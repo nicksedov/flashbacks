@@ -1,0 +1,147 @@
+server: api-service
+version: 1.0
+
+resources:
+  - name: image_metadata
+    description: Retrieve metadata for images including EXIF, OCR tags, and geolocation
+    parameters:
+      - name: image_id
+        type: string
+        required: true
+        description: UUID of the image to retrieve metadata for
+    response:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Image UUID
+        path:
+          type: string
+          description: Filesystem path
+        exif:
+          type: object
+          description: EXIF metadata
+        ocr:
+          type: object
+          description: OCR text recognition results
+        tags:
+          type: array
+          items:
+            type: string
+          description: AI-generated tags
+        geolocation:
+          type: object
+          properties:
+            latitude:
+              type: number
+            longitude:
+              type: number
+            address:
+              type: string
+
+  - name: scan_directory
+    description: Initiate image scanning operation in specified directory
+    parameters:
+      - name: path
+        type: string
+        required: true
+        description: Absolute path to scan for images
+      - name: recursive
+        type: boolean
+        required: false
+        default: true
+        description: Whether to scan subdirectories
+    response:
+      type: object
+      properties:
+        job_id:
+          type: string
+          description: UUID of the scan job
+        status:
+          type: string
+          enum: ["queued", "processing", "completed"]
+        scanned_count:
+          type: integer
+
+  - name: search_images
+    description: Perform semantic search across images using tags or natural language
+    parameters:
+      - name: query
+        type: string
+        required: true
+        description: Search query (text or natural language)
+      - name: limit
+        type: integer
+        required: false
+        default: 20
+        description: Maximum results to return
+    response:
+      type: array
+      items:
+        type: object
+        properties:
+          id:
+            type: string
+          score:
+            type: number
+            description: Relevance score (0-1)
+          thumbnail:
+            type: string
+            format: base64
+
+  - name: generate_thumbnails
+    description: Generate WebP thumbnails for specified images
+    parameters:
+      - name: image_ids
+        type: array
+        items:
+          type: string
+        required: true
+        description: List of image UUIDs to process
+      - name: sizes
+        type: array
+        items:
+          type: integer
+        required: false
+        default: [128, 256, 512]
+        description: Target thumbnail dimensions
+    response:
+      type: object
+      properties:
+        processed:
+          type: integer
+        failures:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              error:
+                type: string
+
+  - name: get_conversation
+    description: Retrieve AI conversation history and context
+    parameters:
+      - name: conversation_id
+        type: string
+        required: true
+        description: UUID of the conversation
+    response:
+      type: object
+      properties:
+        id:
+          type: string
+        messages:
+          type: array
+          items:
+            type: object
+            properties:
+              role:
+                type: string
+                enum: ["user", "assistant"]
+              content:
+                type: string
+        context:
+          type: object
+          description: Current search context and filters

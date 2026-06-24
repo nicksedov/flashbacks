@@ -1,0 +1,562 @@
+openapi: "3.1.0"
+info:
+  title: Flashbacks API Service
+  version: "1.0.0"
+  description: |
+    Core API for the Flashbacks application. Handles authentication, image scanning,
+    duplicate detection, gallery management, OCR coordination, and AI-powered features.
+
+servers:
+  - url: http://localhost:5170
+    description: Local development
+
+security:
+  - sessionAuth: []
+  - csrfToken: []
+
+paths:
+  /api/health:
+    get:
+      summary: Service health check
+      operationId: getHealth
+      security: []
+      responses:
+        "200":
+          description: Service health status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+
+  /api/auth/status:
+    get:
+      summary: Check authentication status
+      operationId: getAuthStatus
+      security: []
+      responses:
+        "200":
+          description: Authentication status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthStatusResponse"
+
+  /api/auth/login:
+    post:
+      summary: Login with credentials
+      operationId: login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Login successful
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginResponse"
+        "401":
+          description: Invalid credentials
+
+  /api/auth/logout:
+    post:
+      summary: Logout current session
+      operationId: logout
+      responses:
+        "200":
+          description: Logout successful
+
+  /api/auth/me:
+    get:
+      summary: Get current user info
+      operationId: getCurrentUser
+      responses:
+        "200":
+          description: Current user information
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+
+  /api/scan:
+    post:
+      summary: Start full scan for duplicates
+      operationId: startScan
+      responses:
+        "202":
+          description: Scan started
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScanResponse"
+
+  /api/fast-scan:
+    post:
+      summary: Start fast scan (new files only)
+      operationId: startFastScan
+      responses:
+        "202":
+          description: Fast scan started
+
+  /api/status:
+    get:
+      summary: Get scan status
+      operationId: getScanStatus
+      responses:
+        "200":
+          description: Current scan status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScanStatus"
+
+  /api/duplicates:
+    get:
+      summary: Get duplicate groups
+      operationId: getDuplicates
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        "200":
+          description: Paginated duplicate groups
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DuplicatesResponse"
+
+  /api/gallery:
+    get:
+      summary: Get gallery images
+      operationId: getGallery
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          schema:
+            type: integer
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [date, name, size]
+      responses:
+        "200":
+          description: Gallery images
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GalleryResponse"
+
+  /api/thumbnail:
+    get:
+      summary: Get image thumbnail
+      operationId: getThumbnail
+      parameters:
+        - name: path
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: size
+          in: query
+          schema:
+            type: integer
+            default: 256
+      responses:
+        "200":
+          description: Thumbnail image
+          content:
+            image/webp:
+              schema:
+                type: string
+                format: binary
+
+  /api/settings:
+    get:
+      summary: Get application settings
+      operationId: getSettings
+      responses:
+        "200":
+          description: Application settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Settings"
+    put:
+      summary: Update application settings
+      operationId: updateSettings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Settings"
+      responses:
+        "200":
+          description: Settings updated
+
+  /api/ocr/classify:
+    post:
+      summary: Start OCR classification
+      operationId: startOcrClassification
+      responses:
+        "202":
+          description: OCR classification started
+
+  /api/ocr/classify-status:
+    get:
+      summary: Get OCR classification status
+      operationId: getOcrClassificationStatus
+      responses:
+        "200":
+          description: OCR status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OcrStatus"
+
+  /api/gallery/smart-search:
+    get:
+      summary: Semantic image search using embeddings
+      operationId: smartSearch
+      parameters:
+        - name: query
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        "200":
+          description: Search results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SmartSearchResponse"
+
+  /api/chat/conversations:
+    get:
+      summary: List AI conversations
+      operationId: listConversations
+      responses:
+        "200":
+          description: List of conversations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Conversation"
+    post:
+      summary: Create new AI conversation
+      operationId: createConversation
+      responses:
+        "201":
+          description: Conversation created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Conversation"
+
+  /api/chat/conversations/{id}/messages:
+    get:
+      summary: Get conversation messages
+      operationId: getMessages
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: List of messages
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Message"
+    post:
+      summary: Send message to AI assistant
+      operationId: sendMessage
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SendMessageRequest"
+      responses:
+        "200":
+          description: AI response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Message"
+
+components:
+  securitySchemes:
+    sessionAuth:
+      type: apiKey
+      in: cookie
+      name: session_id
+    csrfToken:
+      type: apiKey
+      in: header
+      name: X-CSRF-Token
+
+  schemas:
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: healthy
+        version:
+          type: string
+          example: "1.0.0"
+        databaseConnected:
+          type: boolean
+        uptime:
+          type: string
+
+    AuthStatusResponse:
+      type: object
+      properties:
+        authenticated:
+          type: boolean
+        bootstrapRequired:
+          type: boolean
+        user:
+          $ref: "#/components/schemas/User"
+
+    LoginRequest:
+      type: object
+      required:
+        - login
+        - password
+      properties:
+        login:
+          type: string
+        password:
+          type: string
+          format: password
+
+    LoginResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        user:
+          $ref: "#/components/schemas/User"
+
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+        login:
+          type: string
+        displayName:
+          type: string
+        avatarUrl:
+          type: string
+        role:
+          type: string
+          enum: [admin, user]
+        createdAt:
+          type: string
+          format: date-time
+
+    ScanResponse:
+      type: object
+      properties:
+        taskId:
+          type: string
+        status:
+          type: string
+
+    ScanStatus:
+      type: object
+      properties:
+        running:
+          type: boolean
+        progress:
+          type: number
+        totalFiles:
+          type: integer
+        processedFiles:
+          type: integer
+        duplicatesFound:
+          type: integer
+
+    DuplicatesResponse:
+      type: object
+      properties:
+        groups:
+          type: array
+          items:
+            $ref: "#/components/schemas/DuplicateGroup"
+        total:
+          type: integer
+        page:
+          type: integer
+
+    DuplicateGroup:
+      type: object
+      properties:
+        id:
+          type: string
+        hash:
+          type: string
+        files:
+          type: array
+          items:
+            $ref: "#/components/schemas/MediaFile"
+
+    MediaFile:
+      type: object
+      properties:
+        id:
+          type: integer
+        path:
+          type: string
+        filename:
+          type: string
+        size:
+          type: integer
+        mimeType:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        modifiedAt:
+          type: string
+          format: date-time
+
+    GalleryResponse:
+      type: object
+      properties:
+        images:
+          type: array
+          items:
+            $ref: "#/components/schemas/MediaFile"
+        total:
+          type: integer
+        page:
+          type: integer
+
+    Settings:
+      type: object
+      properties:
+        scanFolders:
+          type: array
+          items:
+            type: string
+        excludePatterns:
+          type: array
+          items:
+            type: string
+        thumbnailSize:
+          type: integer
+        language:
+          type: string
+          enum: [en, ru]
+
+    OcrStatus:
+      type: object
+      properties:
+        running:
+          type: boolean
+        processedImages:
+          type: integer
+        documentsFound:
+          type: integer
+
+    SmartSearchResponse:
+      type: object
+      properties:
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/SearchResult"
+
+    SearchResult:
+      type: object
+      properties:
+        file:
+          $ref: "#/components/schemas/MediaFile"
+        score:
+          type: number
+        distance:
+          type: number
+
+    Conversation:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    Message:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        role:
+          type: string
+          enum: [user, assistant, system]
+        content:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+
+    SendMessageRequest:
+      type: object
+      required:
+        - content
+      properties:
+        content:
+          type: string

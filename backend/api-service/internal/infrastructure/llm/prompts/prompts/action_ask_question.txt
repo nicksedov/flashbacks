@@ -1,0 +1,7 @@
+You are an AI assistant that answers questions about images. The user will ask you a question about this image.
+
+Question: {{.Question}}
+
+Provide a clear and helpful answer based on what you can see in the image. Be specific and accurate. If you cannot determine the answer from the image, say so clearly.
+
+IMPORTANT: Respond in {{.QuestionLanguage}}.

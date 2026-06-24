@@ -1,0 +1,219 @@
+{
+  "description": "General messages",
+  "success": "Success",
+  "error": "Error",
+  "validation_error": "Validation error",
+
+  "description_auth": "Authentication messages",
+  "auth": {
+    "internal_error": "Internal server error",
+    "invalid_credentials": "Invalid login or password",
+    "rate_limited": "Too many attempts. Please try again later",
+    "bootstrap_mode": "Bootstrap mode - please complete initial setup",
+    "logout_success": "Logged out successfully",
+    "unauthorized": "Authorization required",
+    "invalid_request_format": "Invalid request format",
+    "password_length": "Password must be between 8 and 128 characters",
+    "invalid_current_password": "Invalid current password",
+    "password_change_failed": "Failed to change password",
+    "bootstrap_failed": "Bootstrap setup failed",
+    "session_creation_failed": "Failed to create session",
+    "bootstrap_complete": "Primary setup complete",
+    "users_list_failed": "Failed to get users list",
+    "invalid_role": "Invalid role",
+    "user_created": "User created",
+    "user_not_found": "User not found",
+    "user_updated": "User updated",
+    "user_update_failed": "Failed to update user",
+    "user_deleted": "User deleted",
+    "user_delete_failed": "Failed to delete user",
+    "password_reset_failed": "Failed to reset password",
+    "password_reset_success": "Password reset successfully",
+    "profile_update_failed": "Failed to update profile",
+    "audit_logs_failed": "Failed to get audit logs"
+  },
+
+  "description_scan": "Scan messages",
+  "scan": {
+    "started": "Scan started",
+    "failed": "Failed to start scan",
+    "duplicate_failed": "Failed to find duplicates",
+    "no_files_selected": "No files selected",
+    "trash_dir_failed": "Failed to create trash directory"
+  },
+
+  "description_folder": "Folder messages",
+  "folder": {
+    "path_required": "Path is required",
+    "invalid_path": "Invalid path",
+    "cannot_access_path": "Cannot access path",
+    "not_directory": "Path is not a directory",
+    "conflict_trash": "Gallery folder conflicts with trash directory: paths must not overlap",
+    "already_in_gallery": "This folder is already in the gallery",
+    "add_failed": "Failed to add folder",
+    "added": "Folder added to gallery",
+    "not_found": "Folder not found",
+    "removed": "Folder removed from gallery",
+    "remove_failed": "Failed to remove folder"
+  },
+
+  "description_image": "Image messages",
+  "image": {
+    "path_required": "Path required",
+    "access_denied": "Access denied: path is not within a gallery folder",
+    "not_found": "File not found",
+    "invalid_theme": "Invalid theme. Must be 'light' or 'dark'",
+    "invalid_language": "Invalid language. Must be 'en' or 'ru'",
+    "invalid_trash_path": "Invalid trash directory path",
+    "trash_conflict": "Trash directory conflicts with gallery folder",
+    "invalid_backup_path": "Invalid EXIF backup directory path",
+    "backup_conflict": "EXIF backup directory conflicts with gallery folder",
+    "trash_not_configured": "Trash directory is not configured",
+    "trash_not_exists": "Trash directory does not exist",
+    "trash_read_failed": "Failed to read trash directory",
+    "trash_clean_failed": "Failed to clean trash",
+    "thumbnail_failed": "Failed to generate thumbnail",
+    "metadata_failed": "Failed to get image metadata"
+  },
+
+  "description_thumbnail_cache": "Thumbnail cache messages",
+  "thumbnail_cache": {
+    "not_available": "Thumbnail cache service is not available",
+    "invalidated": "Thumbnail cache invalidated",
+    "all_invalidated": "All thumbnail cache invalidated",
+    "warmed_up": "Thumbnail cache warmed up",
+    "enabled": "Thumbnail cache enabled",
+    "disabled": "Thumbnail cache disabled"
+  },
+
+  "description_user_service": "User service messages",
+  "user_service": {
+    "invalid_role": "Invalid role",
+    "password_length": "Password must be between 8 and 128 characters",
+    "user_exists": "User with this login already exists",
+    "last_admin_demote": "Cannot demote the last admin",
+    "last_admin_deactivate": "Cannot deactivate the last admin",
+    "last_admin_delete": "Cannot delete the last admin"
+  },
+
+  "description_middleware": "Middleware messages",
+  "middleware": {
+    "unauthorized": "Authorization required",
+    "forbidden": "Insufficient permissions",
+    "csrf_failed": "Origin validation failed"
+  },
+
+  "description_trash": "Trash messages",
+  "trash": {
+    "not_configured": "Trash directory is not configured",
+    "not_exists": "Trash directory does not exist",
+    "read_failed": "Failed to read trash directory",
+    "file_name_required": "File name is required",
+    "file_not_found": "File not found in trash",
+    "delete_failed": "Failed to delete file from trash",
+    "restore_failed": "Failed to restore file from trash",
+    "restored": "File restored successfully",
+    "file_deleted": "File permanently deleted"
+  },
+
+  "description_gallery": "Gallery messages",
+  "gallery": {
+    "conflict": "Gallery folder conflict detected"
+  },
+
+  "description_ocr": "OCR messages",
+  "ocr": {
+    "started": "OCR scan started",
+    "failed": "Failed to start OCR scan",
+    "already_running": "OCR scan already in progress",
+    "not_running": "OCR scan is not running",
+    "image_path_required": "Image path required",
+    "data_not_found": "OCR data not found for this image"
+  },
+
+  "description_llm_ocr": "LLM OCR messages",
+  "llm_ocr": {
+    "not_enabled": "LLM recognition is not enabled",
+    "settings_not_found": "LLM settings not found",
+    "recognition_failed": "Text recognition failed",
+    "recognition_started": "Text recognition started",
+    "settings_saved": "Settings saved",
+    "settings_save_failed": "Failed to save settings",
+    "no_recognition": "No recognition data available"
+  },
+
+  "description_calendar": "Calendar messages",
+  "calendar": {
+    "month_year_required": "Month and year are required",
+    "invalid_month_year": "Invalid month or year",
+    "invalid_cursor": "Invalid pagination cursor"
+  },
+
+  "description_geo": "Geo messages",
+  "geo": {
+    "invalid_zoom": "Invalid zoom level",
+    "invalid_dimensions": "Invalid dimensions",
+    "cluster_failed": "Failed to generate clusters",
+    "cluster_not_found": "Cluster not found"
+  },
+
+  "description_llm": "LLM messages",
+  "llm": {
+    "models_failed": "Failed to fetch models"
+  },
+
+  "description_geocode": "Geocode / GPS messages",
+  "geocode": {
+    "query_required": "Search query is required",
+    "date_required": "Date is required (YYYY-MM-DD format)",
+    "search_failed": "Location search failed",
+    "gps_update_failed": "Failed to update GPS coordinates",
+    "invalid_coordinates": "Invalid GPS coordinates",
+    "gps_updated": "GPS coordinates updated successfully",
+    "not_jpeg": "GPS can only be written to JPEG files",
+    "backup_failed": "Failed to create backup copy of the original file"
+  },
+
+  "description_batch_gps": "Batch GPS messages",
+  "batch_gps": {
+    "no_paths": "No image paths provided"
+  },
+
+  "description_avatar": "Avatar messages",
+  "avatar": {
+    "upload_failed": "Failed to upload avatar",
+    "invalid_type": "Invalid image type. Supported: JPEG, PNG, WebP, GIF",
+    "too_large": "Image is too large. Maximum size is 10MB",
+    "delete_failed": "Failed to delete avatar",
+    "not_found": "Avatar not found"
+  },
+
+  "description_chat": "Chat messages",
+  "chat": {
+    "invalid_request": "Invalid request body",
+    "conversation_not_found": "Conversation not found",
+    "invalid_conversation_id": "Invalid conversation ID",
+    "content_required": "Content is required",
+    "llm_no_chat_support": "LLM provider does not support chat/function calling",
+    "conversation_deleted": "Conversation deleted"
+  },
+
+  "description_embedding": "Embedding messages",
+  "embedding": {
+    "manager_not_available": "Embedding backfill manager not available",
+    "backfill_started": "Embedding backfill started",
+    "backfill_stopped": "Embedding backfill stopped",
+    "provider_not_found": "Embedding provider not found",
+    "client_creation_failed": "Failed to create embedding client",
+    "probe_failed": "Embedding probe failed",
+    "empty_vector": "Embedding probe returned empty vector"
+  },
+
+
+  "description_tag_scan": "Tag scan messages",
+  "tag_scan": {
+    "manager_not_available": "Tag scan manager not available",
+    "paused": "Tag scan paused",
+    "resumed": "Tag scan resumed"
+  }
+}

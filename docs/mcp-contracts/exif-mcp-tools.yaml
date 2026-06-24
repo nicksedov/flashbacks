@@ -1,0 +1,84 @@
+openapi: 3.0.3
+info:
+  title: EXIF MCP Tools
+  version: 1.0.0
+  description: API documentation for EXIF microservice MCP tools
+paths:
+  /exif/mcp:
+    post:
+      summary: Execute EXIF MCP tools
+      description: |
+        The EXIF microservice exposes MCP tools at this endpoint.
+        Each tool is specified by the `tool` parameter in the request body.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                tool:
+                  type: string
+                  description: The name of the tool to execute.
+                  enum:
+                    - read_exif
+                    - read_gps
+                    - read_all_metadata
+                    - write_gps
+                    - write_exif_field
+                    - strip_exif
+                    - copy_exif
+                    - compare_exif
+                    - validate_exif
+                params:
+                  type: object
+                  description: Parameters specific to the selected tool.
+                  properties:
+                    path:
+                      type: string
+                      description: Absolute path to the image file. Required for read_exif, read_gps, read_all_metadata, write_gps, write_exif_field, strip_exif, validate_exif.
+                    latitude:
+                      type: number
+                      description: GPS latitude (-90 to 90). Required for write_gps.
+                    longitude:
+                      type: number
+                      description: GPS longitude (-180 to 180). Required for write_gps.
+                    backup_dir:
+                      type: string
+                      description: Directory for backup copies. Required for write_gps.
+                    tag:
+                      type: string
+                      description: EXIF tag name. Required for write_exif_field.
+                    value:
+                      type: string
+                      description: Value to write. Required for write_exif_field.
+                    tags:
+                      type: array
+                      items:
+                        type: string
+                      description: List of EXIF tags to remove or copy. Optional for strip_exif and copy_exif.
+                    source_path:
+                      type: string
+                      description: Source file path. Required for copy_exif.
+                    target_path:
+                      type: string
+                      description: Target file path. Required for copy_exif.
+                    path1:
+                      type: string
+                      description: Path to first image. Required for compare_exif.
+                    path2:
+                      type: string
+                      description: Path to second image. Required for compare_exif.
+              required: [tool, params]
+      responses:
+        '200':
+          description: Successful tool execution
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  result:
+                    description: Tool-specific result data
+        '400':
+          description: Invalid tool name or missing parameters

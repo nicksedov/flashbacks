@@ -1,0 +1,460 @@
+@import "tailwindcss";
+@import "leaflet/dist/leaflet.css";
+
+:root {
+  /* Light Purple Theme */
+  --color-light-purple-bg: hsl(270 100% 98%);
+  --color-light-purple-sidebar: hsl(270 80% 93%);
+  --color-light-purple-header: hsl(270 80% 95%);
+  --color-light-purple-primary: hsl(270 80% 60%);
+  --color-light-purple-primary-foreground: hsl(0 0% 100%);
+  --color-light-purple-secondary: hsl(270 60% 90%);
+  --color-light-purple-secondary-foreground: hsl(270 80% 20%);
+  --color-light-purple-muted: hsl(270 60% 90%);
+  --color-light-purple-muted-foreground: hsl(270 40% 50%);
+  --color-light-purple-accent: hsl(270 70% 85%);
+  --color-light-purple-accent-foreground: hsl(270 80% 25%);
+  --color-light-purple-border: hsl(270 50% 80%);
+  --color-light-purple-input: hsl(270 50% 80%);
+  --color-light-purple-ring: hsl(270 80% 60%);
+  --color-light-purple-card: hsl(270 100% 95%);
+  --color-light-purple-card-foreground: hsl(270 80% 20%);
+  --color-light-purple-popover: hsl(270 100% 98%);
+  --color-light-purple-popover-foreground: hsl(270 80% 20%);
+  --color-light-purple-destructive: hsl(0 84% 60%);
+  --color-light-purple-destructive-foreground: hsl(0 0% 100%);
+  
+  /* Dark Purple Theme */
+  --color-dark-purple-bg: hsl(270 20% 10%);
+  --color-dark-purple-sidebar: hsl(270 22% 16%);
+  --color-dark-purple-header: hsl(270 20% 13%);
+  --color-dark-purple-primary: hsl(270 70% 65%);
+  --color-dark-purple-primary-foreground: hsl(0 0% 100%);
+  --color-dark-purple-secondary: hsl(270 30% 20%);
+  --color-dark-purple-secondary-foreground: hsl(270 60% 80%);
+  --color-dark-purple-muted: hsl(270 30% 20%);
+  --color-dark-purple-muted-foreground: hsl(270 25% 65%);
+  --color-dark-purple-accent: hsl(270 40% 25%);
+  --color-dark-purple-accent-foreground: hsl(270 60% 85%);
+  --color-dark-purple-border: hsl(270 30% 25%);
+  --color-dark-purple-input: hsl(270 30% 25%);
+  --color-dark-purple-ring: hsl(270 70% 65%);
+  --color-dark-purple-card: hsl(270 25% 15%);
+  --color-dark-purple-card-foreground: hsl(270 60% 85%);
+  --color-dark-purple-popover: hsl(270 20% 12%);
+  --color-dark-purple-popover-foreground: hsl(270 60% 85%);
+  --color-dark-purple-destructive: hsl(0 60% 50%);
+  --color-dark-purple-destructive-foreground: hsl(0 0% 100%);
+  
+  /* Light Green Theme */
+  --color-light-green-bg: hsl(150 100% 97%);
+  --color-light-green-sidebar: hsl(150 70% 92%);
+  --color-light-green-header: hsl(150 70% 94%);
+  --color-light-green-primary: hsl(150 75% 40%);
+  --color-light-green-primary-foreground: hsl(0 0% 100%);
+  --color-light-green-secondary: hsl(150 60% 88%);
+  --color-light-green-secondary-foreground: hsl(150 75% 20%);
+  --color-light-green-muted: hsl(150 60% 88%);
+  --color-light-green-muted-foreground: hsl(150 50% 45%);
+  --color-light-green-accent: hsl(150 70% 82%);
+  --color-light-green-accent-foreground: hsl(150 75% 25%);
+  --color-light-green-border: hsl(150 80% 70%);
+  --color-light-green-foreground: hsl(0 0% 100%);
+  --color-light-green-input: hsl(150 55% 78%);
+  --color-light-green-ring: hsl(150 75% 40%);
+  --color-light-green-card: hsl(150 100% 94%);
+  --color-light-green-card-foreground: hsl(150 75% 20%);
+  --color-light-green-popover: hsl(150 100% 97%);
+  --color-light-green-popover-foreground: hsl(150 75% 20%);
+  --color-light-green-destructive: hsl(0 84% 60%);
+  --color-light-green-destructive-foreground: hsl(0 0% 100%);
+  
+  /* Dark Green Theme */
+  --color-dark-green-bg: hsl(150 20% 8%);
+  --color-dark-green-sidebar: hsl(150 22% 14%);
+  --color-dark-green-header: hsl(150 20% 11%);
+  --color-dark-green-primary: hsl(150 65% 45%);
+  --color-dark-green-primary-foreground: hsl(0 0% 100%);
+  --color-dark-green-secondary: hsl(150 30% 15%);
+  --color-dark-green-secondary-foreground: hsl(150 60% 80%);
+  --color-dark-green-muted: hsl(150 30% 15%);
+  --color-dark-green-muted-foreground: hsl(150 25% 60%);
+  --color-dark-green-accent: hsl(150 40% 18%);
+  --color-dark-green-accent-foreground: hsl(150 60% 85%);
+  --color-dark-green-border: hsl(150 30% 20%);
+  --color-dark-green-input: hsl(150 30% 20%);
+  --color-dark-green-ring: hsl(150 65% 45%);
+  --color-dark-green-card: hsl(150 25% 13%);
+  --color-dark-green-card-foreground: hsl(150 60% 85%);
+  --color-dark-green-popover: hsl(150 20% 10%);
+  --color-dark-green-popover-foreground: hsl(150 60% 85%);
+  --color-dark-green-destructive: hsl(0 60% 50%);
+  --color-dark-green-destructive-foreground: hsl(0 0% 100%);
+  
+  /* Light Blue Theme */
+  --color-light-blue-bg: hsl(210 100% 97%);
+  --color-light-blue-sidebar: hsl(210 70% 92%);
+  --color-light-blue-header: hsl(210 70% 94%);
+  --color-light-blue-primary: hsl(210 85% 50%);
+  --color-light-blue-primary-foreground: hsl(0 0% 100%);
+  --color-light-blue-secondary: hsl(210 65% 88%);
+  --color-light-blue-secondary-foreground: hsl(210 85% 20%);
+  --color-light-blue-muted: hsl(210 65% 88%);
+  --color-light-blue-muted-foreground: hsl(210 55% 50%);
+  --color-light-blue-accent: hsl(210 75% 82%);
+  --color-light-blue-accent-foreground: hsl(210 85% 25%);
+  --color-light-blue-border: hsl(210 60% 78%);
+  --color-light-blue-input: hsl(210 60% 78%);
+  --color-light-blue-ring: hsl(210 85% 50%);
+  --color-light-blue-card: hsl(210 100% 94%);
+  --color-light-blue-card-foreground: hsl(210 85% 20%);
+  --color-light-blue-popover: hsl(210 100% 97%);
+  --color-light-blue-popover-foreground: hsl(210 85% 20%);
+  --color-light-blue-destructive: hsl(0 84% 60%);
+  --color-light-blue-destructive-foreground: hsl(0 0% 100%);
+  
+  /* Dark Blue Theme */
+  --color-dark-blue-bg: hsl(210 20% 10%);
+  --color-dark-blue-sidebar: hsl(210 22% 16%);
+  --color-dark-blue-header: hsl(210 20% 13%);
+  --color-dark-blue-primary: hsl(210 75% 55%);
+  --color-dark-blue-primary-foreground: hsl(0 0% 100%);
+  --color-dark-blue-secondary: hsl(210 30% 20%);
+  --color-dark-blue-secondary-foreground: hsl(210 60% 80%);
+  --color-dark-blue-muted: hsl(210 30% 20%);
+  --color-dark-blue-muted-foreground: hsl(210 25% 60%);
+  --color-dark-blue-accent: hsl(210 40% 25%);
+  --color-dark-blue-accent-foreground: hsl(210 60% 85%);
+  --color-dark-blue-border: hsl(210 30% 25%);
+  --color-dark-blue-input: hsl(210 30% 25%);
+  --color-dark-blue-ring: hsl(210 75% 55%);
+  --color-dark-blue-card: hsl(210 25% 15%);
+  --color-dark-blue-card-foreground: hsl(210 60% 85%);
+  --color-dark-blue-popover: hsl(210 20% 12%);
+  --color-dark-blue-popover-foreground: hsl(210 60% 85%);
+  --color-dark-blue-destructive: hsl(0 60% 50%);
+  --color-dark-blue-destructive-foreground: hsl(0 0% 100%);
+  
+  /* Light Orange Theme */
+  --color-light-orange-bg: hsl(30 100% 97%);
+  --color-light-orange-sidebar: hsl(30 70% 92%);
+  --color-light-orange-header: hsl(30 70% 94%);
+  --color-light-orange-primary: hsl(30 85% 55%);
+  --color-light-orange-primary-foreground: hsl(0 0% 100%);
+  --color-light-orange-secondary: hsl(30 65% 88%);
+  --color-light-orange-secondary-foreground: hsl(30 85% 20%);
+  --color-light-orange-muted: hsl(30 65% 88%);
+  --color-light-orange-muted-foreground: hsl(30 55% 50%);
+  --color-light-orange-accent: hsl(30 75% 82%);
+  --color-light-orange-accent-foreground: hsl(30 85% 25%);
+  --color-light-orange-border: hsl(30 60% 78%);
+  --color-light-orange-input: hsl(30 60% 78%);
+  --color-light-orange-ring: hsl(30 85% 55%);
+  --color-light-orange-card: hsl(30 100% 94%);
+  --color-light-orange-card-foreground: hsl(30 85% 20%);
+  --color-light-orange-popover: hsl(30 100% 97%);
+  --color-light-orange-popover-foreground: hsl(30 85% 20%);
+  --color-light-orange-destructive: hsl(0 84% 60%);
+  --color-light-orange-destructive-foreground: hsl(0 0% 100%);
+  
+  /* Dark Orange Theme */
+  --color-dark-orange-bg: hsl(30 20% 10%);
+  --color-dark-orange-sidebar: hsl(30 22% 16%);
+  --color-dark-orange-header: hsl(30 20% 13%);
+  --color-dark-orange-primary: hsl(30 75% 60%);
+  --color-dark-orange-primary-foreground: hsl(0 0% 100%);
+  --color-dark-orange-secondary: hsl(30 30% 20%);
+  --color-dark-orange-secondary-foreground: hsl(30 60% 80%);
+  --color-dark-orange-muted: hsl(30 30% 20%);
+  --color-dark-orange-muted-foreground: hsl(30 25% 60%);
+  --color-dark-orange-accent: hsl(30 40% 25%);
+  --color-dark-orange-accent-foreground: hsl(30 60% 85%);
+  --color-dark-orange-border: hsl(30 30% 25%);
+  --color-dark-orange-input: hsl(30 30% 25%);
+  --color-dark-orange-ring: hsl(30 75% 60%);
+  --color-dark-orange-card: hsl(30 25% 15%);
+  --color-dark-orange-card-foreground: hsl(30 60% 85%);
+  --color-dark-orange-popover: hsl(30 20% 12%);
+  --color-dark-orange-popover-foreground: hsl(30 60% 85%);
+  --color-dark-orange-destructive: hsl(0 60% 50%);
+  --color-dark-orange-destructive-foreground: hsl(0 0% 100%);
+  
+  /* Dark Contrast Theme */
+  --color-dark-contrast-bg: hsl(0 0% 5%);
+  --color-dark-contrast-sidebar: hsl(0 0% 12%);
+  --color-dark-contrast-header: hsl(0 0% 9%);
+  --color-dark-contrast-primary: hsl(200 100% 60%);
+  --color-dark-contrast-primary-foreground: hsl(0 0% 100%);
+  --color-dark-contrast-secondary: hsl(0 0% 15%);
+  --color-dark-contrast-secondary-foreground: hsl(0 0% 90%);
+  --color-dark-contrast-muted: hsl(0 0% 15%);
+  --color-dark-contrast-muted-foreground: hsl(0 0% 65%);
+  --color-dark-contrast-accent: hsl(0 0% 20%);
+  --color-dark-contrast-accent-foreground: hsl(0 0% 95%);
+  --color-dark-contrast-border: hsl(0 0% 20%);
+  --color-dark-contrast-input: hsl(0 0% 20%);
+  --color-dark-contrast-ring: hsl(200 100% 60%);
+  --color-dark-contrast-card: hsl(0 0% 12%);
+  --color-dark-contrast-card-foreground: hsl(0 0% 95%);
+  --color-dark-contrast-popover: hsl(0 0% 8%);
+  --color-dark-contrast-popover-foreground: hsl(0 0% 95%);
+  --color-dark-contrast-destructive: hsl(0 100% 70%);
+  --color-dark-contrast-destructive-foreground: hsl(0 0% 100%);
+}
+
+/* Light theme defaults */
+.light-purple,
+.light-green,
+.light-blue,
+.light-orange {
+  --color-background: var(--color-light-purple-bg);
+  --color-sidebar: var(--color-light-purple-sidebar);
+  --color-header: var(--color-light-purple-header);
+  --color-primary: var(--color-light-purple-primary);
+  --color-primary-foreground: var(--color-light-purple-primary-foreground);
+  --color-secondary: var(--color-light-purple-secondary);
+  --color-secondary-foreground: var(--color-light-purple-secondary-foreground);
+  --color-muted: var(--color-light-purple-muted);
+  --color-muted-foreground: var(--color-light-purple-muted-foreground);
+  --color-accent: var(--color-light-purple-accent);
+  --color-accent-foreground: var(--color-light-purple-accent-foreground);
+  --color-border: var(--color-light-purple-border);
+  --color-input: var(--color-light-purple-input);
+  --color-ring: var(--color-light-purple-ring);
+  --color-card: var(--color-light-purple-card);
+  --color-card-foreground: var(--color-light-purple-card-foreground);
+  --color-popover: var(--color-light-purple-popover);
+  --color-popover-foreground: var(--color-light-purple-popover-foreground);
+  --color-destructive: var(--color-light-purple-destructive);
+  --color-destructive-foreground: var(--color-light-purple-destructive-foreground);
+  --radius: 0.5rem;
+}
+
+/* Dark theme defaults */
+.dark-purple,
+.dark-green,
+.dark-blue,
+.dark-orange,
+.dark-contrast {
+  --color-background: var(--color-dark-purple-bg);
+  --color-sidebar: var(--color-dark-purple-sidebar);
+  --color-header: var(--color-dark-purple-header);
+  --color-primary: var(--color-dark-purple-primary);
+  --color-primary-foreground: var(--color-dark-purple-primary-foreground);
+  --color-secondary: var(--color-dark-purple-secondary);
+  --color-secondary-foreground: var(--color-dark-purple-secondary-foreground);
+  --color-muted: var(--color-dark-purple-muted);
+  --color-muted-foreground: var(--color-dark-purple-muted-foreground);
+  --color-accent: var(--color-dark-purple-accent);
+  --color-accent-foreground: var(--color-dark-purple-accent-foreground);
+  --color-border: var(--color-dark-purple-border);
+  --color-input: var(--color-dark-purple-input);
+  --color-ring: var(--color-dark-purple-ring);
+  --color-card: var(--color-dark-purple-card);
+  --color-card-foreground: var(--color-dark-purple-card-foreground);
+  --color-popover: var(--color-dark-purple-popover);
+  --color-popover-foreground: var(--color-dark-purple-popover-foreground);
+  --color-destructive: var(--color-dark-purple-destructive);
+  --color-destructive-foreground: var(--color-dark-purple-destructive-foreground);
+  --radius: 0.5rem;
+}
+
+/* Specific overrides for each theme */
+.light-purple { --theme-base-hue: 270; }
+.dark-purple { --theme-base-hue: 270; }
+.light-green { 
+  --color-background: var(--color-light-green-bg);
+  --color-sidebar: var(--color-light-green-sidebar);
+  --color-header: var(--color-light-green-header);
+  --color-primary: var(--color-light-green-primary);
+  --color-primary-foreground: var(--color-light-green-primary-foreground);
+  --color-secondary: var(--color-light-green-secondary);
+  --color-secondary-foreground: var(--color-light-green-secondary-foreground);
+  --color-muted: var(--color-light-green-muted);
+  --color-muted-foreground: var(--color-light-green-muted-foreground);
+  --color-accent: var(--color-light-green-accent);
+  --color-accent-foreground: var(--color-light-green-accent-foreground);
+  --color-border: var(--color-light-green-border);
+  --color-input: var(--color-light-green-input);
+  --color-ring: var(--color-light-green-ring);
+  --color-card: var(--color-light-green-card);
+  --color-card-foreground: var(--color-light-green-card-foreground);
+  --color-popover: var(--color-light-green-popover);
+  --color-popover-foreground: var(--color-light-green-popover-foreground);
+  --color-destructive: var(--color-light-green-destructive);
+  --color-destructive-foreground: var(--color-light-green-destructive-foreground);
+}
+.dark-green { 
+  --color-background: var(--color-dark-green-bg);
+  --color-sidebar: var(--color-dark-green-sidebar);
+  --color-header: var(--color-dark-green-header);
+  --color-primary: var(--color-dark-green-primary);
+  --color-primary-foreground: var(--color-dark-green-primary-foreground);
+  --color-secondary: var(--color-dark-green-secondary);
+  --color-secondary-foreground: var(--color-dark-green-secondary-foreground);
+  --color-muted: var(--color-dark-green-muted);
+  --color-muted-foreground: var(--color-dark-green-muted-foreground);
+  --color-accent: var(--color-dark-green-accent);
+  --color-accent-foreground: var(--color-dark-green-accent-foreground);
+  --color-border: var(--color-dark-green-border);
+  --color-input: var(--color-dark-green-input);
+  --color-ring: var(--color-dark-green-ring);
+  --color-card: var(--color-dark-green-card);
+  --color-card-foreground: var(--color-dark-green-card-foreground);
+  --color-popover: var(--color-dark-green-popover);
+  --color-popover-foreground: var(--color-dark-green-popover-foreground);
+  --color-destructive: var(--color-dark-green-destructive);
+  --color-destructive-foreground: var(--color-dark-green-destructive-foreground);
+}
+.light-blue { 
+  --color-background: var(--color-light-blue-bg);
+  --color-sidebar: var(--color-light-blue-sidebar);
+  --color-header: var(--color-light-blue-header);
+  --color-primary: var(--color-light-blue-primary);
+  --color-primary-foreground: var(--color-light-blue-primary-foreground);
+  --color-secondary: var(--color-light-blue-secondary);
+  --color-secondary-foreground: var(--color-light-blue-secondary-foreground);
+  --color-muted: var(--color-light-blue-muted);
+  --color-muted-foreground: var(--color-light-blue-muted-foreground);
+  --color-accent: var(--color-light-blue-accent);
+  --color-accent-foreground: var(--color-light-blue-accent-foreground);
+  --color-border: var(--color-light-blue-border);
+  --color-input: var(--color-light-blue-input);
+  --color-ring: var(--color-light-blue-ring);
+  --color-card: var(--color-light-blue-card);
+  --color-card-foreground: var(--color-light-blue-card-foreground);
+  --color-popover: var(--color-light-blue-popover);
+  --color-popover-foreground: var(--color-light-blue-popover-foreground);
+  --color-destructive: var(--color-light-blue-destructive);
+  --color-destructive-foreground: var(--color-light-blue-destructive-foreground);
+}
+.dark-blue { 
+  --color-background: var(--color-dark-blue-bg);
+  --color-sidebar: var(--color-dark-blue-sidebar);
+  --color-header: var(--color-dark-blue-header);
+  --color-primary: var(--color-dark-blue-primary);
+  --color-primary-foreground: var(--color-dark-blue-primary-foreground);
+  --color-secondary: var(--color-dark-blue-secondary);
+  --color-secondary-foreground: var(--color-dark-blue-secondary-foreground);
+  --color-muted: var(--color-dark-blue-muted);
+  --color-muted-foreground: var(--color-dark-blue-muted-foreground);
+  --color-accent: var(--color-dark-blue-accent);
+  --color-accent-foreground: var(--color-dark-blue-accent-foreground);
+  --color-border: var(--color-dark-blue-border);
+  --color-input: var(--color-dark-blue-input);
+  --color-ring: var(--color-dark-blue-ring);
+  --color-card: var(--color-dark-blue-card);
+  --color-card-foreground: var(--color-dark-blue-card-foreground);
+  --color-popover: var(--color-dark-blue-popover);
+  --color-popover-foreground: var(--color-dark-blue-popover-foreground);
+  --color-destructive: var(--color-dark-blue-destructive);
+  --color-destructive-foreground: var(--color-dark-blue-destructive-foreground);
+}
+.light-orange { 
+  --color-background: var(--color-light-orange-bg);
+  --color-sidebar: var(--color-light-orange-sidebar);
+  --color-header: var(--color-light-orange-header);
+  --color-primary: var(--color-light-orange-primary);
+  --color-primary-foreground: var(--color-light-orange-primary-foreground);
+  --color-secondary: var(--color-light-orange-secondary);
+  --color-secondary-foreground: var(--color-light-orange-secondary-foreground);
+  --color-muted: var(--color-light-orange-muted);
+  --color-muted-foreground: var(--color-light-orange-muted-foreground);
+  --color-accent: var(--color-light-orange-accent);
+  --color-accent-foreground: var(--color-light-orange-accent-foreground);
+  --color-border: var(--color-light-orange-border);
+  --color-input: var(--color-light-orange-input);
+  --color-ring: var(--color-light-orange-ring);
+  --color-card: var(--color-light-orange-card);
+  --color-card-foreground: var(--color-light-orange-card-foreground);
+  --color-popover: var(--color-light-orange-popover);
+  --color-popover-foreground: var(--color-light-orange-popover-foreground);
+  --color-destructive: var(--color-light-orange-destructive);
+  --color-destructive-foreground: var(--color-light-orange-destructive-foreground);
+}
+.dark-orange { 
+  --color-background: var(--color-dark-orange-bg);
+  --color-sidebar: var(--color-dark-orange-sidebar);
+  --color-header: var(--color-dark-orange-header);
+  --color-primary: var(--color-dark-orange-primary);
+  --color-primary-foreground: var(--color-dark-orange-primary-foreground);
+  --color-secondary: var(--color-dark-orange-secondary);
+  --color-secondary-foreground: var(--color-dark-orange-secondary-foreground);
+  --color-muted: var(--color-dark-orange-muted);
+  --color-muted-foreground: var(--color-dark-orange-muted-foreground);
+  --color-accent: var(--color-dark-orange-accent);
+  --color-accent-foreground: var(--color-dark-orange-accent-foreground);
+  --color-border: var(--color-dark-orange-border);
+  --color-input: var(--color-dark-orange-input);
+  --color-ring: var(--color-dark-orange-ring);
+  --color-card: var(--color-dark-orange-card);
+  --color-card-foreground: var(--color-dark-orange-card-foreground);
+  --color-popover: var(--color-dark-orange-popover);
+  --color-popover-foreground: var(--color-dark-orange-popover-foreground);
+  --color-destructive: var(--color-dark-orange-destructive);
+  --color-destructive-foreground: var(--color-dark-orange-destructive-foreground);
+}
+.dark-contrast { 
+  --color-background: var(--color-dark-contrast-bg);
+  --color-sidebar: var(--color-dark-contrast-sidebar);
+  --color-header: var(--color-dark-contrast-header);
+  --color-primary: var(--color-dark-contrast-primary);
+  --color-primary-foreground: var(--color-dark-contrast-primary-foreground);
+  --color-secondary: var(--color-dark-contrast-secondary);
+  --color-secondary-foreground: var(--color-dark-contrast-secondary-foreground);
+  --color-muted: var(--color-dark-contrast-muted);
+  --color-muted-foreground: var(--color-dark-contrast-muted-foreground);
+  --color-accent: var(--color-dark-contrast-accent);
+  --color-accent-foreground: var(--color-dark-contrast-accent-foreground);
+  --color-border: var(--color-dark-contrast-border);
+  --color-input: var(--color-dark-contrast-input);
+  --color-ring: var(--color-dark-contrast-ring);
+  --color-card: var(--color-dark-contrast-card);
+  --color-card-foreground: var(--color-dark-contrast-card-foreground);
+  --color-popover: var(--color-dark-contrast-popover);
+  --color-popover-foreground: var(--color-dark-contrast-popover-foreground);
+  --color-destructive: var(--color-dark-contrast-destructive);
+  --color-destructive-foreground: var(--color-dark-contrast-destructive-foreground);
+}
+
+body {
+  background-color: var(--color-background);
+  color: var(--color-card-foreground);
+  font-family: system-ui, -apple-system, sans-serif;
+}
+
+/* Ensure text is visible on dark themes */
+.dark-purple,
+.dark-green,
+.dark-blue,
+.dark-orange,
+.dark-contrast {
+  color: var(--color-card-foreground);
+}
+
+/* Hide scrollbar for calendar days strip but keep scroll functionality */
+.calendar-days-no-scrollbar {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
+.calendar-days-no-scrollbar::-webkit-scrollbar {
+  display: none;  /* Chrome, Safari and Opera */
+}
+
+/* Global loading cursor - applies wait cursor during page loads */
+body.loading-cursor,
+body.loading-cursor * {
+  cursor: wait !important;
+}
+
+/* Sidebar collapse/expand transition */
+.sidebar-transition {
+  transition: width 200ms ease-in-out;
+}
+
+/* Sidebar overlay backdrop for mobile */
+.sidebar-backdrop {
+  background-color: rgba(0, 0, 0, 0.5);
+  transition: opacity 200ms ease-in-out;
+}

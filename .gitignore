@@ -1,0 +1,145 @@
+# ===========================
+# Go
+# ===========================
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Build outputs
+main
+debug
+
+# Test binary, built with `go test -c`
+*.test
+
+# Code coverage profiles
+*.out
+coverage.*
+*.coverprofile
+profile.cov
+coverage.html
+
+# Go workspace file
+go.work
+go.work.sum
+
+# Dependency directories
+vendor/
+
+# ===========================
+# Node.js / Frontend
+# ===========================
+node_modules/
+dist/
+*.whl
+build/
+
+# Vite
+*.local
+
+# ===========================
+# Python
+# ===========================
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+*.egg
+
+# Virtual environments
+venv/
+.venv/
+env/
+envs/
+virtualenv/
+
+# Pytest
+.pytest_cache/
+pytest_cache/
+__pytest_cache__/
+*.pytest_cache
+htmlcov/
+.coverage
+.coverage.*
+coverage/
+coverage.xml
+*.cover
+*.py,cover
+.tox/
+.cache/
+nosetests.xml
+junit*.xml
+
+# Mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Jupyter Notebook
+.ipynb_checkpoints/
+*/.ipynb_checkpoints/*
+
+# ===========================
+# IDE & Editors
+# ===========================
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+*.sublime-workspace
+*.sublime-project
+
+# ===========================
+# OS files
+# ===========================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+Desktop.ini
+
+# ===========================
+# Logs & temp
+# ===========================
+*.log
+*.tmp
+*.temp
+/tmp/
+
+# ===========================
+# Environment
+# ===========================
+.env
+
+# ===========================
+# Generated files
+# ===========================
+*.generated.*
+
+# ===========================
+# Dataset derived artifacts
+# ===========================
+dataset/**/__pycache__/
+dataset/**/.ipynb_checkpoints/
+dataset/**/*.log
+dataset/**/derived/
+dataset/**/generated/
+dataset/**/temp/
+
+# ===========================
+# Agent / tool caches
+# ===========================
+.qoder/
+.roo/
+.serena/

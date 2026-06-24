@@ -1,0 +1,69 @@
+version: '3.9'
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg17
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: api_db
+      POSTGRES_MULTIPLE_DATABASES: api_db,exif_db
+    ports: ['5432:5432']
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./scripts/init-databases.sh:/docker-entrypoint-initdb.d/init-databases.sh
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api-service:
+    build: ./backend/api-service
+    ports: ['5170:5170']
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_NAME: api_db
+      SERVER_HOST: 0.0.0.0
+      SERVER_PORT: 5170
+      CORS_ORIGINS: http://localhost:5180
+      EXIF_SERVICE_URL: http://exif:5172
+      OCR_SERVICE_URL: http://ocr:5174
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  exif:
+    build: ./backend/exif
+    ports: ['5172:5172']
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_NAME: exif_db
+      SERVER_HOST: 0.0.0.0
+      SERVER_PORT: 5172
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  ocr:
+    build: ./backend/ocr
+    ports: ['5174:5174']
+    environment:
+      OCR_PORT: '5174'
+
+  webapp:
+    build: ./webapp
+    ports: ['5180:80']
+    environment:
+      VITE_API_URL: ''
+    depends_on:
+      - api-service
+
+volumes:
+  pgdata:

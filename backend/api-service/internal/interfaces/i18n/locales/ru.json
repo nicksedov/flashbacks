@@ -1,0 +1,219 @@
+{
+  "description": "Общие сообщения",
+  "success": "Успех",
+  "error": "Ошибка",
+  "validation_error": "Ошибка валидации",
+
+  "description_auth": "Сообщения аутентификации",
+  "auth": {
+    "internal_error": "Внутренняя ошибка сервера",
+    "invalid_credentials": "Неверный логин или пароль",
+    "rate_limited": "Слишком много попыток. Пожалуйста, попробуйте позже",
+    "bootstrap_mode": "Режим первичной настройки - завершите первоначальную настройку",
+    "logout_success": "Выход выполнен",
+    "unauthorized": "Требуется авторизация",
+    "invalid_request_format": "Неверный формат запроса",
+    "password_length": "Пароль должен содержать от 8 до 128 символов",
+    "invalid_current_password": "Неверный текущий пароль",
+    "password_change_failed": "Не удалось изменить пароль",
+    "bootstrap_failed": "Сбой первичной настройки",
+    "session_creation_failed": "Не удалось создать сессию",
+    "bootstrap_complete": "Первичная настройка завершена",
+    "users_list_failed": "Не удалось получить список пользователей",
+    "invalid_role": "Неверная роль",
+    "user_created": "Пользователь создан",
+    "user_not_found": "Пользователь не найден",
+    "user_updated": "Пользователь обновлен",
+    "user_update_failed": "Не удалось обновить пользователя",
+    "user_deleted": "Пользователь удален",
+    "user_delete_failed": "Не удалось удалить пользователя",
+    "password_reset_failed": "Не удалось сбросить пароль",
+    "password_reset_success": "Пароль успешно сброшен",
+    "profile_update_failed": "Не удалось обновить профиль",
+    "audit_logs_failed": "Не удалось получить журнал аудита"
+  },
+
+  "description_scan": "Сообщения сканирования",
+  "scan": {
+    "started": "Сканирование начато",
+    "failed": "Не удалось начать сканирование",
+    "duplicate_failed": "Не удалось найти дубликаты",
+    "no_files_selected": "Файлы не выбраны",
+    "trash_dir_failed": "Не удалось создать директорию корзины"
+  },
+
+  "description_folder": "Сообщения папок",
+  "folder": {
+    "path_required": "Требуется путь",
+    "invalid_path": "Неверный путь",
+    "cannot_access_path": "Не удалось получить доступ к пути",
+    "not_directory": "Путь не является директорией",
+    "conflict_trash": "Папка галереи конфликтует с директорией корзины: пути не должны пересекаться",
+    "already_in_gallery": "Эта папка уже в галерее",
+    "add_failed": "Не удалось добавить папку",
+    "added": "Папка добавлена в галерею",
+    "not_found": "Папка не найдена",
+    "removed": "Папка удалена из галереи",
+    "remove_failed": "Не удалось удалить папку"
+  },
+
+  "description_image": "Сообщения изображений",
+  "image": {
+    "path_required": "Требуется путь",
+    "access_denied": "Доступ запрещен: путь не в пределах папки галереи",
+    "not_found": "Файл не найден",
+    "invalid_theme": "Неверная тема. Должна быть 'light' или 'dark'",
+    "invalid_language": "Неверный язык. Должен быть 'en' или 'ru'",
+    "invalid_trash_path": "Неверный путь директории корзины",
+    "trash_conflict": "Директория корзины конфликтует с папкой галереи",
+    "invalid_backup_path": "Неверный путь директории резервных копий EXIF",
+    "backup_conflict": "Директория резервных копий EXIF конфликтует с папкой галереи",
+    "trash_not_configured": "Директория корзины не настроена",
+    "trash_not_exists": "Директория корзины не существует",
+    "trash_read_failed": "Не удалось прочитать директорию корзины",
+    "trash_clean_failed": "Не удалось очистить корзину",
+    "thumbnail_failed": "Не удалось создать миниатюру",
+    "metadata_failed": "Не удалось получить метаданные изображения"
+  },
+
+  "description_thumbnail_cache": "Сообщения кэша миниатюр",
+  "thumbnail_cache": {
+    "not_available": "Сервис кэша миниатюр недоступен",
+    "invalidated": "Кэш миниатюр инвалидирован",
+    "all_invalidated": "Весь кэш миниатюр инвалидирован",
+    "warmed_up": "Кэш миниатюр прогрет",
+    "enabled": "Кэш миниатюр включен",
+    "disabled": "Кэш миниатюр выключен"
+  },
+
+  "description_user_service": "Сообщения сервиса пользователей",
+  "user_service": {
+    "invalid_role": "Неверная роль",
+    "password_length": "Пароль должен содержать от 8 до 128 символов",
+    "user_exists": "Пользователь с таким логином уже существует",
+    "last_admin_demote": "Нельзя понизить последнего администратора",
+    "last_admin_deactivate": "Нельзя деактивировать последнего администратора",
+    "last_admin_delete": "Нельзя удалить последнего администратора"
+  },
+
+  "description_middleware": "Сообщения middleware",
+  "middleware": {
+    "unauthorized": "Требуется авторизация",
+    "forbidden": "Недостаточно прав",
+    "csrf_failed": "Проверка Origin не удалась"
+  },
+
+  "description_trash": "Сообщения корзины",
+  "trash": {
+    "not_configured": "Директория корзины не настроена",
+    "not_exists": "Директория корзины не существует",
+    "read_failed": "Не удалось прочитать директорию корзины",
+    "file_name_required": "Требуется имя файла",
+    "file_not_found": "Файл не найден в корзине",
+    "delete_failed": "Не удалось удалить файл из корзины",
+    "restore_failed": "Не удалось восстановить файл из корзины",
+    "restored": "Файл успешно восстановлен",
+    "file_deleted": "Файл удален навсегда"
+  },
+
+  "description_gallery": "Сообщения галереи",
+  "gallery": {
+    "conflict": "Обнаружен конфликт папок галереи"
+  },
+
+  "description_ocr": "Сообщения OCR",
+  "ocr": {
+    "started": "OCR сканирование начато",
+    "failed": "Не удалось запустить OCR сканирование",
+    "already_running": "OCR сканирование уже выполняется",
+    "not_running": "OCR сканирование не выполняется",
+    "image_path_required": "Требуется путь к изображению",
+    "data_not_found": "OCR данные для этого изображения не найдены"
+  },
+
+  "description_llm_ocr": "Сообщения LLM OCR",
+  "llm_ocr": {
+    "not_enabled": "LLM распознавание не включено",
+    "settings_not_found": "Настройки LLM не найдены",
+    "recognition_failed": "Ошибка распознавания текста",
+    "recognition_started": "Распознавание текста начато",
+    "settings_saved": "Настройки сохранены",
+    "settings_save_failed": "Не удалось сохранить настройки",
+    "no_recognition": "Данные распознавания отсутствуют"
+  },
+
+  "description_calendar": "Сообщения календаря",
+  "calendar": {
+    "month_year_required": "Требуется месяц и год",
+    "invalid_month_year": "Неверный месяц или год",
+    "invalid_cursor": "Неверный курсор пагинации"
+  },
+
+  "description_geo": "Сообщения геолокации",
+  "geo": {
+    "invalid_zoom": "Неверный уровень масштабирования",
+    "invalid_dimensions": "Неверные размеры",
+    "cluster_failed": "Не удалось создать кластеры",
+    "cluster_not_found": "Кластер не найден"
+  },
+
+  "description_llm": "Сообщения LLM",
+  "llm": {
+    "models_failed": "Не удалось получить список моделей"
+  },
+
+  "description_geocode": "Сообщения геокодирования / GPS",
+  "geocode": {
+    "query_required": "Требуется поисковый запрос",
+    "date_required": "Требуется дата (формат ГГГГ-ММ-ДД)",
+    "search_failed": "Ошибка поиска местоположения",
+    "gps_update_failed": "Не удалось обновить GPS координаты",
+    "invalid_coordinates": "Неверные GPS координаты",
+    "gps_updated": "GPS координаты успешно обновлены",
+    "not_jpeg": "GPS может быть записан только в JPEG файлы",
+    "backup_failed": "Не удалось создать резервную копию файла"
+  },
+
+  "description_batch_gps": "Сообщения пакетного обновления GPS",
+  "batch_gps": {
+    "no_paths": "Не указаны пути изображений"
+  },
+
+  "description_avatar": "Сообщения аватара",
+  "avatar": {
+    "upload_failed": "Не удалось загрузить аватар",
+    "invalid_type": "Неверный тип изображения. Поддерживаются: JPEG, PNG, WebP, GIF",
+    "too_large": "Изображение слишком большое. Максимальный размер 10 МБ",
+    "delete_failed": "Не удалось удалить аватар",
+    "not_found": "Аватар не найден"
+  },
+
+  "description_chat": "Сообщения чата",
+  "chat": {
+    "invalid_request": "Неверное тело запроса",
+    "conversation_not_found": "Диалог не найден",
+    "invalid_conversation_id": "Неверный ID диалога",
+    "content_required": "Содержимое обязательно",
+    "llm_no_chat_support": "LLM-провайдер не поддерживает чат/вызов функций",
+    "conversation_deleted": "Диалог удален"
+  },
+
+  "description_embedding": "Сообщения эмбеддингов",
+  "embedding": {
+    "manager_not_available": "Менеджер бэкфилла эмбеддингов недоступен",
+    "backfill_started": "Бэкфилл эмбеддингов начат",
+    "backfill_stopped": "Бэкфилл эмбеддингов остановлен",
+    "provider_not_found": "Провайдер эмбеддингов не найден",
+    "client_creation_failed": "Не удалось создать клиент эмбеддингов",
+    "probe_failed": "Ошибка пробного запроса эмбеддингов",
+    "empty_vector": "Пробный запрос эмбеддингов вернул пустой вектор"
+  },
+
+
+  "description_tag_scan": "Сообщения сканирования тегов",
+  "tag_scan": {
+    "manager_not_available": "Менеджер сканирования тегов недоступен",
+    "paused": "Сканирование тегов приостановлено",
+    "resumed": "Сканирование тегов возобновлено"
+  }
+}

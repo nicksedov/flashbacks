@@ -500,7 +500,7 @@ func findDuplicates(db *gorm.DB) ([]domain.DuplicateGroup, error) {
 			if _, err := os.Stat(f.Path); err == nil {
 				existingFiles = append(existingFiles, f)
 			} else {
-				db.Delete(&f)
+				deleteImageFileCascade(db, f.ID)
 			}
 		}
 

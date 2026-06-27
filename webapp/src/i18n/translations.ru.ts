@@ -178,6 +178,9 @@ export const translationsRu = {
   "gallery.sortOldest": "Сначала старые",
   "gallery.search.placeholder": "Поиск по имени папки или файла...",
   "gallery.search.clear": "Очистить поиск",
+  "gallery.search.noResults": "Ничего не найдено по запросу \"{query}\"",
+  "gallery.search.noResultsHint": "Попробуйте другой поисковый запрос",
+  "gallery.search.resultsCount": "Найдено {shown} из {total} изображений",
   "gallery.calendar.noDateInfo": "Информация о дате отсутствует",
   "gallery.calendar.noDateInfoHint": "Изображения без метаданных даты EXIF не отображаются.",
   "gallery.calendar.clearFilter": "Очистить фильтр",
@@ -206,6 +209,13 @@ export const translationsRu = {
   "gallery.deleteConfirm.cancel": "Отмена",
   "gallery.deleteConfirm.delete": "Удалить",
   "gallery.deleteConfirm.deleting": "Удаление...",
+
+  // Gallery folder selection
+  "gallery.selection.select": "Выбрать",
+  "gallery.selection.unselect": "Снять выделение",
+  "gallery.selection.selectedCount": "{count} файлов выбрано",
+  "gallery.selection.selectedCountOne": "{count} файл выбран",
+  "gallery.selection.clearSelection": "Снять выделение",
 
   // Geolocation
   "geolocation.backToMap": "Вернуться к карте",

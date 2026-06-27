@@ -178,6 +178,9 @@ export const translationsEn = {
   "gallery.sortOldest": "Oldest first",
   "gallery.search.placeholder": "Search by folder or file name...",
   "gallery.search.clear": "Clear search",
+  "gallery.search.noResults": "No results found for \"{query}\"",
+  "gallery.search.noResultsHint": "Try a different search term",
+  "gallery.search.resultsCount": "Found {shown} of {total} images",
   "gallery.calendar.noDateInfo": "No date information available",
   "gallery.calendar.noDateInfoHint": "Images without EXIF date metadata are not shown.",
   "gallery.calendar.clearFilter": "Clear filter",
@@ -206,6 +209,13 @@ export const translationsEn = {
   "gallery.deleteConfirm.cancel": "Cancel",
   "gallery.deleteConfirm.delete": "Delete",
   "gallery.deleteConfirm.deleting": "Deleting...",
+
+  // Gallery folder selection
+  "gallery.selection.select": "Select",
+  "gallery.selection.unselect": "Unselect",
+  "gallery.selection.selectedCount": "{count} file(s) selected",
+  "gallery.selection.selectedCountOne": "{count} file selected",
+  "gallery.selection.clearSelection": "Clear Selection",
 
   // Geolocation
   "geolocation.backToMap": "Back to Map",

@@ -1,4 +1,4 @@
-import { useMemo } from "react"
+import { useCallback, useMemo, useRef } from "react"
 import { useTranslation } from "@/i18n"
 import { Folder } from "lucide-react"
 import type { GalleryImageDTO, GalleryFolderDTO } from "@/types"
@@ -10,6 +10,10 @@ interface GalleryImageGridProps {
   onImageDownload?: (image: GalleryImageDTO) => void
   onImageDelete?: (image: GalleryImageDTO) => void
   rootFolders?: GalleryFolderDTO[]
+  selectedIds?: Set<number>
+  activeSelectionFolder?: string | null
+  onToggleSelection?: (image: GalleryImageDTO) => void
+  onRangeSelection?: (startImage: GalleryImageDTO, endImage: GalleryImageDTO) => void
 }
 
 function normalizePath(p: string): string {
@@ -42,8 +46,54 @@ function getRelativeFolderName(dirPath: string, rootFolders?: GalleryFolderDTO[]
   return lastSlash >= 0 ? normalized.substring(lastSlash + 1) : normalized
 }
 
-export function GalleryImageGrid({ images, onImageClick, onImageDownload, onImageDelete, rootFolders }: GalleryImageGridProps) {
+export function GalleryImageGrid({
+  images,
+  onImageClick,
+  onImageDownload,
+  onImageDelete,
+  rootFolders,
+  selectedIds,
+  activeSelectionFolder,
+  onToggleSelection,
+  onRangeSelection,
+}: GalleryImageGridProps) {
   const { t } = useTranslation()
+  const lastShiftImageIdRef = useRef<number | null>(null)
+
+  // Build a lookup from image.id -> its folder group images for shift-range selection
+  const groupImagesMap = useMemo(() => {
+    const map = new Map<number, GalleryImageDTO[]>()
+    for (const image of images) {
+      let group = map.get(image.id)
+      if (!group) {
+        group = images.filter((img) => img.dirPath === image.dirPath)
+        map.set(image.id, group)
+      }
+    }
+    return map
+  }, [images])
+
+  const handleSelectToggle = useCallback((e: React.MouseEvent | React.KeyboardEvent, image: GalleryImageDTO) => {
+    if (e.shiftKey && lastShiftImageIdRef.current !== null && onRangeSelection) {
+      const groupImages = groupImagesMap.get(lastShiftImageIdRef.current)
+      const startImage = groupImages?.find((img) => img.id === lastShiftImageIdRef.current)
+      if (startImage && startImage.dirPath === image.dirPath) {
+        onRangeSelection(startImage, image)
+      }
+      return
+    }
+    if (e.ctrlKey || e.metaKey) {
+      lastShiftImageIdRef.current = image.id
+      onToggleSelection?.(image)
+      return
+    }
+    if (selectedIds !== undefined) {
+      lastShiftImageIdRef.current = image.id
+      onToggleSelection?.(image)
+    } else {
+      onImageClick(image)
+    }
+  }, [groupImagesMap, onRangeSelection, onToggleSelection, selectedIds, onImageClick])
 
   const groupedByFolder = useMemo(() => {
     const groups: { dirPath: string; folderName: string; images: GalleryImageDTO[] }[] = []
@@ -91,6 +141,9 @@ export function GalleryImageGrid({ images, onImageClick, onImageDownload, onImag
                 onClick={onImageClick}
                 onImageDownload={onImageDownload}
                 onImageDelete={onImageDelete}
+                selected={selectedIds?.has(image.id)}
+                selectionActiveInOtherFolder={activeSelectionFolder !== null && image.dirPath !== activeSelectionFolder}
+                onSelectToggle={handleSelectToggle}
               />
             ))}
           </div>

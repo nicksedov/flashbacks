@@ -1,6 +1,6 @@
 import { memo } from "react"
 import { useTranslation } from "@/i18n"
-import { Download, Trash2 } from "lucide-react"
+import { Download, Trash2, Check } from "lucide-react"
 import type { GalleryImageDTO } from "@/types"
 
 interface ImageTileProps {
@@ -8,6 +8,9 @@ interface ImageTileProps {
   onClick: (image: GalleryImageDTO) => void
   onImageDownload?: (image: GalleryImageDTO) => void
   onImageDelete?: (image: GalleryImageDTO) => void
+  selected?: boolean
+  selectionActiveInOtherFolder?: boolean
+  onSelectToggle?: (e: React.MouseEvent | React.KeyboardEvent, image: GalleryImageDTO) => void
 }
 
 export const ImageTile = memo(function ImageTile({
@@ -15,6 +18,9 @@ export const ImageTile = memo(function ImageTile({
   onClick,
   onImageDownload,
   onImageDelete,
+  selected,
+  selectionActiveInOtherFolder,
+  onSelectToggle,
 }: ImageTileProps) {
   const { t } = useTranslation()
 
@@ -26,7 +32,11 @@ export const ImageTile = memo(function ImageTile({
       onClick={() => onClick(image)}
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(image); } }}
     >
-      <div className="relative aspect-square overflow-hidden rounded-lg border bg-muted hover:ring-2 hover:ring-ring transition-all">
+      <div
+        className={`relative aspect-square overflow-hidden rounded-lg border bg-muted transition-all ${
+          selected ? "ring-2 ring-primary border-primary" : "hover:ring-2 hover:ring-ring"
+        }`}
+      >
         {image.thumbnail ? (
           <img
             src={image.thumbnail}
@@ -39,6 +49,36 @@ export const ImageTile = memo(function ImageTile({
             {t("gallery.noPreview")}
           </div>
         )}
+
+        {/* Selection checkmark in top-right corner */}
+        {selected !== undefined && onSelectToggle && (
+          <button
+            type="button"
+            className={`absolute top-1 right-1 flex h-5 w-5 items-center justify-center rounded-full border-2 transition-colors z-10 ${
+              selectionActiveInOtherFolder
+                ? "opacity-40 cursor-not-allowed"
+                : selected
+                  ? "bg-primary border-primary text-primary-foreground"
+                  : "bg-background/80 border-muted-foreground/30 hover:border-primary/60"
+            }`}
+            onClick={(e) => {
+              if (selectionActiveInOtherFolder) return;
+              e.stopPropagation()
+              onSelectToggle(e, image)
+            }}
+            title={
+              selectionActiveInOtherFolder
+                ? t("gallery.selection.select")
+                : selected
+                  ? t("gallery.selection.unselect")
+                  : t("gallery.selection.select")
+            }
+            disabled={selectionActiveInOtherFolder}
+          >
+            {selected && <Check className="h-3 w-3" />}
+          </button>
+        )}
+
         {/* Overlay with action buttons */}
         <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-2 opacity-0 group-hover:opacity-100 transition-opacity">
           <div className="flex gap-1 justify-center">

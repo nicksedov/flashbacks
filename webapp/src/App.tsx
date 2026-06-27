@@ -7,6 +7,7 @@ import { fetchFolders } from "@/api/endpoints"
 import { useTranslation } from "@/i18n"
 import { useSettings } from "@/providers/useSettings"
 import { useAuth } from "@/providers/AuthProvider"
+import { GallerySelectionProvider } from "@/providers/GallerySelectionContext"
 import { LoginScreen } from "@/components/auth/LoginScreen"
 import { BootstrapSetupScreen } from "@/components/auth/BootstrapSetupScreen"
 import { UserProfile } from "@/components/auth/UserProfile"
@@ -113,18 +114,19 @@ export default function App() {
   }
 
   return (
-    <div className="flex h-screen bg-background">
-      <Sidebar
-        activeTab={activeTab}
-        onTabChange={handleTabChange}
-        collapsed={sidebarCollapsed}
-        onToggleCollapse={handleToggleCollapse}
-        mobileOpen={mobileMenuOpen}
-        onMobileClose={handleMobileMenuClose}
-      />
+    <GallerySelectionProvider>
+      <div className="flex h-screen bg-background">
+        <Sidebar
+          activeTab={activeTab}
+          onTabChange={handleTabChange}
+          collapsed={sidebarCollapsed}
+          onToggleCollapse={handleToggleCollapse}
+          mobileOpen={mobileMenuOpen}
+          onMobileClose={handleMobileMenuClose}
+        />
 
-      <div className="flex flex-1 flex-col overflow-hidden">
-        <Header onTabChange={handleTabChange} onMobileMenuToggle={handleMobileMenuToggle} />
+        <div className="flex flex-1 flex-col overflow-hidden">
+          <Header onTabChange={handleTabChange} onMobileMenuToggle={handleMobileMenuToggle} />
 
         <main className={`flex-1 overflow-auto ${activeTab === "gallery-geolocation" ? "px-3 py-3" : "px-8 py-6"}`}>
           <div className={activeTab === "gallery-geolocation" ? "mx-auto" : "mx-auto max-w-7xl"}>
@@ -213,5 +215,6 @@ export default function App() {
 
       <Toaster richColors position="top-right" />
     </div>
+    </GallerySelectionProvider>
   )
 }

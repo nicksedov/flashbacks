@@ -56,7 +56,7 @@ export const ImageTile = memo(function ImageTile({
             type="button"
             className={`absolute top-1 right-1 flex h-5 w-5 items-center justify-center rounded-full border-2 transition-colors z-10 ${
               selectionActiveInOtherFolder
-                ? "opacity-40 cursor-not-allowed"
+                ? "bg-muted-foreground/10 border-muted-foreground/20 text-muted-foreground/30 cursor-not-allowed"
                 : selected
                   ? "bg-primary border-primary text-primary-foreground"
                   : "bg-background/80 border-muted-foreground/30 hover:border-primary/60"

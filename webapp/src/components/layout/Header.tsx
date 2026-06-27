@@ -1,9 +1,11 @@
 import { useTranslation } from "@/i18n"
 import { useAuth } from "@/providers/AuthProvider"
+import { useGallerySelection } from "@/providers/useGallerySelection"
 import { getAvatarUrl } from "@/api/endpoints"
-import { LogOut, Settings, User, Menu } from "lucide-react"
+import { LogOut, Settings, User, Menu, X, Trash2 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { IconButton } from "@/components/ui/icon-button"
+import { Button } from "@/components/ui/button"
 
 interface HeaderProps {
   onTabChange: (tab: string) => void
@@ -13,6 +15,7 @@ interface HeaderProps {
 export function Header({ onTabChange, onMobileMenuToggle }: HeaderProps) {
   const { t } = useTranslation()
   const { user, logout } = useAuth()
+  const selection = useGallerySelection()
 
   return (
     <header
@@ -20,19 +23,52 @@ export function Header({ onTabChange, onMobileMenuToggle }: HeaderProps) {
       style={{ backgroundColor: 'var(--color-header)' }}
     >
       <div className="flex items-center justify-between gap-3">
-        {/* Mobile menu button */}
-        <button
-          type="button"
-          className="flex h-9 w-9 items-center justify-center rounded-md hover:bg-muted transition-colors md:hidden"
-          onClick={onMobileMenuToggle}
-          aria-label={t("header.menu")}
-          title={t("header.menu")}
-        >
-          <Menu className="h-5 w-5" />
-        </button>
+        {/* Selection bar: shown instead of mobile menu button when selection is active */}
+        {selection.isActive ? (
+          <div className="flex items-center gap-2">
+            <Badge variant="secondary" className="text-xs">
+              {selection.selectedCount === 1
+                ? t("gallery.selection.selectedCountOne", { count: selection.selectedCount })
+                : t("gallery.selection.selectedCount", { count: selection.selectedCount })}
+            </Badge>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-7 px-2 text-xs"
+              onClick={selection.clearSelection}
+            >
+              <X className="h-3.5 w-3.5 mr-1" />
+              {t("gallery.selection.clearSelection")}
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              size="sm"
+              className="h-7 px-2 text-xs"
+              onClick={selection.deleteSelected}
+            >
+              <Trash2 className="h-3.5 w-3.5 mr-1" />
+              {t("common.delete")}
+            </Button>
+          </div>
+        ) : (
+          <>
+            {/* Mobile menu button */}
+            <button
+              type="button"
+              className="flex h-9 w-9 items-center justify-center rounded-md hover:bg-muted transition-colors md:hidden"
+              onClick={onMobileMenuToggle}
+              aria-label={t("header.menu")}
+              title={t("header.menu")}
+            >
+              <Menu className="h-5 w-5" />
+            </button>
 
-        {/* Spacer for desktop alignment */}
-        <div className="hidden md:block" />
+            {/* Spacer for desktop alignment */}
+            <div className="hidden md:block" />
+          </>
+        )}
 
         {user && (
           <div className="flex items-center gap-3">

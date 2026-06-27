@@ -3,12 +3,12 @@ import { GalleryImageGrid } from "@/components/gallery/GalleryImageGrid"
 import { useGalleryImages } from "@/hooks/useGalleryImages"
 import { useGalleryFolders } from "@/hooks/useGalleryFolders"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Button } from "@/components/ui/button"
 import { ImageIcon, ArrowDown, ArrowUp, Search, X } from "lucide-react"
 import { useTranslation } from "@/i18n"
 import { useIntersectionObserver } from "@/hooks/useIntersectionObserver"
 import { PaginationFooter } from "@/components/ui/pagination-footer"
 import { ViewHeader } from "@/components/ui/view-header"
+import { useGallerySelection } from "@/providers/useGallerySelection"
 import type { GalleryImageDTO } from "@/types"
 
 interface GalleryFoldersViewProps {
@@ -28,6 +28,7 @@ export function GalleryFoldersView({ onImageClick, onImageDownload, onImageDelet
     useGalleryImages("folders", sortOrder, searchQuery || undefined)
   const { folders: rootFolders } = useGalleryFolders()
   const { t } = useTranslation()
+  const { registerActions } = useGallerySelection()
 
   // Debounce search input (500ms delay)
   useEffect(() => {
@@ -121,88 +122,72 @@ export function GalleryFoldersView({ onImageClick, onImageDownload, onImageDelet
 
   const selectedCount = selectedIds.size
 
+  // Register selection actions in context for Header display
+  useEffect(() => {
+    if (selectedCount > 0) {
+      registerActions({
+        count: selectedCount,
+        clear: () => {
+          setSelectedIds(new Set())
+          setLastSelectedFolder(null)
+        },
+        del: handleDeleteSelected,
+      })
+    } else {
+      registerActions(null)
+    }
+    return () => {
+      registerActions(null)
+    }
+  }, [selectedCount, handleDeleteSelected, registerActions])
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3">
-        {/* Left side: either ViewHeader or Selection info */}
-        {selectedCount > 0 ? (
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-medium">
-              {t(
-                selectedCount === 1 ? "gallery.selection.selectedCountOne" : "gallery.selection.selectedCount",
-                { count: selectedCount }
-              )}
-            </span>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="h-7 px-2 text-xs"
-              onClick={() => {
-                setSelectedIds(new Set())
-                setLastSelectedFolder(null)
-              }}
-            >
-              {t("gallery.selection.clearSelection")}
-            </Button>
-            <Button
-              type="button"
-              variant="destructive"
-              size="sm"
-              className="h-7 px-2 text-xs"
-              onClick={handleDeleteSelected}
-            >
-              {t("common.delete")}
-            </Button>
-          </div>
-        ) : (
-          <ViewHeader
-            icon={ImageIcon}
-            textKey={totalImages === 1 ? "gallery.imageCountOne" : "gallery.imageCount"}
-            textValues={{ count: totalImages.toLocaleString() }}
-            isLoading={!initialized}
-          />
-        )}
+        <ViewHeader
+          icon={ImageIcon}
+          textKey={totalImages === 1 ? "gallery.imageCountOne" : "gallery.imageCount"}
+          textValues={{ count: totalImages.toLocaleString() }}
+          isLoading={!initialized}
+        />
 
-        {/* Right side: search and sort (only when no selection) */}
-        {selectedCount === 0 && (
-          <div className="flex items-center gap-2">
-            {/* Search input */}
-            <div className="relative">
-              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <input
-                type="text"
-                value={searchInput}
-                onChange={handleSearchChange}
-                placeholder={t("gallery.search.placeholder")}
-                className="h-9 w-70 rounded-md border bg-background pl-8 pr-8 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-              />
-              {searchInput && (
-                <button
-                  onClick={handleClearSearch}
-                  className="absolute right-1 top-1/2 -translate-y-1/2 h-6 w-6 rounded-sm hover:bg-accent flex items-center justify-center"
-                  title={t("gallery.search.clear")}
-                >
-                  <X className="h-3 w-3 text-muted-foreground" />
-                </button>
-              )}
-            </div>
-
-            {/* Sort button */}
-            <button
-              onClick={handleSortToggle}
-              className="inline-flex items-center gap-2 rounded-md bg-transparent px-3 py-2 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-              title={sortOrder === "newest" ? t("gallery.sortNewest") : t("gallery.sortOldest")}
-            >
-              {sortOrder === "newest" ? (
-                <ArrowDown className="h-4 w-4" />
-              ) : (
-                <ArrowUp className="h-4 w-4" />
-              )}
-              <span>{sortOrder === "newest" ? t("gallery.sortNewest") : t("gallery.sortOldest")}</span>
-            </button>
+        {/* Right side: search and sort */}
+        <div className="flex items-center gap-2">
+          {/* Search input */}
+          <div className="relative">
+            <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <input
+              type="text"
+              value={searchInput}
+              onChange={handleSearchChange}
+              placeholder={t("gallery.search.placeholder")}
+              className="h-9 w-70 rounded-md border bg-background pl-8 pr-8 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            />
+            {searchInput && (
+              <button
+                onClick={handleClearSearch}
+                className="absolute right-1 top-1/2 -translate-y-1/2 h-6 w-6 rounded-sm hover:bg-accent flex items-center justify-center"
+                title={t("gallery.search.clear")}
+              >
+                <X className="h-3 w-3 text-muted-foreground" />
+              </button>
+            )}
           </div>
-        )}
+
+          {/* Sort button */}
+          <button
+            onClick={handleSortToggle}
+            className="inline-flex items-center gap-2 rounded-md bg-transparent px-3 py-2 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+            title={sortOrder === "newest" ? t("gallery.sortNewest") : t("gallery.sortOldest")}
+          >
+            {sortOrder === "newest" ? (
+              <ArrowDown className="h-4 w-4" />
+            ) : (
+              <ArrowUp className="h-4 w-4" />
+            )}
+            <span>{sortOrder === "newest" ? t("gallery.sortNewest") : t("gallery.sortOldest")}</span>
+          </button>
+        </div>
       </div>
 
       {error && (

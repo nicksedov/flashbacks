@@ -161,11 +161,11 @@ func (om *OcrManager) processSingleImage(image domain.ImageFile, stopRequested f
 	result.Classification = &domain.OcrClassification{
 		ImageFileID:        image.ID,
 		IsTextDocument:     ocrResp.IsTextDocument,
-		MeanConfidence:     ocrResp.MeanConfidence,
-		WeightedConfidence: ocrResp.WeightedConfidence,
+		MeanConfidence:     float32(ocrResp.MeanConfidence),
+		WeightedConfidence: float32(ocrResp.WeightedConfidence),
 		TokenCount:         ocrResp.TokenCount,
 		Angle:              ocrResp.Angle,
-		ScaleFactor:        ocrResp.ScaleFactor,
+		ScaleFactor:        float32(ocrResp.ScaleFactor),
 		BoundingBoxWidth:   rotatedWidth,
 		BoundingBoxHeight:  rotatedHeight,
 	}
@@ -179,7 +179,7 @@ func (om *OcrManager) processSingleImage(image domain.ImageFile, stopRequested f
 				Width:      box.Width,
 				Height:     box.Height,
 				Word:       box.Word,
-				Confidence: box.Confidence,
+				Confidence: float32(box.Confidence),
 			})
 		}
 	}

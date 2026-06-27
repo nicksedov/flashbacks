@@ -1,13 +1,10 @@
 package dto
 
-// HealthResponse is the JSON response for GET /exif/health
-type HealthResponse struct {
-	Status            string `json:"status"`
-	Version           string `json:"version"`
-	ExiftoolAvailable bool   `json:"exiftoolAvailable"`
-	DatabaseConnected bool   `json:"databaseConnected"`
-	Uptime            string `json:"uptime"`
-}
+import shareddomain "github.com/flashbacks/shared/domain"
+
+// HealthResponse is the JSON response for GET /exif/health.
+// This is an alias for the shared ExifHealthStatus type.
+type HealthResponse = shareddomain.ExifHealthStatus
 
 // MetadataResponse is the JSON response for GET /exif/metadata
 type MetadataResponse struct {
@@ -62,18 +59,12 @@ type GPSBatchResponse struct {
 	FailedFiles []string `json:"failedFiles,omitempty"`
 }
 
-// LocationCandidate represents a suggested location
-type LocationCandidate struct {
-	Lat        float64 `json:"lat"`
-	Lng        float64 `json:"lng"`
-	NameLocal  string  `json:"nameLocal"`
-	NameEng    string  `json:"nameEng"`
-	PhotoCount int     `json:"photoCount"`
-}
+// LocationCandidate is re-exported from the shared domain package.
+type LocationCandidate = shareddomain.LocationCandidate
 
 // LocationCandidatesResponse is the JSON response for GET /exif/location-candidates
 type LocationCandidatesResponse struct {
-	Candidates []LocationCandidate `json:"candidates"`
+	Candidates []shareddomain.LocationCandidate `json:"candidates"`
 }
 
 // ErrorResponse is a generic error response
@@ -130,17 +121,10 @@ type MetadataBatchResponse struct {
 	Metadata []MetadataResponse `json:"metadata"`
 }
 
-// CalendarItem represents a single item in the calendar gallery response
-type CalendarItem struct {
-	ImageFileID    uint    `json:"imageFileId"`
-	Path           string  `json:"path"`
-	DateTaken      string  `json:"dateTaken,omitempty"`
-	GeolocationRef *uint   `json:"geolocationRef,omitempty"`
-	GPSLatitude    float64 `json:"gpsLatitude,omitempty"`
-	GPSLongitude   float64 `json:"gpsLongitude,omitempty"`
-	NameLocal      string  `json:"nameLocal,omitempty"`
-	NameEng        string  `json:"nameEng,omitempty"`
-}
+// CalendarItem is re-exported from the shared domain package.
+// Note: the shared type does not include the Path field, which exif adds independently.
+// For response DTOs, construct inline anonymous structs.
+type CalendarItem = shareddomain.CalendarItem
 
 // CalendarResponse is the JSON response for GET /exif/metadata/calendar
 type CalendarResponse struct {
@@ -175,13 +159,8 @@ type GeolocationResponse struct {
 	NameEng      string  `json:"nameEng"`
 }
 
-// MissingImageItem represents an image missing EXIF data
-type MissingImageItem struct {
-	ImageFileID uint   `json:"imageFileId"`
-	Path        string `json:"path"`
-	MissingDate bool   `json:"missingDate"`
-	MissingGPS  bool   `json:"missingGps"`
-}
+// MissingImageItem is re-exported from the shared domain package.
+type MissingImageItem = shareddomain.MissingImageItem
 
 // MissingImagesResponse is the JSON response for GET /exif/missing
 type MissingImagesResponse struct {

@@ -7,8 +7,8 @@ import (
 	"net/http"
 	"strconv"
 
-	"ocr/internal/service"
-
+	shareddomain "github.com/flashbacks/shared/domain"
+	"github.com/flashbacks/ocr/internal/service"
 	"github.com/otiai10/gosseract/v2"
 )
 
@@ -131,8 +131,37 @@ func (h *ClassifyHandler) Classify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Convert internal result to shared ClassifyResponse for JSON encoding
+	response := toSharedClassifyResponse(result)
+
 	w.WriteHeader(http.StatusOK)
-	if err := json.NewEncoder(w).Encode(result); err != nil {
+	if err := json.NewEncoder(w).Encode(response); err != nil {
 		fmt.Fprintf(w, `{"error":"failed to encode response"}`)
 	}
+}
+
+// toSharedClassifyResponse converts an internal ClassifierResult to the shared ClassifyResponse.
+func toSharedClassifyResponse(result *service.ClassifierResult) shareddomain.ClassifyResponse {
+	response := shareddomain.ClassifyResponse{
+		MeanConfidence:     result.MeanConfidence,
+		WeightedConfidence: result.WeightedConfidence,
+		TokenCount:         result.TokenCount,
+		Boxes:              make([]shareddomain.BoundingBox, len(result.Boxes)),
+		Angle:              result.Angle,
+		ScaleFactor:        result.ScaleFactor,
+		IsTextDocument:     result.IsTextDocument,
+		BoundingBoxWidth:   result.BoundingBoxWidth,
+		BoundingBoxHeight:  result.BoundingBoxHeight,
+	}
+	for i, b := range result.Boxes {
+		response.Boxes[i] = shareddomain.BoundingBox{
+			X:          b.X,
+			Y:          b.Y,
+			Width:      b.Width,
+			Height:     b.Height,
+			Word:       b.Word,
+			Confidence: b.Confidence,
+		}
+	}
+	return response
 }

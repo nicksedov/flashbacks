@@ -14,6 +14,7 @@ import (
 	"github.com/flashbacks/api-service/internal/testutil"
 	"github.com/flashbacks/api-service/internal/testutil/fixtures"
 	"github.com/flashbacks/api-service/internal/testutil/mocks"
+	shareddomain "github.com/flashbacks/shared/domain"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -95,7 +96,7 @@ func TestOcrManager_GetEffectiveWorkers_Capped(t *testing.T) {
 func TestOcrManager_ProcessUnclassified_NoImages(t *testing.T) {
 	om, mockOcr, _ := setupOcrManager(t)
 
-	mockOcr.ClassifyFunc = func(ctx context.Context, image io.Reader, contentType string, params *ocr.ClassifyParams) (*ocr.ClassifyResponse, error) {
+	mockOcr.ClassifyFunc = func(ctx context.Context, image io.Reader, contentType string, params *ocr.ClassifyParams) (*shareddomain.ClassifyResponse, error) {
 		return mocks.TextDocumentResponse(0.95, 0.90, 100, 0), nil
 	}
 
@@ -116,7 +117,7 @@ func TestOcrManager_Process_Unclassified_WithImages(t *testing.T) {
 		testutil.SeedImageFileNoT(om.db, path, "hash-"+path, 1000)
 	}
 
-	mockOcr.ClassifyFunc = func(ctx context.Context, image io.Reader, contentType string, params *ocr.ClassifyParams) (*ocr.ClassifyResponse, error) {
+	mockOcr.ClassifyFunc = func(ctx context.Context, image io.Reader, contentType string, params *ocr.ClassifyParams) (*shareddomain.ClassifyResponse, error) {
 		return mocks.TextDocumentResponse(0.95, 0.90, 100, 0), nil
 	}
 
@@ -136,7 +137,7 @@ func TestOcrManager_Process_OCRClientError(t *testing.T) {
 	path := fixtures.CreateMultipleTestJPEGs(t, tmpDir, 1)[0]
 	testutil.SeedImageFileNoT(om.db, path, "hash-error-test", 1000)
 
-	mockOcr.ClassifyFunc = func(ctx context.Context, image io.Reader, contentType string, params *ocr.ClassifyParams) (*ocr.ClassifyResponse, error) {
+	mockOcr.ClassifyFunc = func(ctx context.Context, image io.Reader, contentType string, params *ocr.ClassifyParams) (*shareddomain.ClassifyResponse, error) {
 		return nil, assert.AnError
 	}
 

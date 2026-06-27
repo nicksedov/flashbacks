@@ -20,14 +20,9 @@ type ImageFile struct {
 	UpdatedAt time.Time `json:"updatedAt"`
 }
 
-// ExifHealthStatus represents the EXIF service health check result.
-type ExifHealthStatus struct {
-	Status            string `json:"status"`
-	Version           string `json:"version"`
-	ExiftoolAvailable bool   `json:"exiftoolAvailable"`
-	DatabaseConnected bool   `json:"databaseConnected"`
-	Uptime            string `json:"uptime"`
-}
+// ExifHealthStatus is re-exported from the shared domain package.
+// The canonical definition lives in github.com/flashbacks/shared/domain.
+type ExifHealthStatus = shareddomain.ExifHealthStatus
 
 // DuplicateGroup represents a group of duplicate images
 type DuplicateGroup struct {
@@ -82,16 +77,9 @@ type CalendarResult struct {
 	TotalWithDate int64
 }
 
-// CalendarItem represents a single calendar gallery item.
-type CalendarItem struct {
-	ImageFileID    uint    `json:"imageFileId"`
-	DateTaken      string  `json:"dateTaken"`
-	GeolocationRef *uint   `json:"geolocationRef"`
-	GPSLatitude    float64 `json:"gpsLatitude"`
-	GPSLongitude   float64 `json:"gpsLongitude"`
-	NameLocal      string  `json:"nameLocal"`
-	NameEng        string  `json:"nameEng"`
-}
+// CalendarItem is re-exported from the shared domain package.
+// The canonical definition lives in github.com/flashbacks/shared/domain.
+type CalendarItem = shareddomain.CalendarItem
 
 // GeoBounds defines a geographic bounding box.
 type GeoBounds struct {
@@ -118,22 +106,13 @@ type MissingImagesResult struct {
 	PageSize int
 }
 
-// MissingImageItem represents an image missing EXIF data.
-type MissingImageItem struct {
-	ImageFileID uint   `json:"imageFileId"`
-	Path        string `json:"path"`
-	MissingDate bool   `json:"missingDate"`
-	MissingGPS  bool   `json:"missingGps"`
-}
+// MissingImageItem is re-exported from the shared domain package.
+// The canonical definition lives in github.com/flashbacks/shared/domain.
+type MissingImageItem = shareddomain.MissingImageItem
 
-// LocationCandidate represents a location suggestion.
-type LocationCandidate struct {
-	Lat        float64 `json:"lat"`
-	Lng        float64 `json:"lng"`
-	NameLocal  string  `json:"nameLocal"`
-	NameEng    string  `json:"nameEng"`
-	PhotoCount int     `json:"photoCount"`
-}
+// LocationCandidate is re-exported from the shared domain package.
+// The canonical definition lives in github.com/flashbacks/shared/domain.
+type LocationCandidate = shareddomain.LocationCandidate
 
 // GalleryFolder represents a configured gallery folder in the database
 type GalleryFolder struct {

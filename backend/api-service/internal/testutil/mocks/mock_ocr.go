@@ -4,12 +4,13 @@ import (
 	"context"
 	"io"
 
+	shareddomain "github.com/flashbacks/shared/domain"
 	"github.com/flashbacks/api-service/internal/infrastructure/ocr"
 )
 
 // MockOcrClient is a mock implementation of ocr.Client for testing.
 type MockOcrClient struct {
-	ClassifyFunc    func(ctx context.Context, image io.Reader, contentType string, params *ocr.ClassifyParams) (*ocr.ClassifyResponse, error)
+	ClassifyFunc    func(ctx context.Context, image io.Reader, contentType string, params *ocr.ClassifyParams) (*shareddomain.ClassifyResponse, error)
 	HealthFunc      func(ctx context.Context) (ocr.HealthStatus, error)
 	GetStatusFunc   func() ocr.Status
 	StartHealthFunc func(intervalSeconds int)
@@ -52,7 +53,7 @@ func (m *MockOcrClient) StopHealthCheck() {
 }
 
 // Classify implements ocr.Client.
-func (m *MockOcrClient) Classify(ctx context.Context, image io.Reader, contentType string, params *ocr.ClassifyParams) (*ocr.ClassifyResponse, error) {
+func (m *MockOcrClient) Classify(ctx context.Context, image io.Reader, contentType string, params *ocr.ClassifyParams) (*shareddomain.ClassifyResponse, error) {
 	m.ClassifyCallCount++
 	if m.ClassifyFunc != nil {
 		return m.ClassifyFunc(ctx, image, contentType, params)
@@ -61,8 +62,8 @@ func (m *MockOcrClient) Classify(ctx context.Context, image io.Reader, contentTy
 }
 
 // TextDocumentResponse returns a mock OCR response for a text document with bounding boxes.
-func TextDocumentResponse(meanConfidence, weightedConfidence float32, tokenCount int, angle int) *ocr.ClassifyResponse {
-	return &ocr.ClassifyResponse{
+func TextDocumentResponse(meanConfidence, weightedConfidence float64, tokenCount int, angle int) *shareddomain.ClassifyResponse {
+	return &shareddomain.ClassifyResponse{
 		IsTextDocument:     true,
 		MeanConfidence:     meanConfidence,
 		WeightedConfidence: weightedConfidence,
@@ -71,7 +72,7 @@ func TextDocumentResponse(meanConfidence, weightedConfidence float32, tokenCount
 		ScaleFactor:        1.0,
 		BoundingBoxWidth:   200,
 		BoundingBoxHeight:  50,
-		Boxes: []ocr.BoundingBox{
+		Boxes: []shareddomain.BoundingBox{
 			{X: 10, Y: 10, Width: 100, Height: 20, Word: "Hello", Confidence: 0.95},
 			{X: 10, Y: 35, Width: 80, Height: 20, Word: "World", Confidence: 0.90},
 		},
@@ -79,21 +80,21 @@ func TextDocumentResponse(meanConfidence, weightedConfidence float32, tokenCount
 }
 
 // NonTextResponse returns a mock OCR response for a non-text document (photo).
-func NonTextResponse() *ocr.ClassifyResponse {
-	return &ocr.ClassifyResponse{
+func NonTextResponse() *shareddomain.ClassifyResponse {
+	return &shareddomain.ClassifyResponse{
 		IsTextDocument:     false,
 		MeanConfidence:     0.1,
 		WeightedConfidence: 0.1,
 		TokenCount:         0,
 		Angle:              0,
 		ScaleFactor:        1.0,
-		Boxes:              []ocr.BoundingBox{},
+		Boxes:              []shareddomain.BoundingBox{},
 	}
 }
 
 // ErrorResponse is a helper that returns an error from Classify.
-func ErrorResponse(err error) func(ctx context.Context, image io.Reader, contentType string, params *ocr.ClassifyParams) (*ocr.ClassifyResponse, error) {
-	return func(ctx context.Context, image io.Reader, contentType string, params *ocr.ClassifyParams) (*ocr.ClassifyResponse, error) {
+func ErrorResponse(err error) func(ctx context.Context, image io.Reader, contentType string, params *ocr.ClassifyParams) (*shareddomain.ClassifyResponse, error) {
+	return func(ctx context.Context, image io.Reader, contentType string, params *ocr.ClassifyParams) (*shareddomain.ClassifyResponse, error) {
 		return nil, err
 	}
 }

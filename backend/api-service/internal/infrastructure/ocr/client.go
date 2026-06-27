@@ -10,6 +10,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	shareddomain "github.com/flashbacks/shared/domain"
 )
 
 // Status represents the OCR service status
@@ -46,29 +48,6 @@ func DefaultClassifyParams() *ClassifyParams {
 	}
 }
 
-// ClassifyResponse matches the OCR classifier API response
-type ClassifyResponse struct {
-	MeanConfidence     float32       `json:"mean_confidence"`
-	WeightedConfidence float32       `json:"weighted_confidence"`
-	TokenCount         int           `json:"token_count"`
-	Boxes              []BoundingBox `json:"boxes"`
-	Angle              int           `json:"angle"`
-	BoundingBoxWidth   int           `json:"bounding_box_width"`
-	BoundingBoxHeight  int           `json:"bounding_box_height"`
-	ScaleFactor        float32       `json:"scale_factor"`
-	IsTextDocument     bool          `json:"is_text_document"`
-}
-
-// BoundingBox represents a detected text region
-type BoundingBox struct {
-	X          int     `json:"x"`
-	Y          int     `json:"y"`
-	Width      int     `json:"width"`
-	Height     int     `json:"height"`
-	Word       string  `json:"word"`
-	Confidence float32 `json:"confidence"`
-}
-
 // Client is an interface for OCR classifier service
 type Client interface {
 	// CheckHealth checks if OCR service is available
@@ -80,7 +59,7 @@ type Client interface {
 	// StopHealthCheck stops the periodic health check
 	StopHealthCheck()
 	// Classify sends an image to the OCR classifier and returns results
-	Classify(ctx context.Context, image io.Reader, contentType string, params *ClassifyParams) (*ClassifyResponse, error)
+	Classify(ctx context.Context, image io.Reader, contentType string, params *ClassifyParams) (*shareddomain.ClassifyResponse, error)
 }
 
 type clientImpl struct {
@@ -193,7 +172,7 @@ func (c *clientImpl) healthCheckLoop(intervalSeconds int) {
 }
 
 // Classify sends an image to the OCR classifier and returns results
-func (c *clientImpl) Classify(ctx context.Context, image io.Reader, contentType string, params *ClassifyParams) (*ClassifyResponse, error) {
+func (c *clientImpl) Classify(ctx context.Context, image io.Reader, contentType string, params *ClassifyParams) (*shareddomain.ClassifyResponse, error) {
 	// Build URL with query parameters
 	queryParams := url.Values{}
 	if params != nil {
@@ -236,7 +215,7 @@ func (c *clientImpl) Classify(ctx context.Context, image io.Reader, contentType 
 	}
 	req.Header.Set("Content-Type", contentType)
 
-	// Use longer timeout for OCR processing (90s) - OCR can be slow for large images
+	// Use longer timeout for OCR processing (180s) - OCR can be slow for large images
 	client := &http.Client{Timeout: 180 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
@@ -249,8 +228,8 @@ func (c *clientImpl) Classify(ctx context.Context, image io.Reader, contentType 
 		return nil, fmt.Errorf("OCR API error (status %d): %s", resp.StatusCode, string(body))
 	}
 
-	// Parse response
-	var result ClassifyResponse
+	// Parse response using shared type
+	var result shareddomain.ClassifyResponse
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return nil, fmt.Errorf("failed to parse OCR response: %w", err)
 	}

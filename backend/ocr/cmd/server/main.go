@@ -10,8 +10,8 @@ import (
 	"syscall"
 	"time"
 
-	"ocr/internal/config"
-	"ocr/internal/handler"
+	"github.com/flashbacks/ocr/internal/config"
+	"github.com/flashbacks/ocr/internal/handler"
 )
 
 func main() {

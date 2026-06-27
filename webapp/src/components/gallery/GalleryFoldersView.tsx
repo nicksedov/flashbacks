@@ -23,7 +23,6 @@ export function GalleryFoldersView({ onImageClick, onImageDownload, onImageDelet
   const [searchInput, setSearchInput] = useState("")
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
-  const [lastSelectedFolder, setLastSelectedFolder] = useState<string | null>(null)
   const { images, totalImages, hasMore, isLoading, error, initialized, loadMore, removeImage } =
     useGalleryImages("folders", sortOrder, searchQuery || undefined)
   const { folders: rootFolders } = useGalleryFolders()
@@ -69,27 +68,14 @@ export function GalleryFoldersView({ onImageClick, onImageDownload, onImageDelet
     if (next.has(image.id)) {
       next.delete(image.id)
     } else {
-      if (next.size === 0) {
-        setLastSelectedFolder(image.dirPath)
-      } else if (lastSelectedFolder !== null && image.dirPath !== lastSelectedFolder) {
-        return
-      }
       next.add(image.id)
     }
-    if (next.size === 0) {
-      setLastSelectedFolder(null)
-    }
     setSelectedIds(next)
-  }, [selectedIds, lastSelectedFolder])
+  }, [selectedIds])
 
   const handleImageClick = useCallback((image: GalleryImageDTO) => {
-    if (selectedIds.size > 0) {
-      // When any selection is active, clicking an image toggles selection
-      handleToggleSelection(image)
-      return
-    }
     onImageClick(image)
-  }, [onImageClick, selectedIds, handleToggleSelection])
+  }, [onImageClick])
 
   const handleRangeSelection = useCallback((startImage: GalleryImageDTO, endImage: GalleryImageDTO) => {
     if (startImage.dirPath !== endImage.dirPath) return
@@ -105,7 +91,6 @@ export function GalleryFoldersView({ onImageClick, onImageDownload, onImageDelet
       next.add(folderImages[i].id)
     }
     setSelectedIds(next)
-    setLastSelectedFolder(endImage.dirPath)
   }, [images, selectedIds])
 
   const handleDeleteSelected = useCallback(() => {
@@ -115,7 +100,6 @@ export function GalleryFoldersView({ onImageClick, onImageDownload, onImageDelet
         removeImage(img.id)
       }
       setSelectedIds(new Set())
-      setLastSelectedFolder(null)
     }
     onBulkDelete?.(selectedImages, cleanup)
   }, [images, selectedIds, removeImage, onBulkDelete])
@@ -129,7 +113,6 @@ export function GalleryFoldersView({ onImageClick, onImageDownload, onImageDelet
         count: selectedCount,
         clear: () => {
           setSelectedIds(new Set())
-          setLastSelectedFolder(null)
         },
         del: handleDeleteSelected,
       })
@@ -238,7 +221,7 @@ export function GalleryFoldersView({ onImageClick, onImageDownload, onImageDelet
                 onImageDelete={(image) => onImageDelete?.(image, () => removeImage(image.id))}
                 rootFolders={rootFolders}
                 selectedIds={selectedIds}
-                activeSelectionFolder={lastSelectedFolder}
+                selectionModeActive={selectedIds.size > 0}
                 onToggleSelection={handleToggleSelection}
                 onRangeSelection={handleRangeSelection}
               />

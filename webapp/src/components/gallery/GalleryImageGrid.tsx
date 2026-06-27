@@ -11,7 +11,7 @@ interface GalleryImageGridProps {
   onImageDelete?: (image: GalleryImageDTO) => void
   rootFolders?: GalleryFolderDTO[]
   selectedIds?: Set<number>
-  activeSelectionFolder?: string | null
+  selectionModeActive?: boolean
   onToggleSelection?: (image: GalleryImageDTO) => void
   onRangeSelection?: (startImage: GalleryImageDTO, endImage: GalleryImageDTO) => void
 }
@@ -53,7 +53,7 @@ export function GalleryImageGrid({
   onImageDelete,
   rootFolders,
   selectedIds,
-  activeSelectionFolder,
+  selectionModeActive,
   onToggleSelection,
   onRangeSelection,
 }: GalleryImageGridProps) {
@@ -142,7 +142,7 @@ export function GalleryImageGrid({
                 onImageDownload={onImageDownload}
                 onImageDelete={onImageDelete}
                 selected={selectedIds?.has(image.id)}
-                selectionActiveInOtherFolder={activeSelectionFolder !== null && image.dirPath !== activeSelectionFolder}
+                selectionModeActive={selectionModeActive}
                 onSelectToggle={handleSelectToggle}
               />
             ))}

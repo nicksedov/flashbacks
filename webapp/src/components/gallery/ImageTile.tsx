@@ -9,7 +9,7 @@ interface ImageTileProps {
   onImageDownload?: (image: GalleryImageDTO) => void
   onImageDelete?: (image: GalleryImageDTO) => void
   selected?: boolean
-  selectionActiveInOtherFolder?: boolean
+  selectionModeActive?: boolean
   onSelectToggle?: (e: React.MouseEvent | React.KeyboardEvent, image: GalleryImageDTO) => void
 }
 
@@ -19,7 +19,7 @@ export const ImageTile = memo(function ImageTile({
   onImageDownload,
   onImageDelete,
   selected,
-  selectionActiveInOtherFolder,
+  selectionModeActive,
   onSelectToggle,
 }: ImageTileProps) {
   const { t } = useTranslation()
@@ -29,7 +29,13 @@ export const ImageTile = memo(function ImageTile({
       role="button"
       tabIndex={0}
       className="group flex flex-col cursor-pointer"
-      onClick={() => onClick(image)}
+      onClick={(e) => {
+        if (onSelectToggle && (e.ctrlKey || e.metaKey || e.shiftKey || selectionModeActive)) {
+          onSelectToggle(e, image)
+          return
+        }
+        onClick(image)
+      }}
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(image); } }}
     >
       <div
@@ -50,30 +56,20 @@ export const ImageTile = memo(function ImageTile({
           </div>
         )}
 
-        {/* Selection checkmark in top-right corner */}
-        {selected !== undefined && onSelectToggle && (
+        {/* Selection checkmark in top-right corner — only visible when selection mode is active */}
+        {(selected || selectionModeActive) && onSelectToggle && (
           <button
             type="button"
             className={`absolute top-1 right-1 flex h-5 w-5 items-center justify-center rounded-full border-2 transition-colors z-10 ${
-              selectionActiveInOtherFolder
-                ? "bg-muted-foreground/10 border-muted-foreground/20 text-muted-foreground/30 cursor-not-allowed"
-                : selected
-                  ? "bg-primary border-primary text-primary-foreground"
-                  : "bg-background/80 border-muted-foreground/30 hover:border-primary/60"
+              selected
+                ? "bg-primary border-primary text-primary-foreground"
+                : "bg-background/80 border-muted-foreground/30 hover:border-primary/60"
             }`}
             onClick={(e) => {
-              if (selectionActiveInOtherFolder) return;
               e.stopPropagation()
               onSelectToggle(e, image)
             }}
-            title={
-              selectionActiveInOtherFolder
-                ? t("gallery.selection.select")
-                : selected
-                  ? t("gallery.selection.unselect")
-                  : t("gallery.selection.select")
-            }
-            disabled={selectionActiveInOtherFolder}
+            title={selected ? t("gallery.selection.unselect") : t("gallery.selection.select")}
           >
             {selected && <Check className="h-3 w-3" />}
           </button>

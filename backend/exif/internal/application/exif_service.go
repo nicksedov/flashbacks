@@ -9,10 +9,10 @@ import (
 	"log"
 	"math"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"exif/internal/domain"
@@ -23,24 +23,23 @@ import (
 	_ "golang.org/x/image/webp"
 )
 
-// ExifService provides EXIF metadata extraction and enrichment operations.
+// ExifService provides EXIF metadata extraction and enrichment operations,
+// as well as DB-backed metadata CRUD and geolocation resolution.
 type ExifService struct {
-	et *exiftool.Exiftool
+	et        *exiftool.Exiftool
+	repo      *MetadataRepo
+	nominatim *NominatimClient
+	mu        sync.Mutex
+	lastCall  time.Time
 }
 
-// NewExifService creates a new ExifService. It checks for exiftool binary availability.
-func NewExifService() (*ExifService, error) {
-	if _, err := exec.LookPath("exiftool"); err != nil {
-		return nil, fmt.Errorf("exiftool binary not found in PATH: %w", err)
+// NewExifService creates a new ExifService.
+func NewExifService(et *exiftool.Exiftool, repo *MetadataRepo, nominatim *NominatimClient) *ExifService {
+	return &ExifService{
+		et:        et,
+		repo:      repo,
+		nominatim: nominatim,
 	}
-
-	et, err := exiftool.NewExiftool()
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize exiftool: %w", err)
-	}
-
-	log.Printf("EXIF: go-exiftool initialized successfully")
-	return &ExifService{et: et}, nil
 }
 
 // IsAvailable returns true if exiftool is initialized.
@@ -444,4 +443,140 @@ func formatExposureTimeFloat(val float64) string {
 	}
 	denom := int(1.0 / val)
 	return fmt.Sprintf("1/%ds", denom)
+}
+
+// --- Phase 2: DB-backed metadata operations ---
+
+// GetMetadataByImageID retrieves metadata for a specific image file ID from the database.
+func (s *ExifService) GetMetadataByImageID(imageFileID uint) (*domain.ImageMetadata, error) {
+	if s.repo == nil {
+		return nil, fmt.Errorf("metadata repository not available")
+	}
+	return s.repo.GetByImageID(imageFileID)
+}
+
+// UpsertMetadata creates or updates metadata in the database.
+func (s *ExifService) UpsertMetadata(meta *domain.ImageMetadata) (*domain.ImageMetadata, error) {
+	if s.repo == nil {
+		return nil, fmt.Errorf("metadata repository not available")
+	}
+	return s.repo.Upsert(meta)
+}
+
+// DeleteMetadata deletes metadata for a given image file ID from the database.
+func (s *ExifService) DeleteMetadata(imageFileID uint) error {
+	if s.repo == nil {
+		return fmt.Errorf("metadata repository not available")
+	}
+	return s.repo.DeleteByImageID(imageFileID)
+}
+
+// GetMetadataBatch retrieves metadata for multiple image file IDs.
+func (s *ExifService) GetMetadataBatch(imageFileIDs []uint) (map[uint]*domain.ImageMetadata, error) {
+	if s.repo == nil {
+		return nil, fmt.Errorf("metadata repository not available")
+	}
+	return s.repo.GetBatch(imageFileIDs)
+}
+
+// GetMissingImages returns images missing date_taken or geolocation_ref with pagination.
+func (s *ExifService) GetMissingImages(page, pageSize int) ([]MissingImageRow, int64, error) {
+	if s.repo == nil {
+		return nil, 0, fmt.Errorf("metadata repository not available")
+	}
+	return s.repo.GetMissingImages(page, pageSize)
+}
+
+// GetCalendarItems returns calendar gallery items with cursor-based pagination.
+func (s *ExifService) GetCalendarItems(startDate, endDate *time.Time, cursor *time.Time, cursorID *uint, pageSize int) ([]CalendarRow, *time.Time, *uint, error) {
+	if s.repo == nil {
+		return nil, nil, nil, fmt.Errorf("metadata repository not available")
+	}
+	return s.repo.GetCalendarItems(startDate, endDate, cursor, cursorID, pageSize)
+}
+
+// GetCalendarDateRange returns the min and max date_taken values.
+func (s *ExifService) GetCalendarDateRange() (*time.Time, *time.Time, error) {
+	if s.repo == nil {
+		return nil, nil, fmt.Errorf("metadata repository not available")
+	}
+	return s.repo.GetCalendarDateRange()
+}
+
+// GetCalendarDayCount returns the total number of images with a non-null date_taken.
+func (s *ExifService) GetCalendarDayCount() (int64, error) {
+	if s.repo == nil {
+		return 0, fmt.Errorf("metadata repository not available")
+	}
+	return s.repo.GetCalendarDayCount()
+}
+
+// GetGeoPoints returns GPS points for clustering within the given bounding box.
+func (s *ExifService) GetGeoPoints(minLat, maxLat, minLng, maxLng float64) ([]GeoPointRow, error) {
+	if s.repo == nil {
+		return nil, fmt.Errorf("metadata repository not available")
+	}
+	return s.repo.GetGeoPoints(minLat, maxLat, minLng, maxLng)
+}
+
+// ResolveGeolocation returns a GeolocationCache entry for the given coordinates.
+// It first checks the cache; on a miss, it calls Nominatim (rate-limited) and inserts the result.
+func (s *ExifService) ResolveGeolocation(lat, lng float64) (*domain.GeolocationCache, error) {
+	if s.repo == nil {
+		return nil, fmt.Errorf("metadata repository not available")
+	}
+	if s.nominatim == nil {
+		return nil, fmt.Errorf("nominatim client not available")
+	}
+
+	// Check cache first (no lock needed for reads)
+	entry, err := s.repo.GetGeolocationByCoords(lat, lng)
+	if err != nil {
+		return nil, err
+	}
+	if entry != nil {
+		return entry, nil
+	}
+
+	// Cache miss: acquire mutex and rate-limit
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Double-check after acquiring lock
+	entry, err = s.repo.GetGeolocationByCoords(lat, lng)
+	if err != nil {
+		return nil, err
+	}
+	if entry != nil {
+		return entry, nil
+	}
+
+	// Rate-limit: ensure at least 1 second between Nominatim calls
+	elapsed := time.Since(s.lastCall)
+	if elapsed < time.Second {
+		time.Sleep(time.Second - elapsed)
+	}
+
+	// Call Nominatim reverse geocode
+	result, err := s.nominatim.ReverseGeocode(lat, lng)
+	s.lastCall = time.Now()
+	if err != nil {
+		log.Printf("ResolveGeolocation: Nominatim reverse geocode failed for (%f, %f): %v", lat, lng, err)
+		return nil, fmt.Errorf("nominatim reverse geocode failed: %w", err)
+	}
+
+	// Insert into cache
+	newEntry := &domain.GeolocationCache{
+		GPSLatitude:  lat,
+		GPSLongitude: lng,
+		NameLocal:    result.NameLocal,
+		NameEng:      result.NameEng,
+	}
+
+	return s.repo.CreateGeolocation(newEntry)
+}
+
+// IsNominatimAvailable returns true if a nominatim client is configured.
+func (s *ExifService) IsNominatimAvailable() bool {
+	return s.nominatim != nil
 }

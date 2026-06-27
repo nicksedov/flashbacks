@@ -1,8 +1,10 @@
 openapi: "3.1.0"
 info:
   title: EXIF Microservice API
-  version: "1.0.0"
-  description: REST API for image metadata extraction, GPS writing, and location candidate suggestions.
+  version: "1.1.0"
+  description: >
+    REST API for image metadata extraction, GPS writing, location candidates,
+    calendar gallery, geo-points clustering, and geolocation resolution.
 
 servers:
   - url: http://localhost:5172
@@ -19,33 +21,25 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: healthy
-                  version:
-                    type: string
-                    example: "1.0.0"
-                  exiftoolAvailable:
-                    type: boolean
-                  databaseConnected:
-                    type: boolean
-                  uptime:
-                    type: string
-                    example: "2h30m"
+                $ref: "#/components/schemas/HealthResponse"
 
   /exif/metadata:
     get:
-      summary: Read full EXIF metadata from file
+      summary: Read EXIF metadata from file or database
       operationId: getMetadata
       parameters:
         - name: path
           in: query
-          required: true
+          required: false
           schema:
             type: string
-          description: Absolute file path
+          description: Absolute file path (reads from file). Mutually exclusive with imageFileId.
+        - name: imageFileId
+          in: query
+          required: false
+          schema:
+            type: integer
+          description: Image file ID (reads from database). Mutually exclusive with path.
       responses:
         "200":
           description: EXIF metadata
@@ -54,9 +48,207 @@ paths:
               schema:
                 $ref: "#/components/schemas/MetadataResponse"
         "400":
-          description: Missing path parameter
+          description: Missing or invalid parameters
         "500":
-          description: Extraction error
+          description: Internal error
+
+    put:
+      summary: Upsert image metadata
+      operationId: upsertMetadata
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpsertMetadataRequest"
+      responses:
+        "200":
+          description: Metadata upserted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UpsertMetadataResponse"
+        "400":
+          description: Invalid request body
+        "500":
+          description: Internal error
+
+  /exif/metadata/{imageFileId}:
+    delete:
+      summary: Delete metadata for an image
+      operationId: deleteMetadata
+      parameters:
+        - name: imageFileId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Metadata deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeleteMetadataResponse"
+        "400":
+          description: Invalid imageFileId
+        "500":
+          description: Internal error
+
+  /exif/metadata/batch:
+    get:
+      summary: Batch retrieve metadata for multiple image IDs
+      operationId: getMetadataBatch
+      parameters:
+        - name: ids
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Comma-separated list of image file IDs
+      responses:
+        "200":
+          description: Batch metadata
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MetadataBatchResponse"
+        "400":
+          description: Invalid ids parameter
+        "500":
+          description: Internal error
+
+  /exif/metadata/calendar:
+    get:
+      summary: Calendar gallery with cursor-based pagination
+      operationId: getCalendar
+      parameters:
+        - name: startDate
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+          description: Start date (YYYY-MM-DD)
+        - name: endDate
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+          description: End date (YYYY-MM-DD)
+        - name: pageSize
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 30
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Base64 cursor for pagination
+      responses:
+        "200":
+          description: Calendar items
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarResponse"
+        "400":
+          description: Invalid parameters
+        "500":
+          description: Internal error
+
+  /exif/metadata/geo-points:
+    get:
+      summary: GPS points for clustering within bounding box
+      operationId: getGeoPoints
+      parameters:
+        - name: minLat
+          in: query
+          required: false
+          schema:
+            type: number
+        - name: maxLat
+          in: query
+          required: false
+          schema:
+            type: number
+        - name: minLng
+          in: query
+          required: false
+          schema:
+            type: number
+        - name: maxLng
+          in: query
+          required: false
+          schema:
+            type: number
+      responses:
+        "200":
+          description: Geo points
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GeoPointsResponse"
+        "500":
+          description: Internal error
+
+  /exif/missing:
+    get:
+      summary: List images missing EXIF data (date_taken or geolocation_ref)
+      operationId: getMissingImages
+      parameters:
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 1
+        - name: pageSize
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: Missing images list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MissingImagesResponse"
+        "500":
+          description: Internal error
+
+  /exif/geolocation:
+    get:
+      summary: Resolve GPS coordinates to location names (with caching)
+      operationId: resolveGeolocation
+      parameters:
+        - name: lat
+          in: query
+          required: true
+          schema:
+            type: number
+        - name: lng
+          in: query
+          required: true
+          schema:
+            type: number
+      responses:
+        "200":
+          description: Geolocation data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GeolocationResponse"
+        "400":
+          description: Missing or invalid parameters
+        "500":
+          description: Internal error
 
   /exif/gps:
     put:
@@ -106,7 +298,7 @@ paths:
           required: true
           schema:
             type: string
-          description: Date in YYYY-MM-DD format (provided by external service)
+          description: Date in YYYY-MM-DD format
       responses:
         "200":
           description: Location candidates
@@ -119,6 +311,15 @@ paths:
 
 components:
   schemas:
+    HealthResponse:
+      type: object
+      properties:
+        status: { type: string, example: healthy }
+        version: { type: string, example: "1.0.0" }
+        exiftoolAvailable: { type: boolean }
+        databaseConnected: { type: boolean }
+        uptime: { type: string, example: "2h30m" }
+
     MetadataResponse:
       type: object
       properties:
@@ -137,6 +338,127 @@ components:
         gpsLatitude: { type: number }
         gpsLongitude: { type: number }
 
+    UpsertMetadataRequest:
+      type: object
+      required: [imageFileId]
+      properties:
+        imageFileId: { type: integer }
+        width: { type: integer }
+        height: { type: integer }
+        cameraModel: { type: string }
+        lensModel: { type: string }
+        iso: { type: integer }
+        aperture: { type: string }
+        shutterSpeed: { type: string }
+        focalLength: { type: string }
+        dateTaken: { type: string, format: date-time }
+        orientation: { type: integer }
+        colorSpace: { type: string }
+        software: { type: string }
+        geolocationRef: { type: integer }
+
+    UpsertMetadataResponse:
+      type: object
+      properties:
+        id: { type: integer }
+        imageFileId: { type: integer }
+        width: { type: integer }
+        height: { type: integer }
+        cameraModel: { type: string }
+        lensModel: { type: string }
+        iso: { type: integer }
+        aperture: { type: string }
+        shutterSpeed: { type: string }
+        focalLength: { type: string }
+        dateTaken: { type: string, format: date-time }
+        orientation: { type: integer }
+        colorSpace: { type: string }
+        software: { type: string }
+        geolocationRef: { type: integer }
+
+    DeleteMetadataResponse:
+      type: object
+      properties:
+        deleted: { type: boolean }
+
+    MetadataBatchResponse:
+      type: object
+      properties:
+        metadata:
+          type: array
+          items:
+            $ref: "#/components/schemas/MetadataResponse"
+
+    CalendarResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/CalendarItem"
+        nextCursor: { type: string }
+        minDate: { type: string }
+        maxDate: { type: string }
+        totalWithDate: { type: integer }
+
+    CalendarItem:
+      type: object
+      properties:
+        imageFileId: { type: integer }
+        path: { type: string }
+        dateTaken: { type: string, format: date-time }
+        geolocationRef: { type: integer }
+        gpsLatitude: { type: number }
+        gpsLongitude: { type: number }
+        nameLocal: { type: string }
+        nameEng: { type: string }
+
+    GeoPointsResponse:
+      type: object
+      properties:
+        points:
+          type: array
+          items:
+            $ref: "#/components/schemas/GeoPointItem"
+
+    GeoPointItem:
+      type: object
+      properties:
+        imageFileId: { type: integer }
+        path: { type: string }
+        gpsLatitude: { type: number }
+        gpsLongitude: { type: number }
+        nameLocal: { type: string }
+        nameEng: { type: string }
+
+    GeolocationResponse:
+      type: object
+      properties:
+        id: { type: integer }
+        gpsLatitude: { type: number }
+        gpsLongitude: { type: number }
+        nameLocal: { type: string }
+        nameEng: { type: string }
+
+    MissingImagesResponse:
+      type: object
+      properties:
+        images:
+          type: array
+          items:
+            $ref: "#/components/schemas/MissingImageItem"
+        total: { type: integer }
+        page: { type: integer }
+        pageSize: { type: integer }
+
+    MissingImageItem:
+      type: object
+      properties:
+        imageFileId: { type: integer }
+        path: { type: string }
+        missingDate: { type: boolean }
+        missingGps: { type: boolean }
+
     GPSRequest:
       type: object
       required: [path, backupDir]
@@ -144,7 +466,7 @@ components:
         path: { type: string }
         latitude: { type: number }
         longitude: { type: number }
-        backupDir: { type: string, description: Directory where a backup copy of the original file will be stored before modification }
+        backupDir: { type: string, description: Directory for backup before modification }
 
     GPSResponse:
       type: object
@@ -166,7 +488,7 @@ components:
               path: { type: string }
               latitude: { type: number }
               longitude: { type: number }
-        backupDir: { type: string, description: Directory where backup copies of the original files will be stored before modification }
+        backupDir: { type: string }
 
     GPSBatchResponse:
       type: object

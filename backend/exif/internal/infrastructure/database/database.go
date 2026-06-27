@@ -11,8 +11,8 @@ import (
 	"gorm.io/gorm/logger"
 )
 
-// Init connects to PostgreSQL and opens the shared database.
-// The EXIF service does NOT run AutoMigrate — schema is managed by the main backend.
+// Init connects to PostgreSQL, runs AutoMigrate for owned tables, and opens the shared database.
+// The EXIF service owns the schema for image_metadata and geolocation_caches tables.
 func Init(cfg *config.Config) (*gorm.DB, error) {
 	dsn := fmt.Sprintf(
 		"host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
@@ -28,9 +28,10 @@ func Init(cfg *config.Config) (*gorm.DB, error) {
 		return nil, fmt.Errorf("failed to connect to database: %w", err)
 	}
 
-	// Verify connectivity to critical tables (read-only check)
+	// Run AutoMigrate for owned tables (image_metadata, geolocation_caches).
+	// Schema ownership was transferred from api-service to exif service.
 	if err := db.AutoMigrate(&domain.ImageMetadata{}, &domain.GeolocationCache{}); err != nil {
-		return nil, fmt.Errorf("schema compatibility check failed: %w", err)
+		return nil, fmt.Errorf("failed to migrate database tables: %w", err)
 	}
 
 	return db, nil

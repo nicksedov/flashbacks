@@ -5,6 +5,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	shareddomain "github.com/flashbacks/shared/domain"
 )
 
 // ImageFile represents an image file in the database
@@ -52,37 +54,13 @@ func IsImageFile(path string) bool {
 	return SupportedExtensions[ext]
 }
 
-// ImageMetadata stores extracted EXIF metadata for an image.
-// Geolocation is resolved via GeolocationRef -> GeolocationCache (Nominatim-backed).
-type ImageMetadata struct {
-	ID             uint       `gorm:"primaryKey" json:"id"`
-	ImageFileID    uint       `gorm:"uniqueIndex;not null" json:"imageFileId"`
-	Width          int        `json:"width"`
-	Height         int        `json:"height"`
-	CameraModel    string     `json:"cameraModel"`
-	LensModel      string     `json:"lensModel"`
-	ISO            int        `json:"iso"`
-	Aperture       string     `json:"aperture"`
-	ShutterSpeed   string     `json:"shutterSpeed"`
-	FocalLength    string     `json:"focalLength"`
-	DateTaken      *time.Time `json:"dateTaken"`
-	Orientation    int        `json:"orientation"`
-	ColorSpace     string     `json:"colorSpace"`
-	Software       string     `json:"software"`
-	GeolocationRef *uint      `gorm:"index" json:"geolocationRef"`
-	CreatedAt      time.Time  `json:"createdAt"`
-	UpdatedAt      time.Time  `json:"updatedAt"`
-}
+// ImageMetadata is re-exported from the shared domain package.
+// The canonical definition lives in github.com/flashbacks/shared/domain.
+type ImageMetadata = shareddomain.ImageMetadata
 
-// GeolocationCache stores reverse-geocoded location names for unique GPS coordinate pairs.
-// Populated by Nominatim reverse geocoding; referenced by ImageMetadata.GeolocationRef.
-type GeolocationCache struct {
-	ID           uint    `gorm:"primaryKey" json:"id"`
-	GPSLatitude  float64 `gorm:"uniqueIndex:idx_geo_lat_lng;not null" json:"gpsLatitude"`
-	GPSLongitude float64 `gorm:"uniqueIndex:idx_geo_lat_lng;not null" json:"gpsLongitude"`
-	NameLocal    string  `gorm:"type:text" json:"nameLocal"`
-	NameEng      string  `gorm:"type:text" json:"nameEng"`
-}
+// GeolocationCache is re-exported from the shared domain package.
+// The canonical definition lives in github.com/flashbacks/shared/domain.
+type GeolocationCache = shareddomain.GeolocationCache
 
 // GalleryFolder represents a configured gallery folder in the database
 type GalleryFolder struct {
@@ -95,26 +73,26 @@ type GalleryFolder struct {
 // AppSettings stores global application settings (singleton, ID=1)
 // Contains application-level settings: trash directory, EXIF backup directory, and thumbnail cache configuration
 type AppSettings struct {
-	ID                    uint      `gorm:"primaryKey" json:"id"`
-	TrashDir              string    `gorm:"default:''" json:"trashDir"`
-	ExifBackupDir         string    `gorm:"default:''" json:"exifBackupDir"`
-	ThumbnailCachePath    string    `gorm:"default:''" json:"thumbnailCachePath"`
-	ThumbnailCacheSize    int       `gorm:"default:0" json:"thumbnailCacheSize"`
-	OcrConcurrentRequests int       `gorm:"default:4" json:"ocrConcurrentRequests"`
+	ID                    uint   `gorm:"primaryKey" json:"id"`
+	TrashDir              string `gorm:"default:''" json:"trashDir"`
+	ExifBackupDir         string `gorm:"default:''" json:"exifBackupDir"`
+	ThumbnailCachePath    string `gorm:"default:''" json:"thumbnailCachePath"`
+	ThumbnailCacheSize    int    `gorm:"default:0" json:"thumbnailCacheSize"`
+	OcrConcurrentRequests int    `gorm:"default:4" json:"ocrConcurrentRequests"`
 	// SyncDays: comma-separated weekday numbers (time.Weekday: 0=Sunday,1=Monday,...,6=Saturday)
 	// Empty string means sync is disabled for all days.
-	SyncDays              string    `gorm:"default:'1,2,3,4,5'" json:"syncDays"`
-	DailySyncHour         int       `gorm:"default:3" json:"dailySyncHour"`
-	DailySyncMinute       int       `gorm:"default:30" json:"dailySyncMinute"`
+	SyncDays        string `gorm:"default:'1,2,3,4,5'" json:"syncDays"`
+	DailySyncHour   int    `gorm:"default:3" json:"dailySyncHour"`
+	DailySyncMinute int    `gorm:"default:30" json:"dailySyncMinute"`
 	// SyncTimezoneOffset: user's timezone offset in minutes from UTC (same sign as JS getTimezoneOffset: UTC+3 = -180)
-	SyncTimezoneOffset    int       `gorm:"default:0" json:"syncTimezoneOffset"`
+	SyncTimezoneOffset int `gorm:"default:0" json:"syncTimezoneOffset"`
 	// Last sync status fields
-	LastSyncAt            *time.Time `json:"lastSyncAt"`
-	LastSyncNew           int        `gorm:"default:0" json:"lastSyncNew"`
-	LastSyncUpdated       int        `gorm:"default:0" json:"lastSyncUpdated"`
-	LastSyncDeleted       int        `gorm:"default:0" json:"lastSyncDeleted"`
-	LastSyncThumbnails    int        `gorm:"default:0" json:"lastSyncThumbnails"`
-	UpdatedAt             time.Time  `json:"updatedAt"`
+	LastSyncAt         *time.Time `json:"lastSyncAt"`
+	LastSyncNew        int        `gorm:"default:0" json:"lastSyncNew"`
+	LastSyncUpdated    int        `gorm:"default:0" json:"lastSyncUpdated"`
+	LastSyncDeleted    int        `gorm:"default:0" json:"lastSyncDeleted"`
+	LastSyncThumbnails int        `gorm:"default:0" json:"lastSyncThumbnails"`
+	UpdatedAt          time.Time  `json:"updatedAt"`
 }
 
 // OcrClassification stores OCR classification results for an image
@@ -173,20 +151,20 @@ type LlmProviderModelCache struct {
 
 // LlmSettings stores global LLM settings (singleton, ID=1)
 type LlmSettings struct {
-	ID                    uint      `gorm:"primaryKey" json:"id"`
-	ActiveProvider        string    `gorm:"default:ollama_1;not null" json:"activeProvider"` // References LlmProvider.Alias
-	TagScanEnabled        bool      `gorm:"default:true" json:"tagScanEnabled"`
-	TagScanStartHour      int       `gorm:"default:22" json:"tagScanStartHour"`
-	TagScanStartMinute    int       `gorm:"default:0" json:"tagScanStartMinute"`
-	TagScanEndHour        int       `gorm:"default:7" json:"tagScanEndHour"`
-	TagScanEndMinute      int       `gorm:"default:0" json:"tagScanEndMinute"`
-	TagScanTimezoneOffset int       `gorm:"default:0" json:"tagScanTimezoneOffset"` // User's timezone offset in minutes (JS getTimezoneOffset: UTC+3 = -180)
-	EmbeddingProviderAlias string  `gorm:"default:''" json:"embeddingProviderAlias"` // empty = use active VL provider
-	EmbeddingModel         string  `gorm:"default:'qwen3-embedding:4b'" json:"embeddingModel"`
-	EmbeddingDimension     int     `gorm:"default:1024" json:"embeddingDimension"`
-	EmbeddingBatchSize     int     `gorm:"default:50" json:"embeddingBatchSize"`
-	CreatedAt             time.Time `json:"createdAt"`
-	UpdatedAt             time.Time `json:"updatedAt"`
+	ID                     uint      `gorm:"primaryKey" json:"id"`
+	ActiveProvider         string    `gorm:"default:ollama_1;not null" json:"activeProvider"` // References LlmProvider.Alias
+	TagScanEnabled         bool      `gorm:"default:true" json:"tagScanEnabled"`
+	TagScanStartHour       int       `gorm:"default:22" json:"tagScanStartHour"`
+	TagScanStartMinute     int       `gorm:"default:0" json:"tagScanStartMinute"`
+	TagScanEndHour         int       `gorm:"default:7" json:"tagScanEndHour"`
+	TagScanEndMinute       int       `gorm:"default:0" json:"tagScanEndMinute"`
+	TagScanTimezoneOffset  int       `gorm:"default:0" json:"tagScanTimezoneOffset"`   // User's timezone offset in minutes (JS getTimezoneOffset: UTC+3 = -180)
+	EmbeddingProviderAlias string    `gorm:"default:''" json:"embeddingProviderAlias"` // empty = use active VL provider
+	EmbeddingModel         string    `gorm:"default:'qwen3-embedding:4b'" json:"embeddingModel"`
+	EmbeddingDimension     int       `gorm:"default:1024" json:"embeddingDimension"`
+	EmbeddingBatchSize     int       `gorm:"default:50" json:"embeddingBatchSize"`
+	CreatedAt              time.Time `json:"createdAt"`
+	UpdatedAt              time.Time `json:"updatedAt"`
 }
 
 // ImageTag stores AI-generated tags for an image

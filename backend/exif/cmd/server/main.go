@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/barasher/go-exiftool"
 	"github.com/gin-gonic/gin"
 
 	"exif/internal/application"
@@ -35,13 +36,22 @@ func main() {
 	defer sqlDB.Close()
 	fmt.Println("Database connected successfully!")
 
+	// Initialize MetadataRepo
+	metadataRepo := application.NewMetadataRepo(db)
+
+	// Initialize Nominatim client
+	nominatimClient := application.NewNominatimClient(nil, "")
+
 	// Initialize exiftool
 	fmt.Println("Initializing exiftool...")
-	exifSvc, err := application.NewExifService()
+	et, err := exiftool.NewExiftool()
 	if err != nil {
 		log.Fatalf("Failed to initialize exiftool: %v", err)
 	}
 	fmt.Println("exiftool initialized!")
+
+	// Initialize ExifService with all dependencies
+	exifSvc := application.NewExifService(et, metadataRepo, nominatimClient)
 
 	// Initialize GPS writer
 	gpsWriter := application.NewGPSWriter()

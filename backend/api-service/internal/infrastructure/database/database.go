@@ -34,12 +34,11 @@ func InitDatabase(cfg *config.AppConfig) (*gorm.DB, error) {
 	}
 
 	// Run AutoMigrate
+	// Note: image_metadata and geolocation_caches are owned by the exif service.
 	if err := db.AutoMigrate(
 		&domain.ImageFile{},
 		&domain.GalleryFolder{},
 		&domain.AppSettings{},
-		&domain.GeolocationCache{},
-		&domain.ImageMetadata{},
 		&domain.User{},
 		&domain.UserSettings{},
 		&domain.Session{},

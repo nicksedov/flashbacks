@@ -4,6 +4,7 @@ go 1.25.0
 
 require (
 	github.com/barasher/go-exiftool v1.3.0
+	github.com/flashbacks/shared v0.0.0-00010101000000-000000000000
 	github.com/gin-gonic/gin v1.12.0
 	github.com/modelcontextprotocol/go-sdk v1.6.1
 	golang.org/x/image v0.43.0
@@ -52,3 +53,5 @@ require (
 	golang.org/x/text v0.38.0 // indirect
 	google.golang.org/protobuf v1.36.10 // indirect
 )
+
+replace github.com/flashbacks/shared => ../shared

@@ -4,6 +4,7 @@ go 1.25.0
 
 require (
 	github.com/MadAppGang/gocluster v0.0.0-20161226093512-f4629d7b12f8
+	github.com/flashbacks/shared v0.0.0-00010101000000-000000000000
 	github.com/deepteams/webp v1.2.1
 	github.com/disintegration/imaging v1.6.2
 	github.com/gin-contrib/cors v1.7.7
@@ -17,6 +18,8 @@ require (
 	gorm.io/driver/postgres v1.5.4
 	gorm.io/gorm v1.30.0
 )
+
+replace github.com/flashbacks/shared => ../shared
 
 require (
 	github.com/MadAppGang/kdbush v0.0.0-20161230031607-ed6b87d35c48 // indirect

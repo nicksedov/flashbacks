@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import { ThemeProvider, type Theme } from "@/theme"
 import { I18nProvider, type Language } from "@/i18n"
-import { fetchUserSettings, updateUserSettings } from "@/api/endpoints"
+import { fetchUserSettings, fetchSettings, updateUserSettings } from "@/api/endpoints"
+import type { UpdateUserSettingsRequest } from "@/types"
 import { SettingsContext } from "./settingsContext"
 import { useAuth } from "./AuthProvider"
 
@@ -13,19 +14,27 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
   const [theme, setThemeState] = useState<Theme>("light-purple")
   const [language, setLanguageState] = useState<Language>("en")
   const [trashDir, setTrashDirState] = useState("")
-  const { isAuthenticated } = useAuth()
-  const [isLoading, setIsLoading] = useState(!isAuthenticated)
+  const { isAuthenticated, isLoading: isAuthLoading } = useAuth()
+  const [settingsFetched, setSettingsFetched] = useState(false)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const languageRef = useRef<Language>(language)
-  languageRef.current = language
   const themeRef = useRef<Theme>(theme)
-  themeRef.current = theme
+
+  // Derived: loading while auth is resolving OR settings haven't been fetched yet for an authenticated user
+  const isLoading = useMemo(
+    () => isAuthLoading || (isAuthenticated && !settingsFetched),
+    [isAuthLoading, isAuthenticated, settingsFetched]
+  )
 
   useEffect(() => {
-    if (!isAuthenticated) {
-      setIsLoading(false)
-      return
-    }
+    languageRef.current = language
+    themeRef.current = theme
+  }, [language, theme])
+
+  useEffect(() => {
+    // Wait for auth to resolve; when not authenticated, isLoading
+    // derived value already resolves to false — nothing to fetch.
+    if (isAuthLoading || !isAuthenticated) return
 
     // Theme migration mapping
     const themeMigration: Record<string, Theme> = {
@@ -48,19 +57,31 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
       setLanguageState(effectiveLanguage)
     }).catch(() => {
       // Use defaults on failure
-    }).finally(() => setIsLoading(false))
-  }, [isAuthenticated])
+    })
+
+    // Load app settings for trashDir
+    fetchSettings()
+      .then((appSettings) => {
+        if (appSettings?.trashDir) {
+          setTrashDirState(appSettings.trashDir)
+        }
+      })
+      .catch(() => {
+        // Use default (empty) on failure
+      })
+      .finally(() => setSettingsFetched(true))
+  }, [isAuthenticated, isAuthLoading])
 
   const persistSettings = useCallback((newTheme: Theme, newLanguage: Language) => {
     if (debounceRef.current) {
       clearTimeout(debounceRef.current)
     }
     debounceRef.current = setTimeout(() => {
-      const req: { theme?: string; language?: string } = {
+      const req: UpdateUserSettingsRequest = {
         theme: newTheme,
         language: newLanguage,
       }
-      updateUserSettings(req as any).catch(() => {
+      updateUserSettings(req).catch(() => {
         // Silently fail - UI already updated
       })
     }, 300)

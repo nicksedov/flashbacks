@@ -279,10 +279,19 @@ func main() {
 	// Wire embedding backfill to tag scan manager (triggered after tags are saved)
 	tagScanManager.SetEmbeddingBackfill(embeddingBackfill)
 
+	// Read EXIF backup directory from AppSettings
+	var exifBackupDir string
+	if result := db.First(&appSettings, 1); result.Error == nil && appSettings.ExifBackupDir != "" {
+		exifBackupDir = appSettings.ExifBackupDir
+	}
+
+	// Create EXIF agent for MCP tool delegation (write_gps, read_exif_fields, etc.)
+	exifAgent := agentpkg.NewExifAgent(cfg.ExifServiceURL, exifBackupDir)
+
 	// Create MCP server
 	llmFactory := helpers.NewLLMFactory(db, cfg.LlmMaxImageMegapixels)
-	mcpSrv := mcpserver.NewFlashbacksMCPServer(db, llmFactory, llmOcrService, cfg.LlmMaxImageMegapixels, embeddingBackfill)
-	fmt.Println("MCP server initialized with image analysis and search tools")
+	mcpSrv := mcpserver.NewFlashbacksMCPServer(db, llmFactory, llmOcrService, cfg.LlmMaxImageMegapixels, embeddingBackfill, exifAgent)
+	fmt.Println("MCP server initialized with image analysis, search, and EXIF tools")
 
 	// Create conversation service and agent
 	convService := agentpkg.NewConversationService(db)

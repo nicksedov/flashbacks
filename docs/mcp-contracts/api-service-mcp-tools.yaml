@@ -1,147 +1,260 @@
+# Flashbacks MCP Tools — API Service (LLM Agent)
+# Version: 1.1.0
+#
+# These are the tools exposed to the AI agent via FlashbacksMCPServer.
+# Tools are divided into two groups by source:
+#   - Core tools: query DB cache, run VL LLM analysis, search
+#   - EXIF tools: read/write/validate EXIF in actual image files (delegated to ExifAgent → EXIF microservice)
+#
+# v1.1.0 changes:
+#   - Removed describe_image (merged into ask_about_image)
+#   - Removed read_gps (merged into read_exif_fields)
+#   - Renamed read_exif → read_exif_fields
+#   - Renamed read_all_metadata → dump_exif_raw
+#   - Renamed get_image_metadata → get_cached_metadata (clarifies DB source)
+#
+# Total: 15 tools (8 core + 7 EXIF)
+
 server: api-service
-version: 1.0
+version: 1.1.0
 
-resources:
-  - name: image_metadata
-    description: Retrieve metadata for images including EXIF, OCR tags, and geolocation
+tools:
+  # ── Core: Image Analysis (VL LLM) ──────────────────────────
+  - name: ask_about_image
+    description: Ask any question about an image (describe, analyze, answer). Supersedes the former describe_image tool.
+    source: "FlashbacksMCPServer (VL LLM)"
     parameters:
-      - name: image_id
+      - name: image_path
         type: string
         required: true
-        description: UUID of the image to retrieve metadata for
-    response:
-      type: object
-      properties:
-        id:
-          type: string
-          description: Image UUID
-        path:
-          type: string
-          description: Filesystem path
-        exif:
-          type: object
-          description: EXIF metadata
-        ocr:
-          type: object
-          description: OCR text recognition results
-        tags:
-          type: array
-          items:
-            type: string
-          description: AI-generated tags
-        geolocation:
-          type: object
-          properties:
-            latitude:
-              type: number
-            longitude:
-              type: number
-            address:
-              type: string
-
-  - name: scan_directory
-    description: Initiate image scanning operation in specified directory
-    parameters:
-      - name: path
+        description: Absolute path to the image file
+      - name: question
         type: string
         required: true
-        description: Absolute path to scan for images
-      - name: recursive
-        type: boolean
+        description: The question to ask about the image
+      - name: language
+        type: string
         required: false
-        default: true
-        description: Whether to scan subdirectories
-    response:
-      type: object
-      properties:
-        job_id:
-          type: string
-          description: UUID of the scan job
-        status:
-          type: string
-          enum: ["queued", "processing", "completed"]
-        scanned_count:
-          type: integer
+        default: en
+        description: Response language code (en, ru)
 
-  - name: search_images
-    description: Perform semantic search across images using tags or natural language
+  - name: recognize_text
+    description: Extract and recognize all text from an image (OCR via VL LLM)
+    source: "FlashbacksMCPServer (VL LLM)"
+    parameters:
+      - name: image_path
+        type: string
+        required: true
+        description: Absolute path to the image file
+
+  - name: generate_tags
+    description: Generate descriptive AI tags for an image. Results are cached in DB and used for semantic search embeddings.
+    source: "FlashbacksMCPServer (VL LLM + DB cache)"
+    parameters:
+      - name: image_path
+        type: string
+        required: true
+        description: Absolute path to the image file
+
+  # ── Core: Search (DB queries) ──────────────────────────────
+  - name: semantic_search
+    description: Find images by natural language using semantic similarity of AI-generated tag embeddings. PRIMARY tool for finding similar/related images.
+    source: "FlashbacksMCPServer (DB: pgvector embeddings)"
     parameters:
       - name: query
         type: string
         required: true
-        description: Search query (text or natural language)
+        description: Natural language description of what you're looking for
       - name: limit
         type: integer
         required: false
         default: 20
-        description: Maximum results to return
-    response:
-      type: array
-      items:
-        type: object
-        properties:
-          id:
-            type: string
-          score:
-            type: number
-            description: Relevance score (0-1)
-          thumbnail:
-            type: string
-            format: base64
+        description: Maximum number of results (1-100)
 
-  - name: generate_thumbnails
-    description: Generate WebP thumbnails for specified images
+  - name: search_by_date
+    description: Find images taken within a date range (uses EXIF date_taken from DB)
+    source: "FlashbacksMCPServer (DB: image_metadata)"
     parameters:
-      - name: image_ids
-        type: array
-        items:
-          type: string
-        required: true
-        description: List of image UUIDs to process
-      - name: sizes
-        type: array
-        items:
-          type: integer
-        required: false
-        default: [128, 256, 512]
-        description: Target thumbnail dimensions
-    response:
-      type: object
-      properties:
-        processed:
-          type: integer
-        failures:
-          type: array
-          items:
-            type: object
-            properties:
-              id:
-                type: string
-              error:
-                type: string
-
-  - name: get_conversation
-    description: Retrieve AI conversation history and context
-    parameters:
-      - name: conversation_id
+      - name: start_date
         type: string
         required: true
-        description: UUID of the conversation
-    response:
-      type: object
-      properties:
-        id:
-          type: string
-        messages:
-          type: array
-          items:
-            type: object
-            properties:
-              role:
-                type: string
-                enum: ["user", "assistant"]
-              content:
-                type: string
-        context:
-          type: object
-          description: Current search context and filters
+        description: Start date in YYYY-MM-DD format
+      - name: end_date
+        type: string
+        required: true
+        description: End date in YYYY-MM-DD format
+      - name: limit
+        type: integer
+        required: false
+        default: 20
+
+  - name: search_by_location
+    description: Find images within a GPS bounding box (uses geolocation_caches from DB)
+    source: "FlashbacksMCPServer (DB: geolocation_caches)"
+    parameters:
+      - name: min_lat
+        type: number
+        required: true
+      - name: max_lat
+        type: number
+        required: true
+      - name: min_lng
+        type: number
+        required: true
+      - name: max_lng
+        type: number
+        required: true
+      - name: limit
+        type: integer
+        required: false
+        default: 20
+
+  - name: search_by_path
+    description: Find images by filename or path pattern (case-insensitive ILIKE)
+    source: "FlashbacksMCPServer (DB: image_files)"
+    parameters:
+      - name: query
+        type: string
+        required: true
+        description: Search query for filename/path
+      - name: limit
+        type: integer
+        required: false
+        default: 20
+
+  # ── Core: Cached Metadata (DB) ─────────────────────────────
+  - name: get_cached_metadata
+    description: |
+      Get cached EXIF metadata from the database for a specific image.
+      FAST but may be STALE (populated by background sync).
+      For live file-level EXIF, use read_exif_fields or dump_exif_raw.
+    source: "FlashbacksMCPServer (DB: image_metadata + geolocation_caches)"
+    parameters:
+      - name: image_path
+        type: string
+        required: true
+        description: Absolute path to the image file
+
+  # ── EXIF: File-level Read ──────────────────────────────────
+  - name: read_exif_fields
+    description: |
+      Read structured EXIF fields directly from the image file (camera, lens,
+      ISO, aperture, shutter, focal length, date, orientation, GPS).
+      Always current — reads the actual file, not the DB cache.
+    source: "ExifAgent → EXIF microservice"
+    parameters:
+      - name: path
+        type: string
+        required: true
+        description: Absolute path to the image file
+
+  - name: dump_exif_raw
+    description: |
+      Dump ALL raw EXIF tags from the image file (complete tag listing,
+      unprocessed values). Use when you need the full EXIF data, not just
+      the common fields returned by read_exif_fields.
+    source: "ExifAgent → EXIF microservice"
+    parameters:
+      - name: path
+        type: string
+        required: true
+        description: Absolute path to the image file
+
+  # ── EXIF: File-level Write ─────────────────────────────────
+  - name: write_gps
+    description: Write GPS coordinates to image EXIF. Uses a 3-attempt strategy with automatic backup of the original file.
+    source: "ExifAgent → EXIF microservice"
+    parameters:
+      - name: path
+        type: string
+        required: true
+        description: Absolute path to the image file
+      - name: latitude
+        type: number
+        required: true
+        description: GPS latitude (-90 to 90)
+      - name: longitude
+        type: number
+        required: true
+        description: GPS longitude (-180 to 180)
+      - name: backup_dir
+        type: string
+        required: true
+        description: Directory for backup copies (auto-injected by ExifAgent from app settings)
+
+  - name: write_exif_field
+    description: Write an arbitrary EXIF tag value to the image file (e.g., DateTimeOriginal, ImageDescription)
+    source: "ExifAgent → EXIF microservice"
+    parameters:
+      - name: path
+        type: string
+        required: true
+      - name: tag
+        type: string
+        required: true
+        description: EXIF tag name
+      - name: value
+        type: string
+        required: true
+        description: Value to write
+
+  # ── EXIF: Utilities ────────────────────────────────────────
+  - name: strip_exif
+    description: Remove specified EXIF tags from the image file (or all tags if tags parameter is omitted)
+    source: "ExifAgent → EXIF microservice"
+    parameters:
+      - name: path
+        type: string
+        required: true
+      - name: tags
+        type: array
+        items: string
+        required: false
+        description: Tags to remove (omit to strip all EXIF)
+
+  - name: copy_exif
+    description: Copy EXIF data from a source image file to a target image file
+    source: "ExifAgent → EXIF microservice"
+    parameters:
+      - name: source_path
+        type: string
+        required: true
+      - name: target_path
+        type: string
+        required: true
+      - name: tags
+        type: array
+        items: string
+        required: false
+        description: Specific tags to copy (omit to copy all)
+
+  - name: compare_exif
+    description: Compare EXIF metadata between two image files, return differences
+    source: "ExifAgent → EXIF microservice"
+    parameters:
+      - name: path1
+        type: string
+        required: true
+      - name: path2
+        type: string
+        required: true
+
+  - name: validate_exif
+    description: Validate EXIF integrity of an image file (check for corruption, InteropIFD issues)
+    source: "ExifAgent → EXIF microservice"
+    parameters:
+      - name: path
+        type: string
+        required: true
+
+# ── Architecture Notes ───────────────────────────────────────
+#
+# Two sources of metadata truth:
+#   get_cached_metadata → DB (image_metadata table, populated by background sync)
+#   read_exif_fields    → File (actual EXIF via exif microservice)
+#
+# The LLM should prefer get_cached_metadata for quick lookups and
+# read_exif_fields / dump_exif_raw when it needs guaranteed up-to-date data.
+#
+# write_gps and write_exif_field modify the actual files. After writing,
+# the DB cache may be briefly stale until the next background sync cycle.

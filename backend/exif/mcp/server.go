@@ -281,15 +281,16 @@ func (s *Server) handleWriteGPS(ctx context.Context, req *mcp.CallToolRequest) (
 
 func (s *Server) handleWriteExifField(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	var args struct {
-		Path  string `json:"path"`
-		Tag   string `json:"tag"`
-		Value string `json:"value"`
+		Path      string `json:"path"`
+		Tag       string `json:"tag"`
+		Value     string `json:"value"`
+		BackupDir string `json:"backup_dir"`
 	}
 	if err := json.Unmarshal(req.Params.Arguments, &args); err != nil {
 		return nil, fmt.Errorf("invalid arguments: %w", err)
 	}
 
-	if err := application.WriteExifField(args.Path, args.Tag, args.Value); err != nil {
+	if err := application.WriteExifField(args.Path, args.Tag, args.Value, args.BackupDir); err != nil {
 		return nil, fmt.Errorf("EXIF field write failed: %w", err)
 	}
 
@@ -300,14 +301,15 @@ func (s *Server) handleWriteExifField(ctx context.Context, req *mcp.CallToolRequ
 
 func (s *Server) handleStripExif(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	var args struct {
-		Path string   `json:"path"`
-		Tags []string `json:"tags"`
+		Path      string   `json:"path"`
+		Tags      []string `json:"tags"`
+		BackupDir string   `json:"backup_dir"`
 	}
 	if err := json.Unmarshal(req.Params.Arguments, &args); err != nil {
 		return nil, fmt.Errorf("invalid arguments: %w", err)
 	}
 
-	if err := application.StripExif(args.Path, args.Tags); err != nil {
+	if err := application.StripExif(args.Path, args.Tags, args.BackupDir); err != nil {
 		return nil, fmt.Errorf("EXIF strip failed: %w", err)
 	}
 
@@ -328,12 +330,13 @@ func (s *Server) handleCopyExif(ctx context.Context, req *mcp.CallToolRequest) (
 		SourcePath string   `json:"source_path"`
 		TargetPath string   `json:"target_path"`
 		Tags       []string `json:"tags"`
+		BackupDir  string   `json:"backup_dir"`
 	}
 	if err := json.Unmarshal(req.Params.Arguments, &args); err != nil {
 		return nil, fmt.Errorf("invalid arguments: %w", err)
 	}
 
-	if err := application.CopyExif(args.SourcePath, args.TargetPath, args.Tags); err != nil {
+	if err := application.CopyExif(args.SourcePath, args.TargetPath, args.Tags, args.BackupDir); err != nil {
 		return nil, fmt.Errorf("EXIF copy failed: %w", err)
 	}
 

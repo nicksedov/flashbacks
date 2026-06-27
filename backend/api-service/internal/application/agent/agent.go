@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"strings"
 	"sync"
 
 	"github.com/flashbacks/api-service/internal/domain"
@@ -275,15 +276,7 @@ func (a *Agent) buildSystemPrompt(conv *domain.Conversation) string {
 	prompt := `You are an AI assistant for the Flashbacks application. You help users analyze, search, and understand their image collection.
 
 You have access to the following tools:
-- describe_image: Generate a detailed description of an image
-- recognize_text: Extract text from an image (OCR)
-- generate_tags: Generate descriptive tags for an image
-- ask_about_image: Answer a specific question about an image
-- semantic_search: Find images by natural language description using semantic similarity. This is the PRIMARY tool for finding similar or related images.
-- search_by_date: Find images taken within a date range
-- search_by_location: Find images at specific geographic coordinates
-- search_by_path: Find images by filename or path pattern
-- get_image_metadata: Get EXIF metadata for an image
+` + a.buildToolList() + `
 
 Guidelines:
 - Use tools when you need information. Don't guess.
@@ -303,6 +296,20 @@ Guidelines:
 	}
 
 	return prompt
+}
+
+// buildToolList generates a dynamic list of available tools from the ToolProvider.
+func (a *Agent) buildToolList() string {
+	toolDefs := a.toolProvider.ToolDefinitions()
+	if len(toolDefs) == 0 {
+		return "(no tools available)"
+	}
+
+	var b strings.Builder
+	for _, td := range toolDefs {
+		b.WriteString(fmt.Sprintf("- %s: %s\n", td.Name, td.Description))
+	}
+	return b.String()
 }
 
 // maybeSummarize checks token count and triggers summarization if threshold exceeded.

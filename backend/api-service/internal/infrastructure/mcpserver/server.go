@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/flashbacks/api-service/internal/application/agent"
 	"github.com/flashbacks/api-service/internal/application/imaging"
 	"github.com/flashbacks/api-service/internal/infrastructure/llm"
 	"github.com/flashbacks/api-service/internal/interfaces/handler/helpers"
@@ -22,10 +23,11 @@ type FlashbacksMCPServer struct {
 	llmService        *imaging.LlmOcrService
 	maxMegapixels     float64
 	embeddingBackfill *imaging.EmbeddingBackfillManager
+	exifAgent         *agent.ExifAgent
 }
 
 // NewFlashbacksMCPServer creates and configures the MCP server with all tools.
-func NewFlashbacksMCPServer(db *gorm.DB, llmFactory *helpers.LLMFactory, llmService *imaging.LlmOcrService, maxMegapixels float64, embeddingBackfill *imaging.EmbeddingBackfillManager) *FlashbacksMCPServer {
+func NewFlashbacksMCPServer(db *gorm.DB, llmFactory *helpers.LLMFactory, llmService *imaging.LlmOcrService, maxMegapixels float64, embeddingBackfill *imaging.EmbeddingBackfillManager, exifAgent *agent.ExifAgent) *FlashbacksMCPServer {
 	srv := mcp.NewServer(&mcp.Implementation{
 		Name:    "image-toolkit",
 		Version: "1.0.0",
@@ -38,6 +40,7 @@ func NewFlashbacksMCPServer(db *gorm.DB, llmFactory *helpers.LLMFactory, llmServ
 		llmService:        llmService,
 		maxMegapixels:     maxMegapixels,
 		embeddingBackfill: embeddingBackfill,
+		exifAgent:         exifAgent,
 	}
 
 	s.registerImageTools()
@@ -60,24 +63,36 @@ func (s *FlashbacksMCPServer) HTTPHandler() http.Handler {
 
 // ToolDefinitions returns all registered tool definitions for use by the agent.
 func (s *FlashbacksMCPServer) ToolDefinitions() []llm.ToolDefinition {
-	return []llm.ToolDefinition{
-		describeImageToolDef(),
+	tools := []llm.ToolDefinition{
 		recognizeTextToolDef(),
 		generateTagsToolDef(),
 		askAboutImageToolDef(),
 		searchByDateToolDef(),
 		searchByLocationToolDef(),
 		searchByPathToolDef(),
-		getImageMetadataToolDef(),
+		getCachedMetadataToolDef(),
 		semanticSearchToolDef(),
 	}
+
+	// Append EXIF agent tools if available
+	if s.exifAgent != nil {
+		tools = append(tools, s.exifAgent.ToolDefinitions()...)
+	}
+
+	return tools
 }
 
 // ExecuteTool runs a tool by name with the given arguments.
 func (s *FlashbacksMCPServer) ExecuteTool(ctx context.Context, name string, arguments json.RawMessage) (string, error) {
+	// Delegate EXIF tools to the ExifAgent
+	if agent.IsExifTool(name) {
+		if s.exifAgent == nil {
+			return "", fmt.Errorf("EXIF agent not available")
+		}
+		return s.exifAgent.ExecuteTool(ctx, name, arguments)
+	}
+
 	switch name {
-	case "describe_image":
-		return s.executeDescribeImage(ctx, arguments)
 	case "recognize_text":
 		return s.executeRecognizeText(ctx, arguments)
 	case "generate_tags":
@@ -90,8 +105,8 @@ func (s *FlashbacksMCPServer) ExecuteTool(ctx context.Context, name string, argu
 		return s.executeSearchByLocation(ctx, arguments)
 	case "search_by_path":
 		return s.executeSearchByPath(ctx, arguments)
-	case "get_image_metadata":
-		return s.executeGetImageMetadata(ctx, arguments)
+	case "get_cached_metadata":
+		return s.executeGetCachedMetadata(ctx, arguments)
 	case "semantic_search":
 		return s.executeSemanticSearch(ctx, arguments)
 	default:

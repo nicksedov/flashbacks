@@ -18,11 +18,6 @@ import (
 
 // --- Tool input/output types ---
 
-type DescribeImageInput struct {
-	ImagePath string `json:"image_path" jsonschema:"Path to the image file"`
-	Language  string `json:"language,omitempty" jsonschema:"Response language code (en, ru). Defaults to en"`
-}
-
 type RecognizeTextInput struct {
 	ImagePath string `json:"image_path" jsonschema:"Path to the image file"`
 }
@@ -46,21 +41,6 @@ type ImageAnalysisOutput struct {
 }
 
 // --- Tool definitions for the agent ---
-
-func describeImageToolDef() llm.ToolDefinition {
-	return llm.ToolDefinition{
-		Name:        "describe_image",
-		Description: "Generate a detailed text description of what is shown in the image",
-		Parameters: map[string]any{
-			"type": "object",
-			"properties": map[string]any{
-				"image_path": map[string]any{"type": "string", "description": "Path to the image file"},
-				"language":   map[string]any{"type": "string", "description": "Response language code (en, ru). Defaults to en"},
-			},
-			"required": []string{"image_path"},
-		},
-	}
-}
 
 func recognizeTextToolDef() llm.ToolDefinition {
 	return llm.ToolDefinition{
@@ -110,11 +90,6 @@ func askAboutImageToolDef() llm.ToolDefinition {
 
 func (s *FlashbacksMCPServer) registerImageTools() {
 	mcp.AddTool(s.server, &mcp.Tool{
-		Name:        "describe_image",
-		Description: "Generate a detailed text description of what is shown in the image",
-	}, s.handleDescribeImage)
-
-	mcp.AddTool(s.server, &mcp.Tool{
 		Name:        "recognize_text",
 		Description: "Extract and recognize all text from an image (OCR)",
 	}, s.handleRecognizeText)
@@ -131,22 +106,6 @@ func (s *FlashbacksMCPServer) registerImageTools() {
 }
 
 // --- MCP SDK handlers ---
-
-func (s *FlashbacksMCPServer) handleDescribeImage(ctx context.Context, req *mcp.CallToolRequest, input DescribeImageInput) (*mcp.CallToolResult, ImageAnalysisOutput, error) {
-	result, err := s.runImageAction(input.ImagePath, "describe", "", input.Language)
-	if err != nil {
-		return nil, ImageAnalysisOutput{}, err
-	}
-	output := ImageAnalysisOutput{
-		Content:          result.Result,
-		Provider:         result.Provider,
-		Model:            result.Model,
-		ProcessingTimeMs: result.ProcessingTimeMs,
-	}
-	return &mcp.CallToolResult{
-		Content: []mcp.Content{&mcp.TextContent{Text: result.Result}},
-	}, output, nil
-}
 
 func (s *FlashbacksMCPServer) handleRecognizeText(ctx context.Context, req *mcp.CallToolRequest, input RecognizeTextInput) (*mcp.CallToolResult, ImageAnalysisOutput, error) {
 	result, err := s.runImageAction(input.ImagePath, "recognizeText", "", "en")
@@ -203,18 +162,6 @@ func (s *FlashbacksMCPServer) handleAskAboutImage(ctx context.Context, req *mcp.
 }
 
 // --- Direct execution methods (for agent) ---
-
-func (s *FlashbacksMCPServer) executeDescribeImage(ctx context.Context, args json.RawMessage) (string, error) {
-	var input DescribeImageInput
-	if err := json.Unmarshal(args, &input); err != nil {
-		return "", fmt.Errorf("invalid arguments: %w", err)
-	}
-	result, err := s.runImageAction(input.ImagePath, "describe", "", input.Language)
-	if err != nil {
-		return "", err
-	}
-	return result.Result, nil
-}
 
 func (s *FlashbacksMCPServer) executeRecognizeText(ctx context.Context, args json.RawMessage) (string, error) {
 	var input RecognizeTextInput

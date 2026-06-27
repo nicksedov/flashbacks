@@ -119,7 +119,11 @@ func (w *GPSWriter) WriteGPS(filePath string, lat, lng float64, meta *domain.Ima
 }
 
 // WriteExifField writes an arbitrary EXIF tag value to a file.
-func WriteExifField(filePath, tag, value string) error {
+// If backupDir is non-empty, a backup copy is created before modification.
+func WriteExifField(filePath, tag, value, backupDir string) error {
+	if _, err := createBackupIfDirSet(filePath, backupDir); err != nil {
+		return err
+	}
 	cmd := exec.Command("exiftool", "-overwrite_original", "-m",
 		fmt.Sprintf("-%s=%s", tag, value), filePath)
 	output, err := cmd.CombinedOutput()
@@ -130,7 +134,11 @@ func WriteExifField(filePath, tag, value string) error {
 }
 
 // StripExif removes specified EXIF tags from a file. If tags is nil/empty, removes all EXIF.
-func StripExif(filePath string, tags []string) error {
+// If backupDir is non-empty, a backup copy is created before modification.
+func StripExif(filePath string, tags []string, backupDir string) error {
+	if _, err := createBackupIfDirSet(filePath, backupDir); err != nil {
+		return err
+	}
 	args := []string{"-overwrite_original", "-m"}
 	if len(tags) == 0 {
 		args = append(args, "-exif:all=")
@@ -150,7 +158,11 @@ func StripExif(filePath string, tags []string) error {
 }
 
 // CopyExif copies EXIF data from source to target file.
-func CopyExif(sourcePath, targetPath string, tags []string) error {
+// If backupDir is non-empty, a backup of the target file is created before modification.
+func CopyExif(sourcePath, targetPath string, tags []string, backupDir string) error {
+	if _, err := createBackupIfDirSet(targetPath, backupDir); err != nil {
+		return err
+	}
 	args := []string{"-overwrite_original", "-m", "-tagsFromFile", sourcePath}
 	if len(tags) == 0 {
 		args = append(args, "-all:all")
@@ -167,6 +179,15 @@ func CopyExif(sourcePath, targetPath string, tags []string) error {
 		return fmt.Errorf("exiftool copy failed: %v, output: %s", err, string(output))
 	}
 	return nil
+}
+
+// createBackupIfDirSet creates a backup of filePath into backupDir if backupDir is non-empty.
+// Returns the backup path, or empty string if no backup was made.
+func createBackupIfDirSet(filePath, backupDir string) (string, error) {
+	if backupDir == "" {
+		return "", nil
+	}
+	return createBackup(filePath, backupDir)
 }
 
 // metadataRestoreArgs builds exiftool arguments to restore DB-stored EXIF fields.

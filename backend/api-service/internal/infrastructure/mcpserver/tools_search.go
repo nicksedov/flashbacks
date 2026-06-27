@@ -35,7 +35,7 @@ type SearchByPathInput struct {
 	Limit int    `json:"limit,omitempty" jsonschema:"Maximum number of results (default 20)"`
 }
 
-type GetImageMetadataInput struct {
+type GetCachedMetadataInput struct {
 	ImagePath string `json:"image_path" jsonschema:"Path to the image file"`
 }
 
@@ -137,10 +137,10 @@ func searchByPathToolDef() llm.ToolDefinition {
 	}
 }
 
-func getImageMetadataToolDef() llm.ToolDefinition {
+func getCachedMetadataToolDef() llm.ToolDefinition {
 	return llm.ToolDefinition{
-		Name:        "get_image_metadata",
-		Description: "Get EXIF metadata for a specific image",
+		Name:        "get_cached_metadata",
+		Description: "Get cached EXIF metadata from the database for a specific image (fast, may be stale). For live file-level EXIF use read_exif_fields or dump_exif_raw.",
 		Parameters: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -185,9 +185,9 @@ func (s *FlashbacksMCPServer) registerSearchTools() {
 	}, s.handleSearchByPath)
 
 	mcp.AddTool(s.server, &mcp.Tool{
-		Name:        "get_image_metadata",
-		Description: "Get EXIF metadata for a specific image",
-	}, s.handleGetImageMetadata)
+		Name:        "get_cached_metadata",
+		Description: "Get cached EXIF metadata from the database for a specific image (fast, may be stale). For live file-level EXIF use read_exif_fields or dump_exif_raw.",
+	}, s.handleGetCachedMetadata)
 
 	mcp.AddTool(s.server, &mcp.Tool{
 		Name:        "semantic_search",
@@ -230,7 +230,7 @@ func (s *FlashbacksMCPServer) handleSearchByPath(ctx context.Context, req *mcp.C
 	}, output, nil
 }
 
-func (s *FlashbacksMCPServer) handleGetImageMetadata(ctx context.Context, req *mcp.CallToolRequest, input GetImageMetadataInput) (*mcp.CallToolResult, ImageMetadataOutput, error) {
+func (s *FlashbacksMCPServer) handleGetCachedMetadata(ctx context.Context, req *mcp.CallToolRequest, input GetCachedMetadataInput) (*mcp.CallToolResult, ImageMetadataOutput, error) {
 	output, err := s.queryImageMetadata(input.ImagePath)
 	if err != nil {
 		return nil, ImageMetadataOutput{}, err
@@ -290,8 +290,8 @@ func (s *FlashbacksMCPServer) executeSearchByPath(ctx context.Context, args json
 	return formatSearchResultsJSON(output)
 }
 
-func (s *FlashbacksMCPServer) executeGetImageMetadata(ctx context.Context, args json.RawMessage) (string, error) {
-	var input GetImageMetadataInput
+func (s *FlashbacksMCPServer) executeGetCachedMetadata(ctx context.Context, args json.RawMessage) (string, error) {
+	var input GetCachedMetadataInput
 	if err := json.Unmarshal(args, &input); err != nil {
 		return "", fmt.Errorf("invalid arguments: %w", err)
 	}

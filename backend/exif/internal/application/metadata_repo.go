@@ -68,9 +68,12 @@ func (r *MetadataRepo) Upsert(meta *domain.ImageMetadata) (*domain.ImageMetadata
 	if err := r.db.Where("image_file_id = ?", meta.ImageFileID).Assign(meta).FirstOrCreate(result).Error; err != nil {
 		return nil, fmt.Errorf("failed to upsert image_metadata: %w", err)
 	}
-	// Re-query to get the fully populated record
-	if err := r.db.Where("image_file_id = ?", meta.ImageFileID).First(result).Error; err != nil {
-		return nil, fmt.Errorf("failed to re-query image_metadata after upsert: %w", err)
+	// FirstOrCreate populates result on "found" but may not on "created" due to GORM behavior.
+	// Only re-query when ID is zero (record was created, not found).
+	if result.ID == 0 {
+		if err := r.db.Where("image_file_id = ?", meta.ImageFileID).First(result).Error; err != nil {
+			return nil, fmt.Errorf("failed to re-query image_metadata after upsert: %w", err)
+		}
 	}
 	return result, nil
 }
@@ -147,15 +150,39 @@ func (r *MetadataRepo) GetCalendarItems(startDate, endDate *time.Time, cursor *t
 	}
 
 	type calendarRow struct {
-		domain.ImageMetadata
-		GPSLatitude  float64 `gorm:"column:gps_latitude"`
-		GPSLongitude float64 `gorm:"column:gps_longitude"`
-		NameLocal    string  `gorm:"column:name_local"`
-		NameEng      string  `gorm:"column:name_eng"`
+		ID             uint
+		ImageFileID    uint
+		Width          int
+		Height         int
+		CameraModel    string
+		LensModel      string
+		ISO            int
+		Aperture       string
+		ShutterSpeed   string
+		FocalLength    string
+		DateTaken      *time.Time
+		Orientation    int
+		ColorSpace     string
+		Software       string
+		GeolocationRef *uint
+		CreatedAt      time.Time
+		UpdatedAt      time.Time
+		GPSLatitude    float64 `gorm:"column:gps_latitude"`
+		GPSLongitude   float64 `gorm:"column:gps_longitude"`
+		NameLocal      string  `gorm:"column:name_local"`
+		NameEng        string  `gorm:"column:name_eng"`
 	}
 
 	query := r.db.Table("image_metadata").
-		Select(`image_metadata.*, 
+		Select(`image_metadata.id, image_metadata.image_file_id,
+			image_metadata.width, image_metadata.height,
+			image_metadata.camera_model, image_metadata.lens_model,
+			image_metadata.iso, image_metadata.aperture,
+			image_metadata.shutter_speed, image_metadata.focal_length,
+			image_metadata.date_taken, image_metadata.orientation,
+			image_metadata.color_space, image_metadata.software,
+			image_metadata.geolocation_ref,
+			image_metadata.created_at, image_metadata.updated_at,
 			COALESCE(geolocation_caches.gps_latitude, 0) as gps_latitude,
 			COALESCE(geolocation_caches.gps_longitude, 0) as gps_longitude,
 			COALESCE(geolocation_caches.name_local, '') as name_local,
@@ -195,11 +222,29 @@ func (r *MetadataRepo) GetCalendarItems(startDate, endDate *time.Time, cursor *t
 	results := make([]CalendarRow, len(rows))
 	for i := range rows {
 		results[i] = CalendarRow{
-			ImageMetadata: rows[i].ImageMetadata,
-			GPSLatitude:   rows[i].GPSLatitude,
-			GPSLongitude:  rows[i].GPSLongitude,
-			NameLocal:     rows[i].NameLocal,
-			NameEng:       rows[i].NameEng,
+			ImageMetadata: domain.ImageMetadata{
+				ID:             rows[i].ID,
+				ImageFileID:    rows[i].ImageFileID,
+				Width:          rows[i].Width,
+				Height:         rows[i].Height,
+				CameraModel:    rows[i].CameraModel,
+				LensModel:      rows[i].LensModel,
+				ISO:            rows[i].ISO,
+				Aperture:       rows[i].Aperture,
+				ShutterSpeed:   rows[i].ShutterSpeed,
+				FocalLength:    rows[i].FocalLength,
+				DateTaken:      rows[i].DateTaken,
+				Orientation:    rows[i].Orientation,
+				ColorSpace:     rows[i].ColorSpace,
+				Software:       rows[i].Software,
+				GeolocationRef: rows[i].GeolocationRef,
+				CreatedAt:      rows[i].CreatedAt,
+				UpdatedAt:      rows[i].UpdatedAt,
+			},
+			GPSLatitude:  rows[i].GPSLatitude,
+			GPSLongitude: rows[i].GPSLongitude,
+			NameLocal:    rows[i].NameLocal,
+			NameEng:      rows[i].NameEng,
 		}
 	}
 	return results, nextCursor, nextCursorID, nil

@@ -62,6 +62,79 @@ type ImageMetadata = shareddomain.ImageMetadata
 // The canonical definition lives in github.com/flashbacks/shared/domain.
 type GeolocationCache = shareddomain.GeolocationCache
 
+// --- Phase 3: API response types (used by ExifClient and mocks) ---
+
+// CalendarParams holds parameters for the calendar gallery query.
+type CalendarParams struct {
+	StartDate *time.Time
+	EndDate   *time.Time
+	Cursor    *time.Time
+	CursorID  *uint
+	PageSize  int
+}
+
+// CalendarResult holds the calendar gallery response.
+type CalendarResult struct {
+	Items         []CalendarItem
+	NextCursor    string
+	MinDate       string
+	MaxDate       string
+	TotalWithDate int64
+}
+
+// CalendarItem represents a single calendar gallery item.
+type CalendarItem struct {
+	ImageFileID    uint    `json:"imageFileId"`
+	DateTaken      string  `json:"dateTaken"`
+	GeolocationRef *uint   `json:"geolocationRef"`
+	GPSLatitude    float64 `json:"gpsLatitude"`
+	GPSLongitude   float64 `json:"gpsLongitude"`
+	NameLocal      string  `json:"nameLocal"`
+	NameEng        string  `json:"nameEng"`
+}
+
+// GeoBounds defines a geographic bounding box.
+type GeoBounds struct {
+	MinLat float64
+	MaxLat float64
+	MinLng float64
+	MaxLng float64
+}
+
+// GeoPoint represents a GPS point for clustering.
+type GeoPoint struct {
+	ImageFileID  uint    `json:"imageFileId"`
+	GPSLatitude  float64 `json:"gpsLatitude"`
+	GPSLongitude float64 `json:"gpsLongitude"`
+	NameLocal    string  `json:"nameLocal"`
+	NameEng      string  `json:"nameEng"`
+}
+
+// MissingImagesResult holds paginated missing images response.
+type MissingImagesResult struct {
+	Images   []MissingImageItem
+	Total    int64
+	Page     int
+	PageSize int
+}
+
+// MissingImageItem represents an image missing EXIF data.
+type MissingImageItem struct {
+	ImageFileID uint   `json:"imageFileId"`
+	Path        string `json:"path"`
+	MissingDate bool   `json:"missingDate"`
+	MissingGPS  bool   `json:"missingGps"`
+}
+
+// LocationCandidate represents a location suggestion.
+type LocationCandidate struct {
+	Lat        float64 `json:"lat"`
+	Lng        float64 `json:"lng"`
+	NameLocal  string  `json:"nameLocal"`
+	NameEng    string  `json:"nameEng"`
+	PhotoCount int     `json:"photoCount"`
+}
+
 // GalleryFolder represents a configured gallery folder in the database
 type GalleryFolder struct {
 	ID        uint      `gorm:"primaryKey" json:"id"`

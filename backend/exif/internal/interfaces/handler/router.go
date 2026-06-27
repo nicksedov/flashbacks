@@ -654,7 +654,7 @@ func SetupRouter(db *gorm.DB, exifSvc *application.ExifService, gpsWriter *appli
 // --- helper functions ---
 
 // MetaFromUpsertRequest converts an UpsertMetadataRequest to a domain.ImageMetadata.
-func MetaFromUpsertRequest(req dto.UpsertMetadataRequest) *domain.ImageMetadata { //nolint:deadcode
+func MetaFromUpsertRequest(req dto.UpsertMetadataRequest) *domain.ImageMetadata {
 	meta := &domain.ImageMetadata{
 		ImageFileID:    req.ImageFileID,
 		Width:          req.Width,

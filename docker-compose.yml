@@ -18,11 +18,11 @@ services:
       timeout: 5s
       retries: 5
 
-  api-service:
+  api:
     build:
       context: ./backend
       dockerfile: Dockerfile
-      target: api-service
+      target: api
     ports: ['5170:5170']
     environment:
       DB_HOST: postgres
@@ -72,7 +72,7 @@ services:
     environment:
       VITE_API_URL: ''
     depends_on:
-      - api-service
+      - api
 
 volumes:
   pgdata:

@@ -3,7 +3,7 @@
 # Unified Dockerfile for Flashbacks backend microservices
 #
 # Build specific service:
-#   docker build --target=api-service -t flashbacks/api-service .
+#   docker build --target=api         -t flashbacks/api .
 #   docker build --target=exif        -t flashbacks/exif .
 #   docker build --target=ocr         -t flashbacks/ocr .
 #
@@ -17,7 +17,7 @@ FROM golang:1.26.4-alpine AS builder
 WORKDIR /build
 
 # Install all build dependencies (CGO deps needed for gosseract/ocr)
-# api-service and exif set CGO_ENABLED=0, so extra packages are harmless
+# api and exif set CGO_ENABLED=0, so extra packages are harmless
 RUN apk update && apk add --no-cache \
     git \
     gcc \
@@ -56,7 +56,7 @@ RUN cd ocr        && CGO_ENABLED=1 GOOS=linux go build -ldflags="-w -s" -o /buil
 # ======================================================================
 
 # --- api-service runtime ---
-FROM alpine:3.24 AS api-service
+FROM alpine:3.24 AS api
 
 RUN apk add --no-cache ca-certificates tzdata curl
 

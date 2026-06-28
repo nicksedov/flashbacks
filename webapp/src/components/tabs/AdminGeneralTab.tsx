@@ -101,12 +101,14 @@ export function AdminGeneralTab() {
       })
   }, [])
 
-  const loadThumbnailCacheStats = useCallback(async () => {
+  const loadThumbnailCacheStats = useCallback(async (skipPathUpdate = false) => {
     try {
       setIsThumbnailLoading(true)
       const stats = await fetchThumbnailCacheStats()
       setThumbnailCacheStats(stats)
-      setThumbnailCachePath(stats.cacheDir || "")
+      if (!skipPathUpdate) {
+        setThumbnailCachePath(stats.cacheDir || "")
+      }
     } catch {
       setThumbnailCacheStats(null)
     } finally {
@@ -151,8 +153,23 @@ export function AdminGeneralTab() {
 
   useEffect(() => {
     loadTrashInfo()
-    loadThumbnailCacheStats()
-  }, [loadTrashInfo, loadThumbnailCacheStats])
+
+    // Inline the initial thumbnail cache stats load to avoid calling
+    // loadThumbnailCacheStats() (which sets isThumbnailLoading synchronously)
+    // from within an effect body — React discourages synchronous setState in effects
+    // as it triggers cascading renders. The loadThumbnailCacheStats callback itself
+    // remains available for event-driven callers (button clicks, save handlers).
+    const loadCacheStats = async () => {
+      try {
+        const stats = await fetchThumbnailCacheStats()
+        setThumbnailCacheStats(stats)
+        setThumbnailCachePath(stats.cacheDir || "")
+      } catch {
+        setThumbnailCacheStats(null)
+      }
+    }
+    loadCacheStats()
+  }, [loadTrashInfo])
 
   // Thumbnail Cache handlers
   const handleSaveThumbnailCachePath = useCallback(async () => {
@@ -161,7 +178,8 @@ export function AdminGeneralTab() {
       const result = await updateSettings({ thumbnailCachePath: thumbnailCachePath.trim() })
       setThumbnailCachePath(result.thumbnailCachePath || "")
       toast.success(t("adminPanel.thumbnailCache.saved"))
-      loadThumbnailCacheStats()
+      // Refresh stats without overwriting the path — the saved value is authoritative
+      loadThumbnailCacheStats(true)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t("adminPanel.thumbnailCache.saveFailed"))
     } finally {
@@ -678,7 +696,7 @@ export function AdminGeneralTab() {
             <Button
               variant="outline"
               size="sm"
-              onClick={loadThumbnailCacheStats}
+              onClick={() => loadThumbnailCacheStats()}
               disabled={isThumbnailLoading}
             >
               {isThumbnailLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}

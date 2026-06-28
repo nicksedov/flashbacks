@@ -56,7 +56,7 @@ RUN cd ocr        && CGO_ENABLED=1 GOOS=linux go build -ldflags="-w -s" -o /buil
 # ======================================================================
 
 # --- api-service runtime ---
-FROM alpine:3.24 AS api
+FROM alpine:3.24 AS api-service
 
 RUN apk add --no-cache ca-certificates tzdata curl
 

@@ -19,7 +19,10 @@ services:
       retries: 5
 
   api-service:
-    build: ./backend/api-service
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: api-service
     ports: ['5170:5170']
     environment:
       DB_HOST: postgres
@@ -37,7 +40,10 @@ services:
         condition: service_healthy
 
   exif:
-    build: ./backend/exif
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: exif
     ports: ['5172:5172']
     environment:
       DB_HOST: postgres
@@ -52,7 +58,10 @@ services:
         condition: service_healthy
 
   ocr:
-    build: ./backend/ocr
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: ocr
     ports: ['5174:5174']
     environment:
       OCR_PORT: '5174'

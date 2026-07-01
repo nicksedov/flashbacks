@@ -1,24 +1,15 @@
-import { useCallback, useState } from "react"
+import { useCallback, useRef, useState } from "react"
 import { GalleryFoldersView } from "@/components/gallery/GalleryFoldersView"
 import { GalleryCalendarView } from "@/components/gallery/GalleryCalendarView"
 import { GalleryGeolocationView } from "@/components/gallery/GalleryGeolocationView"
 import { UnifiedLightbox } from "@/components/gallery/UnifiedLightbox"
+import { DeleteConfirmDialog } from "@/components/gallery/DeleteConfirmDialog"
+import { BulkDeleteDialog } from "@/components/gallery/BulkDeleteDialog"
 import type { LightboxMode } from "@/components/gallery/UnifiedLightbox"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
-import { Button } from "@/components/ui/button"
-import { Checkbox } from "@/components/ui/checkbox"
-import { Label } from "@/components/ui/label"
 import { deleteFiles } from "@/api/endpoints"
-import { API_BASE_URL } from "@/api/client"
 import { useSettings } from "@/providers/useSettings"
 import { useTranslation } from "@/i18n"
+import { downloadImage } from "@/lib/downloadImage"
 import type { GalleryImageDTO } from "@/types"
 
 interface GalleryTabProps {
@@ -31,8 +22,13 @@ export function GalleryTab({ galleryMode }: GalleryTabProps) {
   const [lightboxImage, setLightboxImage] = useState<string | null>(null)
   const [lightboxMode, setLightboxMode] = useState<LightboxMode>("ai")
   const [showGeoForm, setShowGeoForm] = useState(false)
-  const [deleteConfirm, setDeleteConfirm] = useState<{ image: GalleryImageDTO; removeThumbnail: () => void } | null>(null)
+
+  // Single delete state
+  const [deleteConfirm, setDeleteConfirm] = useState<{ fileName: string; path: string } | null>(null)
+  const removeThumbnailRef = useRef<(() => void) | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
+
+  // Bulk delete state
   const [bulkDeleteImages, setBulkDeleteImages] = useState<GalleryImageDTO[] | null>(null)
   const [bulkDeleteCleanup, setBulkDeleteCleanup] = useState<(() => void) | null>(null)
   const [bulkUseTrash, setBulkUseTrash] = useState(true)
@@ -43,15 +39,12 @@ export function GalleryTab({ galleryMode }: GalleryTabProps) {
   }, [])
 
   const handleImageDownload = useCallback((image: GalleryImageDTO) => {
-    const imageUrl = `${API_BASE_URL}/api/image?path=${encodeURIComponent(image.path)}`
-    const a = document.createElement("a")
-    a.href = imageUrl
-    a.download = image.fileName
-    a.click()
+    downloadImage(image.path, image.fileName)
   }, [])
 
   const handleImageDelete = useCallback((image: GalleryImageDTO, removeThumbnail: () => void) => {
-    setDeleteConfirm({ image, removeThumbnail })
+    setDeleteConfirm({ fileName: image.fileName, path: image.path })
+    removeThumbnailRef.current = removeThumbnail
   }, [])
 
   const handleConfirmDelete = useCallback(async () => {
@@ -59,10 +52,11 @@ export function GalleryTab({ galleryMode }: GalleryTabProps) {
     setIsDeleting(true)
     try {
       await deleteFiles({
-        filePaths: [deleteConfirm.image.path],
+        filePaths: [deleteConfirm.path],
         trashDir: trashDir || "",
       })
-      deleteConfirm.removeThumbnail()
+      removeThumbnailRef.current?.()
+      removeThumbnailRef.current = null
     } catch (err) {
       console.error("Failed to delete file:", err)
       alert("Failed to delete file")
@@ -141,63 +135,32 @@ export function GalleryTab({ galleryMode }: GalleryTabProps) {
         onShowGeoFormChange={setShowGeoForm}
       />
 
-      <Dialog open={!!deleteConfirm} onOpenChange={(open) => !open && setDeleteConfirm(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{t("gallery.deleteConfirm.title")}</DialogTitle>
-            <DialogDescription>
-              {deleteConfirm && t("gallery.deleteConfirm.description", { fileName: deleteConfirm.image.fileName })}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteConfirm(null)} disabled={isDeleting}>
-              {t("gallery.deleteConfirm.cancel")}
-            </Button>
-            <Button variant="destructive" onClick={handleConfirmDelete} disabled={isDeleting}>
-              {isDeleting ? t("gallery.deleteConfirm.deleting") : t("gallery.deleteConfirm.delete")}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Single delete confirmation dialog */}
+      <DeleteConfirmDialog
+        fileName={deleteConfirm?.fileName}
+        open={!!deleteConfirm}
+        onCancel={() => {
+          setDeleteConfirm(null)
+          removeThumbnailRef.current = null
+        }}
+        onConfirm={handleConfirmDelete}
+        loading={isDeleting}
+      />
 
-      <Dialog open={!!bulkDeleteImages} onOpenChange={(open) => !open && setBulkDeleteImages(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{t("deleteFiles.title")}</DialogTitle>
-            <DialogDescription>
-              {t("deleteFiles.description", { count: bulkDeleteImages?.length ?? 0 })}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="rounded-md bg-destructive/10 border border-destructive/20 p-3 text-sm text-destructive">
-              {t("deleteFiles.warning")}
-            </div>
-            <div className="flex items-center gap-2">
-              <Checkbox
-                id="bulk-delete-use-trash"
-                checked={bulkUseTrash}
-                onCheckedChange={(checked) => setBulkUseTrash(checked === true)}
-              />
-              <Label htmlFor="bulk-delete-use-trash" className="text-sm cursor-pointer">
-                {t("deleteFiles.useTrash")}
-              </Label>
-            </div>
-            {bulkUseTrash && !trashDir && (
-              <p className="text-xs text-destructive">
-                {t("deleteFiles.trashNotConfigured")}
-              </p>
-            )}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => { setBulkDeleteImages(null); setBulkDeleteCleanup(null) }} disabled={isDeleting}>
-              {t("common.cancel")}
-            </Button>
-            <Button variant="destructive" onClick={handleConfirmBulkDelete} disabled={isDeleting}>
-              {isDeleting ? t("deleteFiles.deleting") : t("deleteFiles.button")}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Bulk delete dialog */}
+      <BulkDeleteDialog
+        count={bulkDeleteImages?.length ?? 0}
+        open={!!bulkDeleteImages}
+        onCancel={() => {
+          setBulkDeleteImages(null)
+          setBulkDeleteCleanup(null)
+        }}
+        onConfirm={handleConfirmBulkDelete}
+        useTrash={bulkUseTrash}
+        onUseTrashChange={setBulkUseTrash}
+        trashDir={trashDir}
+        loading={isDeleting}
+      />
     </div>
   )
 }

@@ -45,6 +45,11 @@ export function useSmartSearch() {
     }
   }, [])
 
+  const removeResults = useCallback((ids: number[]) => {
+    setResults((prev) => prev.filter((r) => !ids.includes(r.id)))
+    setTotal((prev) => Math.max(0, prev - ids.length))
+  }, [])
+
   const reset = useCallback(() => {
     abortRef.current?.abort()
     setResults([])
@@ -63,6 +68,7 @@ export function useSmartSearch() {
     error,
     searched,
     search,
+    removeResults,
     reset,
   }
 }

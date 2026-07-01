@@ -1,7 +1,8 @@
 import { memo } from "react"
 import { useTranslation } from "@/i18n"
-import { Download, Trash2, Check } from "lucide-react"
 import type { GalleryImageDTO } from "@/types"
+import { TileOverlay } from "./TileOverlay"
+import { SelectionCheckbox } from "./SelectionCheckbox"
 
 interface ImageTileProps {
   image: GalleryImageDTO
@@ -24,6 +25,10 @@ export const ImageTile = memo(function ImageTile({
 }: ImageTileProps) {
   const { t } = useTranslation()
 
+  const handleSelectToggle = (e: React.MouseEvent | React.KeyboardEvent) => {
+    onSelectToggle?.(e, image)
+  }
+
   return (
     <div
       role="button"
@@ -31,7 +36,7 @@ export const ImageTile = memo(function ImageTile({
       className="group flex flex-col cursor-pointer"
       onClick={(e) => {
         if (onSelectToggle && (e.ctrlKey || e.metaKey || e.shiftKey || selectionModeActive)) {
-          onSelectToggle(e, image)
+          handleSelectToggle(e)
           return
         }
         onClick(image)
@@ -56,56 +61,16 @@ export const ImageTile = memo(function ImageTile({
           </div>
         )}
 
-        {/* Selection checkmark in top-right corner — only visible when selection mode is active */}
-        {(selected || selectionModeActive) && onSelectToggle && (
-          <button
-            type="button"
-            className={`absolute top-1 right-1 flex h-5 w-5 items-center justify-center rounded-full border-2 transition-colors z-10 ${
-              selected
-                ? "bg-primary border-primary text-primary-foreground"
-                : "bg-background/80 border-muted-foreground/30 hover:border-primary/60"
-            }`}
-            onClick={(e) => {
-              e.stopPropagation()
-              onSelectToggle(e, image)
-            }}
-            title={selected ? t("gallery.selection.unselect") : t("gallery.selection.select")}
-          >
-            {selected && <Check className="h-3 w-3" />}
-          </button>
-        )}
+        <SelectionCheckbox
+          selected={!!selected}
+          visible={(!!selected || !!selectionModeActive) && !!onSelectToggle}
+          onToggle={handleSelectToggle}
+        />
 
-        {/* Overlay with action buttons */}
-        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-2 opacity-0 group-hover:opacity-100 transition-opacity">
-          <div className="flex gap-1 justify-center">
-            {onImageDownload && (
-              <button
-                type="button"
-                className="p-2 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  onImageDownload(image)
-                }}
-                title={t("gallery.overlay.download")}
-              >
-                <Download className="h-5 w-5" />
-              </button>
-            )}
-            {onImageDelete && (
-              <button
-                type="button"
-                className="p-2 rounded-lg bg-red-500/20 hover:bg-red-500/40 text-white transition-colors"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  onImageDelete(image)
-                }}
-                title={t("gallery.overlay.delete")}
-              >
-                <Trash2 className="h-5 w-5" />
-              </button>
-            )}
-          </div>
-        </div>
+        <TileOverlay
+          onDownload={onImageDownload ? () => onImageDownload(image) : undefined}
+          onDelete={onImageDelete ? () => onImageDelete(image) : undefined}
+        />
       </div>
       <p className="text-[11px] text-muted-foreground truncate mt-1 px-0.5 w-full text-center" title={image.fileName}>
         {image.fileName}

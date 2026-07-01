@@ -1,58 +1,41 @@
 import { useState, useCallback, useRef, useEffect } from "react"
-import { Search, Loader2, X, AlertTriangle, Zap, ImageIcon } from "lucide-react"
+import { Search, Loader2, X, AlertTriangle, Zap } from "lucide-react"
 import { useTranslation } from "@/i18n"
 import type { SmartSearchResult, EmbeddingBackfillStatus } from "@/types"
 import { UnifiedLightbox } from "@/components/gallery/UnifiedLightbox"
+import { SmartSearchTile } from "@/components/gallery/SmartSearchTile"
+import { DeleteConfirmDialog } from "@/components/gallery/DeleteConfirmDialog"
+import { BulkDeleteDialog } from "@/components/gallery/BulkDeleteDialog"
 import { useSmartSearch } from "@/hooks/useSmartSearch"
-import { fetchEmbeddingStatus, startEmbeddingBackfill, stopEmbeddingBackfill, fetchThumbnail } from "@/api/endpoints"
+import { fetchEmbeddingStatus, startEmbeddingBackfill, stopEmbeddingBackfill, deleteFiles } from "@/api/endpoints"
 import { Input } from "@/components/ui/input"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { usePolling } from "@/hooks/usePolling"
+import { useSettings } from "@/providers/useSettings"
+import { useGallerySelection } from "@/providers/useGallerySelection"
+import { downloadImage } from "@/lib/downloadImage"
 
 const DEBOUNCE_MS = 600
 const EMBEDDING_POLL_INTERVAL = 3000
 
-/** Lazily fetches and renders a thumbnail via the JSON thumbnail API. */
-function LazyThumbnail({ path, fileName }: { path: string; fileName: string }) {
-  const [src, setSrc] = useState<string | null>(null)
-
-  useEffect(() => {
-    let cancelled = false
-    fetchThumbnail(path)
-      .then((res) => {
-        if (!cancelled) setSrc(res.thumbnail)
-      })
-      .catch(() => {
-        // leave blank on error
-      })
-    return () => { cancelled = true }
-  }, [path])
-
-  if (!src) {
-    return (
-      <div className="w-full h-full flex items-center justify-center bg-muted">
-        <ImageIcon className="h-8 w-8 text-muted-foreground" />
-      </div>
-    )
-  }
-
-  return (
-    <img
-      src={src}
-      alt={fileName}
-      className="w-full h-full object-cover"
-    />
-  )
-}
-
 export function SmartSearchTab() {
   const { t } = useTranslation()
-  const { results, total, query, isLoading, error, searched, search, reset } = useSmartSearch()
+  const { trashDir } = useSettings()
+  const { results, total, query, isLoading, error, searched, search, removeResults, reset } = useSmartSearch()
   const [selectedImage, setSelectedImage] = useState<string | null>(null)
   const [inputValue, setInputValue] = useState("")
   const [limit, setLimit] = useState(50)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Selection state
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
+  const { registerActions } = useGallerySelection()
+
+  // Delete confirmation dialogs
+  const [deleteConfirm, setDeleteConfirm] = useState<{ id: number; fileName: string; path: string } | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [bulkDeleteResults, setBulkDeleteResults] = useState<SmartSearchResult[] | null>(null)
+  const [bulkUseTrash, setBulkUseTrash] = useState(true)
 
   // Embedding status polling
   const {
@@ -124,11 +107,113 @@ export function SmartSearchTab() {
   const handleClear = useCallback(() => {
     setInputValue("")
     reset()
+    setSelectedIds(new Set())
   }, [reset])
 
   const handleResultClick = useCallback((result: SmartSearchResult) => {
     setSelectedImage(result.path)
   }, [])
+
+  // --- Selection handlers ---
+
+  const handleToggleSelection = useCallback((_e: React.MouseEvent | React.KeyboardEvent, result: SmartSearchResult) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(result.id)) {
+        next.delete(result.id)
+      } else {
+        next.add(result.id)
+      }
+      return next
+    })
+  }, [])
+
+  const selectedCount = selectedIds.size
+
+  const handleDeleteSelected = useCallback(() => {
+    const selectedResults = results.filter((r) => selectedIds.has(r.id))
+    setBulkDeleteResults(selectedResults)
+    setBulkUseTrash(true)
+  }, [results, selectedIds])
+
+  // Register selection actions in context for Header display
+  useEffect(() => {
+    if (selectedCount > 0) {
+      registerActions({
+        count: selectedCount,
+        clear: () => {
+          setSelectedIds(new Set())
+        },
+        del: handleDeleteSelected,
+      })
+    } else {
+      registerActions(null)
+    }
+    return () => {
+      registerActions(null)
+    }
+  }, [selectedCount, handleDeleteSelected, registerActions])
+
+  // --- Download handler ---
+
+  const handleImageDownload = useCallback((result: SmartSearchResult) => {
+    downloadImage(result.path, result.fileName)
+  }, [])
+
+  // --- Single delete handler ---
+
+  const handleImageDelete = useCallback((result: SmartSearchResult) => {
+    setDeleteConfirm({ id: result.id, fileName: result.fileName, path: result.path })
+  }, [])
+
+  const handleConfirmDelete = useCallback(async () => {
+    if (!deleteConfirm) return
+    setIsDeleting(true)
+    try {
+      await deleteFiles({
+        filePaths: [deleteConfirm.path],
+        trashDir: trashDir || "",
+      })
+      removeResults([deleteConfirm.id])
+      setDeleteConfirm(null)
+    } catch (err) {
+      console.error("Failed to delete file:", err)
+      alert("Failed to delete file")
+    } finally {
+      setIsDeleting(false)
+    }
+  }, [deleteConfirm, trashDir, removeResults])
+
+  // --- Bulk delete handler ---
+
+  const handleConfirmBulkDelete = useCallback(async () => {
+    if (!bulkDeleteResults || bulkDeleteResults.length === 0) return
+
+    if (!bulkUseTrash || !trashDir) {
+      if (!window.confirm(t("deleteFiles.confirmPermanent"))) {
+        return
+      }
+    }
+
+    setIsDeleting(true)
+    try {
+      const result = await deleteFiles({
+        filePaths: bulkDeleteResults.map((r) => r.path),
+        trashDir: bulkUseTrash ? trashDir : "",
+      })
+      removeResults(bulkDeleteResults.map((r) => r.id))
+      setBulkDeleteResults(null)
+      setSelectedIds(new Set())
+      if (result.failed > 0) {
+        alert(t("deleteFiles.successWithFailed", { count: result.success, failed: result.failed }))
+      }
+    } catch (err) {
+      console.error("Failed to delete files:", err)
+      alert(t("deleteFiles.errorFailed"))
+    } finally {
+      setIsDeleting(false)
+    }
+  }, [bulkDeleteResults, bulkUseTrash, trashDir, t, removeResults])
 
   const hasEmbeddings = embeddingStatus && embeddingStatus.progress.total > 0
   const needsBackfill = embeddingStatus && !embeddingStatus.running && embeddingStatus.progress.remaining > 0
@@ -269,7 +354,7 @@ export function SmartSearchTab() {
           {total === 1
             ? t("smartSearch.resultCountOne", { count: total })
             : t("smartSearch.resultCount", { count: total })}
-          {query && <span> — &quot;{query}&quot;</span>}
+          {query && <span> — "{query}"</span>}
         </p>
       )}
 
@@ -295,42 +380,16 @@ export function SmartSearchTab() {
       {!isLoading && results.length > 0 && (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
           {results.map((result) => (
-            <button
+            <SmartSearchTile
               key={result.id}
-              onClick={() => handleResultClick(result)}
-              className="group relative aspect-square rounded-lg overflow-hidden border bg-card hover:border-primary transition-colors"
-            >
-              {/* Thumbnail */}
-              <LazyThumbnail path={result.path} fileName={result.fileName} />
-
-              {/* Similarity badge */}
-              <Badge
-                variant="secondary"
-                className="absolute top-2 right-2 text-xs font-semibold bg-primary/90 text-primary-foreground"
-              >
-                {(result.similarity * 100).toFixed(0)}%
-              </Badge>
-
-              {/* Overlay on hover */}
-              <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity p-2 flex flex-col justify-end">
-                <p className="text-xs text-white font-medium truncate">
-                  {result.fileName}
-                </p>
-                {/* Top 3 tags */}
-                {result.tags.length > 0 && (
-                  <div className="flex flex-wrap gap-1 mt-1">
-                    {result.tags.slice(0, 3).map((tag) => (
-                      <span
-                        key={tag}
-                        className="text-[10px] bg-white/20 text-white rounded px-1"
-                      >
-                        {tag}
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </button>
+              result={result}
+              onClick={handleResultClick}
+              onDownload={handleImageDownload}
+              onDelete={handleImageDelete}
+              selected={selectedIds.has(result.id)}
+              selectionModeActive={selectedIds.size > 0}
+              onSelectToggle={handleToggleSelection}
+            />
           ))}
         </div>
       )}
@@ -340,6 +399,28 @@ export function SmartSearchTab() {
         imagePath={selectedImage}
         initialMode="exif"
         onClose={() => setSelectedImage(null)}
+      />
+
+      {/* Single delete confirmation dialog */}
+      <DeleteConfirmDialog
+        fileName={deleteConfirm?.fileName}
+        open={!!deleteConfirm}
+        onCancel={() => setDeleteConfirm(null)}
+        onConfirm={handleConfirmDelete}
+        loading={isDeleting}
+      />
+
+      {/* Bulk delete dialog */}
+      <BulkDeleteDialog
+        count={bulkDeleteResults?.length ?? 0}
+        open={!!bulkDeleteResults}
+        onCancel={() => setBulkDeleteResults(null)}
+        onConfirm={handleConfirmBulkDelete}
+        useTrash={bulkUseTrash}
+        onUseTrashChange={setBulkUseTrash}
+        trashDir={trashDir}
+        loading={isDeleting}
+        idSuffix="-smart"
       />
     </div>
   )

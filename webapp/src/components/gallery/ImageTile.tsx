@@ -12,6 +12,8 @@ interface ImageTileProps {
   selected?: boolean
   selectionModeActive?: boolean
   onSelectToggle?: (e: React.MouseEvent | React.KeyboardEvent, image: GalleryImageDTO) => void
+  /** Image loading strategy: "lazy" (default) or "eager". Use "eager" when all thumbnails must load immediately (e.g., calendar view). */
+  loading?: "lazy" | "eager"
 }
 
 export const ImageTile = memo(function ImageTile({
@@ -22,6 +24,7 @@ export const ImageTile = memo(function ImageTile({
   selected,
   selectionModeActive,
   onSelectToggle,
+  loading = "lazy",
 }: ImageTileProps) {
   const { t } = useTranslation()
 
@@ -53,7 +56,7 @@ export const ImageTile = memo(function ImageTile({
             src={image.thumbnail}
             alt={image.fileName}
             className="h-full w-full object-cover"
-            loading="lazy"
+            loading={loading}
           />
         ) : (
           <div className="flex h-full items-center justify-center text-xs text-muted-foreground">

@@ -11,9 +11,11 @@ interface CalendarImageGridProps {
   onImageDownload?: (image: GalleryImageDTO) => void
   onImageDelete?: (image: GalleryImageDTO, removeThumbnail: () => void) => void
   onBulkGeo?: (group: CalendarDateGroup) => void
+  /** Image loading strategy for tiles. Calendar mode uses "eager" to load all thumbnails immediately. */
+  imageLoading?: "lazy" | "eager"
 }
 
-export function CalendarImageGrid({ groups, onImageClick, onImageDownload, onImageDelete, onBulkGeo }: CalendarImageGridProps) {
+export function CalendarImageGrid({ groups, onImageClick, onImageDownload, onImageDelete, onBulkGeo, imageLoading = "eager" }: CalendarImageGridProps) {
   const { t } = useTranslation()
 
   const handleDelete = (image: GalleryImageDTO) => {
@@ -59,6 +61,7 @@ export function CalendarImageGrid({ groups, onImageClick, onImageDownload, onIma
                   onClick={onImageClick}
                   onImageDownload={onImageDownload}
                   onImageDelete={handleDelete}
+                  loading={imageLoading}
                 />
               ))}
             </div>

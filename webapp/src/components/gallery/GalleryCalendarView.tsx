@@ -29,6 +29,11 @@ export function GalleryCalendarView({ onImageClick, onImageDownload, onImageDele
   // Bulk geo dialog state
   const [bulkGeoGroup, setBulkGeoGroup] = useState<CalendarDateGroup | null>(null)
 
+  // Auto-load remaining pages for a target date after navigation.
+  // When set, a useEffect loop keeps calling loadMore() until the date
+  // is no longer the last loaded group (i.e., all its images are fetched).
+  const [pendingDateLoad, setPendingDateLoad] = useState<string | null>(null)
+
   // Image preloading cache
   const preloadImageCache = useRef<Map<string, HTMLImageElement>>(new Map())
   const sentinelRef = useRef<HTMLDivElement>(null)
@@ -154,6 +159,28 @@ export function GalleryCalendarView({ onImageClick, onImageDownload, onImageDele
     return () => observer.disconnect()
   }, [calendar.hasMore, calendar.isLoading, calendar.loadMore])
 
+  // Auto-load remaining pages for the target date after navigation.
+  // When pendingDateLoad is set, this effect keeps calling loadMore()
+  // until the date is no longer the last group (all images are fetched)
+  // or there is no more data.
+  //
+  // IMPORTANT: Do NOT clear pendingDateLoad when isLoading is true —
+  // loadMore() sets isLoading=true which triggers a re-render and would
+  // kill the loop. Instead, just return and wait for isLoading→false
+  // to re-fire the effect and continue loading.
+  useEffect(() => {
+    if (!pendingDateLoad) return
+    const idx = calendar.groups.findIndex((g) => g.date === pendingDateLoad)
+    // Terminal conditions: clear pendingDateLoad and stop
+    if (idx === -1 || idx !== calendar.groups.length - 1 || !calendar.hasMore) {
+      setPendingDateLoad(null)
+      return
+    }
+    // Transient condition: loadMore() is in progress, wait for it to finish
+    if (calendar.isLoading) return
+    calendar.loadMore()
+  }, [pendingDateLoad, calendar.groups, calendar.hasMore, calendar.isLoading, calendar.loadMore])
+
   // Handlers
   const handleDateSelect = async (date: string) => {
     // Navigate to the selected date
@@ -182,11 +209,11 @@ export function GalleryCalendarView({ onImageClick, onImageDownload, onImageDele
     // Check if the date is already in loaded groups
     const existingGroupIndex = calendar.groups.findIndex((g) => g.date === date)
     if (existingGroupIndex !== -1) {
-      // If this is the last group and more data exists, continue loading
-      // to ensure all images for this date are fetched
+      // If this is the last group and more data exists, trigger auto-load
+      // via the pendingDateLoad effect to fetch all remaining images.
       const isLastGroup = existingGroupIndex === calendar.groups.length - 1
       if (isLastGroup && calendar.hasMore && !calendar.isLoading) {
-        calendar.loadMore()
+        setPendingDateLoad(date)
       }
       // Scroll to the group
       const element = document.getElementById(`date-group-${date}`)
@@ -202,6 +229,9 @@ export function GalleryCalendarView({ onImageClick, onImageDownload, onImageDele
 
       // Use the hook's jumpToDate method
       await calendar.jumpToDate(date)
+
+      // After jumpToDate, trigger auto-load for any remaining pages of this date
+      setPendingDateLoad(date)
 
       // Update calendar widget to the month of the navigated date
       const navDate = new Date(date + "T00:00:00")

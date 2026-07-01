@@ -80,8 +80,19 @@ func (s *ExifService) ExtractGPS(filePath string) (float64, float64, bool) {
 	baseName := filepath.Base(filePath)
 
 	// Method 1: Try direct GPSLatitude/GPSLongitude as float
+	// IMPORTANT: exiftool without -n outputs GPS coordinates as DMS strings,
+	// but some EXIF configurations or newer exiftool versions may output
+	// decimal values. When reading as float, the values are unsigned — the
+	// hemisphere sign comes from GPSLatitudeRef/GPSLongitudeRef tags.
 	if lat, err := fi.GetFloat("GPSLatitude"); err == nil {
 		if lng, err := fi.GetFloat("GPSLongitude"); err == nil {
+			// Apply hemisphere sign from GPSLatitudeRef/GPSLongitudeRef
+			if ref, err := fi.GetString("GPSLatitudeRef"); err == nil && (ref == "S" || ref == "s") {
+				lat = -lat
+			}
+			if ref, err := fi.GetString("GPSLongitudeRef"); err == nil && (ref == "W" || ref == "w") {
+				lng = -lng
+			}
 			log.Printf("EXIF %s: GPS via float: lat=%.8f, lng=%.8f", baseName, lat, lng)
 			return lat, lng, true
 		}

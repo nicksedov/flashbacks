@@ -39,8 +39,9 @@ func NewExifAgent(serviceURL, backupDir string) *ExifAgent {
 }
 
 // exifToolNames lists the MCP tools provided by the EXIF service.
+// Must match the tool names registered in backend/exif/mcp/server.go.
 var exifToolNames = []string{
-	"read_exif_fields", "dump_exif_raw",
+	"read_exif", "read_gps", "read_all_metadata",
 	"write_gps", "write_exif_field", "strip_exif", "copy_exif",
 	"compare_exif", "validate_exif",
 }
@@ -274,14 +275,15 @@ func IsExifTool(name string) bool {
 
 func exifToolDescription(name string) string {
 	descriptions := map[string]string{
-		"read_exif_fields": "Read structured EXIF fields from image file (camera, lens, ISO, aperture, shutter, focal length, date, orientation, GPS). Reads directly from the file — always current.",
-		"dump_exif_raw":    "Dump all raw EXIF tags from image file (complete tag listing, unprocessed values)",
-		"write_gps":        "Write GPS coordinates to image EXIF (3-attempt strategy with backup)",
-		"write_exif_field": "Write arbitrary EXIF tag value (e.g., DateTimeOriginal, ImageDescription)",
-		"strip_exif":       "Remove specified EXIF tags (or all if tags omitted)",
-		"copy_exif":        "Copy EXIF data from source to target file",
-		"compare_exif":     "Compare EXIF metadata between two images, return differences",
-		"validate_exif":    "Validate EXIF integrity (check for corruption, InteropIFD issues)",
+		"read_exif":         "Read structured EXIF fields from image file (camera, lens, ISO, aperture, shutter, focal length, date, orientation). Reads directly from the file — always current.",
+		"read_gps":          "Read GPS coordinates from image EXIF (latitude, longitude, altitude if available)",
+		"read_all_metadata": "Read complete EXIF tag dump (all tags, raw values) from image file",
+		"write_gps":         "Write GPS coordinates to image EXIF (3-attempt strategy with backup)",
+		"write_exif_field":  "Write arbitrary EXIF tag value (e.g., DateTimeOriginal, ImageDescription)",
+		"strip_exif":        "Remove specified EXIF tags (or all if tags omitted)",
+		"copy_exif":         "Copy EXIF data from source to target file",
+		"compare_exif":      "Compare EXIF metadata between two images, return differences",
+		"validate_exif":     "Validate EXIF integrity (check for corruption, InteropIFD issues)",
 	}
 	if desc, ok := descriptions[name]; ok {
 		return desc
@@ -291,7 +293,7 @@ func exifToolDescription(name string) string {
 
 func exifToolParams(name string) map[string]interface{} {
 	switch name {
-	case "read_exif_fields", "dump_exif_raw", "validate_exif":
+	case "read_exif", "read_gps", "read_all_metadata", "validate_exif":
 		return map[string]interface{}{
 			"type": "object",
 			"properties": map[string]interface{}{

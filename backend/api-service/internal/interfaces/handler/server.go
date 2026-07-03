@@ -2,7 +2,6 @@ package handler
 
 import (
 	"cmp"
-	"fmt"
 	"slices"
 	"strings"
 
@@ -22,6 +21,36 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
+
+// ServerDeps groups all dependencies for the Server in a single struct,
+// enabling Wire-based dependency injection with a single-parameter constructor.
+type ServerDeps struct {
+	DB                  *gorm.DB
+	Config              *config.AppConfig
+	ScanManager         *imaging.ScanManager
+	OcrManager          *imaging.OcrManager
+	LlmOcrService       *imaging.LlmOcrService
+	BackgroundSync      *imaging.BackgroundSyncManager
+	TagScanManager      *imaging.TagScanManager
+	EmbeddingBackfill   *imaging.EmbeddingBackfillManager
+	ThumbnailService    *thumbnail.Service
+	ThumbnailCache      *imaging.ThumbnailCache
+	ThumbnailBatch      *helpers.ThumbnailBatch
+	OcrClient           ocr.Client
+	ClusterStorage      *geo.ClusterStorage
+	GalleryAccess       *helpers.GalleryAccess
+	SettingsLoader      *helpers.SettingsLoader
+	LlmFactory          *helpers.LLMFactory
+	FileMover           *helpers.FileMover
+	I18n                *i18n.Service
+	GeolocationService  *geocoder.GeolocationService
+	Nominatim           *geocoder.NominatimClient
+	McpServer           *mcpserver.FlashbacksMCPServer
+	Agent               *agent.Agent
+	AgentConfig         agent.AgentConfig
+	ConversationService *agent.ConversationService
+	ExifClient          imaging.ExifClient
+}
 
 // Server holds the application state
 type Server struct {
@@ -52,47 +81,36 @@ type Server struct {
 	exifClient          imaging.ExifClient
 }
 
-// NewServer creates a new server instance
-func NewServer(db *gorm.DB, scanManager *imaging.ScanManager, ocrManager *imaging.OcrManager, llmOcrService *imaging.LlmOcrService, backgroundSync *imaging.BackgroundSyncManager, tagScanManager *imaging.TagScanManager, embeddingBackfill *imaging.EmbeddingBackfillManager, thumbnailService *thumbnail.Service, cfg *config.AppConfig, geolocationService *geocoder.GeolocationService, nominatimClient *geocoder.NominatimClient, mcpSrv *mcpserver.FlashbacksMCPServer, ag *agent.Agent, agCfg agent.AgentConfig, convService *agent.ConversationService, exifClient imaging.ExifClient) *Server {
-	var ocrClient ocr.Client
-	if cfg.OCREnabled {
-		ocrClient = ocr.NewClient(cfg.OCRServiceURL)
+// NewServer creates a new server instance from a dependency struct.
+// All dependencies are injected via Wire — no internal construction.
+func NewServer(deps ServerDeps) *Server {
+	return &Server{
+		db:                  deps.DB,
+		thumbnailCache:      deps.ThumbnailCache,
+		thumbnailService:    deps.ThumbnailService,
+		thumbnailBatch:      deps.ThumbnailBatch,
+		scanManager:         deps.ScanManager,
+		ocrManager:          deps.OcrManager,
+		llmOcrService:       deps.LlmOcrService,
+		backgroundSync:      deps.BackgroundSync,
+		tagScanManager:      deps.TagScanManager,
+		embeddingBackfill:   deps.EmbeddingBackfill,
+		config:              deps.Config,
+		ocrClient:           deps.OcrClient,
+		clusterStorage:      deps.ClusterStorage,
+		galleryAccess:       deps.GalleryAccess,
+		settingsLoader:      deps.SettingsLoader,
+		llmFactory:          deps.LlmFactory,
+		fileMover:           deps.FileMover,
+		i18n:                deps.I18n,
+		geolocationService:  deps.GeolocationService,
+		nominatim:           deps.Nominatim,
+		mcpServer:           deps.McpServer,
+		agent:               deps.Agent,
+		agentConfig:         deps.AgentConfig,
+		conversationService: deps.ConversationService,
+		exifClient:          deps.ExifClient,
 	}
-
-	// Initialize i18n service
-	i18nSvc, err := i18n.NewService()
-	if err != nil {
-		panic(fmt.Sprintf("Failed to initialize i18n service: %v", err))
-	}
-
-	s := &Server{
-		db:                  db,
-		thumbnailCache:      imaging.NewThumbnailCache(),
-		thumbnailService:    thumbnailService,
-		scanManager:         scanManager,
-		ocrManager:          ocrManager,
-		llmOcrService:       llmOcrService,
-		backgroundSync:      backgroundSync,
-		tagScanManager:      tagScanManager,
-		embeddingBackfill:   embeddingBackfill,
-		config:              cfg,
-		ocrClient:           ocrClient,
-		clusterStorage:      geo.NewClusterStorage(),
-		i18n:                i18nSvc,
-		geolocationService:  geolocationService,
-		nominatim:           nominatimClient,
-		mcpServer:           mcpSrv,
-		agent:               ag,
-		agentConfig:         agCfg,
-		conversationService: convService,
-		exifClient:          exifClient,
-	}
-	s.thumbnailBatch = helpers.NewThumbnailBatch(thumbnailService, s.thumbnailCache)
-	s.galleryAccess = helpers.NewGalleryAccess(db)
-	s.settingsLoader = helpers.NewSettingsLoader(db)
-	s.llmFactory = helpers.NewLLMFactory(db, cfg.LlmMaxImageMegapixels)
-	s.fileMover = helpers.NewFileMover(db)
-	return s
 }
 
 // StartOCRHealthCheck starts the OCR health check in background

@@ -142,4 +142,5 @@ dataset/**/temp/
 # ===========================
 .qoder/
 .roo/
-.serena/
+.gigacode/
+.gigaide/

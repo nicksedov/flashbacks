@@ -109,40 +109,6 @@ func (s *Server) StopOCRHealthCheck() {
 	}
 }
 
-// formatSize formats file size in human readable format
-func formatSize(size int64) string {
-	const unit = 1024
-	if size < unit {
-		return fmt.Sprintf("%d B", size)
-	}
-	div, exp := int64(unit), 0
-	for n := size / unit; n >= unit; n /= unit {
-		div *= unit
-		exp++
-	}
-	return fmt.Sprintf("%.1f %cB", float64(size)/float64(div), "KMGTPE"[exp])
-}
-
-// pathsConflict checks if two normalized (forward-slash) paths are the same,
-// or if one is a parent/child of the other.
-// Returns a non-empty reason string if there is a conflict, empty string otherwise.
-func pathsConflict(a, b string) string {
-	// Normalize: trim trailing slashes, lowercase for case-insensitive FS
-	na := strings.TrimRight(strings.ToLower(a), "/")
-	nb := strings.TrimRight(strings.ToLower(b), "/")
-
-	if na == nb {
-		return "same"
-	}
-	if strings.HasPrefix(na, nb+"/") {
-		return "child" // a is child of b
-	}
-	if strings.HasPrefix(nb, na+"/") {
-		return "parent" // a is parent of b
-	}
-	return ""
-}
-
 // sortPatternsByCount sorts patterns by duplicate count descending
 func sortPatternsByCount(patterns []dto.FolderPattern) {
 	slices.SortFunc(patterns, func(a, b dto.FolderPattern) int {

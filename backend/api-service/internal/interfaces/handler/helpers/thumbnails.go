@@ -5,6 +5,7 @@ import (
 
 	"github.com/flashbacks/api-service/internal/application/imaging"
 	"github.com/flashbacks/api-service/internal/application/thumbnail"
+	"github.com/flashbacks/api-service/internal/interfaces/dto"
 )
 
 // ThumbnailBatch handles parallel thumbnail generation with service fallback.
@@ -54,6 +55,18 @@ func (tb *ThumbnailBatch) GenerateParallel(paths []string, setFn func(index int,
 		}(i, path)
 	}
 	wg.Wait()
+}
+
+// GenerateThumbnailsForDTOs extracts paths from a slice of GalleryImageDTO,
+// generates thumbnails in parallel, and sets the Thumbnail field on each DTO.
+func (tb *ThumbnailBatch) GenerateThumbnailsForDTOs(dtos []dto.GalleryImageDTO) {
+	paths := make([]string, len(dtos))
+	for i, d := range dtos {
+		paths[i] = d.Path
+	}
+	tb.GenerateParallel(paths, func(idx int, thumb string) {
+		dtos[idx].Thumbnail = thumb
+	})
 }
 
 // GenerateParallelBasic generates thumbnails using only the basic cache-based function

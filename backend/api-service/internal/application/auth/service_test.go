@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -48,7 +49,7 @@ func TestAuthService_Login_Success(t *testing.T) {
 	}
 	db.Create(&user)
 
-	result, err := authService.Login("testuser", "password123", "127.0.0.1", "test-agent")
+	result, err := authService.Login(context.Background(), "testuser", "password123", "127.0.0.1", "test-agent")
 	if err != nil {
 		t.Fatalf("expected successful login, got error: %v", err)
 	}
@@ -82,7 +83,7 @@ func TestAuthService_Login_WrongPassword(t *testing.T) {
 	}
 	db.Create(&user)
 
-	_, err = authService.Login("testuser", "wrongpassword", "127.0.0.1", "test-agent")
+	_, err = authService.Login(context.Background(), "testuser", "wrongpassword", "127.0.0.1", "test-agent")
 	if err != domain.ErrInvalidCredentials {
 		t.Fatalf("expected ErrInvalidCredentials, got: %v", err)
 	}
@@ -91,7 +92,7 @@ func TestAuthService_Login_WrongPassword(t *testing.T) {
 func TestAuthService_Login_UserNotFound(t *testing.T) {
 	_, authService, _, _, _ := setupAuthService(t)
 
-	_, err := authService.Login("nonexistent", "password123", "127.0.0.1", "test-agent")
+	_, err := authService.Login(context.Background(), "nonexistent", "password123", "127.0.0.1", "test-agent")
 	if err != domain.ErrInvalidCredentials {
 		t.Fatalf("expected ErrInvalidCredentials, got: %v", err)
 	}
@@ -115,7 +116,7 @@ func TestAuthService_Login_DeactivatedUser(t *testing.T) {
 	// GORM treats false as zero value, need explicit update
 	db.Model(&domain.User{}).Where("id = ?", user.ID).Update("is_active", false)
 
-	_, err = authService.Login("deactivated", "password123", "127.0.0.1", "test-agent")
+	_, err = authService.Login(context.Background(), "deactivated", "password123", "127.0.0.1", "test-agent")
 	if err != domain.ErrInvalidCredentials {
 		t.Fatalf("expected ErrInvalidCredentials for deactivated user, got: %v", err)
 	}
@@ -142,7 +143,7 @@ func TestAuthService_Login_BootstrapMode(t *testing.T) {
 	loginLimiter := NewLoginRateLimiter(10, 15*time.Minute, 30*time.Minute)
 	authService := NewAuthService(db, bootstrap, sessionRepo, loginLimiter)
 
-	result, err := authService.Login("bootstrap_admin", "bootstrap123", "127.0.0.1", "test-agent")
+	result, err := authService.Login(context.Background(), "bootstrap_admin", "bootstrap123", "127.0.0.1", "test-agent")
 	if err != nil {
 		t.Fatalf("expected successful bootstrap login, got error: %v", err)
 	}
@@ -174,7 +175,7 @@ func TestAuthService_Login_BootstrapWrongCreds(t *testing.T) {
 	loginLimiter := NewLoginRateLimiter(10, 15*time.Minute, 30*time.Minute)
 	authService := NewAuthService(db, bootstrap, sessionRepo, loginLimiter)
 
-	_, err := authService.Login("bootstrap_admin", "wrongpassword", "127.0.0.1", "test-agent")
+	_, err := authService.Login(context.Background(), "bootstrap_admin", "wrongpassword", "127.0.0.1", "test-agent")
 	if err != domain.ErrInvalidCredentials {
 		t.Fatalf("expected ErrInvalidCredentials, got: %v", err)
 	}
@@ -204,7 +205,7 @@ func TestAuthService_Login_RateLimited(t *testing.T) {
 	loginLimiter.RecordFailure("banned_ip")
 
 	// Now try to login - should be rate limited
-	_, err := authService.Login("anyuser", "anypass", "banned_ip", "test-agent")
+	_, err := authService.Login(context.Background(), "anyuser", "anypass", "banned_ip", "test-agent")
 	if err != domain.ErrRateLimited {
 		t.Fatalf("expected ErrRateLimited, got: %v", err)
 	}
@@ -227,19 +228,19 @@ func TestAuthService_Logout_Success(t *testing.T) {
 	db.Create(&user)
 
 	// Login to get a token
-	loginResult, err := authService.Login("testuser", "password123", "127.0.0.1", "test-agent")
+	loginResult, err := authService.Login(context.Background(), "testuser", "password123", "127.0.0.1", "test-agent")
 	if err != nil {
 		t.Fatalf("login failed: %v", err)
 	}
 
 	// Logout
-	err = authService.Logout(loginResult.Token)
+	err = authService.Logout(context.Background(), loginResult.Token)
 	if err != nil {
 		t.Fatalf("expected successful logout, got error: %v", err)
 	}
 
 	// Verify session is revoked
-	_, err = authService.GetCurrentUser(loginResult.Token)
+	_, err = authService.GetCurrentUser(context.Background(), loginResult.Token)
 	if err == nil {
 		t.Fatal("expected error after logout, got nil")
 	}
@@ -261,12 +262,12 @@ func TestAuthService_GetCurrentUser_Success(t *testing.T) {
 	}
 	db.Create(&user)
 
-	loginResult, err := authService.Login("testuser", "password123", "127.0.0.1", "test-agent")
+	loginResult, err := authService.Login(context.Background(), "testuser", "password123", "127.0.0.1", "test-agent")
 	if err != nil {
 		t.Fatalf("login failed: %v", err)
 	}
 
-	currentUser, err := authService.GetCurrentUser(loginResult.Token)
+	currentUser, err := authService.GetCurrentUser(context.Background(), loginResult.Token)
 	if err != nil {
 		t.Fatalf("expected to get current user, got error: %v", err)
 	}
@@ -291,7 +292,7 @@ func TestAuthService_GetCurrentUser_DeactivatedUser(t *testing.T) {
 	}
 	db.Create(&user)
 
-	loginResult, err := authService.Login("deactivated", "password123", "127.0.0.1", "test-agent")
+	loginResult, err := authService.Login(context.Background(), "deactivated", "password123", "127.0.0.1", "test-agent")
 	if err != nil {
 		t.Fatalf("login failed: %v", err)
 	}
@@ -300,7 +301,7 @@ func TestAuthService_GetCurrentUser_DeactivatedUser(t *testing.T) {
 	db.Model(&user).Update("is_active", false)
 
 	// Try to get current user
-	_, err = authService.GetCurrentUser(loginResult.Token)
+	_, err = authService.GetCurrentUser(context.Background(), loginResult.Token)
 	if err != domain.ErrUserDeactivated {
 		t.Fatalf("expected ErrUserDeactivated, got: %v", err)
 	}
@@ -323,7 +324,7 @@ func TestAuthService_GetCurrentUser_ExpiredSession(t *testing.T) {
 	db.Create(&user)
 
 	// Login to get a session
-	loginResult, err := authService.Login("testuser", "password123", "127.0.0.1", "test-agent")
+	loginResult, err := authService.Login(context.Background(), "testuser", "password123", "127.0.0.1", "test-agent")
 	if err != nil {
 		t.Fatalf("login failed: %v", err)
 	}
@@ -332,7 +333,7 @@ func TestAuthService_GetCurrentUser_ExpiredSession(t *testing.T) {
 	db.Model(&domain.Session{}).Where("user_id = ?", user.ID).Update("expires_at", time.Now().Add(-1*time.Hour))
 
 	// Try to get current user - should fail
-	_, err = authService.GetCurrentUser(loginResult.Token)
+	_, err = authService.GetCurrentUser(context.Background(), loginResult.Token)
 	if err == nil {
 		t.Fatal("expected error for expired session, got nil")
 	}
@@ -355,31 +356,31 @@ func TestAuthService_ChangePassword_Success(t *testing.T) {
 	db.Create(&user)
 
 	// Login
-	loginResult, err := authService.Login("testuser", "password123", "127.0.0.1", "test-agent")
+	loginResult, err := authService.Login(context.Background(), "testuser", "password123", "127.0.0.1", "test-agent")
 	if err != nil {
 		t.Fatalf("login failed: %v", err)
 	}
 
 	// Change password
-	err = authService.ChangePassword(user.ID, "password123", "newpassword456")
+	err = authService.ChangePassword(context.Background(), user.ID, "password123", "newpassword456")
 	if err != nil {
 		t.Fatalf("expected successful password change, got error: %v", err)
 	}
 
 	// Verify old password no longer works
-	_, err = authService.Login("testuser", "password123", "127.0.0.1", "test-agent")
+	_, err = authService.Login(context.Background(), "testuser", "password123", "127.0.0.1", "test-agent")
 	if err != domain.ErrInvalidCredentials {
 		t.Fatalf("expected old password to fail, got: %v", err)
 	}
 
 	// Verify new password works
-	_, err = authService.Login("testuser", "newpassword456", "127.0.0.1", "test-agent")
+	_, err = authService.Login(context.Background(), "testuser", "newpassword456", "127.0.0.1", "test-agent")
 	if err != nil {
 		t.Fatalf("expected new password to work, got error: %v", err)
 	}
 
 	// Verify old session is revoked (ChangePassword revokes all sessions)
-	_, err = authService.GetCurrentUser(loginResult.Token)
+	_, err = authService.GetCurrentUser(context.Background(), loginResult.Token)
 	if err == nil {
 		t.Fatal("expected old session to be revoked")
 	}
@@ -401,7 +402,7 @@ func TestAuthService_ChangePassword_WrongOldPassword(t *testing.T) {
 	}
 	db.Create(&user)
 
-	err = authService.ChangePassword(user.ID, "wrongpassword", "newpassword456")
+	err = authService.ChangePassword(context.Background(), user.ID, "wrongpassword", "newpassword456")
 	if err != domain.ErrInvalidCredentials {
 		t.Fatalf("expected ErrInvalidCredentials for wrong old password, got: %v", err)
 	}
@@ -433,16 +434,16 @@ func TestAuthService_AdminResetPassword_Success(t *testing.T) {
 	db.Create(&user)
 
 	// Login as admin
-	adminLogin, _ := authService.Login("admin", "adminpass", "127.0.0.1", "test-agent")
+	adminLogin, _ := authService.Login(context.Background(), "admin", "adminpass", "127.0.0.1", "test-agent")
 
 	// Admin resets user password
-	err := authService.AdminResetPassword(adminLogin.User.ID, user.ID, "resetpass123")
+	err := authService.AdminResetPassword(context.Background(), adminLogin.User.ID, user.ID, "resetpass123")
 	if err != nil {
 		t.Fatalf("expected successful admin reset, got error: %v", err)
 	}
 
 	// Verify new password works
-	_, err = authService.Login("testuser", "resetpass123", "127.0.0.1", "test-agent")
+	_, err = authService.Login(context.Background(), "testuser", "resetpass123", "127.0.0.1", "test-agent")
 	if err != nil {
 		t.Fatalf("expected reset password to work, got error: %v", err)
 	}
@@ -474,7 +475,7 @@ func TestAuthService_AdminResetPassword_NonAdmin(t *testing.T) {
 	db.Create(&target)
 
 	// Regular user tries to reset another user's password
-	err := authService.AdminResetPassword(user.ID, target.ID, "newpass123")
+	err := authService.AdminResetPassword(context.Background(), user.ID, target.ID, "newpass123")
 	if err != domain.ErrForbidden {
 		t.Fatalf("expected ErrForbidden for non-admin, got: %v", err)
 	}

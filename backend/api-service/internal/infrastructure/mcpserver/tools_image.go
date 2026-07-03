@@ -254,7 +254,7 @@ func (s *FlashbacksMCPServer) runImageAction(imagePath, action, question, langua
 
 	// Call LLM
 	startTime := time.Now()
-	response, err := client.Recognize(imageFile.Path, systemPrompt, userMessage)
+	response, err := client.Recognize(context.Background(), imageFile.Path, systemPrompt, userMessage)
 	processingTime := int(time.Since(startTime).Milliseconds())
 
 	if err != nil {

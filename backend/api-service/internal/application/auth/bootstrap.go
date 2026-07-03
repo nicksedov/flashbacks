@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -26,7 +27,7 @@ func NewBootstrapService(db *gorm.DB, bootstrapLogin, bootstrapPassword string) 
 }
 
 // IsBootstrapMode returns true if no users exist in the database
-func (s *BootstrapService) IsBootstrapMode() (bool, error) {
+func (s *BootstrapService) IsBootstrapMode(ctx context.Context) (bool, error) {
 	var count int64
 	if err := s.db.Model(&domain.User{}).Count(&count).Error; err != nil {
 		return false, err
@@ -40,9 +41,9 @@ func (s *BootstrapService) ValidateBootstrapCredentials(login, password string) 
 }
 
 // CreateBootstrapAdmin creates the first admin user in the database and completes bootstrap
-func (s *BootstrapService) CreateBootstrapAdmin(newPassword, displayName string) (*domain.User, error) {
+func (s *BootstrapService) CreateBootstrapAdmin(ctx context.Context, newPassword, displayName string) (*domain.User, error) {
 	// Double-check we're still in bootstrap mode
-	isBootstrap, err := s.IsBootstrapMode()
+	isBootstrap, err := s.IsBootstrapMode(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to check bootstrap mode: %w", err)
 	}

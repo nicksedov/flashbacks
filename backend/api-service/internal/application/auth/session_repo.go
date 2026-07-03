@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"crypto/sha256"
 	"fmt"
 	"time"
@@ -43,7 +44,7 @@ func NewSessionRepository(db *gorm.DB, config *SessionConfig) *SessionRepository
 }
 
 // CreateSession creates a new session for a user and returns the session token
-func (r *SessionRepository) CreateSession(userID uint, ipAddress, userAgent string) (string, error) {
+func (r *SessionRepository) CreateSession(ctx context.Context, userID uint, ipAddress, userAgent string) (string, error) {
 	token, err := GenerateSecureToken(r.config.TokenLength)
 	if err != nil {
 		return "", fmt.Errorf("failed to generate session token: %w", err)
@@ -71,7 +72,7 @@ func (r *SessionRepository) CreateSession(userID uint, ipAddress, userAgent stri
 }
 
 // GetSession retrieves a session by token and validates it
-func (r *SessionRepository) GetSession(token string) (*domain.Session, error) {
+func (r *SessionRepository) GetSession(ctx context.Context, token string) (*domain.Session, error) {
 	tokenHash := fmt.Sprintf("%x", sha256.Sum256([]byte(token)))
 
 	var session domain.Session
@@ -97,7 +98,7 @@ func (r *SessionRepository) GetSession(token string) (*domain.Session, error) {
 }
 
 // UpdateLastSeen updates the last_seen_at timestamp for a session
-func (r *SessionRepository) UpdateLastSeen(token string) error {
+func (r *SessionRepository) UpdateLastSeen(ctx context.Context, token string) error {
 	tokenHash := fmt.Sprintf("%x", sha256.Sum256([]byte(token)))
 	return r.db.Model(&domain.Session{}).
 		Where("session_token = ? AND revoked_at IS NULL", tokenHash).
@@ -105,7 +106,7 @@ func (r *SessionRepository) UpdateLastSeen(token string) error {
 }
 
 // RevokeSession marks a session as revoked
-func (r *SessionRepository) RevokeSession(token string) error {
+func (r *SessionRepository) RevokeSession(ctx context.Context, token string) error {
 	tokenHash := fmt.Sprintf("%x", sha256.Sum256([]byte(token)))
 	now := time.Now()
 	return r.db.Model(&domain.Session{}).
@@ -116,7 +117,7 @@ func (r *SessionRepository) RevokeSession(token string) error {
 }
 
 // RevokeAllUserSessions revokes all sessions for a user
-func (r *SessionRepository) RevokeAllUserSessions(userID uint) error {
+func (r *SessionRepository) RevokeAllUserSessions(ctx context.Context, userID uint) error {
 	now := time.Now()
 	return r.db.Model(&domain.Session{}).
 		Where("user_id = ? AND revoked_at IS NULL", userID).
@@ -124,7 +125,7 @@ func (r *SessionRepository) RevokeAllUserSessions(userID uint) error {
 }
 
 // CleanupExpiredSessions removes expired and revoked sessions from the database
-func (r *SessionRepository) CleanupExpiredSessions() error {
+func (r *SessionRepository) CleanupExpiredSessions(ctx context.Context) error {
 	now := time.Now()
 	return r.db.Where("expires_at < ? OR revoked_at IS NOT NULL", now).Delete(&domain.Session{}).Error
 }

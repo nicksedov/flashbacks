@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -23,7 +24,7 @@ func NewConversationService(db *gorm.DB) *ConversationService {
 }
 
 // CreateConversation creates a new conversation for a user.
-func (s *ConversationService) CreateConversation(userID uint, imagePath, language string) (*domain.Conversation, error) {
+func (s *ConversationService) CreateConversation(ctx context.Context, userID uint, imagePath, language string) (*domain.Conversation, error) {
 	if language == "" {
 		language = "en"
 	}
@@ -40,7 +41,7 @@ func (s *ConversationService) CreateConversation(userID uint, imagePath, languag
 }
 
 // GetConversation retrieves a conversation by ID, verifying user ownership.
-func (s *ConversationService) GetConversation(convID, userID uint) (*domain.Conversation, error) {
+func (s *ConversationService) GetConversation(ctx context.Context, convID, userID uint) (*domain.Conversation, error) {
 	var conv domain.Conversation
 	if err := s.db.Where("id = ? AND user_id = ?", convID, userID).First(&conv).Error; err != nil {
 		return nil, fmt.Errorf("conversation not found: %w", err)
@@ -50,7 +51,7 @@ func (s *ConversationService) GetConversation(convID, userID uint) (*domain.Conv
 
 // GetConversationByID retrieves a conversation by ID without user ownership check.
 // Use this for internal/agent use where userID is already validated.
-func (s *ConversationService) GetConversationByID(convID uint) (*domain.Conversation, error) {
+func (s *ConversationService) GetConversationByID(ctx context.Context, convID uint) (*domain.Conversation, error) {
 	var conv domain.Conversation
 	if err := s.db.First(&conv, convID).Error; err != nil {
 		return nil, fmt.Errorf("conversation not found: %w", err)
@@ -59,7 +60,7 @@ func (s *ConversationService) GetConversationByID(convID uint) (*domain.Conversa
 }
 
 // ListConversations returns all conversations for a user that have at least one message, ordered by most recent.
-func (s *ConversationService) ListConversations(userID uint) ([]domain.Conversation, error) {
+func (s *ConversationService) ListConversations(ctx context.Context, userID uint) ([]domain.Conversation, error) {
 	var conversations []domain.Conversation
 	if err := s.db.Where("user_id = ? AND token_count > 0", userID).Order("updated_at DESC").Find(&conversations).Error; err != nil {
 		return nil, fmt.Errorf("failed to list conversations: %w", err)
@@ -69,7 +70,7 @@ func (s *ConversationService) ListConversations(userID uint) ([]domain.Conversat
 
 // ListConversationsByImage returns conversations for a user filtered by image path.
 // Only returns conversations that have at least one message.
-func (s *ConversationService) ListConversationsByImage(userID uint, imagePath string) ([]domain.Conversation, error) {
+func (s *ConversationService) ListConversationsByImage(ctx context.Context, userID uint, imagePath string) ([]domain.Conversation, error) {
 	var conversations []domain.Conversation
 	if err := s.db.Where("user_id = ? AND image_path = ? AND token_count > 0", userID, imagePath).Order("updated_at DESC").Find(&conversations).Error; err != nil {
 		return nil, fmt.Errorf("failed to list conversations by image: %w", err)
@@ -78,7 +79,7 @@ func (s *ConversationService) ListConversationsByImage(userID uint, imagePath st
 }
 
 // DeleteConversation deletes a conversation and all its messages.
-func (s *ConversationService) DeleteConversation(convID, userID uint) error {
+func (s *ConversationService) DeleteConversation(ctx context.Context, convID, userID uint) error {
 	// Verify ownership
 	var conv domain.Conversation
 	if err := s.db.Where("id = ? AND user_id = ?", convID, userID).First(&conv).Error; err != nil {
@@ -97,7 +98,7 @@ func (s *ConversationService) DeleteConversation(convID, userID uint) error {
 }
 
 // AddMessage adds a message to a conversation and updates the conversation timestamp and token count.
-func (s *ConversationService) AddMessage(convID uint, msg domain.ConversationMessage) error {
+func (s *ConversationService) AddMessage(ctx context.Context, convID uint, msg domain.ConversationMessage) error {
 	msg.ConversationID = convID
 	// Auto-estimate token count if not provided
 	if msg.TokenCount == 0 && msg.Content != "" {
@@ -135,13 +136,13 @@ func (s *ConversationService) AddMessage(convID uint, msg domain.ConversationMes
 
 // CleanupEmptyConversations deletes conversations with no messages for a given user and image path.
 // Used to prevent accumulating empty conversation rows when the user opens the chat panel.
-func (s *ConversationService) CleanupEmptyConversations(userID uint, imagePath string) {
+func (s *ConversationService) CleanupEmptyConversations(ctx context.Context, userID uint, imagePath string) {
 	s.db.Where("user_id = ? AND image_path = ? AND token_count = 0", userID, imagePath).
 		Delete(&domain.Conversation{})
 }
 
 // GetMessages returns all messages for a conversation, ordered chronologically.
-func (s *ConversationService) GetMessages(convID uint) ([]domain.ConversationMessage, error) {
+func (s *ConversationService) GetMessages(ctx context.Context, convID uint) ([]domain.ConversationMessage, error) {
 	var messages []domain.ConversationMessage
 	if err := s.db.Where("conversation_id = ?", convID).Order("created_at ASC, id ASC").Find(&messages).Error; err != nil {
 		return nil, fmt.Errorf("failed to get messages: %w", err)
@@ -150,7 +151,7 @@ func (s *ConversationService) GetMessages(convID uint) ([]domain.ConversationMes
 }
 
 // CountTokens returns the cached token count for a conversation.
-func (s *ConversationService) CountTokens(convID uint) (int, error) {
+func (s *ConversationService) CountTokens(ctx context.Context, convID uint) (int, error) {
 	var conv domain.Conversation
 	if err := s.db.Select("token_count").First(&conv, convID).Error; err != nil {
 		return 0, fmt.Errorf("failed to count tokens: %w", err)
@@ -160,7 +161,7 @@ func (s *ConversationService) CountTokens(convID uint) (int, error) {
 
 // SummarizeOlderMessages compresses older messages into a summary to reduce context size.
 // Keeps the last `keepRecent` messages intact and summarizes everything before them.
-func (s *ConversationService) SummarizeOlderMessages(convID uint, keepRecent int, chatClient llm.ChatClient) error {
+func (s *ConversationService) SummarizeOlderMessages(ctx context.Context, convID uint, keepRecent int, chatClient llm.ChatClient) error {
 	var messages []domain.ConversationMessage
 	if err := s.db.Where("conversation_id = ?", convID).Order("created_at ASC, id ASC").Find(&messages).Error; err != nil {
 		return fmt.Errorf("failed to get messages: %w", err)
@@ -180,7 +181,7 @@ func (s *ConversationService) SummarizeOlderMessages(convID uint, keepRecent int
 	}
 
 	// Call LLM to summarize
-	summary, err := chatClient.Chat(llm.ChatRequest{
+	summary, err := chatClient.Chat(ctx, llm.ChatRequest{
 		Messages: []llm.ChatMessage{
 			{
 				Role:    "system",
@@ -251,8 +252,8 @@ func (s *ConversationService) ResolveModelMaxTokens(providerAlias, modelName str
 
 // GenerateDisplaySummary generates an LLM summary for conversation history.
 // Falls back to first user message if fewer than 2 messages.
-func (s *ConversationService) GenerateDisplaySummary(convID uint, chatClient llm.ChatClient) {
-	conv, err := s.GetConversationByID(convID)
+func (s *ConversationService) GenerateDisplaySummary(ctx context.Context, convID uint, chatClient llm.ChatClient) {
+	conv, err := s.GetConversationByID(ctx, convID)
 	if err != nil {
 		return
 	}
@@ -261,7 +262,7 @@ func (s *ConversationService) GenerateDisplaySummary(convID uint, chatClient llm
 		return
 	}
 
-	messages, err := s.GetMessages(convID)
+	messages, err := s.GetMessages(ctx, convID)
 	if err != nil || len(messages) < 2 {
 		// Fallback: use first user message as summary
 		for _, m := range messages {
@@ -285,7 +286,7 @@ func (s *ConversationService) GenerateDisplaySummary(convID uint, chatClient llm
 		}
 	}
 
-	resp, err := chatClient.Chat(llm.ChatRequest{
+	resp, err := chatClient.Chat(ctx, llm.ChatRequest{
 		Messages: []llm.ChatMessage{
 			{Role: "system", Content: "Generate a brief one-line summary (max 80 chars) of this conversation. Output only the summary text, no quotes."},
 			{Role: "user", Content: sb.String()},

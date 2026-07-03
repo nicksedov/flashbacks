@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"context"
 	"testing"
 )
 
@@ -115,7 +116,7 @@ func TestOpenAIClientListModels_WithV1BaseURL(t *testing.T) {
 	baseURLWithV1 := server.URL + "/v1"
 	client := NewOpenAIClient(baseURLWithV1, "test-key", "qwen3.7-plus", 3.6)
 
-	models, err := client.ListModels()
+	models, err := client.ListModels(context.Background())
 	if err != nil {
 		t.Fatalf("ListModels() should succeed, got error: %v", err)
 	}

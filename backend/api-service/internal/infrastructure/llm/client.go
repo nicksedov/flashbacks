@@ -1,13 +1,15 @@
 package llm
 
+import "context"
+
 // Client interface for VL LLM communication
 type Client interface {
 	// Recognize performs image recognition with given system and user prompts
 	// Returns response content and error
-	Recognize(imagePath string, systemPrompt string, userMessage string) (string, error)
+	Recognize(ctx context.Context, imagePath string, systemPrompt string, userMessage string) (string, error)
 
 	// ListModels returns a list of available models from the LLM server
-	ListModels() ([]ModelInfo, error)
+	ListModels(ctx context.Context) ([]ModelInfo, error)
 }
 
 // ModelInfo represents information about an available LLM model

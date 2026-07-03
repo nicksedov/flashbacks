@@ -192,7 +192,7 @@ func (s *Server) handleProbeEmbeddingDimension(c *gin.Context) {
 		return
 	}
 
-	probe, err := embeddingClient.Embed([]string{"dimension probe"})
+	probe, err := embeddingClient.Embed(c.Request.Context(), []string{"dimension probe"})
 	if err != nil {
 		s.respondError(c, http.StatusInternalServerError, i18n.MsgEmbeddingProbeFailed)
 		return
@@ -546,7 +546,7 @@ func (s *Server) handleGetLlmModels(c *gin.Context) {
 		return
 	}
 
-	models, err := llmClient.ListModels()
+	models, err := llmClient.ListModels(c.Request.Context())
 	if err != nil {
 		c.JSON(http.StatusOK, dto.LlmModelsResponse{
 			Success:  false,

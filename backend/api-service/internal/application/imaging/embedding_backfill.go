@@ -1,6 +1,7 @@
 package imaging
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"sort"
@@ -178,7 +179,7 @@ func (m *EmbeddingBackfillManager) run() {
 			tagTexts[i] = strings.Join(tagStrs, ", ")
 		}
 
-		embeddings, err := embeddingClient.Embed(tagTexts)
+		embeddings, err := embeddingClient.Embed(context.Background(), tagTexts)
 		if err != nil {
 			m.setError(fmt.Sprintf("Embedding API failed: %v", err))
 			log.Printf("Embedding backfill: embedding API error: %v", err)
@@ -304,7 +305,7 @@ func GenerateAndSaveEmbedding(db *gorm.DB, imageFileID uint, tags []string) {
 	sort.Strings(tagStrs)
 	text := strings.Join(tagStrs, ", ")
 
-	embeddings, err := embeddingClient.Embed([]string{text})
+	embeddings, err := embeddingClient.Embed(context.Background(), []string{text})
 	if err != nil {
 		log.Printf("Embedding hook: embed API failed for image %d: %v", imageFileID, err)
 		return

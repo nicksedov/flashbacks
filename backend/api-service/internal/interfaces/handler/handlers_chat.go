@@ -29,10 +29,10 @@ func (s *Server) handleCreateConversation(c *gin.Context) {
 
 	// Clean up any previous empty conversations for this image before creating a new one
 	if req.ImagePath != "" {
-		s.conversationService.CleanupEmptyConversations(userID, req.ImagePath)
+		s.conversationService.CleanupEmptyConversations(c.Request.Context(), userID, req.ImagePath)
 	}
 
-	conv, err := s.conversationService.CreateConversation(userID, req.ImagePath, req.Language)
+	conv, err := s.conversationService.CreateConversation(c.Request.Context(), userID, req.ImagePath, req.Language)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -62,9 +62,9 @@ func (s *Server) handleListConversations(c *gin.Context) {
 	var conversations []domain.Conversation
 	var err error
 	if imagePath != "" {
-		conversations, err = s.conversationService.ListConversationsByImage(userID, imagePath)
+		conversations, err = s.conversationService.ListConversationsByImage(c.Request.Context(), userID, imagePath)
 	} else {
-		conversations, err = s.conversationService.ListConversations(userID)
+		conversations, err = s.conversationService.ListConversations(c.Request.Context(), userID)
 	}
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -100,7 +100,7 @@ func (s *Server) handleDeleteConversation(c *gin.Context) {
 	}
 
 	userID := middleware.GetUserID(c)
-	if err := s.conversationService.DeleteConversation(uint(convID), userID); err != nil {
+	if err := s.conversationService.DeleteConversation(c.Request.Context(), uint(convID), userID); err != nil {
 		s.respondError(c, http.StatusInternalServerError, i18n.MsgChatConversationNotFound)
 		return
 	}
@@ -118,12 +118,12 @@ func (s *Server) handleGetMessages(c *gin.Context) {
 
 	// Verify ownership
 	userID := middleware.GetUserID(c)
-	if _, err := s.conversationService.GetConversation(uint(convID), userID); err != nil {
+	if _, err := s.conversationService.GetConversation(c.Request.Context(), uint(convID), userID); err != nil {
 		s.respondError(c, http.StatusNotFound, i18n.MsgChatConversationNotFound)
 		return
 	}
 
-	messages, err := s.conversationService.GetMessages(uint(convID))
+	messages, err := s.conversationService.GetMessages(c.Request.Context(), uint(convID))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -168,7 +168,7 @@ func (s *Server) handleSendMessage(c *gin.Context) {
 
 	// Verify ownership
 	userID := middleware.GetUserID(c)
-	if _, err := s.conversationService.GetConversation(uint(convID), userID); err != nil {
+	if _, err := s.conversationService.GetConversation(c.Request.Context(), uint(convID), userID); err != nil {
 		s.respondError(c, http.StatusNotFound, i18n.MsgChatConversationNotFound)
 		return
 	}

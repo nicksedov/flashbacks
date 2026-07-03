@@ -1,12 +1,15 @@
 package llm
 
-import "encoding/json"
+import (
+	"context"
+	"encoding/json"
+)
 
 // ChatMessage represents a single message in a conversation.
 type ChatMessage struct {
-	Role       string     `json:"role"`                  // "system", "user", "assistant", "tool"
+	Role       string     `json:"role"` // "system", "user", "assistant", "tool"
 	Content    string     `json:"content"`
-	ToolCalls  []ToolCall `json:"tool_calls,omitempty"`  // populated when assistant requests tool invocations
+	ToolCalls  []ToolCall `json:"tool_calls,omitempty"`   // populated when assistant requests tool invocations
 	ToolCallID string     `json:"tool_call_id,omitempty"` // populated for role "tool" responses
 }
 
@@ -39,7 +42,7 @@ type ChatResponse struct {
 // ChatClient extends Client with conversational capabilities including tool use.
 type ChatClient interface {
 	Client
-	Chat(req ChatRequest) (*ChatResponse, error)
+	Chat(ctx context.Context, req ChatRequest) (*ChatResponse, error)
 }
 
 // NewChatClient wraps a Client into a ChatClient if the underlying implementation supports it,

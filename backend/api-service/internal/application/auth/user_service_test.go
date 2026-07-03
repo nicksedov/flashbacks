@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -32,7 +33,7 @@ func TestUserService_CreateUser_Success(t *testing.T) {
 		Password:    "secure-password",
 	}
 
-	user, err := svc.CreateUser(admin.ID, input)
+	user, err := svc.CreateUser(context.Background(), admin.ID, input)
 
 	require.NoError(t, err)
 	require.NotNil(t, user)
@@ -54,7 +55,7 @@ func TestUserService_CreateUser_NonAdmin(t *testing.T) {
 		Password:    "secure-password",
 	}
 
-	_, err := svc.CreateUser(regularUser.ID, input)
+	_, err := svc.CreateUser(context.Background(), regularUser.ID, input)
 
 	require.ErrorIs(t, err, domain.ErrForbidden)
 }
@@ -71,7 +72,7 @@ func TestUserService_CreateUser_DuplicateLogin(t *testing.T) {
 		Password:    "secure-password",
 	}
 
-	_, err := svc.CreateUser(admin.ID, input)
+	_, err := svc.CreateUser(context.Background(), admin.ID, input)
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "user with this login already exists")
@@ -88,7 +89,7 @@ func TestUserService_CreateUser_ShortPassword(t *testing.T) {
 		Password:    "short",
 	}
 
-	_, err := svc.CreateUser(admin.ID, input)
+	_, err := svc.CreateUser(context.Background(), admin.ID, input)
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "password must be between 8 and 128 characters")
@@ -105,7 +106,7 @@ func TestUserService_CreateUser_InvalidRole(t *testing.T) {
 		Password:    "secure-password",
 	}
 
-	_, err := svc.CreateUser(admin.ID, input)
+	_, err := svc.CreateUser(context.Background(), admin.ID, input)
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "invalid role")
@@ -121,7 +122,7 @@ func TestUserService_UpdateUser_DisplayName(t *testing.T) {
 		DisplayName: &newName,
 	}
 
-	updatedUser, err := svc.UpdateUser(admin.ID, user.ID, input)
+	updatedUser, err := svc.UpdateUser(context.Background(), admin.ID, user.ID, input)
 
 	require.NoError(t, err)
 	assert.Equal(t, "Updated Name", updatedUser.DisplayName)
@@ -136,7 +137,7 @@ func TestUserService_UpdateUser_DeactivateLastAdmin(t *testing.T) {
 		IsActive: &isActive,
 	}
 
-	_, err := svc.UpdateUser(admin.ID, admin.ID, input)
+	_, err := svc.UpdateUser(context.Background(), admin.ID, admin.ID, input)
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "cannot deactivate the last admin")
@@ -151,7 +152,7 @@ func TestUserService_UpdateUser_DemoteLastAdmin(t *testing.T) {
 		Role: &newRole,
 	}
 
-	_, err := svc.UpdateUser(admin.ID, admin.ID, input)
+	_, err := svc.UpdateUser(context.Background(), admin.ID, admin.ID, input)
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "cannot demote the last admin")
@@ -162,12 +163,12 @@ func TestUserService_DeleteUser_Success(t *testing.T) {
 	admin := testutil.SeedUserWithHash(t, svc.db, "admin", "admin", domain.RoleAdmin, true, "hashed")
 	user := testutil.SeedUserWithHash(t, svc.db, "user", "user", domain.RoleUser, true, "hashed")
 
-	err := svc.DeleteUser(admin.ID, user.ID)
+	err := svc.DeleteUser(context.Background(), admin.ID, user.ID)
 
 	require.NoError(t, err)
 
 	// Verify user is deleted
-	_, err = svc.GetUser(user.ID)
+	_, err = svc.GetUser(context.Background(), user.ID)
 	require.Error(t, err)
 }
 
@@ -175,7 +176,7 @@ func TestUserService_DeleteUser_LastAdmin(t *testing.T) {
 	svc, _ := setupUserService(t)
 	admin := testutil.SeedUserWithHash(t, svc.db, "admin", "admin", domain.RoleAdmin, true, "hashed")
 
-	err := svc.DeleteUser(admin.ID, admin.ID)
+	err := svc.DeleteUser(context.Background(), admin.ID, admin.ID)
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "cannot delete the last admin")
@@ -185,7 +186,7 @@ func TestUserService_UpdateProfile_Success(t *testing.T) {
 	svc, _ := setupUserService(t)
 	user := testutil.SeedUserWithHash(t, svc.db, "user", "user", domain.RoleUser, true, "hashed")
 
-	updatedUser, err := svc.UpdateProfile(user.ID, "New Display Name")
+	updatedUser, err := svc.UpdateProfile(context.Background(), user.ID, "New Display Name")
 
 	require.NoError(t, err)
 	assert.Equal(t, "New Display Name", updatedUser.DisplayName)
@@ -194,7 +195,7 @@ func TestUserService_UpdateProfile_Success(t *testing.T) {
 func TestUserService_ListUsers_Empty(t *testing.T) {
 	svc, _ := setupUserService(t)
 
-	users, err := svc.ListUsers()
+	users, err := svc.ListUsers(context.Background(), )
 
 	require.NoError(t, err)
 	assert.Empty(t, users)
@@ -211,7 +212,7 @@ func TestUserService_ListUsers_WithUsers(t *testing.T) {
 	u3 := testutil.SeedUserWithHash(t, svc.db, "user3", "user", domain.RoleUser, true, "hashed3")
 	svc.db.Model(u3).Update("created_at", now)
 
-	users, err := svc.ListUsers()
+	users, err := svc.ListUsers(context.Background(), )
 
 	require.NoError(t, err)
 	assert.Len(t, users, 3)

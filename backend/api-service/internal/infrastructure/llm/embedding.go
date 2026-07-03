@@ -9,7 +9,7 @@ import (
 
 // EmbeddingClient generates vector embeddings for text.
 type EmbeddingClient interface {
-	Embed(texts []string) ([][]float32, error)
+	Embed(ctx context.Context, texts []string) ([][]float32, error)
 }
 
 // --- Ollama embedding ---
@@ -26,7 +26,7 @@ type ollamaEmbedResponse struct {
 }
 
 // Embed generates embeddings using Ollama's /api/embed endpoint.
-func (c *OllamaClient) Embed(texts []string) ([][]float32, error) {
+func (c *OllamaClient) Embed(ctx context.Context, texts []string) ([][]float32, error) {
 	if len(texts) == 0 {
 		return nil, fmt.Errorf("no texts provided")
 	}
@@ -37,7 +37,7 @@ func (c *OllamaClient) Embed(texts []string) ([][]float32, error) {
 	}
 
 	var embedResp ollamaEmbedResponse
-	if err := c.doJSON(context.Background(), http.MethodPost, "/api/embed", req, &embedResp, nil); err != nil {
+	if err := c.doJSON(ctx, http.MethodPost, "/api/embed", req, &embedResp, nil); err != nil {
 		return nil, fmt.Errorf("Ollama embed: %w", err)
 	}
 
@@ -64,7 +64,7 @@ type openAIEmbedResponse struct {
 }
 
 // Embed generates embeddings using OpenAI's /v1/embeddings endpoint.
-func (c *OpenAIClient) Embed(texts []string) ([][]float32, error) {
+func (c *OpenAIClient) Embed(ctx context.Context, texts []string) ([][]float32, error) {
 	if len(texts) == 0 {
 		return nil, fmt.Errorf("no texts provided")
 	}
@@ -75,7 +75,7 @@ func (c *OpenAIClient) Embed(texts []string) ([][]float32, error) {
 	}
 
 	var embedResp openAIEmbedResponse
-	if err := c.doJSON(context.Background(), http.MethodPost, "/v1/embeddings", req, &embedResp, nil); err != nil {
+	if err := c.doJSON(ctx, http.MethodPost, "/v1/embeddings", req, &embedResp, nil); err != nil {
 		return nil, fmt.Errorf("OpenAI embed: %w", err)
 	}
 

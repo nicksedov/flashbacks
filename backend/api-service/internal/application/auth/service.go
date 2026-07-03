@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"time"
 
 	"github.com/flashbacks/api-service/internal/domain"
@@ -34,14 +35,14 @@ type LoginResult struct {
 }
 
 // Login authenticates a user and creates a session
-func (s *AuthService) Login(login, password, ipAddress, userAgent string) (*LoginResult, error) {
+func (s *AuthService) Login(ctx context.Context, login, password, ipAddress, userAgent string) (*LoginResult, error) {
 	// Check rate limiting
 	if !s.loginLimiter.Allow(ipAddress) {
 		return nil, domain.ErrRateLimited
 	}
 
 	// Check if in bootstrap mode
-	isBootstrap, err := s.bootstrap.IsBootstrapMode()
+	isBootstrap, err := s.bootstrap.IsBootstrapMode(ctx)
 	if err != nil {
 		s.loginLimiter.RecordFailure(ipAddress)
 		return nil, err
@@ -84,7 +85,7 @@ func (s *AuthService) Login(login, password, ipAddress, userAgent string) (*Logi
 	s.loginLimiter.RecordSuccess(ipAddress)
 
 	// Create session
-	token, err := s.sessionRepo.CreateSession(user.ID, ipAddress, userAgent)
+	token, err := s.sessionRepo.CreateSession(ctx, user.ID, ipAddress, userAgent)
 	if err != nil {
 		return nil, err
 	}
@@ -101,19 +102,19 @@ func (s *AuthService) Login(login, password, ipAddress, userAgent string) (*Logi
 }
 
 // Logout revokes a session
-func (s *AuthService) Logout(token string) error {
-	return s.sessionRepo.RevokeSession(token)
+func (s *AuthService) Logout(ctx context.Context, token string) error {
+	return s.sessionRepo.RevokeSession(ctx, token)
 }
 
 // GetCurrentUser retrieves the user associated with a session token
-func (s *AuthService) GetCurrentUser(token string) (*domain.User, error) {
-	session, err := s.sessionRepo.GetSession(token)
+func (s *AuthService) GetCurrentUser(ctx context.Context, token string) (*domain.User, error) {
+	session, err := s.sessionRepo.GetSession(ctx, token)
 	if err != nil {
 		return nil, err
 	}
 
 	// Update last seen
-	s.sessionRepo.UpdateLastSeen(token)
+	s.sessionRepo.UpdateLastSeen(ctx, token)
 
 	var user domain.User
 	// Exclude avatar bytes to avoid loading ~10KB on every authenticated request
@@ -123,7 +124,7 @@ func (s *AuthService) GetCurrentUser(token string) (*domain.User, error) {
 
 	if !user.IsActive {
 		// Deactivate session if user is disabled
-		s.sessionRepo.RevokeSession(token)
+		s.sessionRepo.RevokeSession(ctx, token)
 		return nil, domain.ErrUserDeactivated
 	}
 
@@ -131,7 +132,7 @@ func (s *AuthService) GetCurrentUser(token string) (*domain.User, error) {
 }
 
 // ChangePassword changes a user's password and revokes all their sessions
-func (s *AuthService) ChangePassword(userID uint, oldPassword, newPassword string) error {
+func (s *AuthService) ChangePassword(ctx context.Context, userID uint, oldPassword, newPassword string) error {
 	var user domain.User
 	if err := s.db.First(&user, userID).Error; err != nil {
 		return err
@@ -157,11 +158,11 @@ func (s *AuthService) ChangePassword(userID uint, oldPassword, newPassword strin
 	}
 
 	// Revoke all sessions
-	return s.sessionRepo.RevokeAllUserSessions(userID)
+	return s.sessionRepo.RevokeAllUserSessions(ctx, userID)
 }
 
 // AdminResetPassword resets a user's password (admin action)
-func (s *AuthService) AdminResetPassword(adminID, targetUserID uint, newPassword string) error {
+func (s *AuthService) AdminResetPassword(ctx context.Context, adminID, targetUserID uint, newPassword string) error {
 	// Verify admin exists and has admin role
 	var admin domain.User
 	if err := s.db.First(&admin, adminID).Error; err != nil {
@@ -191,5 +192,5 @@ func (s *AuthService) AdminResetPassword(adminID, targetUserID uint, newPassword
 	}
 
 	// Revoke all user sessions
-	return s.sessionRepo.RevokeAllUserSessions(targetUserID)
+	return s.sessionRepo.RevokeAllUserSessions(ctx, targetUserID)
 }

@@ -46,7 +46,7 @@ type ollamaRequest struct {
 type ollamaMessage struct {
 	Role      string              `json:"role"`
 	Content   string              `json:"content"`
-	Images    []string            `json:"images,omitempty"`    // Base64 encoded images
+	Images    []string            `json:"images,omitempty"`     // Base64 encoded images
 	ToolCalls []ollamaToolCallMsg `json:"tool_calls,omitempty"` // Populated when assistant requests tool use
 }
 
@@ -80,7 +80,7 @@ type ollamaResponseMessage struct {
 }
 
 // Recognize performs OCR using Ollama
-func (c *OllamaClient) Recognize(imagePath string, systemPrompt string, userMessage string) (string, error) {
+func (c *OllamaClient) Recognize(ctx context.Context, imagePath string, systemPrompt string, userMessage string) (string, error) {
 	// Read and optionally resize image
 	imgData, _, err := resizeImageForLLM(imagePath, c.MaxImageMegapixels)
 	if err != nil {
@@ -100,7 +100,7 @@ func (c *OllamaClient) Recognize(imagePath string, systemPrompt string, userMess
 	}
 
 	var ollamaResp ollamaResponse
-	if err := c.doJSON(context.Background(), http.MethodPost, "/api/chat", req, &ollamaResp, nil); err != nil {
+	if err := c.doJSON(ctx, http.MethodPost, "/api/chat", req, &ollamaResp, nil); err != nil {
 		return "", fmt.Errorf("Ollama recognize: %w", err)
 	}
 
@@ -109,7 +109,7 @@ func (c *OllamaClient) Recognize(imagePath string, systemPrompt string, userMess
 
 // Chat performs a conversational LLM call with optional tool definitions.
 // It implements the ChatClient interface.
-func (c *OllamaClient) Chat(req ChatRequest) (*ChatResponse, error) {
+func (c *OllamaClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse, error) {
 	messages := make([]ollamaMessage, len(req.Messages))
 	for i, m := range req.Messages {
 		msg := ollamaMessage{
@@ -152,7 +152,7 @@ func (c *OllamaClient) Chat(req ChatRequest) (*ChatResponse, error) {
 	}
 
 	var oResp ollamaResponse
-	if err := c.doJSON(context.Background(), http.MethodPost, "/api/chat", oReq, &oResp, nil); err != nil {
+	if err := c.doJSON(ctx, http.MethodPost, "/api/chat", oReq, &oResp, nil); err != nil {
 		return nil, fmt.Errorf("Ollama chat: %w", err)
 	}
 
@@ -197,9 +197,9 @@ type ollamaModel struct {
 
 // ListModels returns a list of available models from Ollama server.
 // It also fetches context length for each model via /api/show concurrently.
-func (c *OllamaClient) ListModels() ([]ModelInfo, error) {
+func (c *OllamaClient) ListModels(ctx context.Context) ([]ModelInfo, error) {
 	var tagsResp ollamaTagsResponse
-	if err := c.doJSON(context.Background(), http.MethodGet, "/api/tags", nil, &tagsResp, nil); err != nil {
+	if err := c.doJSON(ctx, http.MethodGet, "/api/tags", nil, &tagsResp, nil); err != nil {
 		return nil, fmt.Errorf("Ollama list models: %w", err)
 	}
 
@@ -223,7 +223,7 @@ func (c *OllamaClient) ListModels() ([]ModelInfo, error) {
 			defer wg.Done()
 			sem <- struct{}{}
 			defer func() { <-sem }()
-			ctxLen := c.fetchContextLength(models[idx].Name)
+			ctxLen := c.fetchContextLength(ctx, models[idx].Name)
 			if ctxLen > 0 {
 				mu.Lock()
 				models[idx].ContextLength = ctxLen
@@ -237,7 +237,7 @@ func (c *OllamaClient) ListModels() ([]ModelInfo, error) {
 }
 
 // fetchContextLength calls /api/show to extract context_length for a model.
-func (c *OllamaClient) fetchContextLength(modelName string) int {
+func (c *OllamaClient) fetchContextLength(ctx context.Context, modelName string) int {
 	// Use a short-lived client with 30s timeout for this call
 	shortClient := newAPIClient(c.baseURL, 30*time.Second, c.headers)
 
@@ -245,7 +245,7 @@ func (c *OllamaClient) fetchContextLength(modelName string) int {
 		ModelInfo  map[string]any `json:"model_info"`
 		Parameters string         `json:"parameters"`
 	}
-	err := shortClient.doJSON(context.Background(), http.MethodGet, "/api/show?name="+modelName, nil, &showResp, nil)
+	err := shortClient.doJSON(ctx, http.MethodGet, "/api/show?name="+modelName, nil, &showResp, nil)
 	if err != nil {
 		return 0
 	}

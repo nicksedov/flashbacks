@@ -26,25 +26,35 @@ import (
 // ExifService provides EXIF metadata extraction and enrichment operations,
 // as well as DB-backed metadata CRUD and geolocation resolution.
 type ExifService struct {
-	et        *exiftool.Exiftool
+	pool      *ExiftoolPool
 	repo      *MetadataRepo
 	nominatim *NominatimClient
 	mu        sync.Mutex
 	lastCall  time.Time
 }
 
-// NewExifService creates a new ExifService.
-func NewExifService(et *exiftool.Exiftool, repo *MetadataRepo, nominatim *NominatimClient) *ExifService {
+// NewExifService creates a new ExifService with an exiftool pool for concurrent operations.
+func NewExifService(pool *ExiftoolPool, repo *MetadataRepo, nominatim *NominatimClient) *ExifService {
 	return &ExifService{
-		et:        et,
+		pool:      pool,
 		repo:      repo,
 		nominatim: nominatim,
 	}
 }
 
-// IsAvailable returns true if exiftool is initialized.
+// IsAvailable returns true if the exiftool pool is initialized.
 func (s *ExifService) IsAvailable() bool {
-	return s != nil && s.et != nil
+	return s != nil && s.pool != nil
+}
+
+// acquire acquires an exiftool instance from the pool.
+func (s *ExifService) acquire() *exiftool.Exiftool {
+	return s.pool.Acquire()
+}
+
+// release returns an exiftool instance to the pool.
+func (s *ExifService) release(et *exiftool.Exiftool) {
+	s.pool.Release(et)
 }
 
 // ExtractMetadata reads EXIF metadata and image dimensions from a file.
@@ -71,7 +81,10 @@ func (s *ExifService) ExtractGPS(filePath string) (float64, float64, bool) {
 		return 0, 0, false
 	}
 
-	fileInfos := s.et.ExtractMetadata(filePath)
+	et := s.acquire()
+	fileInfos := et.ExtractMetadata(filePath)
+	s.release(et)
+
 	if len(fileInfos) == 0 || fileInfos[0].Err != nil {
 		return 0, 0, false
 	}
@@ -147,7 +160,10 @@ func (s *ExifService) EnrichMissingMetadata(filePath string, meta *domain.ImageM
 		return nil
 	}
 
-	fileInfos := s.et.ExtractMetadata(filePath)
+	et := s.acquire()
+	fileInfos := et.ExtractMetadata(filePath)
+	s.release(et)
+
 	if len(fileInfos) == 0 || fileInfos[0].Err != nil {
 		return nil
 	}
@@ -234,7 +250,10 @@ func (s *ExifService) ReadAllTags(filePath string) (map[string]string, error) {
 		return nil, fmt.Errorf("exiftool not available")
 	}
 
-	fileInfos := s.et.ExtractMetadata(filePath)
+	et := s.acquire()
+	fileInfos := et.ExtractMetadata(filePath)
+	s.release(et)
+
 	if len(fileInfos) == 0 {
 		return nil, fmt.Errorf("no metadata found for %s", filePath)
 	}
@@ -267,7 +286,10 @@ func getImageDimensions(filePath string) (int, int, error) {
 }
 
 func (s *ExifService) extractExifFields(filePath string, meta *domain.ImageMetadata) {
-	fileInfos := s.et.ExtractMetadata(filePath)
+	et := s.acquire()
+	fileInfos := et.ExtractMetadata(filePath)
+	s.release(et)
+
 	if len(fileInfos) == 0 {
 		return
 	}

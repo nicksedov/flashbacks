@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"encoding/json"
 	"testing"
 
@@ -15,7 +16,7 @@ func TestCreateConversation(t *testing.T) {
 
 	svc := NewConversationService(db)
 
-	conv, err := svc.CreateConversation(1, "/photos/test.jpg", "en")
+	conv, err := svc.CreateConversation(context.Background(), 1, "/photos/test.jpg", "en")
 	if err != nil {
 		t.Fatalf("CreateConversation failed: %v", err)
 	}
@@ -41,10 +42,10 @@ func TestGetConversation(t *testing.T) {
 	defer cleanup()
 
 	svc := NewConversationService(db)
-	conv, _ := svc.CreateConversation(1, "/img.jpg", "en")
+	conv, _ := svc.CreateConversation(context.Background(), 1, "/img.jpg", "en")
 
 	// Correct user
-	got, err := svc.GetConversation(conv.ID, 1)
+	got, err := svc.GetConversation(context.Background(), conv.ID, 1)
 	if err != nil {
 		t.Fatalf("GetConversation failed: %v", err)
 	}
@@ -53,7 +54,7 @@ func TestGetConversation(t *testing.T) {
 	}
 
 	// Wrong user
-	_, err = svc.GetConversation(conv.ID, 999)
+	_, err = svc.GetConversation(context.Background(), conv.ID, 999)
 	if err == nil {
 		t.Fatal("expected error for wrong user, got nil")
 	}
@@ -64,9 +65,9 @@ func TestGetConversationByID(t *testing.T) {
 	defer cleanup()
 
 	svc := NewConversationService(db)
-	conv, _ := svc.CreateConversation(1, "/img.jpg", "en")
+	conv, _ := svc.CreateConversation(context.Background(), 1, "/img.jpg", "en")
 
-	got, err := svc.GetConversationByID(conv.ID)
+	got, err := svc.GetConversationByID(context.Background(), conv.ID)
 	if err != nil {
 		t.Fatalf("GetConversationByID failed: %v", err)
 	}
@@ -75,7 +76,7 @@ func TestGetConversationByID(t *testing.T) {
 	}
 
 	// Non-existent
-	_, err = svc.GetConversationByID(9999)
+	_, err = svc.GetConversationByID(context.Background(), 9999)
 	if err == nil {
 		t.Fatal("expected error for non-existent ID")
 	}
@@ -86,16 +87,16 @@ func TestListConversations(t *testing.T) {
 	defer cleanup()
 
 	svc := NewConversationService(db)
-	conv1, _ := svc.CreateConversation(1, "/img1.jpg", "en")
-	conv2, _ := svc.CreateConversation(1, "/img2.jpg", "ru")
-	conv3, _ := svc.CreateConversation(2, "/other.jpg", "en")
+	conv1, _ := svc.CreateConversation(context.Background(), 1, "/img1.jpg", "en")
+	conv2, _ := svc.CreateConversation(context.Background(), 1, "/img2.jpg", "ru")
+	conv3, _ := svc.CreateConversation(context.Background(), 2, "/other.jpg", "en")
 
 	// Add messages so conversations are non-empty
-	svc.AddMessage(conv1.ID, domain.ConversationMessage{Role: "user", Content: "hello"})
-	svc.AddMessage(conv2.ID, domain.ConversationMessage{Role: "user", Content: "hello"})
-	svc.AddMessage(conv3.ID, domain.ConversationMessage{Role: "user", Content: "hello"})
+	svc.AddMessage(context.Background(), conv1.ID, domain.ConversationMessage{Role: "user", Content: "hello"})
+	svc.AddMessage(context.Background(), conv2.ID, domain.ConversationMessage{Role: "user", Content: "hello"})
+	svc.AddMessage(context.Background(), conv3.ID, domain.ConversationMessage{Role: "user", Content: "hello"})
 
-	list, err := svc.ListConversations(1)
+	list, err := svc.ListConversations(context.Background(), 1)
 	if err != nil {
 		t.Fatalf("ListConversations failed: %v", err)
 	}
@@ -103,7 +104,7 @@ func TestListConversations(t *testing.T) {
 		t.Errorf("expected 2 conversations for user 1, got %d", len(list))
 	}
 
-	list2, _ := svc.ListConversations(2)
+	list2, _ := svc.ListConversations(context.Background(), 2)
 	if len(list2) != 1 {
 		t.Errorf("expected 1 conversation for user 2, got %d", len(list2))
 	}
@@ -114,13 +115,13 @@ func TestListConversations_EmptyFiltered(t *testing.T) {
 	defer cleanup()
 
 	svc := NewConversationService(db)
-	conv1, _ := svc.CreateConversation(1, "/img1.jpg", "en")
-	conv2, _ := svc.CreateConversation(1, "/img2.jpg", "en")
+	conv1, _ := svc.CreateConversation(context.Background(), 1, "/img1.jpg", "en")
+	conv2, _ := svc.CreateConversation(context.Background(), 1, "/img2.jpg", "en")
 
 	// Only add message to conv1, leave conv2 empty
-	svc.AddMessage(conv1.ID, domain.ConversationMessage{Role: "user", Content: "hello"})
+	svc.AddMessage(context.Background(), conv1.ID, domain.ConversationMessage{Role: "user", Content: "hello"})
 
-	list, err := svc.ListConversations(1)
+	list, err := svc.ListConversations(context.Background(), 1)
 	if err != nil {
 		t.Fatalf("ListConversations failed: %v", err)
 	}
@@ -138,32 +139,32 @@ func TestDeleteConversation(t *testing.T) {
 	defer cleanup()
 
 	svc := NewConversationService(db)
-	conv, _ := svc.CreateConversation(1, "/img.jpg", "en")
+	conv, _ := svc.CreateConversation(context.Background(), 1, "/img.jpg", "en")
 
 	// Add some messages
-	svc.AddMessage(conv.ID, domain.ConversationMessage{Role: "user", Content: "hello"})
-	svc.AddMessage(conv.ID, domain.ConversationMessage{Role: "assistant", Content: "hi there"})
+	svc.AddMessage(context.Background(), conv.ID, domain.ConversationMessage{Role: "user", Content: "hello"})
+	svc.AddMessage(context.Background(), conv.ID, domain.ConversationMessage{Role: "assistant", Content: "hi there"})
 
 	// Wrong user
-	err := svc.DeleteConversation(conv.ID, 999)
+	err := svc.DeleteConversation(context.Background(), conv.ID, 999)
 	if err == nil {
 		t.Fatal("expected error deleting with wrong user")
 	}
 
 	// Correct user
-	err = svc.DeleteConversation(conv.ID, 1)
+	err = svc.DeleteConversation(context.Background(), conv.ID, 1)
 	if err != nil {
 		t.Fatalf("DeleteConversation failed: %v", err)
 	}
 
 	// Verify deleted
-	_, err = svc.GetConversationByID(conv.ID)
+	_, err = svc.GetConversationByID(context.Background(), conv.ID)
 	if err == nil {
 		t.Fatal("expected error after deletion")
 	}
 
 	// Verify messages deleted
-	msgs, _ := svc.GetMessages(conv.ID)
+	msgs, _ := svc.GetMessages(context.Background(), conv.ID)
 	if len(msgs) != 0 {
 		t.Errorf("expected 0 messages after deletion, got %d", len(msgs))
 	}
@@ -174,18 +175,18 @@ func TestAddAndGetMessages(t *testing.T) {
 	defer cleanup()
 
 	svc := NewConversationService(db)
-	conv, _ := svc.CreateConversation(1, "", "en")
+	conv, _ := svc.CreateConversation(context.Background(), 1, "", "en")
 
-	err := svc.AddMessage(conv.ID, domain.ConversationMessage{Role: "user", Content: "Hello"})
+	err := svc.AddMessage(context.Background(), conv.ID, domain.ConversationMessage{Role: "user", Content: "Hello"})
 	if err != nil {
 		t.Fatalf("AddMessage failed: %v", err)
 	}
-	err = svc.AddMessage(conv.ID, domain.ConversationMessage{Role: "assistant", Content: "Hi!"})
+	err = svc.AddMessage(context.Background(), conv.ID, domain.ConversationMessage{Role: "assistant", Content: "Hi!"})
 	if err != nil {
 		t.Fatalf("AddMessage failed: %v", err)
 	}
 
-	msgs, err := svc.GetMessages(conv.ID)
+	msgs, err := svc.GetMessages(context.Background(), conv.ID)
 	if err != nil {
 		t.Fatalf("GetMessages failed: %v", err)
 	}
@@ -205,11 +206,11 @@ func TestAutoTitleFromFirstUserMessage(t *testing.T) {
 	defer cleanup()
 
 	svc := NewConversationService(db)
-	conv, _ := svc.CreateConversation(1, "", "en")
+	conv, _ := svc.CreateConversation(context.Background(), 1, "", "en")
 
-	svc.AddMessage(conv.ID, domain.ConversationMessage{Role: "user", Content: "What is in this photo?"})
+	svc.AddMessage(context.Background(), conv.ID, domain.ConversationMessage{Role: "user", Content: "What is in this photo?"})
 
-	got, _ := svc.GetConversationByID(conv.ID)
+	got, _ := svc.GetConversationByID(context.Background(), conv.ID)
 	if got.Title != "What is in this photo?" {
 		t.Errorf("expected auto-title, got %q", got.Title)
 	}
@@ -220,12 +221,12 @@ func TestAutoTitleTruncated(t *testing.T) {
 	defer cleanup()
 
 	svc := NewConversationService(db)
-	conv, _ := svc.CreateConversation(1, "", "en")
+	conv, _ := svc.CreateConversation(context.Background(), 1, "", "en")
 
 	longMsg := "This is a very long message that exceeds fifty characters and should be truncated"
-	svc.AddMessage(conv.ID, domain.ConversationMessage{Role: "user", Content: longMsg})
+	svc.AddMessage(context.Background(), conv.ID, domain.ConversationMessage{Role: "user", Content: longMsg})
 
-	got, _ := svc.GetConversationByID(conv.ID)
+	got, _ := svc.GetConversationByID(context.Background(), conv.ID)
 	if len(got.Title) > 54 { // 50 + "..."
 		t.Errorf("title too long: %q (len=%d)", got.Title, len(got.Title))
 	}
@@ -236,13 +237,13 @@ func TestCountTokens(t *testing.T) {
 	defer cleanup()
 
 	svc := NewConversationService(db)
-	conv, _ := svc.CreateConversation(1, "", "en")
+	conv, _ := svc.CreateConversation(context.Background(), 1, "", "en")
 
 	// Add known-length messages
-	svc.AddMessage(conv.ID, domain.ConversationMessage{Role: "user", Content: "hello world"})        // ~3 tokens
-	svc.AddMessage(conv.ID, domain.ConversationMessage{Role: "assistant", Content: "how can I help"}) // ~4 tokens
+	svc.AddMessage(context.Background(), conv.ID, domain.ConversationMessage{Role: "user", Content: "hello world"})         // ~3 tokens
+	svc.AddMessage(context.Background(), conv.ID, domain.ConversationMessage{Role: "assistant", Content: "how can I help"}) // ~4 tokens
 
-	count, err := svc.CountTokens(conv.ID)
+	count, err := svc.CountTokens(context.Background(), conv.ID)
 	if err != nil {
 		t.Fatalf("CountTokens failed: %v", err)
 	}
@@ -330,7 +331,7 @@ type mockChatClient struct {
 	callIndex int
 }
 
-func (m *mockChatClient) Chat(req llm.ChatRequest) (*llm.ChatResponse, error) {
+func (m *mockChatClient) Chat(ctx context.Context, req llm.ChatRequest) (*llm.ChatResponse, error) {
 	if m.callIndex >= len(m.responses) {
 		// Default: end turn with empty message
 		return &llm.ChatResponse{
@@ -343,11 +344,11 @@ func (m *mockChatClient) Chat(req llm.ChatRequest) (*llm.ChatResponse, error) {
 	return resp, nil
 }
 
-func (m *mockChatClient) Recognize(imagePath, systemPrompt, userMessage string) (string, error) {
+func (m *mockChatClient) Recognize(ctx context.Context, imagePath, systemPrompt, userMessage string) (string, error) {
 	return "", nil
 }
 
-func (m *mockChatClient) ListModels() ([]llm.ModelInfo, error) {
+func (m *mockChatClient) ListModels(ctx context.Context) ([]llm.ModelInfo, error) {
 	return nil, nil
 }
 
@@ -356,11 +357,11 @@ func TestSummarizeOlderMessages(t *testing.T) {
 	defer cleanup()
 
 	svc := NewConversationService(db)
-	conv, _ := svc.CreateConversation(1, "", "en")
+	conv, _ := svc.CreateConversation(context.Background(), 1, "", "en")
 
 	// Add 8 messages
 	for i := 0; i < 8; i++ {
-		svc.AddMessage(conv.ID, domain.ConversationMessage{
+		svc.AddMessage(context.Background(), conv.ID, domain.ConversationMessage{
 			Role:    "user",
 			Content: "message " + string(rune('A'+i)),
 		})
@@ -376,12 +377,12 @@ func TestSummarizeOlderMessages(t *testing.T) {
 	}
 
 	// Keep last 4, summarize the first 4
-	err := svc.SummarizeOlderMessages(conv.ID, 4, mock)
+	err := svc.SummarizeOlderMessages(context.Background(), conv.ID, 4, mock)
 	if err != nil {
 		t.Fatalf("SummarizeOlderMessages failed: %v", err)
 	}
 
-	msgs, _ := svc.GetMessages(conv.ID)
+	msgs, _ := svc.GetMessages(context.Background(), conv.ID)
 	// Should have: 1 summary + 4 kept = 5
 	if len(msgs) != 5 {
 		t.Errorf("expected 5 messages after summarization, got %d", len(msgs))
@@ -398,18 +399,18 @@ func TestSummarizeOlderMessages_NothingToSummarize(t *testing.T) {
 	defer cleanup()
 
 	svc := NewConversationService(db)
-	conv, _ := svc.CreateConversation(1, "", "en")
+	conv, _ := svc.CreateConversation(context.Background(), 1, "", "en")
 
-	svc.AddMessage(conv.ID, domain.ConversationMessage{Role: "user", Content: "only one"})
+	svc.AddMessage(context.Background(), conv.ID, domain.ConversationMessage{Role: "user", Content: "only one"})
 
 	mock := &mockChatClient{}
-	err := svc.SummarizeOlderMessages(conv.ID, 6, mock)
+	err := svc.SummarizeOlderMessages(context.Background(), conv.ID, 6, mock)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
 	// Should still have 1 message
-	msgs, _ := svc.GetMessages(conv.ID)
+	msgs, _ := svc.GetMessages(context.Background(), conv.ID)
 	if len(msgs) != 1 {
 		t.Errorf("expected 1 message, got %d", len(msgs))
 	}
@@ -420,18 +421,18 @@ func TestListConversationsByImage(t *testing.T) {
 	defer cleanup()
 
 	svc := NewConversationService(db)
-	conv1, _ := svc.CreateConversation(1, "/img1.jpg", "en")
-	conv2, _ := svc.CreateConversation(1, "/img1.jpg", "en")
-	conv3, _ := svc.CreateConversation(1, "/img2.jpg", "en")
-	conv4, _ := svc.CreateConversation(2, "/img1.jpg", "en")
+	conv1, _ := svc.CreateConversation(context.Background(), 1, "/img1.jpg", "en")
+	conv2, _ := svc.CreateConversation(context.Background(), 1, "/img1.jpg", "en")
+	conv3, _ := svc.CreateConversation(context.Background(), 1, "/img2.jpg", "en")
+	conv4, _ := svc.CreateConversation(context.Background(), 2, "/img1.jpg", "en")
 
 	// Add messages to make them non-empty
-	svc.AddMessage(conv1.ID, domain.ConversationMessage{Role: "user", Content: "hello"})
-	svc.AddMessage(conv2.ID, domain.ConversationMessage{Role: "user", Content: "hello"})
-	svc.AddMessage(conv3.ID, domain.ConversationMessage{Role: "user", Content: "hello"})
-	svc.AddMessage(conv4.ID, domain.ConversationMessage{Role: "user", Content: "hello"})
+	svc.AddMessage(context.Background(), conv1.ID, domain.ConversationMessage{Role: "user", Content: "hello"})
+	svc.AddMessage(context.Background(), conv2.ID, domain.ConversationMessage{Role: "user", Content: "hello"})
+	svc.AddMessage(context.Background(), conv3.ID, domain.ConversationMessage{Role: "user", Content: "hello"})
+	svc.AddMessage(context.Background(), conv4.ID, domain.ConversationMessage{Role: "user", Content: "hello"})
 
-	list, err := svc.ListConversationsByImage(1, "/img1.jpg")
+	list, err := svc.ListConversationsByImage(context.Background(), 1, "/img1.jpg")
 	if err != nil {
 		t.Fatalf("ListConversationsByImage failed: %v", err)
 	}
@@ -439,12 +440,12 @@ func TestListConversationsByImage(t *testing.T) {
 		t.Errorf("expected 2 conversations, got %d", len(list))
 	}
 
-	list2, _ := svc.ListConversationsByImage(2, "/img1.jpg")
+	list2, _ := svc.ListConversationsByImage(context.Background(), 2, "/img1.jpg")
 	if len(list2) != 1 {
 		t.Errorf("expected 1 conversation for user 2, got %d", len(list2))
 	}
 
-	list3, _ := svc.ListConversationsByImage(1, "/nonexistent.jpg")
+	list3, _ := svc.ListConversationsByImage(context.Background(), 1, "/nonexistent.jpg")
 	if len(list3) != 0 {
 		t.Errorf("expected 0 conversations, got %d", len(list3))
 	}
@@ -455,34 +456,34 @@ func TestAddMessage_TokenIncrement(t *testing.T) {
 	defer cleanup()
 
 	svc := NewConversationService(db)
-	conv, _ := svc.CreateConversation(1, "/img.jpg", "en")
+	conv, _ := svc.CreateConversation(context.Background(), 1, "/img.jpg", "en")
 
 	// Initial token count should be 0
-	got, _ := svc.GetConversationByID(conv.ID)
+	got, _ := svc.GetConversationByID(context.Background(), conv.ID)
 	if got.TokenCount != 0 {
 		t.Errorf("expected initial TokenCount=0, got %d", got.TokenCount)
 	}
 
 	// Add a message with known token count
-	svc.AddMessage(conv.ID, domain.ConversationMessage{
+	svc.AddMessage(context.Background(), conv.ID, domain.ConversationMessage{
 		Role:       "user",
 		Content:    "hello world",
 		TokenCount: 5,
 	})
 
-	got, _ = svc.GetConversationByID(conv.ID)
+	got, _ = svc.GetConversationByID(context.Background(), conv.ID)
 	if got.TokenCount != 5 {
 		t.Errorf("expected TokenCount=5 after first message, got %d", got.TokenCount)
 	}
 
 	// Add another message
-	svc.AddMessage(conv.ID, domain.ConversationMessage{
+	svc.AddMessage(context.Background(), conv.ID, domain.ConversationMessage{
 		Role:       "assistant",
 		Content:    "hi there, how can I help you today?",
 		TokenCount: 10,
 	})
 
-	got, _ = svc.GetConversationByID(conv.ID)
+	got, _ = svc.GetConversationByID(context.Background(), conv.ID)
 	if got.TokenCount != 15 {
 		t.Errorf("expected TokenCount=15 after second message, got %d", got.TokenCount)
 	}
@@ -531,19 +532,19 @@ func TestGenerateDisplaySummary_FallbackToFirstMessage(t *testing.T) {
 	defer cleanup()
 
 	svc := NewConversationService(db)
-	conv, _ := svc.CreateConversation(1, "/img.jpg", "en")
+	conv, _ := svc.CreateConversation(context.Background(), 1, "/img.jpg", "en")
 
 	// Add only 1 user message (fewer than 2)
-	svc.AddMessage(conv.ID, domain.ConversationMessage{
+	svc.AddMessage(context.Background(), conv.ID, domain.ConversationMessage{
 		Role:       "user",
 		Content:    "What is in this photo?",
 		TokenCount: 5,
 	})
 
 	mock := &mockChatClient{}
-	svc.GenerateDisplaySummary(conv.ID, mock)
+	svc.GenerateDisplaySummary(context.Background(), conv.ID, mock)
 
-	got, _ := svc.GetConversationByID(conv.ID)
+	got, _ := svc.GetConversationByID(context.Background(), conv.ID)
 	if got.Summary != "What is in this photo?" {
 		t.Errorf("expected fallback summary, got %q", got.Summary)
 	}
@@ -554,15 +555,15 @@ func TestGenerateDisplaySummary_SkipsIfAlreadyHasSummary(t *testing.T) {
 	defer cleanup()
 
 	svc := NewConversationService(db)
-	conv, _ := svc.CreateConversation(1, "/img.jpg", "en")
+	conv, _ := svc.CreateConversation(context.Background(), 1, "/img.jpg", "en")
 
 	// Set existing summary
 	db.Model(&domain.Conversation{}).Where("id = ?", conv.ID).Update("summary", "Existing summary")
 
 	mock := &mockChatClient{}
-	svc.GenerateDisplaySummary(conv.ID, mock)
+	svc.GenerateDisplaySummary(context.Background(), conv.ID, mock)
 
-	got, _ := svc.GetConversationByID(conv.ID)
+	got, _ := svc.GetConversationByID(context.Background(), conv.ID)
 	if got.Summary != "Existing summary" {
 		t.Errorf("expected existing summary to be preserved, got %q", got.Summary)
 	}

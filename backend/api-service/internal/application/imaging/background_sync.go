@@ -38,7 +38,7 @@ type BackgroundSyncManager struct {
 	stopCh             chan struct{}
 	scheduleCh         chan struct{} // Signal to restart the schedule loop
 	db                 *gorm.DB
-	thumbnailService   *thumbnail.Service
+	thumbnailService   thumbnail.ThumbnailProvider
 	geolocationService *geocoder.GeolocationService
 	exifClient         ExifClient
 	syncDays           []time.Weekday
@@ -58,7 +58,7 @@ type BackgroundSyncManager struct {
 }
 
 // NewBackgroundSyncManager creates a new background sync manager
-func NewBackgroundSyncManager(db *gorm.DB, thumbnailService *thumbnail.Service, geoService *geocoder.GeolocationService, exifClient ExifClient) *BackgroundSyncManager {
+func NewBackgroundSyncManager(db *gorm.DB, thumbnailService thumbnail.ThumbnailProvider, geoService *geocoder.GeolocationService, exifClient ExifClient) *BackgroundSyncManager {
 	return &BackgroundSyncManager{
 		db:                 db,
 		thumbnailService:   thumbnailService,
@@ -639,4 +639,3 @@ func FormatSyncDays(days []time.Weekday) string {
 	}
 	return result
 }
-

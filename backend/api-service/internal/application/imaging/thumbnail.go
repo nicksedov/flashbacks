@@ -7,8 +7,6 @@ import (
 	"image"
 	"image/jpeg"
 	"os"
-	"path/filepath"
-	"strings"
 	"sync"
 
 	"github.com/deepteams/webp"
@@ -99,25 +97,4 @@ func GenerateThumbnail(imagePath string, cache *ThumbnailCache) (string, error) 
 	cache.Set(imagePath, result)
 
 	return result, nil
-}
-
-// GetImageMimeType returns the MIME type based on file extension
-func GetImageMimeType(path string) string {
-	ext := strings.ToLower(filepath.Ext(path))
-	switch ext {
-	case ".jpg", ".jpeg":
-		return "image/jpeg"
-	case ".png":
-		return "image/png"
-	case ".gif":
-		return "image/gif"
-	case ".bmp":
-		return "image/bmp"
-	case ".webp":
-		return "image/webp"
-	case ".tiff", ".tif":
-		return "image/tiff"
-	default:
-		return "image/jpeg"
-	}
 }

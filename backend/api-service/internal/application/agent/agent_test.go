@@ -33,7 +33,7 @@ func TestAgent_NoToolCalls(t *testing.T) {
 	defer cleanup()
 
 	convSvc := NewConversationService(db)
-	conv, _ := convSvc.CreateConversation(1, "/test.jpg", "en")
+	conv, _ := convSvc.CreateConversation(context.Background(), 1, "/test.jpg", "en")
 
 	mockLLM := &mockChatClient{
 		responses: []*llm.ChatResponse{
@@ -88,7 +88,7 @@ func TestAgent_SingleToolCall(t *testing.T) {
 	defer cleanup()
 
 	convSvc := NewConversationService(db)
-	conv, _ := convSvc.CreateConversation(1, "/test.jpg", "en")
+	conv, _ := convSvc.CreateConversation(context.Background(), 1, "/test.jpg", "en")
 
 	mockLLM := &mockChatClient{
 		responses: []*llm.ChatResponse{
@@ -171,7 +171,7 @@ func TestAgent_MultipleToolCalls(t *testing.T) {
 	defer cleanup()
 
 	convSvc := NewConversationService(db)
-	conv, _ := convSvc.CreateConversation(1, "/test.jpg", "en")
+	conv, _ := convSvc.CreateConversation(context.Background(), 1, "/test.jpg", "en")
 
 	mockLLM := &mockChatClient{
 		responses: []*llm.ChatResponse{
@@ -237,7 +237,7 @@ func TestAgent_MaxToolRounds(t *testing.T) {
 	defer cleanup()
 
 	convSvc := NewConversationService(db)
-	conv, _ := convSvc.CreateConversation(1, "", "en")
+	conv, _ := convSvc.CreateConversation(context.Background(), 1, "", "en")
 
 	// LLM always returns tool_use, never end_turn
 	toolResp := &llm.ChatResponse{
@@ -283,7 +283,7 @@ func TestAgent_ToolError(t *testing.T) {
 	defer cleanup()
 
 	convSvc := NewConversationService(db)
-	conv, _ := convSvc.CreateConversation(1, "/test.jpg", "en")
+	conv, _ := convSvc.CreateConversation(context.Background(), 1, "/test.jpg", "en")
 
 	mockLLM := &mockChatClient{
 		responses: []*llm.ChatResponse{
@@ -331,7 +331,7 @@ func TestAgent_NilEventHandler(t *testing.T) {
 	defer cleanup()
 
 	convSvc := NewConversationService(db)
-	conv, _ := convSvc.CreateConversation(1, "", "en")
+	conv, _ := convSvc.CreateConversation(context.Background(), 1, "", "en")
 
 	mockLLM := &mockChatClient{
 		responses: []*llm.ChatResponse{
@@ -377,7 +377,7 @@ func TestAgent_TokenLimitEnforcement(t *testing.T) {
 	defer cleanup()
 
 	convSvc := NewConversationService(db)
-	conv, _ := convSvc.CreateConversation(1, "/test.jpg", "en")
+	conv, _ := convSvc.CreateConversation(context.Background(), 1, "/test.jpg", "en")
 
 	// Pre-fill token count above limit
 	db.Model(&domain.Conversation{}).Where("id = ?", conv.ID).Update("token_count", 100)
@@ -442,7 +442,7 @@ func TestAgent_TokenLimitCustomOverride(t *testing.T) {
 	defer cleanup()
 
 	convSvc := NewConversationService(db)
-	conv, _ := convSvc.CreateConversation(1, "/test.jpg", "en")
+	conv, _ := convSvc.CreateConversation(context.Background(), 1, "/test.jpg", "en")
 
 	// Pre-fill token count to 75
 	db.Model(&domain.Conversation{}).Where("id = ?", conv.ID).Update("token_count", 75)
@@ -479,7 +479,7 @@ func TestAgent_TokenUsageEvent(t *testing.T) {
 	defer cleanup()
 
 	convSvc := NewConversationService(db)
-	conv, _ := convSvc.CreateConversation(1, "/test.jpg", "en")
+	conv, _ := convSvc.CreateConversation(context.Background(), 1, "/test.jpg", "en")
 
 	mockLLM := &mockChatClient{
 		responses: []*llm.ChatResponse{

@@ -1,6 +1,7 @@
 package imaging
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"strings"
@@ -63,7 +64,7 @@ func SearchByEmbedding(db *gorm.DB, query string, limit int) (SmartSearchRespons
 	}
 
 	// Embed the query
-	queryEmbeddings, err := embeddingClient.Embed([]string{strings.ToLower(query)})
+	queryEmbeddings, err := embeddingClient.Embed(context.Background(), []string{strings.ToLower(query)})
 	if err != nil {
 		return SmartSearchResponse{}, fmt.Errorf("failed to embed query: %w", err)
 	}

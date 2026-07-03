@@ -53,7 +53,7 @@ func (m *AuthMiddleware) RequireAuth() gin.HandlerFunc {
 			return
 		}
 
-		user, err := m.authService.GetCurrentUser(token)
+		user, err := m.authService.GetCurrentUser(c.Request.Context(), token)
 		if err != nil {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": m.resolveMessage(i18n.MsgMiddlewareUnauthorized)})
 			c.Abort()

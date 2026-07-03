@@ -2,6 +2,7 @@ package auth
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"image"
@@ -40,7 +41,7 @@ type CreateUserInput struct {
 }
 
 // CreateUser creates a new user (admin action)
-func (s *UserService) CreateUser(adminID uint, input *CreateUserInput) (*domain.User, error) {
+func (s *UserService) CreateUser(ctx context.Context, adminID uint, input *CreateUserInput) (*domain.User, error) {
 	// Verify admin exists
 	var admin domain.User
 	if err := s.db.First(&admin, adminID).Error; err != nil {
@@ -89,7 +90,7 @@ func (s *UserService) CreateUser(adminID uint, input *CreateUserInput) (*domain.
 }
 
 // GetUser retrieves a user by ID
-func (s *UserService) GetUser(id uint) (*domain.User, error) {
+func (s *UserService) GetUser(ctx context.Context, id uint) (*domain.User, error) {
 	var user domain.User
 	if err := s.db.First(&user, id).Error; err != nil {
 		return nil, err
@@ -98,7 +99,7 @@ func (s *UserService) GetUser(id uint) (*domain.User, error) {
 }
 
 // ListUsers returns all users (avatar excluded for performance)
-func (s *UserService) ListUsers() ([]domain.User, error) {
+func (s *UserService) ListUsers(ctx context.Context) ([]domain.User, error) {
 	var users []domain.User
 	if err := s.db.Omit("avatar").Order("created_at desc").Find(&users).Error; err != nil {
 		return nil, err
@@ -114,7 +115,7 @@ type UpdateUserInput struct {
 }
 
 // UpdateUser updates a user (admin action)
-func (s *UserService) UpdateUser(adminID, userID uint, input *UpdateUserInput) (*domain.User, error) {
+func (s *UserService) UpdateUser(ctx context.Context, adminID, userID uint, input *UpdateUserInput) (*domain.User, error) {
 	// Verify admin exists
 	var admin domain.User
 	if err := s.db.First(&admin, adminID).Error; err != nil {
@@ -170,14 +171,14 @@ func (s *UserService) UpdateUser(adminID, userID uint, input *UpdateUserInput) (
 
 	// If deactivated, revoke all sessions
 	if input.IsActive != nil && !*input.IsActive {
-		s.sessionRepo.RevokeAllUserSessions(user.ID)
+		s.sessionRepo.RevokeAllUserSessions(ctx, user.ID)
 	}
 
 	return &user, nil
 }
 
 // DeleteUser deletes a user (admin action)
-func (s *UserService) DeleteUser(adminID, userID uint) error {
+func (s *UserService) DeleteUser(ctx context.Context, adminID, userID uint) error {
 	// Verify admin exists
 	var admin domain.User
 	if err := s.db.First(&admin, adminID).Error; err != nil {
@@ -204,14 +205,14 @@ func (s *UserService) DeleteUser(adminID, userID uint) error {
 	}
 
 	// Revoke all sessions
-	s.sessionRepo.RevokeAllUserSessions(user.ID)
+	s.sessionRepo.RevokeAllUserSessions(ctx, user.ID)
 
 	// Delete user
 	return s.db.Delete(&user).Error
 }
 
 // UpdateProfile updates the current user's own profile
-func (s *UserService) UpdateProfile(userID uint, displayName string) (*domain.User, error) {
+func (s *UserService) UpdateProfile(ctx context.Context, userID uint, displayName string) (*domain.User, error) {
 	var user domain.User
 	if err := s.db.Omit("avatar").First(&user, userID).Error; err != nil {
 		return nil, err
@@ -225,7 +226,7 @@ func (s *UserService) UpdateProfile(userID uint, displayName string) (*domain.Us
 }
 
 // GetUserWithAvatar retrieves a user including the avatar field
-func (s *UserService) GetUserWithAvatar(id uint) (*domain.User, error) {
+func (s *UserService) GetUserWithAvatar(ctx context.Context, id uint) (*domain.User, error) {
 	var user domain.User
 	if err := s.db.First(&user, id).Error; err != nil {
 		return nil, err
@@ -234,7 +235,7 @@ func (s *UserService) GetUserWithAvatar(id uint) (*domain.User, error) {
 }
 
 // UpdateAvatar processes and stores a user's avatar image
-func (s *UserService) UpdateAvatar(userID uint, imageData []byte) error {
+func (s *UserService) UpdateAvatar(ctx context.Context, userID uint, imageData []byte) error {
 	if len(imageData) == 0 {
 		return errors.New("empty image data")
 	}
@@ -261,12 +262,12 @@ func (s *UserService) UpdateAvatar(userID uint, imageData []byte) error {
 }
 
 // DeleteAvatar removes a user's avatar
-func (s *UserService) DeleteAvatar(userID uint) error {
+func (s *UserService) DeleteAvatar(ctx context.Context, userID uint) error {
 	return s.db.Model(&domain.User{}).Where("id = ?", userID).Update("avatar", nil).Error
 }
 
 // GetAvatar retrieves the avatar bytes for a user
-func (s *UserService) GetAvatar(userID uint) ([]byte, error) {
+func (s *UserService) GetAvatar(ctx context.Context, userID uint) ([]byte, error) {
 	var user domain.User
 	if err := s.db.Select("avatar").First(&user, userID).Error; err != nil {
 		return nil, err

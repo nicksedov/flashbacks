@@ -53,7 +53,8 @@ func (h *AuthHandlers) respondError(c *gin.Context, code int, msg i18n.MessageKe
 
 // handleAuthStatus returns the current authentication status
 func (h *AuthHandlers) handleAuthStatus(c *gin.Context) {
-	isBootstrap, err := h.bootstrap.IsBootstrapMode()
+	ctx := c.Request.Context()
+	isBootstrap, err := h.bootstrap.IsBootstrapMode(ctx)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, i18n.ErrorResponse(i18n.MsgAuthInternalError))
 		return
@@ -63,7 +64,7 @@ func (h *AuthHandlers) handleAuthStatus(c *gin.Context) {
 	user := middleware.GetCurrentUser(c)
 	if user != nil {
 		// Re-fetch with avatar to correctly set hasAvatar flag
-		userWithAvatar, err := h.userService.GetUserWithAvatar(user.ID)
+		userWithAvatar, err := h.userService.GetUserWithAvatar(ctx, user.ID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, i18n.ErrorResponse(i18n.MsgAuthInternalError))
 			return
@@ -91,10 +92,11 @@ func (h *AuthHandlers) handleLogin(c *gin.Context) {
 		return
 	}
 
+	ctx := c.Request.Context()
 	ipAddress := c.ClientIP()
 	userAgent := c.GetHeader("User-Agent")
 
-	result, err := h.authService.Login(req.Login, req.Password, ipAddress, userAgent)
+	result, err := h.authService.Login(ctx, req.Login, req.Password, ipAddress, userAgent)
 	if err != nil {
 		if err == domain.ErrRateLimited {
 			c.JSON(http.StatusTooManyRequests, i18n.ErrorResponse(i18n.MsgAuthRateLimited))
@@ -140,7 +142,7 @@ func (h *AuthHandlers) handleLogout(c *gin.Context) {
 	user := middleware.GetCurrentUser(c)
 	if user != nil {
 		token, _ := c.Cookie(middleware.SessionCookieName)
-		h.authService.Logout(token)
+		h.authService.Logout(c.Request.Context(), token)
 		auth.CreateAuditLog(h.db, &user.ID, domain.ActionLogout, "user", &user.ID, "")
 	}
 
@@ -158,7 +160,7 @@ func (h *AuthHandlers) handleMe(c *gin.Context) {
 	}
 
 	// Re-fetch with avatar to correctly set hasAvatar flag
-	userWithAvatar, err := h.userService.GetUserWithAvatar(user.ID)
+	userWithAvatar, err := h.userService.GetUserWithAvatar(c.Request.Context(), user.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, i18n.ErrorResponse(i18n.MsgAuthInternalError))
 		return
@@ -189,7 +191,7 @@ func (h *AuthHandlers) handleChangePassword(c *gin.Context) {
 		return
 	}
 
-	if err := h.authService.ChangePassword(user.ID, req.OldPassword, req.NewPassword); err != nil {
+	if err := h.authService.ChangePassword(c.Request.Context(), user.ID, req.OldPassword, req.NewPassword); err != nil {
 		if err == domain.ErrInvalidCredentials {
 			c.JSON(http.StatusUnauthorized, i18n.ErrorResponse(i18n.MsgAuthInvalidCurrentPassword))
 			return
@@ -220,15 +222,16 @@ func (h *AuthHandlers) handleBootstrapSetup(c *gin.Context) {
 		return
 	}
 
+	ctx := c.Request.Context()
 	// Create admin user
-	user, err := h.bootstrap.CreateBootstrapAdmin(req.NewPassword, req.DisplayName)
+	user, err := h.bootstrap.CreateBootstrapAdmin(ctx, req.NewPassword, req.DisplayName)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, i18n.ErrorResponse(i18n.MsgAuthBootstrapFailed))
 		return
 	}
 
 	// Revoke bootstrap cookie and create real session
-	token, err := h.sessionRepo.CreateSession(user.ID, c.ClientIP(), c.GetHeader("User-Agent"))
+	token, err := h.sessionRepo.CreateSession(ctx, user.ID, c.ClientIP(), c.GetHeader("User-Agent"))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, i18n.ErrorResponse(i18n.MsgAuthSessionCreationFailed))
 		return
@@ -259,7 +262,7 @@ func (h *AuthHandlers) handleBootstrapSetup(c *gin.Context) {
 
 // handleListUsers returns all users (admin only)
 func (h *AuthHandlers) handleListUsers(c *gin.Context) {
-	users, err := h.userService.ListUsers()
+	users, err := h.userService.ListUsers(c.Request.Context())
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, i18n.ErrorResponse(i18n.MsgAuthUsersListFailed))
 		return
@@ -305,7 +308,7 @@ func (h *AuthHandlers) handleCreateUser(c *gin.Context) {
 		Password:    req.Password,
 	}
 
-	user, err := h.userService.CreateUser(admin.ID, input)
+	user, err := h.userService.CreateUser(c.Request.Context(), admin.ID, input)
 	if err != nil {
 		if strings.Contains(err.Error(), "exists") {
 			c.JSON(http.StatusBadRequest, i18n.ErrorResponse(i18n.MsgUserServiceUserExists))
@@ -346,7 +349,7 @@ func (h *AuthHandlers) handleUpdateUser(c *gin.Context) {
 		IsActive:    req.IsActive,
 	}
 
-	user, err := h.userService.UpdateUser(admin.ID, userID, input)
+	user, err := h.userService.UpdateUser(c.Request.Context(), admin.ID, userID, input)
 	if err != nil {
 		if strings.Contains(err.Error(), "last admin") {
 			if strings.Contains(err.Error(), "demote") {
@@ -388,7 +391,7 @@ func (h *AuthHandlers) handleDeleteUser(c *gin.Context) {
 		return
 	}
 
-	if err := h.userService.DeleteUser(admin.ID, userID); err != nil {
+	if err := h.userService.DeleteUser(c.Request.Context(), admin.ID, userID); err != nil {
 		if strings.Contains(err.Error(), "last admin") {
 			c.JSON(http.StatusBadRequest, i18n.ErrorResponse(i18n.MsgUserServiceLastAdminDelete))
 			return
@@ -424,7 +427,7 @@ func (h *AuthHandlers) handleResetPassword(c *gin.Context) {
 		return
 	}
 
-	if err := h.authService.AdminResetPassword(admin.ID, userID, req.NewPassword); err != nil {
+	if err := h.authService.AdminResetPassword(c.Request.Context(), admin.ID, userID, req.NewPassword); err != nil {
 		c.JSON(http.StatusInternalServerError, i18n.ErrorResponse(i18n.MsgAuthPasswordResetFailed))
 		return
 	}
@@ -444,14 +447,14 @@ func (h *AuthHandlers) handleUpdateProfile(c *gin.Context) {
 		return
 	}
 
-	_, err := h.userService.UpdateProfile(user.ID, req.DisplayName)
+	_, err := h.userService.UpdateProfile(c.Request.Context(), user.ID, req.DisplayName)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, i18n.ErrorResponse(i18n.MsgAuthProfileUpdateFailed))
 		return
 	}
 
 	// Re-fetch with avatar to correctly set hasAvatar flag
-	updatedUser, err := h.userService.GetUserWithAvatar(user.ID)
+	updatedUser, err := h.userService.GetUserWithAvatar(c.Request.Context(), user.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, i18n.ErrorResponse(i18n.MsgAuthProfileUpdateFailed))
 		return
@@ -503,7 +506,7 @@ func (h *AuthHandlers) handleUploadAvatar(c *gin.Context) {
 		return
 	}
 
-	if err := h.userService.UpdateAvatar(user.ID, fileBytes); err != nil {
+	if err := h.userService.UpdateAvatar(c.Request.Context(), user.ID, fileBytes); err != nil {
 		if strings.Contains(err.Error(), "too large") {
 			c.JSON(http.StatusBadRequest, i18n.ErrorResponse(i18n.MsgAvatarTooLarge))
 			return
@@ -513,7 +516,7 @@ func (h *AuthHandlers) handleUploadAvatar(c *gin.Context) {
 	}
 
 	// Return updated user with hasAvatar=true
-	updatedUser, err := h.userService.GetUserWithAvatar(user.ID)
+	updatedUser, err := h.userService.GetUserWithAvatar(c.Request.Context(), user.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, i18n.ErrorResponse(i18n.MsgAvatarUploadFailed))
 		return
@@ -532,13 +535,13 @@ func (h *AuthHandlers) handleDeleteAvatar(c *gin.Context) {
 		return
 	}
 
-	if err := h.userService.DeleteAvatar(user.ID); err != nil {
+	if err := h.userService.DeleteAvatar(c.Request.Context(), user.ID); err != nil {
 		c.JSON(http.StatusInternalServerError, i18n.ErrorResponse(i18n.MsgAvatarDeleteFailed))
 		return
 	}
 
 	// Return updated user with hasAvatar=false
-	updatedUser, err := h.userService.GetUserWithAvatar(user.ID)
+	updatedUser, err := h.userService.GetUserWithAvatar(c.Request.Context(), user.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, i18n.ErrorResponse(i18n.MsgAvatarDeleteFailed))
 		return
@@ -558,7 +561,7 @@ func (h *AuthHandlers) handleGetAvatar(c *gin.Context) {
 		return
 	}
 
-	avatar, err := h.userService.GetAvatar(userID)
+	avatar, err := h.userService.GetAvatar(c.Request.Context(), userID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, i18n.ErrorResponse(i18n.MsgAvatarNotFound))
 		return

@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"testing"
 
 	"github.com/flashbacks/api-service/internal/domain"
@@ -20,7 +21,7 @@ func setupBootstrapService(t *testing.T) (*BootstrapService, func()) {
 func TestBootstrapService_IsBootstrapMode_EmptyDB(t *testing.T) {
 	svc, _ := setupBootstrapService(t)
 
-	result, err := svc.IsBootstrapMode()
+	result, err := svc.IsBootstrapMode(context.Background())
 
 	require.NoError(t, err)
 	assert.True(t, result, "should be in bootstrap mode with empty DB")
@@ -30,7 +31,7 @@ func TestBootstrapService_IsBootstrapMode_WithUsers(t *testing.T) {
 	svc, _ := setupBootstrapService(t)
 	testutil.SeedUserWithHash(t, svc.db, "existing-user", "user", domain.RoleUser, true, "hashed-password")
 
-	result, err := svc.IsBootstrapMode()
+	result, err := svc.IsBootstrapMode(context.Background())
 
 	require.NoError(t, err)
 	assert.False(t, result, "should not be in bootstrap mode when users exist")
@@ -68,7 +69,7 @@ func TestBootstrapService_ValidateCredentials_Mismatch(t *testing.T) {
 func TestBootstrapService_CreateBootstrapAdmin_Success(t *testing.T) {
 	svc, _ := setupBootstrapService(t)
 
-	user, err := svc.CreateBootstrapAdmin("new-admin-password", "Admin User")
+	user, err := svc.CreateBootstrapAdmin(context.Background(), "new-admin-password", "Admin User")
 
 	require.NoError(t, err)
 	require.NotNil(t, user)
@@ -80,7 +81,7 @@ func TestBootstrapService_CreateBootstrapAdmin_Success(t *testing.T) {
 	assert.NotEmpty(t, user.PasswordHash)
 
 	// Verify bootstrap mode is now disabled
-	isBootstrap, err := svc.IsBootstrapMode()
+	isBootstrap, err := svc.IsBootstrapMode(context.Background())
 	require.NoError(t, err)
 	assert.False(t, isBootstrap, "bootstrap mode should be disabled after admin creation")
 }
@@ -90,7 +91,7 @@ func TestBootstrapService_CreateBootstrapAdmin_NotInBootstrap(t *testing.T) {
 	// Seed a user to exit bootstrap mode
 	testutil.SeedUserWithHash(t, svc.db, "existing-user", "user", domain.RoleUser, true, "hashed-password")
 
-	_, err := svc.CreateBootstrapAdmin("new-password", "New Admin")
+	_, err := svc.CreateBootstrapAdmin(context.Background(), "new-password", "New Admin")
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "bootstrap mode is already disabled")

@@ -261,19 +261,6 @@ func scanDirectory(db *gorm.DB, dirPath string, progressChan chan<- string, numW
 	return batch, nil
 }
 
-// flushDBBatch writes accumulated create/update records to the database and resets the slices.
-// Deprecated: use batchTracker.flush for event-emitting scans.
-func flushDBBatch(db *gorm.DB, toCreate *[]domain.ImageFile, toUpdate *[]domain.ImageFile) {
-	if len(*toCreate) > 0 {
-		db.Create(toCreate)
-		*toCreate = (*toCreate)[:0]
-	}
-	for _, f := range *toUpdate {
-		db.Save(&f)
-	}
-	*toUpdate = (*toUpdate)[:0]
-}
-
 // fastScanGalleryDirectory performs a fast gallery scan that only computes hash
 // when file record doesn't exist in DB or size differs.
 // It also cleans up records for files that no longer exist on disk.

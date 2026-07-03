@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"log"
 	"sync"
 	"time"
@@ -73,7 +74,7 @@ func (j *SessionCleanupJob) Stop() {
 
 // runCleanup performs a single cleanup operation
 func (j *SessionCleanupJob) runCleanup() {
-	if err := j.sessionRepo.CleanupExpiredSessions(); err != nil {
+	if err := j.sessionRepo.CleanupExpiredSessions(context.Background()); err != nil {
 		log.Printf("[SessionCleanup] Error cleaning up sessions: %v", err)
 	} else {
 		log.Println("[SessionCleanup] Cleanup completed successfully")

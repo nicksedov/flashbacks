@@ -113,7 +113,7 @@ type openAIChoiceMessage struct {
 }
 
 // Recognize performs OCR using OpenAI-compatible API
-func (c *OpenAIClient) Recognize(imagePath string, systemPrompt string, userMessage string) (string, error) {
+func (c *OpenAIClient) Recognize(ctx context.Context, imagePath string, systemPrompt string, userMessage string) (string, error) {
 	// Read and optionally resize image
 	imgData, mediaType, err := resizeImageForLLM(imagePath, c.MaxImageMegapixels)
 	if err != nil {
@@ -140,7 +140,7 @@ func (c *OpenAIClient) Recognize(imagePath string, systemPrompt string, userMess
 	}
 
 	var openAIResp openAIResponse
-	if err := c.doJSON(context.Background(), http.MethodPost, "/v1/chat/completions", req, &openAIResp, nil); err != nil {
+	if err := c.doJSON(ctx, http.MethodPost, "/v1/chat/completions", req, &openAIResp, nil); err != nil {
 		return "", fmt.Errorf("OpenAI recognize: %w", err)
 	}
 
@@ -153,7 +153,7 @@ func (c *OpenAIClient) Recognize(imagePath string, systemPrompt string, userMess
 
 // Chat performs a conversational LLM call with optional tool definitions.
 // It implements the ChatClient interface.
-func (c *OpenAIClient) Chat(req ChatRequest) (*ChatResponse, error) {
+func (c *OpenAIClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse, error) {
 	messages := make([]openAIChatMessage, len(req.Messages))
 	for i, m := range req.Messages {
 		msg := openAIChatMessage{
@@ -199,7 +199,7 @@ func (c *OpenAIClient) Chat(req ChatRequest) (*ChatResponse, error) {
 	}
 
 	var oaiResp openAIResponse
-	if err := c.doJSON(context.Background(), http.MethodPost, "/v1/chat/completions", oaiReq, &oaiResp, nil); err != nil {
+	if err := c.doJSON(ctx, http.MethodPost, "/v1/chat/completions", oaiReq, &oaiResp, nil); err != nil {
 		return nil, fmt.Errorf("OpenAI chat: %w", err)
 	}
 
@@ -243,12 +243,12 @@ type openAIModel struct {
 }
 
 // ListModels returns a list of available models from OpenAI-compatible server
-func (c *OpenAIClient) ListModels() ([]ModelInfo, error) {
+func (c *OpenAIClient) ListModels(ctx context.Context) ([]ModelInfo, error) {
 	// Use a shorter timeout for model listing
 	shortClient := newAPIClient(c.baseURL, 30*time.Second, c.headers)
 
 	var modelsResp openAIModelsResponse
-	if err := shortClient.doJSON(context.Background(), http.MethodGet, "/v1/models", nil, &modelsResp, nil); err != nil {
+	if err := shortClient.doJSON(ctx, http.MethodGet, "/v1/models", nil, &modelsResp, nil); err != nil {
 		return nil, fmt.Errorf("OpenAI list models: %w", err)
 	}
 

@@ -352,19 +352,6 @@ func (s *Service) Warmup(imagePaths []string) error {
 	return nil
 }
 
-// GenerateThumbnailPath возвращает относительный путь к миниатюре для указанного файла (относительно корня кэша)
-func (s *Service) GenerateThumbnailPath(filePath string) string {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if !s.cfg.Enabled || !s.initialized {
-		return ""
-	}
-
-	// Возвращаем относительный путь
-	return s.storage.GetPathRelative(filePath)
-}
-
 // UpdateStats обновляет статистику кэша
 func (s *Service) updateStats() {
 	if !s.initialized {
@@ -400,6 +387,19 @@ func (s *Service) Stats() ThumbnailStats {
 
 	log.Printf("Stats: returning %+v", s.stats)
 	return s.stats
+}
+
+// GetStats returns the current cache statistics as a *Stats value,
+// satisfying the ThumbnailProvider interface.
+func (s *Service) GetStats() (*Stats, error) {
+	st := s.Stats()
+	return &Stats{
+		TotalSize:   st.TotalSize,
+		TotalFiles:  st.TotalFiles,
+		CacheDir:    st.CacheDir,
+		Enabled:     st.Enabled,
+		Initialized: st.Initialized,
+	}, nil
 }
 
 // UpdateCachePath обновляет путь кэша с физическим перемещением файлов

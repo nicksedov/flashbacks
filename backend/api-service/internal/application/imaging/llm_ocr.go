@@ -1,6 +1,7 @@
 package imaging
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"strings"
@@ -145,7 +146,7 @@ func (s *LlmOcrService) RecognizeWithLlm(imageFileID uint, client llm.Client, pr
 
 	// Step 4: Call LLM
 	startTime := time.Now()
-	markdownContent, err := client.Recognize(imageFile.Path, systemPrompt, "Perform OCR on this image and return markdown content.")
+	markdownContent, err := client.Recognize(context.Background(), imageFile.Path, systemPrompt, "Perform OCR on this image and return markdown content.")
 	processingTime := int(time.Since(startTime).Milliseconds())
 
 	if err != nil {
@@ -328,7 +329,7 @@ func (s *LlmOcrService) ExecuteAiAction(imageFileID uint, action string, questio
 
 	// Call LLM
 	startTime := time.Now()
-	response, err := client.Recognize(imageFile.Path, systemPrompt, userMessage)
+	response, err := client.Recognize(context.Background(), imageFile.Path, systemPrompt, userMessage)
 	processingTime := int(time.Since(startTime).Milliseconds())
 
 	if err != nil {

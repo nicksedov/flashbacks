@@ -93,7 +93,7 @@ func (a *Agent) ProcessMessage(ctx context.Context, convID uint, userMessage str
 	}
 
 	// Check token exhaustion before processing
-	conv, err := a.conversationService.GetConversationByID(convID)
+	conv, err := a.conversationService.GetConversationByID(ctx, convID)
 	if err != nil {
 		return nil, fmt.Errorf("conversation not found: %w", err)
 	}
@@ -112,18 +112,18 @@ func (a *Agent) ProcessMessage(ctx context.Context, convID uint, userMessage str
 		Content:    userMessage,
 		TokenCount: estimateTokens(userMessage),
 	}
-	if err := a.conversationService.AddMessage(convID, userMsg); err != nil {
+	if err := a.conversationService.AddMessage(ctx, convID, userMsg); err != nil {
 		return nil, fmt.Errorf("failed to save user message: %w", err)
 	}
 
 	// Reload conversation to get updated context
-	conv, err = a.conversationService.GetConversationByID(convID)
+	conv, err = a.conversationService.GetConversationByID(ctx, convID)
 	if err != nil {
 		return nil, fmt.Errorf("conversation not found: %w", err)
 	}
 
 	// Load message history
-	messages, err := a.conversationService.GetMessages(convID)
+	messages, err := a.conversationService.GetMessages(ctx, convID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load message history: %w", err)
 	}
@@ -144,7 +144,7 @@ func (a *Agent) ProcessMessage(ctx context.Context, convID uint, userMessage str
 
 	// Agent loop: iterate until the LLM produces a final text response or max rounds exceeded
 	for round := 0; round < a.config.MaxToolRounds; round++ {
-		resp, err := chatClient.Chat(llm.ChatRequest{
+		resp, err := chatClient.Chat(ctx, llm.ChatRequest{
 			Messages: fullMessages,
 			Tools:    toolDefs,
 		})
@@ -162,23 +162,23 @@ func (a *Agent) ProcessMessage(ctx context.Context, convID uint, userMessage str
 				Content:    resp.Message.Content,
 				TokenCount: estimateTokens(resp.Message.Content),
 			}
-			if err := a.conversationService.AddMessage(convID, assistantMsg); err != nil {
+			if err := a.conversationService.AddMessage(ctx, convID, assistantMsg); err != nil {
 				log.Printf("Failed to save assistant message: %v", err)
 			}
 
 			if eventHandler != nil {
 				eventHandler(ToolEvent{Type: "message", Content: resp.Message.Content})
 				// Emit token usage event
-				tokenCount, _ := a.conversationService.CountTokens(convID)
+				tokenCount, _ := a.conversationService.CountTokens(ctx, convID)
 				eventHandler(ToolEvent{Type: "token_usage", TokenCount: tokenCount, MaxTokens: effectiveMax})
 				eventHandler(ToolEvent{Type: "done"})
 			}
 
 			// Check token threshold and summarize if needed
-			a.maybeSummarize(convID, chatClient)
+			a.maybeSummarize(ctx, convID, chatClient)
 
 			// Trigger summary generation in background if needed
-			a.maybeGenerateSummary(convID, chatClient)
+			a.maybeGenerateSummary(ctx, convID, chatClient)
 
 			return &AgentResponse{
 				Message:   resp.Message.Content,
@@ -195,7 +195,7 @@ func (a *Agent) ProcessMessage(ctx context.Context, convID uint, userMessage str
 			ToolCallsJSON: string(toolCallsJSON),
 			TokenCount:    estimateTokens(resp.Message.Content),
 		}
-		if err := a.conversationService.AddMessage(convID, assistantMsg); err != nil {
+		if err := a.conversationService.AddMessage(ctx, convID, assistantMsg); err != nil {
 			log.Printf("Failed to save assistant tool_call message: %v", err)
 		}
 
@@ -240,7 +240,7 @@ func (a *Agent) ProcessMessage(ctx context.Context, convID uint, userMessage str
 				ToolCallID: tc.ID,
 				TokenCount: estimateTokens(result),
 			}
-			if err := a.conversationService.AddMessage(convID, toolResultMsg); err != nil {
+			if err := a.conversationService.AddMessage(ctx, convID, toolResultMsg); err != nil {
 				log.Printf("Failed to save tool result: %v", err)
 			}
 
@@ -257,13 +257,13 @@ func (a *Agent) ProcessMessage(ctx context.Context, convID uint, userMessage str
 	fallbackMsg := "I've reached the maximum number of tool invocations. Here's what I found so far."
 	if eventHandler != nil {
 		eventHandler(ToolEvent{Type: "message", Content: fallbackMsg})
-		tokenCount, _ := a.conversationService.CountTokens(convID)
+		tokenCount, _ := a.conversationService.CountTokens(ctx, convID)
 		eventHandler(ToolEvent{Type: "token_usage", TokenCount: tokenCount, MaxTokens: effectiveMax})
 		eventHandler(ToolEvent{Type: "done"})
 	}
 
 	// Trigger summary generation in background if needed
-	a.maybeGenerateSummary(convID, chatClient)
+	a.maybeGenerateSummary(ctx, convID, chatClient)
 
 	return &AgentResponse{
 		Message:   fallbackMsg,
@@ -313,8 +313,8 @@ func (a *Agent) buildToolList() string {
 }
 
 // maybeSummarize checks token count and triggers summarization if threshold exceeded.
-func (a *Agent) maybeSummarize(convID uint, chatClient llm.ChatClient) {
-	tokenCount, err := a.conversationService.CountTokens(convID)
+func (a *Agent) maybeSummarize(ctx context.Context, convID uint, chatClient llm.ChatClient) {
+	tokenCount, err := a.conversationService.CountTokens(ctx, convID)
 	if err != nil {
 		log.Printf("Failed to count tokens for conversation %d: %v", convID, err)
 		return
@@ -322,7 +322,7 @@ func (a *Agent) maybeSummarize(convID uint, chatClient llm.ChatClient) {
 
 	if tokenCount > a.config.MaxTokens {
 		log.Printf("Conversation %d has %d tokens (threshold %d), summarizing...", convID, tokenCount, a.config.MaxTokens)
-		if err := a.conversationService.SummarizeOlderMessages(convID, 6, chatClient); err != nil {
+		if err := a.conversationService.SummarizeOlderMessages(ctx, convID, 6, chatClient); err != nil {
 			log.Printf("Failed to summarize conversation %d: %v", convID, err)
 		}
 	}
@@ -330,7 +330,7 @@ func (a *Agent) maybeSummarize(convID uint, chatClient llm.ChatClient) {
 
 // maybeGenerateSummary triggers summary generation in a goroutine if summary is empty
 // and there are at least 2 user messages. Prevents duplicate goroutines for the same conversation.
-func (a *Agent) maybeGenerateSummary(convID uint, chatClient llm.ChatClient) {
+func (a *Agent) maybeGenerateSummary(ctx context.Context, convID uint, chatClient llm.ChatClient) {
 	// Check if summary generation is already in flight for this conversation
 	a.summaryMu.Lock()
 	if a.summaryInFlight[convID] {
@@ -339,13 +339,13 @@ func (a *Agent) maybeGenerateSummary(convID uint, chatClient llm.ChatClient) {
 	}
 	a.summaryMu.Unlock()
 
-	conv, err := a.conversationService.GetConversationByID(convID)
+	conv, err := a.conversationService.GetConversationByID(ctx, convID)
 	if err != nil || conv.Summary != "" {
 		return
 	}
 
 	// Count user messages
-	messages, err := a.conversationService.GetMessages(convID)
+	messages, err := a.conversationService.GetMessages(ctx, convID)
 	if err != nil {
 		return
 	}
@@ -370,7 +370,7 @@ func (a *Agent) maybeGenerateSummary(convID uint, chatClient llm.ChatClient) {
 				delete(a.summaryInFlight, convID)
 				a.summaryMu.Unlock()
 			}()
-			a.conversationService.GenerateDisplaySummary(convID, chatClient)
+			a.conversationService.GenerateDisplaySummary(context.Background(), convID, chatClient)
 		}()
 	}
 }

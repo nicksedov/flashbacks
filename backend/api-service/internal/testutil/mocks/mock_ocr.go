@@ -4,15 +4,16 @@ import (
 	"context"
 	"io"
 
-	shareddomain "github.com/flashbacks/shared/domain"
+	"github.com/flashbacks/api-service/internal/infrastructure/healthcheck"
 	"github.com/flashbacks/api-service/internal/infrastructure/ocr"
+	shareddomain "github.com/flashbacks/shared/domain"
 )
 
 // MockOcrClient is a mock implementation of ocr.Client for testing.
 type MockOcrClient struct {
 	ClassifyFunc    func(ctx context.Context, image io.Reader, contentType string, params *ocr.ClassifyParams) (*shareddomain.ClassifyResponse, error)
-	HealthFunc      func(ctx context.Context) (ocr.HealthStatus, error)
-	GetStatusFunc   func() ocr.Status
+	HealthFunc      func(ctx context.Context) error
+	GetStatusFunc   func() healthcheck.HealthStatus
 	StartHealthFunc func(intervalSeconds int)
 	StopHealthFunc  func()
 
@@ -22,20 +23,20 @@ type MockOcrClient struct {
 }
 
 // CheckHealth implements ocr.Client.
-func (m *MockOcrClient) CheckHealth(ctx context.Context) (ocr.HealthStatus, error) {
+func (m *MockOcrClient) CheckHealth(ctx context.Context) error {
 	m.HealthCallCount++
 	if m.HealthFunc != nil {
 		return m.HealthFunc(ctx)
 	}
-	return ocr.HealthStatusHealthy, nil
+	return nil
 }
 
 // GetStatus implements ocr.Client.
-func (m *MockOcrClient) GetStatus() ocr.Status {
+func (m *MockOcrClient) GetStatus() healthcheck.HealthStatus {
 	if m.GetStatusFunc != nil {
 		return m.GetStatusFunc()
 	}
-	return ocr.Status{HealthStatus: ocr.HealthStatusHealthy}
+	return healthcheck.HealthStatus{Status: healthcheck.StatusHealthy}
 }
 
 // StartHealthCheck implements ocr.Client.

@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/flashbacks/api-service/internal/application/imaging"
-	"github.com/flashbacks/api-service/internal/domain"
 	"github.com/flashbacks/api-service/internal/interfaces/dto"
 	"github.com/flashbacks/api-service/internal/interfaces/handler/helpers"
 	"github.com/flashbacks/api-service/internal/interfaces/i18n"
@@ -56,8 +55,7 @@ func (s *Server) handleUpdateSettings(c *gin.Context) {
 			}
 			normalizedTrash := filepath.ToSlash(absTrash)
 
-			var galleryFolders []domain.GalleryFolder
-			s.db.Find(&galleryFolders)
+			galleryFolders, _ := s.galleryFolderRepo.FindAll()
 			for _, gf := range galleryFolders {
 				if helpers.CheckPathsConflict(normalizedTrash, gf.Path) {
 					c.JSON(http.StatusBadRequest, i18n.ErrorResponse(i18n.MsgImageTrashConflict))
@@ -79,8 +77,7 @@ func (s *Server) handleUpdateSettings(c *gin.Context) {
 			}
 			normalizedBackup := filepath.ToSlash(absBackup)
 
-			var galleryFolders []domain.GalleryFolder
-			s.db.Find(&galleryFolders)
+			galleryFolders, _ := s.galleryFolderRepo.FindAll()
 			for _, gf := range galleryFolders {
 				if helpers.CheckPathsConflict(normalizedBackup, gf.Path) {
 					c.JSON(http.StatusBadRequest, i18n.ErrorResponse(i18n.MsgImageBackupConflict))
@@ -103,12 +100,14 @@ func (s *Server) handleUpdateSettings(c *gin.Context) {
 			normalizedCache := filepath.ToSlash(absCache)
 			settings.ThumbnailCachePath = normalizedCache
 
-			if s.thumbnailService != nil {
-				log.Printf("Updating thumbnail cache path from %s to %s", s.thumbnailService.Stats().CacheDir, normalizedCache)
-				if err := s.thumbnailService.UpdateCachePath(normalizedCache); err != nil {
+			if s.thumbnailProvider != nil {
+				stats, _ := s.thumbnailProvider.GetStats()
+				log.Printf("Updating thumbnail cache path from %s to %s", stats.CacheDir, normalizedCache)
+				if err := s.thumbnailProvider.UpdateCachePath(normalizedCache); err != nil {
 					log.Printf("Failed to update thumbnail cache path: %v", err)
 				} else {
-					log.Printf("Thumbnail cache path updated successfully. New stats: %+v", s.thumbnailService.Stats())
+					newStats, _ := s.thumbnailProvider.GetStats()
+					log.Printf("Thumbnail cache path updated successfully. New stats: %+v", newStats)
 				}
 			} else {
 				log.Printf("Thumbnail service is nil, cannot update cache path")
@@ -163,7 +162,7 @@ func (s *Server) handleUpdateSettings(c *gin.Context) {
 		s.backgroundSync.UpdateSchedule(syncDays, settings.DailySyncHour, settings.DailySyncMinute, settings.SyncTimezoneOffset)
 	}
 
-	s.db.Save(&settings)
+	s.appSettingsRepo.Save(&settings)
 
 	c.JSON(http.StatusOK, dto.AppSettingsDTO{
 		TrashDir:              settings.TrashDir,
@@ -191,8 +190,8 @@ func (s *Server) handleGetUserSettings(c *gin.Context) {
 		return
 	}
 
-	var settings domain.UserSettings
-	if result := s.db.FirstOrCreate(&settings, domain.UserSettings{UserID: user.ID}); result.Error != nil {
+	settings, err := s.userSettingsRepo.FindOrCreateByUserID(user.ID)
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, i18n.ErrorResponse(i18n.MsgAuthInternalError))
 		return
 	}
@@ -238,9 +237,8 @@ func (s *Server) handleUpdateUserSettings(c *gin.Context) {
 		return
 	}
 
-	var settings domain.UserSettings
-	result := s.db.FirstOrCreate(&settings, domain.UserSettings{UserID: user.ID})
-	if result.Error != nil {
+	settings, err := s.userSettingsRepo.FindOrCreateByUserID(user.ID)
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, i18n.ErrorResponse(i18n.MsgAuthInternalError))
 		return
 	}
@@ -252,7 +250,7 @@ func (s *Server) handleUpdateUserSettings(c *gin.Context) {
 		settings.Language = req.Language
 	}
 
-	s.db.Save(&settings)
+	s.userSettingsRepo.Save(settings)
 
 	c.JSON(http.StatusOK, dto.UserSettingsDTO{
 		Theme:    settings.Theme,

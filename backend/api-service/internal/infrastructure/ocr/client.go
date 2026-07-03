@@ -11,24 +11,24 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flashbacks/api-service/internal/infrastructure/healthcheck"
+	"github.com/flashbacks/api-service/internal/infrastructure/retry"
 	shareddomain "github.com/flashbacks/shared/domain"
 )
 
-// Status represents the OCR service status
-type Status struct {
-	HealthStatus HealthStatus `json:"healthStatus"`
-	Error        string       `json:"error,omitempty"`
-	LastCheck    time.Time    `json:"lastCheck"`
+// Client is an interface for OCR classifier service
+type Client interface {
+	// CheckHealth checks if OCR service is available
+	CheckHealth(ctx context.Context) error
+	// GetStatus returns the current OCR health status
+	GetStatus() healthcheck.HealthStatus
+	// StartHealthCheck starts the periodic health check in background
+	StartHealthCheck(intervalSeconds int)
+	// StopHealthCheck stops the periodic health check
+	StopHealthCheck()
+	// Classify sends an image to the OCR classifier and returns results
+	Classify(ctx context.Context, image io.Reader, contentType string, params *ClassifyParams) (*shareddomain.ClassifyResponse, error)
 }
-
-// HealthStatus represents the health status of OCR service
-type HealthStatus string
-
-const (
-	HealthStatusUnknown   HealthStatus = "unknown"
-	HealthStatusHealthy   HealthStatus = "healthy"
-	HealthStatusUnhealthy HealthStatus = "unhealthy"
-)
 
 // ClassifyParams holds query parameters for the classify endpoint
 type ClassifyParams struct {
@@ -48,132 +48,91 @@ func DefaultClassifyParams() *ClassifyParams {
 	}
 }
 
-// Client is an interface for OCR classifier service
-type Client interface {
-	// CheckHealth checks if OCR service is available
-	CheckHealth(ctx context.Context) (HealthStatus, error)
-	// GetStatus returns the current OCR status
-	GetStatus() Status
-	// StartHealthCheck starts the periodic health check in background
-	StartHealthCheck(intervalSeconds int)
-	// StopHealthCheck stops the periodic health check
-	StopHealthCheck()
-	// Classify sends an image to the OCR classifier and returns results
-	Classify(ctx context.Context, image io.Reader, contentType string, params *ClassifyParams) (*shareddomain.ClassifyResponse, error)
-}
-
 type clientImpl struct {
 	baseURL    string
 	httpClient *http.Client
-	status     Status
-	stopCheck  chan struct{}
-	isRunning  bool
+	checker    *healthcheck.PeriodicChecker
 }
 
-// NewClient creates a new OCR client
+// NewClient creates a new OCR client with unified healthcheck.
 func NewClient(serviceURL string) Client {
 	baseURL := fmt.Sprintf("%s/ocr/api", strings.TrimRight(serviceURL, "/"))
-	return &clientImpl{
+	c := &clientImpl{
 		baseURL:    baseURL,
 		httpClient: &http.Client{Timeout: 5 * time.Second},
-		status: Status{
-			HealthStatus: HealthStatusUnknown,
-			LastCheck:    time.Now(),
-		},
-		stopCheck: make(chan struct{}),
 	}
+	c.checker = healthcheck.NewPeriodicChecker(c, 30*time.Second, 2*time.Second)
+	return c
 }
 
-// CheckHealth checks if OCR service is available
-func (c *clientImpl) CheckHealth(ctx context.Context) (HealthStatus, error) {
+// Check implements healthcheck.Checker by delegating to CheckHealth.
+func (c *clientImpl) Check(ctx context.Context) error {
+	return c.CheckHealth(ctx)
+}
+
+// CheckHealth checks if OCR service is available.
+func (c *clientImpl) CheckHealth(ctx context.Context) error {
 	url := fmt.Sprintf("%s/health", c.baseURL)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		return HealthStatusUnhealthy, fmt.Errorf("failed to create request: %w", err)
+		return fmt.Errorf("failed to create request: %w", err)
 	}
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return HealthStatusUnhealthy, fmt.Errorf("request failed: %w", err)
+		return fmt.Errorf("request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return HealthStatusUnhealthy, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+		return fmt.Errorf("unexpected status code: %d", resp.StatusCode)
 	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return HealthStatusUnhealthy, fmt.Errorf("failed to read response body: %w", err)
+		return fmt.Errorf("failed to read response body: %w", err)
 	}
 
 	var result map[string]string
 	if err := json.Unmarshal(body, &result); err != nil {
-		return HealthStatusUnhealthy, fmt.Errorf("failed to parse response: %w", err)
+		return fmt.Errorf("failed to parse response: %w", err)
 	}
 
-	if result["status"] == "ok" {
-		return HealthStatusHealthy, nil
+	if result["status"] != "ok" {
+		return fmt.Errorf("health check returned non-OK status")
 	}
 
-	return HealthStatusUnhealthy, fmt.Errorf("health check returned non-OK status")
+	return nil
 }
 
-// GetStatus returns the current OCR status
-func (c *clientImpl) GetStatus() Status {
-	c.status.LastCheck = time.Now()
-	return c.status
+// GetStatus returns the current OCR health status.
+func (c *clientImpl) GetStatus() healthcheck.HealthStatus {
+	return c.checker.GetStatus()
 }
 
-// StartHealthCheck starts the periodic health check in background
+// StartHealthCheck starts the periodic health check in background.
 func (c *clientImpl) StartHealthCheck(intervalSeconds int) {
-	if c.isRunning {
-		return
-	}
-
-	c.isRunning = true
-	go c.healthCheckLoop(intervalSeconds)
+	c.checker.Start(time.Duration(intervalSeconds) * time.Second)
 }
 
-// StopHealthCheck stops the periodic health check
+// StopHealthCheck stops the periodic health check.
 func (c *clientImpl) StopHealthCheck() {
-	if !c.isRunning {
-		return
-	}
-
-	close(c.stopCheck)
-	c.isRunning = false
+	c.checker.Stop()
 }
 
-func (c *clientImpl) healthCheckLoop(intervalSeconds int) {
-	ticker := time.NewTicker(time.Duration(intervalSeconds) * time.Second)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-c.stopCheck:
-			return
-		case <-ticker.C:
-			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-			status, err := c.CheckHealth(ctx)
-			cancel()
-
-			c.status.LastCheck = time.Now()
-			if err != nil {
-				c.status.HealthStatus = HealthStatusUnhealthy
-				c.status.Error = err.Error()
-			} else {
-				c.status.HealthStatus = status
-				c.status.Error = ""
-			}
-		}
-	}
-}
-
-// Classify sends an image to the OCR classifier and returns results
+// Classify sends an image to the OCR classifier and returns results.
+// Uses unified retry with exponential backoff.
 func (c *clientImpl) Classify(ctx context.Context, image io.Reader, contentType string, params *ClassifyParams) (*shareddomain.ClassifyResponse, error) {
-	// Build URL with query parameters
+	imgData, err := io.ReadAll(image)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read image: %w", err)
+	}
+
+	if contentType == "" {
+		contentType = "image/jpeg"
+	}
+
 	queryParams := url.Values{}
 	if params != nil {
 		queryParams.Set("confidence_threshold", fmt.Sprintf("%.2f", params.ConfidenceThreshold))
@@ -187,7 +146,6 @@ func (c *clientImpl) Classify(ctx context.Context, image io.Reader, contentType 
 			queryParams.Set("lang", params.Lang)
 		}
 	} else {
-		// Use defaults
 		defaults := DefaultClassifyParams()
 		queryParams.Set("confidence_threshold", fmt.Sprintf("%.2f", defaults.ConfidenceThreshold))
 		queryParams.Set("level", defaults.Level)
@@ -197,42 +155,37 @@ func (c *clientImpl) Classify(ctx context.Context, image io.Reader, contentType 
 
 	classifyURL := fmt.Sprintf("%s/v1/classify?%s", c.baseURL, queryParams.Encode())
 
-	// Read image data into buffer
-	imgData, err := io.ReadAll(image)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read image: %w", err)
+	cfg := retry.Config{
+		MaxAttempts: 3,
+		Delay:       2 * time.Second,
+		MaxDelay:    30 * time.Second,
+		Backoff:     retry.BackoffExponential,
 	}
 
-	// Create POST request
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, classifyURL, bytes.NewReader(imgData))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
+	return retry.WithRetry(ctx, cfg, func(ctx context.Context) (*shareddomain.ClassifyResponse, error) {
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, classifyURL, bytes.NewReader(imgData))
+		if err != nil {
+			return nil, fmt.Errorf("failed to create request: %w", err)
+		}
+		req.Header.Set("Content-Type", contentType)
 
-	// Set content type
-	if contentType == "" {
-		contentType = "image/jpeg"
-	}
-	req.Header.Set("Content-Type", contentType)
+		client := &http.Client{Timeout: 180 * time.Second}
+		resp, err := client.Do(req)
+		if err != nil {
+			return nil, fmt.Errorf("request failed: %w", err)
+		}
+		defer resp.Body.Close()
 
-	// Use longer timeout for OCR processing (180s) - OCR can be slow for large images
-	client := &http.Client{Timeout: 180 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("request failed: %w", err)
-	}
-	defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			body, _ := io.ReadAll(resp.Body)
+			return nil, fmt.Errorf("OCR API error (status %d): %s", resp.StatusCode, string(body))
+		}
 
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("OCR API error (status %d): %s", resp.StatusCode, string(body))
-	}
+		var result shareddomain.ClassifyResponse
+		if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+			return nil, fmt.Errorf("failed to parse OCR response: %w", err)
+		}
 
-	// Parse response using shared type
-	var result shareddomain.ClassifyResponse
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, fmt.Errorf("failed to parse OCR response: %w", err)
-	}
-
-	return &result, nil
+		return &result, nil
+	})
 }

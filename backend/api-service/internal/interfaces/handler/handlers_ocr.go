@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/flashbacks/api-service/internal/domain"
 	"github.com/flashbacks/api-service/internal/interfaces/dto"
 	"github.com/flashbacks/api-service/internal/interfaces/handler/helpers"
 	"github.com/flashbacks/api-service/internal/interfaces/i18n"
@@ -30,7 +29,7 @@ func (s *Server) handleGetOCRStatus(c *gin.Context) {
 	c.JSON(http.StatusOK, dto.OCRStatusResponse{
 		Status: dto.OCRStatus{
 			Enabled:    true,
-			Health:     string(status.HealthStatus),
+			Health:     string(status.Status),
 			LastCheck:  status.LastCheck.Format(helpers.DateTimeFormat),
 			Error:      status.Error,
 			ServiceURL: s.config.OCRServiceURL,
@@ -147,34 +146,14 @@ func (s *Server) handleGetOcrDocuments(c *gin.Context) {
 	pageSize := params.PageSize
 	offset := params.Offset
 
-	var total int64
-	s.db.Table("ocr_classifications").
-		Joins("JOIN image_files ON image_files.id = ocr_classifications.image_file_id").
-		Where("ocr_classifications.is_text_document = true").
-		Count(&total)
-
-	var results []struct {
-		ID                 uint
-		ImageFileID        uint
-		Path               string
-		Size               int64
-		Hash               string
-		ModTime            time.Time
-		MeanConfidence     float32
-		WeightedConfidence float32
-		TokenCount         int
-		Angle              int
-		ScaleFactor        float32
+	total, err := s.ocrRepo.CountDocuments()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, i18n.ErrorResponse(i18n.MsgScanFailed))
+		return
 	}
 
-	if err := s.db.Table("ocr_classifications").
-		Select("image_files.id, image_files.path, image_files.size, image_files.hash, image_files.mod_time, ocr_classifications.image_file_id, ocr_classifications.mean_confidence, ocr_classifications.weighted_confidence, ocr_classifications.token_count, ocr_classifications.angle, ocr_classifications.scale_factor").
-		Joins("JOIN image_files ON image_files.id = ocr_classifications.image_file_id").
-		Where("ocr_classifications.is_text_document = true").
-		Order("image_files.id").
-		Offset(offset).
-		Limit(pageSize).
-		Find(&results).Error; err != nil {
+	results, err := s.ocrRepo.FindDocumentsPaginated(offset, pageSize)
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, i18n.ErrorResponse(i18n.MsgScanFailed))
 		return
 	}
@@ -201,11 +180,9 @@ func (s *Server) handleGetOcrDocuments(c *gin.Context) {
 	}
 
 	paths := make([]string, 0, len(docs))
-	pathToIdx := make(map[string]int)
-	for i, doc := range docs {
+	for _, doc := range docs {
 		if doc.Path != "" {
 			paths = append(paths, doc.Path)
-			pathToIdx[doc.Path] = i
 		}
 	}
 	s.thumbnailBatch.GenerateParallel(paths, func(idx int, thumb string) {
@@ -230,17 +207,13 @@ func (s *Server) handleGetOcrData(c *gin.Context) {
 		return
 	}
 
-	var classification domain.OcrClassification
-	if err := s.db.Table("ocr_classifications").
-		Joins("JOIN image_files ON image_files.id = ocr_classifications.image_file_id").
-		Where("image_files.path = ?", imagePath).
-		First(&classification).Error; err != nil {
+	classification, err := s.ocrRepo.FindClassificationByPath(imagePath)
+	if err != nil {
 		c.JSON(http.StatusNotFound, i18n.ErrorResponse(i18n.MsgOcrDataNotFound))
 		return
 	}
 
-	var boxes []domain.OcrBoundingBox
-	s.db.Where("classification_id = ?", classification.ID).Find(&boxes)
+	boxes, _ := s.ocrRepo.FindBoundingBoxesByClassificationID(classification.ID)
 
 	boxDTOs := make([]dto.BoundingBoxDTO, len(boxes))
 	for i, b := range boxes {

@@ -11,6 +11,7 @@ import (
 	"github.com/flashbacks/api-service/internal/application/imaging"
 	"github.com/flashbacks/api-service/internal/application/thumbnail"
 	"github.com/flashbacks/api-service/internal/domain"
+	"github.com/flashbacks/api-service/internal/domain/repository"
 	"github.com/flashbacks/api-service/internal/infrastructure/config"
 	"github.com/flashbacks/api-service/internal/infrastructure/database"
 	"github.com/flashbacks/api-service/internal/infrastructure/exifclient"
@@ -40,9 +41,17 @@ var CoreSet = wire.NewSet(
 	ProvideGeolocationService,
 	ProvideOcrClient,
 	ProvideThumbnailConfig,
-	ProvideThumbnailService,
+	ProvideThumbnailProvider,
 	ProvideLLMFactory,
 	ProvideMaxMegapixels,
+	ProvideImageFileRepo,
+	ProvideGalleryFolderRepo,
+	ProvideLlmRepo,
+	ProvideMetadataRepo,
+	ProvideOcrRepo,
+	ProvideImageTagRepo,
+	ProvideAppSettingsRepo,
+	ProvideUserSettingsRepo,
 )
 
 // ProvideConfig loads application configuration from environment variables.
@@ -107,8 +116,8 @@ func ProvideThumbnailConfig(db *gorm.DB, cfg *config.AppConfig) *thumbnail.Confi
 	}
 }
 
-// ProvideThumbnailService creates the thumbnail service (returns nil on error).
-func ProvideThumbnailService(tcConfig *thumbnail.Config) *thumbnail.Service {
+// ProvideThumbnailProvider creates the thumbnail service as a ThumbnailProvider.
+func ProvideThumbnailProvider(tcConfig *thumbnail.Config) thumbnail.ThumbnailProvider {
 	svc, err := thumbnail.NewService(tcConfig)
 	if err != nil {
 		log.Printf("Failed to initialize thumbnail cache: %v", err)
@@ -123,6 +132,50 @@ func ProvideLLMFactory(db *gorm.DB, maxMegapixels float64) *helpers.LLMFactory {
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
+// Repository providers (data access layer)
+// ──────────────────────────────────────────────────────────────────────────────
+
+// ProvideImageFileRepo creates the image file repository.
+func ProvideImageFileRepo(db *gorm.DB) repository.ImageFileRepository {
+	return repository.NewImageFileRepository(db)
+}
+
+// ProvideGalleryFolderRepo creates the gallery folder repository.
+func ProvideGalleryFolderRepo(db *gorm.DB) repository.GalleryFolderRepository {
+	return repository.NewGalleryFolderRepository(db)
+}
+
+// ProvideLlmRepo creates the LLM repository.
+func ProvideLlmRepo(db *gorm.DB) repository.LlmRepository {
+	return repository.NewLlmRepository(db)
+}
+
+// ProvideMetadataRepo creates the image metadata repository.
+func ProvideMetadataRepo(db *gorm.DB) repository.MetadataRepository {
+	return repository.NewMetadataRepository(db)
+}
+
+// ProvideOcrRepo creates the OCR data repository.
+func ProvideOcrRepo(db *gorm.DB) repository.OcrRepository {
+	return repository.NewOcrRepository(db)
+}
+
+// ProvideImageTagRepo creates the image tag repository.
+func ProvideImageTagRepo(db *gorm.DB) repository.ImageTagRepository {
+	return repository.NewImageTagRepository(db)
+}
+
+// ProvideAppSettingsRepo creates the app settings repository.
+func ProvideAppSettingsRepo(db *gorm.DB) repository.AppSettingsRepository {
+	return repository.NewAppSettingsRepository(db)
+}
+
+// ProvideUserSettingsRepo creates the user settings repository.
+func ProvideUserSettingsRepo(db *gorm.DB) repository.UserSettingsRepository {
+	return repository.NewUserSettingsRepository(db)
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
 // Application service providers (scanning, OCR, LLM, background, thumbnail)
 // ──────────────────────────────────────────────────────────────────────────────
 
@@ -134,7 +187,6 @@ var AppSet = wire.NewSet(
 	ProvideBackgroundSyncManager,
 	ProvideTagScanManager,
 	ProvideEmbeddingBackfillManager,
-	ProvideThumbnailCache,
 	ProvideClusterStorage,
 	ProvideGalleryAccess,
 	ProvideSettingsLoader,
@@ -168,7 +220,7 @@ func ProvideLlmOcrService(db *gorm.DB) *imaging.LlmOcrService {
 // ProvideBackgroundSyncManager creates the background sync manager.
 func ProvideBackgroundSyncManager(
 	db *gorm.DB,
-	thumbnailService *thumbnail.Service,
+	thumbnailService thumbnail.ThumbnailProvider,
 	geolocationService *geocoder.GeolocationService,
 	exifClient imaging.ExifClient,
 ) *imaging.BackgroundSyncManager {
@@ -187,11 +239,6 @@ func ProvideTagScanManager(
 // ProvideEmbeddingBackfillManager creates the embedding backfill manager.
 func ProvideEmbeddingBackfillManager(db *gorm.DB) *imaging.EmbeddingBackfillManager {
 	return imaging.NewEmbeddingBackfillManager(db)
-}
-
-// ProvideThumbnailCache creates the in-memory thumbnail cache.
-func ProvideThumbnailCache() *imaging.ThumbnailCache {
-	return imaging.NewThumbnailCache()
 }
 
 // ProvideClusterStorage creates the geo-cluster storage.
@@ -215,11 +262,8 @@ func ProvideFileMover(db *gorm.DB) *helpers.FileMover {
 }
 
 // ProvideThumbnailBatch creates the thumbnail batch generator.
-func ProvideThumbnailBatch(
-	thumbnailService *thumbnail.Service,
-	thumbnailCache *imaging.ThumbnailCache,
-) *helpers.ThumbnailBatch {
-	return helpers.NewThumbnailBatch(thumbnailService, thumbnailCache)
+func ProvideThumbnailBatch(provider thumbnail.ThumbnailProvider) *helpers.ThumbnailBatch {
+	return helpers.NewThumbnailBatch(provider)
 }
 
 // ──────────────────────────────────────────────────────────────────────────────

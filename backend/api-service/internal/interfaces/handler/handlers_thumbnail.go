@@ -4,7 +4,6 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/flashbacks/api-service/internal/application/imaging"
 	"github.com/flashbacks/api-service/internal/application/thumbnail"
 	"github.com/flashbacks/api-service/internal/interfaces/dto"
 	"github.com/flashbacks/api-service/internal/interfaces/handler/helpers"
@@ -21,15 +20,12 @@ func (s *Server) handleThumbnail(c *gin.Context) {
 		return
 	}
 
-	var thumbnailStr string
-	var err error
-
-	if s.thumbnailService != nil {
-		thumbnailStr, err = s.thumbnailService.GetOrGenerate(path)
-	} else {
-		thumbnailStr, err = imaging.GenerateThumbnail(path, s.thumbnailCache)
+	if s.thumbnailProvider == nil {
+		c.JSON(http.StatusServiceUnavailable, i18n.ErrorResponse(i18n.MsgImageThumbnailFailed))
+		return
 	}
 
+	thumbnailStr, err := s.thumbnailProvider.GetOrGenerate(path)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, i18n.ErrorResponse(i18n.MsgImageThumbnailFailed))
 		return
@@ -38,20 +34,23 @@ func (s *Server) handleThumbnail(c *gin.Context) {
 	c.JSON(http.StatusOK, dto.ThumbnailResponse{Thumbnail: thumbnailStr})
 }
 
-// handleThumbnailCacheStats возвращает статистику кэша миниатюр
+// handleThumbnailCacheStats returns thumbnail cache statistics
 func (s *Server) handleThumbnailCacheStats(c *gin.Context) {
-	if s.thumbnailService == nil {
-		log.Printf("Thumbnail stats requested: service is nil")
+	if s.thumbnailProvider == nil {
+		log.Printf("Thumbnail stats requested: provider is nil")
 		c.JSON(http.StatusOK, thumbnail.ThumbnailStats{})
 		return
 	}
 
-	stats := s.thumbnailService.Stats()
-	log.Printf("Thumbnail stats: %+v", stats)
+	stats, err := s.thumbnailProvider.GetStats()
+	if err != nil {
+		c.JSON(http.StatusOK, thumbnail.ThumbnailStats{})
+		return
+	}
 	c.JSON(http.StatusOK, stats)
 }
 
-// handleThumbnailCacheInvalidate удаляет миниатюру из кэша
+// handleThumbnailCacheInvalidate removes a single thumbnail from cache
 func (s *Server) handleThumbnailCacheInvalidate(c *gin.Context) {
 	var req dto.InvalidateThumbnailRequest
 	if !helpers.BindJSON(c, &req) {
@@ -63,12 +62,12 @@ func (s *Server) handleThumbnailCacheInvalidate(c *gin.Context) {
 		return
 	}
 
-	if s.thumbnailService == nil {
+	if s.thumbnailProvider == nil {
 		c.JSON(http.StatusNotFound, i18n.ErrorResponse(i18n.MsgScanDuplicateFailed))
 		return
 	}
 
-	if err := s.thumbnailService.Invalidate(req.FilePath); err != nil {
+	if err := s.thumbnailProvider.Invalidate(req.FilePath); err != nil {
 		c.JSON(http.StatusInternalServerError, i18n.ErrorResponse(i18n.MsgImageThumbnailFailed))
 		return
 	}
@@ -76,14 +75,14 @@ func (s *Server) handleThumbnailCacheInvalidate(c *gin.Context) {
 	s.respondSuccess(c, http.StatusOK, i18n.MsgThumbnailCacheInvalidated)
 }
 
-// handleThumbnailCacheInvalidateAll удаляет все миниатюры из кэша
+// handleThumbnailCacheInvalidateAll removes all thumbnails from cache
 func (s *Server) handleThumbnailCacheInvalidateAll(c *gin.Context) {
-	if s.thumbnailService == nil {
+	if s.thumbnailProvider == nil {
 		c.JSON(http.StatusNotFound, i18n.ErrorResponse(i18n.MsgScanDuplicateFailed))
 		return
 	}
 
-	if err := s.thumbnailService.InvalidateAll(); err != nil {
+	if err := s.thumbnailProvider.InvalidateAll(); err != nil {
 		c.JSON(http.StatusInternalServerError, i18n.ErrorResponse(i18n.MsgImageThumbnailFailed))
 		return
 	}
@@ -91,7 +90,7 @@ func (s *Server) handleThumbnailCacheInvalidateAll(c *gin.Context) {
 	s.respondSuccess(c, http.StatusOK, i18n.MsgThumbnailCacheAllInvalidated)
 }
 
-// handleThumbnailCacheWarmup предварительно генерирует миниатюры для файлов
+// handleThumbnailCacheWarmup pre-generates thumbnails for files
 func (s *Server) handleThumbnailCacheWarmup(c *gin.Context) {
 	var req dto.WarmupThumbnailsRequest
 	if !helpers.BindJSON(c, &req) {
@@ -103,12 +102,12 @@ func (s *Server) handleThumbnailCacheWarmup(c *gin.Context) {
 		return
 	}
 
-	if s.thumbnailService == nil {
+	if s.thumbnailProvider == nil {
 		c.JSON(http.StatusNotFound, i18n.ErrorResponse(i18n.MsgScanDuplicateFailed))
 		return
 	}
 
-	if err := s.thumbnailService.Warmup(req.FilePaths); err != nil {
+	if err := s.thumbnailProvider.Warmup(req.FilePaths); err != nil {
 		c.JSON(http.StatusInternalServerError, i18n.ErrorResponse(i18n.MsgImageThumbnailFailed))
 		return
 	}
@@ -116,24 +115,24 @@ func (s *Server) handleThumbnailCacheWarmup(c *gin.Context) {
 	s.respondSuccess(c, http.StatusOK, i18n.MsgThumbnailCacheWarmedUp)
 }
 
-// handleThumbnailCacheEnable включает кэш миниатюр
+// handleThumbnailCacheEnable enables the thumbnail cache
 func (s *Server) handleThumbnailCacheEnable(c *gin.Context) {
-	if s.thumbnailService == nil {
+	if s.thumbnailProvider == nil {
 		s.respondError(c, http.StatusNotFound, i18n.MsgThumbnailCacheNotAvailable)
 		return
 	}
 
-	s.thumbnailService.Enable()
+	s.thumbnailProvider.Enable()
 	s.respondSuccess(c, http.StatusOK, i18n.MsgThumbnailCacheEnabled)
 }
 
-// handleThumbnailCacheDisable выключает кэш миниатюр
+// handleThumbnailCacheDisable disables the thumbnail cache
 func (s *Server) handleThumbnailCacheDisable(c *gin.Context) {
-	if s.thumbnailService == nil {
+	if s.thumbnailProvider == nil {
 		s.respondError(c, http.StatusNotFound, i18n.MsgThumbnailCacheNotAvailable)
 		return
 	}
 
-	s.thumbnailService.Disable()
+	s.thumbnailProvider.Disable()
 	s.respondSuccess(c, http.StatusOK, i18n.MsgThumbnailCacheDisabled)
 }

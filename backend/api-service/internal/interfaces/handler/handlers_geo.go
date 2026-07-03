@@ -28,14 +28,14 @@ func (s *Server) handleGetImageMetadata(c *gin.Context) {
 		return
 	}
 
-	var imageFile domain.ImageFile
-	if result := s.db.Where("path = ?", path).First(&imageFile); result.Error != nil {
+	imageFile, err := s.imageFileRepo.FindByPath(path)
+	if err != nil {
 		c.JSON(http.StatusOK, dto.ImageMetadataResponse{Found: false})
 		return
 	}
 
-	var meta domain.ImageMetadata
-	if result := s.db.Where("image_file_id = ?", imageFile.ID).First(&meta); result.Error != nil {
+	meta, err := s.metadataRepo.FindByImageFileID(imageFile.ID)
+	if err != nil {
 		c.JSON(http.StatusOK, dto.ImageMetadataResponse{Found: false})
 		return
 	}
@@ -43,8 +43,8 @@ func (s *Server) handleGetImageMetadata(c *gin.Context) {
 	var geoLat, geoLng *float64
 	var nameLocal, nameEng string
 	if meta.GeolocationRef != nil {
-		var geoCache domain.GeolocationCache
-		if result := s.db.First(&geoCache, *meta.GeolocationRef); result.Error == nil {
+		geoCache, err := s.metadataRepo.FindGeolocationCacheByID(*meta.GeolocationRef)
+		if err == nil {
 			lat := geoCache.GPSLatitude
 			lng := geoCache.GPSLongitude
 			geoLat = &lat
@@ -72,7 +72,7 @@ func (s *Server) handleGetImageMetadata(c *gin.Context) {
 		NameLocal:    nameLocal,
 		NameEng:      nameEng,
 		HasGPS:       meta.GeolocationRef != nil,
-		HasExif:      imaging.HasExifData(&meta),
+		HasExif:      imaging.HasExifData(meta),
 	}
 
 	if meta.DateTaken != nil {
@@ -202,18 +202,20 @@ func (s *Server) handleUpdateGps(c *gin.Context) {
 		return
 	}
 
-	var imageFile domain.ImageFile
-	if result := s.db.Where("path = ?", req.Path).First(&imageFile); result.Error != nil {
+	imageFile, err := s.imageFileRepo.FindByPath(req.Path)
+	if err != nil {
 		s.respondError(c, http.StatusNotFound, i18n.MsgImageNotFound)
 		return
 	}
 
-	var existingMeta domain.ImageMetadata
-	s.db.Where("image_file_id = ?", imageFile.ID).First(&existingMeta)
+	existingMeta, _ := s.metadataRepo.FindByImageFileID(imageFile.ID)
+	if existingMeta == nil {
+		existingMeta = &domain.ImageMetadata{}
+	}
 
 	osPath := filepath.FromSlash(req.Path)
 
-	if err := s.exifClient.WriteGPS(context.Background(), osPath, req.Lat, req.Lng, s.settingsLoader.AppSettings().ExifBackupDir, &existingMeta); err != nil {
+	if err := s.exifClient.WriteGPS(context.Background(), osPath, req.Lat, req.Lng, s.settingsLoader.AppSettings().ExifBackupDir, existingMeta); err != nil {
 		log.Printf("UpdateGps: WriteGPS failed for %s: %v", req.Path, err)
 		if strings.Contains(err.Error(), "backup") {
 			s.respondError(c, http.StatusInternalServerError, i18n.MsgGpsBackupFailed)
@@ -223,7 +225,7 @@ func (s *Server) handleUpdateGps(c *gin.Context) {
 		return
 	}
 
-	enriched, _ := s.exifClient.EnrichMissingMetadata(context.Background(), osPath, &existingMeta)
+	enriched, _ := s.exifClient.EnrichMissingMetadata(context.Background(), osPath, existingMeta)
 
 	var nameLocal, nameEng string
 	var geoRef *uint
@@ -253,13 +255,13 @@ func (s *Server) handleUpdateGps(c *gin.Context) {
 			ColorSpace:     existingMeta.ColorSpace,
 			Software:       existingMeta.Software,
 		}
-		s.db.Create(&newMeta)
+		s.metadataRepo.Create(&newMeta)
 	} else {
 		updates := map[string]interface{}{"geolocation_ref": geoRef}
 		for k, v := range enriched {
 			updates[k] = v
 		}
-		s.db.Model(&existingMeta).Updates(updates)
+		s.metadataRepo.Update(imageFile.ID, updates)
 	}
 
 	s.respondJSON(c, http.StatusOK, dto.UpdateGpsResponse{
@@ -404,15 +406,17 @@ func (s *Server) handleBatchUpdateGps(c *gin.Context) {
 			continue
 		}
 
-		var imageFile domain.ImageFile
-		if result := s.db.Where("path = ?", p).First(&imageFile); result.Error != nil {
+		imageFile, err := s.imageFileRepo.FindByPath(p)
+		if err != nil {
 			failedCount++
 			failedFiles = append(failedFiles, p)
 			continue
 		}
 
-		var existingMeta domain.ImageMetadata
-		s.db.Where("image_file_id = ?", imageFile.ID).First(&existingMeta)
+		existingMeta, _ := s.metadataRepo.FindByImageFileID(imageFile.ID)
+		if existingMeta == nil {
+			existingMeta = &domain.ImageMetadata{}
+		}
 
 		if existingMeta.GeolocationRef != nil {
 			skippedCount++
@@ -421,14 +425,14 @@ func (s *Server) handleBatchUpdateGps(c *gin.Context) {
 
 		osPath := filepath.FromSlash(p)
 
-		if err := s.exifClient.WriteGPS(context.Background(), osPath, req.Lat, req.Lng, s.settingsLoader.AppSettings().ExifBackupDir, &existingMeta); err != nil {
+		if err := s.exifClient.WriteGPS(context.Background(), osPath, req.Lat, req.Lng, s.settingsLoader.AppSettings().ExifBackupDir, existingMeta); err != nil {
 			log.Printf("BatchUpdateGps: WriteGPS failed for %s: %v", p, err)
 			failedCount++
 			failedFiles = append(failedFiles, p)
 			continue
 		}
 
-		enriched, _ := s.exifClient.EnrichMissingMetadata(context.Background(), osPath, &existingMeta)
+		enriched, _ := s.exifClient.EnrichMissingMetadata(context.Background(), osPath, existingMeta)
 
 		if existingMeta.ID == 0 {
 			newMeta := domain.ImageMetadata{
@@ -445,13 +449,13 @@ func (s *Server) handleBatchUpdateGps(c *gin.Context) {
 				ColorSpace:     existingMeta.ColorSpace,
 				Software:       existingMeta.Software,
 			}
-			s.db.Create(&newMeta)
+			s.metadataRepo.Create(&newMeta)
 		} else {
 			updates := map[string]interface{}{"geolocation_ref": geoRef}
 			for k, v := range enriched {
 				updates[k] = v
 			}
-			s.db.Model(&existingMeta).Updates(updates)
+			s.metadataRepo.Update(imageFile.ID, updates)
 		}
 
 		successCount++

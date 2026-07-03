@@ -389,6 +389,19 @@ func (s *Service) Stats() ThumbnailStats {
 	return s.stats
 }
 
+// GetStats returns the current cache statistics as a *Stats value,
+// satisfying the ThumbnailProvider interface.
+func (s *Service) GetStats() (*Stats, error) {
+	st := s.Stats()
+	return &Stats{
+		TotalSize:   st.TotalSize,
+		TotalFiles:  st.TotalFiles,
+		CacheDir:    st.CacheDir,
+		Enabled:     st.Enabled,
+		Initialized: st.Initialized,
+	}, nil
+}
+
 // UpdateCachePath обновляет путь кэша с физическим перемещением файлов
 func (s *Service) UpdateCachePath(newPath string) error {
 	if newPath == "" {

@@ -26,16 +26,15 @@ func InitializeApp() (*App, error) {
 	ocrManager := di.ProvideOcrManager(db, client, appConfig)
 	llmOcrService := di.ProvideLlmOcrService(db)
 	config := di.ProvideThumbnailConfig(db, appConfig)
-	service := di.ProvideThumbnailService(config)
+	thumbnailProvider := di.ProvideThumbnailProvider(config)
 	nominatimClient := di.ProvideNominatimClient()
 	geolocationService := di.ProvideGeolocationService(db, nominatimClient)
 	exifClient := di.ProvideExifClient(appConfig)
-	backgroundSyncManager := di.ProvideBackgroundSyncManager(db, service, geolocationService, exifClient)
+	backgroundSyncManager := di.ProvideBackgroundSyncManager(db, thumbnailProvider, geolocationService, exifClient)
 	float64_2 := di.ProvideMaxMegapixels(appConfig)
 	tagScanManager := di.ProvideTagScanManager(db, llmOcrService, float64_2)
 	embeddingBackfillManager := di.ProvideEmbeddingBackfillManager(db)
-	thumbnailCache := di.ProvideThumbnailCache()
-	thumbnailBatch := di.ProvideThumbnailBatch(service, thumbnailCache)
+	thumbnailBatch := di.ProvideThumbnailBatch(thumbnailProvider)
 	clusterStorage := di.ProvideClusterStorage()
 	galleryAccess := di.ProvideGalleryAccess(db)
 	settingsLoader := di.ProvideSettingsLoader(db)
@@ -51,6 +50,17 @@ func InitializeApp() (*App, error) {
 	conversationService := di.ProvideConversationService(db)
 	agentConfig := di.ProvideAgentConfig(appConfig)
 	agent := di.ProvideAgent(conversationService, flashbacksMCPServer, agentConfig)
+
+	// Repositories
+	imageFileRepo := di.ProvideImageFileRepo(db)
+	galleryFolderRepo := di.ProvideGalleryFolderRepo(db)
+	llmRepo := di.ProvideLlmRepo(db)
+	metadataRepo := di.ProvideMetadataRepo(db)
+	ocrRepo := di.ProvideOcrRepo(db)
+	imageTagRepo := di.ProvideImageTagRepo(db)
+	appSettingsRepo := di.ProvideAppSettingsRepo(db)
+	userSettingsRepo := di.ProvideUserSettingsRepo(db)
+
 	serverDeps := handler.ServerDeps{
 		DB:                  db,
 		Config:              appConfig,
@@ -60,8 +70,7 @@ func InitializeApp() (*App, error) {
 		BackgroundSync:      backgroundSyncManager,
 		TagScanManager:      tagScanManager,
 		EmbeddingBackfill:   embeddingBackfillManager,
-		ThumbnailService:    service,
-		ThumbnailCache:      thumbnailCache,
+		ThumbnailProvider:   thumbnailProvider,
 		ThumbnailBatch:      thumbnailBatch,
 		OcrClient:           client,
 		ClusterStorage:      clusterStorage,
@@ -77,6 +86,14 @@ func InitializeApp() (*App, error) {
 		AgentConfig:         agentConfig,
 		ConversationService: conversationService,
 		ExifClient:          exifClient,
+		ImageFileRepo:       imageFileRepo,
+		GalleryFolderRepo:   galleryFolderRepo,
+		LlmRepo:             llmRepo,
+		MetadataRepo:        metadataRepo,
+		OcrRepo:             ocrRepo,
+		ImageTagRepo:        imageTagRepo,
+		AppSettingsRepo:     appSettingsRepo,
+		UserSettingsRepo:    userSettingsRepo,
 	}
 	server := di.ProvideServer(serverDeps)
 	loginRateLimiter := di.ProvideLoginRateLimiter()
@@ -99,7 +116,7 @@ func InitializeApp() (*App, error) {
 		BackgroundSync:    backgroundSyncManager,
 		TagScanManager:    tagScanManager,
 		EmbeddingBackfill: embeddingBackfillManager,
-		ThumbnailService:  service,
+		ThumbnailService:  thumbnailProvider,
 		LoginLimiter:      loginRateLimiter,
 		SessionCleanup:    sessionCleanupJob,
 		AuthMiddleware:    authMiddleware,

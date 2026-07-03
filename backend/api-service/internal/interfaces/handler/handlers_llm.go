@@ -21,8 +21,10 @@ func (s *Server) handleGetLlmSettings(c *gin.Context) {
 	settings := s.settingsLoader.LlmSettings()
 	providers := s.settingsLoader.AllLlmProviders()
 
-	var cacheRows []domain.LlmProviderModelCache
-	s.db.Find(&cacheRows)
+	cacheRows, err := s.llmRepo.GetAllModelCaches()
+	if err != nil {
+		cacheRows = nil
+	}
 	cacheMap := make(map[string][]dto.LlmModelDTO, len(cacheRows))
 	for _, row := range cacheRows {
 		var models []dto.LlmModelDTO
@@ -72,8 +74,7 @@ func (s *Server) handleUpdateLlmSettings(c *gin.Context) {
 		return
 	}
 
-	var settings domain.LlmSettings
-	err := s.db.First(&settings).Error
+	settings, err := s.llmRepo.GetSettings()
 	globalUpdates := make(map[string]interface{})
 	if req.ActiveProvider != nil {
 		globalUpdates["active_provider"] = *req.ActiveProvider
@@ -110,7 +111,7 @@ func (s *Server) handleUpdateLlmSettings(c *gin.Context) {
 	}
 
 	if err == gorm.ErrRecordNotFound {
-		settings = domain.LlmSettings{
+		settings = &domain.LlmSettings{
 			ActiveProvider:     "ollama_1",
 			TagScanEnabled:     true,
 			TagScanStartHour:   22,
@@ -151,7 +152,7 @@ func (s *Server) handleUpdateLlmSettings(c *gin.Context) {
 		if req.EmbeddingBatchSize != nil {
 			settings.EmbeddingBatchSize = *req.EmbeddingBatchSize
 		}
-		if err := s.db.Create(&settings).Error; err != nil {
+		if err := s.llmRepo.CreateSettings(settings); err != nil {
 			c.JSON(http.StatusInternalServerError, i18n.ErrorResponse(i18n.MsgLlmOcrSettingsSaveFailed))
 			return
 		}
@@ -160,13 +161,12 @@ func (s *Server) handleUpdateLlmSettings(c *gin.Context) {
 		return
 	} else {
 		if len(globalUpdates) > 0 {
-			s.db.Model(&settings).Updates(globalUpdates)
+			s.llmRepo.UpdateSettings(globalUpdates)
 		}
 	}
 
-	s.db.First(&settings)
-
-	if s.tagScanManager != nil && s.tagScanManager.IsRunning() {
+	settings, _ = s.llmRepo.ReloadSettings()
+	if settings != nil && s.tagScanManager != nil && s.tagScanManager.IsRunning() {
 		s.tagScanManager.UpdateSchedule(settings.TagScanEnabled, settings.TagScanStartHour, settings.TagScanStartMinute, settings.TagScanEndHour, settings.TagScanEndMinute, settings.TagScanTimezoneOffset)
 	}
 
@@ -180,13 +180,13 @@ func (s *Server) handleProbeEmbeddingDimension(c *gin.Context) {
 		return
 	}
 
-	var provider domain.LlmProvider
-	if err := s.db.Where("alias = ?", req.ProviderAlias).First(&provider).Error; err != nil {
+	_, err := s.llmRepo.GetProviderByAlias(req.ProviderAlias)
+	if err != nil {
 		s.respondError(c, http.StatusNotFound, i18n.MsgEmbeddingProviderNotFound)
 		return
 	}
 
-	embeddingClient, err := llm.NewEmbeddingClient(provider.Name, provider.ApiUrl, provider.ApiKey, req.Model)
+	embeddingClient, err := llm.NewEmbeddingClient("", "", "", req.Model)
 	if err != nil {
 		s.respondError(c, http.StatusInternalServerError, i18n.MsgEmbeddingClientFailed)
 		return
@@ -204,14 +204,11 @@ func (s *Server) handleProbeEmbeddingDimension(c *gin.Context) {
 
 	dimension := len(probe[0])
 
-	var settings domain.LlmSettings
-	if s.db.First(&settings).Error == nil {
-		s.db.Model(&settings).Updates(map[string]interface{}{
-			"embedding_dimension":      dimension,
-			"embedding_model":          req.Model,
-			"embedding_provider_alias": req.ProviderAlias,
-		})
-	}
+	s.llmRepo.UpdateSettings(map[string]interface{}{
+		"embedding_dimension":      dimension,
+		"embedding_model":          req.Model,
+		"embedding_provider_alias": req.ProviderAlias,
+	})
 
 	c.JSON(http.StatusOK, dto.ProbeEmbeddingDimensionResponse{Dimension: dimension})
 }
@@ -223,8 +220,7 @@ func (s *Server) handleCreateLlmProvider(c *gin.Context) {
 		return
 	}
 
-	var existing domain.LlmProvider
-	if err := s.db.Where("alias = ?", req.Alias).First(&existing).Error; err == nil {
+	if _, err := s.llmRepo.GetProviderByAlias(req.Alias); err == nil {
 		c.JSON(http.StatusConflict, i18n.CreateValidationError(i18n.ValidationError))
 		return
 	}
@@ -250,7 +246,7 @@ func (s *Server) handleCreateLlmProvider(c *gin.Context) {
 		provider.Model = "minicpm-v"
 	}
 
-	if err := s.db.Create(&provider).Error; err != nil {
+	if err := s.llmRepo.CreateProvider(&provider); err != nil {
 		c.JSON(http.StatusInternalServerError, i18n.ErrorResponse(i18n.MsgLlmOcrSettingsSaveFailed))
 		return
 	}
@@ -272,8 +268,7 @@ func (s *Server) handleUpdateLlmProvider(c *gin.Context) {
 		return
 	}
 
-	var provider domain.LlmProvider
-	if err := s.db.Where("alias = ?", alias).First(&provider).Error; err != nil {
+	if _, err := s.llmRepo.GetProviderByAlias(alias); err != nil {
 		c.JSON(http.StatusNotFound, i18n.ErrorResponse(i18n.MsgLlmOcrSettingsNotFound))
 		return
 	}
@@ -289,32 +284,29 @@ func (s *Server) handleUpdateLlmProvider(c *gin.Context) {
 		updates["model"] = *req.Model
 	}
 	if req.Alias != nil && *req.Alias != alias {
-		var existing domain.LlmProvider
-		if err := s.db.Where("alias = ?", *req.Alias).First(&existing).Error; err == nil {
+		if _, err := s.llmRepo.GetProviderByAlias(*req.Alias); err == nil {
 			c.JSON(http.StatusConflict, i18n.CreateValidationError(i18n.ValidationError))
 			return
 		}
 		updates["alias"] = *req.Alias
-		var settings domain.LlmSettings
-		if s.db.First(&settings).Error == nil && settings.ActiveProvider == alias {
-			s.db.Model(&settings).Update("active_provider", *req.Alias)
+		settings, err := s.llmRepo.GetSettings()
+		if err == nil && settings.ActiveProvider == alias {
+			s.llmRepo.UpdateSettings(map[string]interface{}{"active_provider": *req.Alias})
 		}
 	}
 
 	if len(updates) > 0 {
-		if err := s.db.Model(&provider).Updates(updates).Error; err != nil {
+		if err := s.llmRepo.UpdateProviderByAlias(alias, updates); err != nil {
 			c.JSON(http.StatusInternalServerError, i18n.ErrorResponse(i18n.MsgLlmOcrSettingsSaveFailed))
 			return
 		}
 
 		if req.ApiUrl != nil || req.ApiKey != nil {
-			s.db.Where("provider_alias = ?", alias).Delete(&domain.LlmProviderModelCache{})
+			s.llmRepo.DeleteModelCacheByAlias(alias)
 		}
 
 		if req.Alias != nil && *req.Alias != alias {
-			s.db.Model(&domain.LlmProviderModelCache{}).
-				Where("provider_alias = ?", alias).
-				Update("provider_alias", *req.Alias)
+			s.llmRepo.UpdateModelCacheAlias(alias, *req.Alias)
 		}
 	}
 
@@ -325,26 +317,25 @@ func (s *Server) handleUpdateLlmProvider(c *gin.Context) {
 func (s *Server) handleDeleteLlmProvider(c *gin.Context) {
 	alias := c.Param("alias")
 
-	var provider domain.LlmProvider
-	if err := s.db.Where("alias = ?", alias).First(&provider).Error; err != nil {
+	provider, err := s.llmRepo.GetProviderByAlias(alias)
+	if err != nil {
 		c.JSON(http.StatusNotFound, i18n.ErrorResponse(i18n.MsgLlmOcrSettingsNotFound))
 		return
 	}
 
-	var settings domain.LlmSettings
-	if s.db.First(&settings).Error == nil && settings.ActiveProvider == alias {
-		var firstProvider domain.LlmProvider
-		if s.db.Where("id != ?", provider.ID).First(&firstProvider).Error == nil {
-			s.db.Model(&settings).Update("active_provider", firstProvider.Alias)
+	settings, err := s.llmRepo.GetSettings()
+	if err == nil && settings.ActiveProvider == alias {
+		if firstProvider, err := s.llmRepo.GetFirstProviderExcept(provider.ID); err == nil {
+			s.llmRepo.UpdateSettings(map[string]interface{}{"active_provider": firstProvider.Alias})
 		}
 	}
 
-	if err := s.db.Delete(&provider).Error; err != nil {
+	if err := s.llmRepo.DeleteProvider(provider); err != nil {
 		c.JSON(http.StatusInternalServerError, i18n.ErrorResponse(i18n.MsgLlmOcrSettingsSaveFailed))
 		return
 	}
 
-	s.db.Where("provider_alias = ?", alias).Delete(&domain.LlmProviderModelCache{})
+	s.llmRepo.DeleteModelCacheByAlias(alias)
 
 	c.JSON(http.StatusOK, map[string]string{"message": string(i18n.MsgLlmOcrSettingsSaved)})
 }
@@ -361,8 +352,8 @@ func (s *Server) handleLlmRecognize(c *gin.Context) {
 		return
 	}
 
-	var imageFile domain.ImageFile
-	if err := s.db.Where("path = ?", req.ImagePath).First(&imageFile).Error; err != nil {
+	imageFile, err := s.imageFileRepo.FindByPath(req.ImagePath)
+	if err != nil {
 		c.JSON(http.StatusNotFound, i18n.ErrorResponse(i18n.MsgOcrDataNotFound))
 		return
 	}
@@ -401,8 +392,8 @@ func (s *Server) handleLlmRecognizeStatus(c *gin.Context) {
 		return
 	}
 
-	var imageFile domain.ImageFile
-	if err := s.db.Where("path = ?", imagePath).First(&imageFile).Error; err != nil {
+	imageFile, err := s.imageFileRepo.FindByPath(imagePath)
+	if err != nil {
 		c.JSON(http.StatusNotFound, i18n.ErrorResponse(i18n.MsgOcrDataNotFound))
 		return
 	}
@@ -463,8 +454,8 @@ func (s *Server) handleGetLlmRecognition(c *gin.Context) {
 		return
 	}
 
-	var imageFile domain.ImageFile
-	if err := s.db.Where("path = ?", imagePath).First(&imageFile).Error; err != nil {
+	imageFile, err := s.imageFileRepo.FindByPath(imagePath)
+	if err != nil {
 		c.JSON(http.StatusNotFound, i18n.ErrorResponse(i18n.MsgOcrDataNotFound))
 		return
 	}
@@ -531,8 +522,8 @@ func (s *Server) handleGetLlmModels(c *gin.Context) {
 	}
 
 	if !forceRefresh {
-		var cacheRow domain.LlmProviderModelCache
-		if err := s.db.Where("provider_alias = ?", provider.Alias).First(&cacheRow).Error; err == nil {
+		cacheRow, err := s.llmRepo.GetModelCacheByAlias(provider.Alias)
+		if err == nil {
 			var models []dto.LlmModelDTO
 			if err := json.Unmarshal([]byte(cacheRow.ModelsJSON), &models); err == nil && len(models) > 0 {
 				c.JSON(http.StatusOK, dto.LlmModelsResponse{
@@ -577,19 +568,11 @@ func (s *Server) handleGetLlmModels(c *gin.Context) {
 
 	if len(modelDTOs) > 0 {
 		modelsJSON, _ := json.Marshal(modelDTOs)
-		var existing domain.LlmProviderModelCache
-		if s.db.Where("provider_alias = ?", provider.Alias).First(&existing).Error == nil {
-			s.db.Model(&existing).Updates(map[string]interface{}{
-				"models_json": string(modelsJSON),
-				"fetched_at":  time.Now(),
-			})
-		} else {
-			s.db.Create(&domain.LlmProviderModelCache{
-				ProviderAlias: provider.Alias,
-				ModelsJSON:    string(modelsJSON),
-				FetchedAt:     time.Now(),
-			})
-		}
+		s.llmRepo.UpsertModelCache(&domain.LlmProviderModelCache{
+			ProviderAlias: provider.Alias,
+			ModelsJSON:    string(modelsJSON),
+			FetchedAt:     time.Now(),
+		})
 	}
 
 	c.JSON(http.StatusOK, dto.LlmModelsResponse{
@@ -607,14 +590,13 @@ func (s *Server) handleGetImageTags(c *gin.Context) {
 		return
 	}
 
-	var imageFile domain.ImageFile
-	if err := s.db.Where("path = ?", path).First(&imageFile).Error; err != nil {
+	imageFile, err := s.imageFileRepo.FindByPath(path)
+	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Image not found"})
 		return
 	}
 
-	var existingTags []domain.ImageTag
-	s.db.Where("image_file_id = ?", imageFile.ID).Find(&existingTags)
+	existingTags, _ := s.imageTagRepo.FindByImageFileID(imageFile.ID)
 
 	tags := make([]string, len(existingTags))
 	for i, t := range existingTags {
@@ -636,8 +618,8 @@ func (s *Server) handleAiAction(c *gin.Context) {
 		return
 	}
 
-	var imageFile domain.ImageFile
-	if err := s.db.Where("path = ?", req.ImagePath).First(&imageFile).Error; err != nil {
+	imageFile, err := s.imageFileRepo.FindByPath(req.ImagePath)
+	if err != nil {
 		c.JSON(http.StatusNotFound, dto.AiActionResponse{
 			Success: false,
 			Action:  req.Action,
@@ -667,8 +649,7 @@ func (s *Server) handleAiAction(c *gin.Context) {
 	taskID := uuid.New().String()
 
 	if req.Action == dto.AiActionTags && !req.Force {
-		var existingTags []domain.ImageTag
-		s.db.Where("image_file_id = ?", imageFile.ID).Find(&existingTags)
+		existingTags, _ := s.imageTagRepo.FindByImageFileID(imageFile.ID)
 		if len(existingTags) > 0 {
 			tags := make([]string, len(existingTags))
 			for i, t := range existingTags {

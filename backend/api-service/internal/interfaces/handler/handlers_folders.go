@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -14,15 +15,15 @@ import (
 
 // handleGetFolders returns all gallery folders
 func (s *Server) handleGetFolders(c *gin.Context) {
-	var folders []domain.GalleryFolder
-	s.db.Order("created_at").Find(&folders)
+	folders, err := s.galleryFolderRepo.FindAll()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, i18n.ErrorResponse(i18n.MsgFolderAddFailed))
+		return
+	}
 
 	folderDTOs := make([]dto.GalleryFolderDTO, len(folders))
 	for i, f := range folders {
-		var count int64
-		prefix := f.Path + "/"
-		s.db.Model(&domain.ImageFile{}).Where("path LIKE ?", prefix+"%").Count(&count)
-
+		count, _ := s.imageFileRepo.CountByPathPrefix(f.Path)
 		folderDTOs[i] = dto.GalleryFolderDTO{
 			ID:        f.ID,
 			Path:      f.Path,
@@ -61,8 +62,8 @@ func (s *Server) handleAddFolder(c *gin.Context) {
 	}
 
 	folder := domain.GalleryFolder{Path: normalizedPath}
-	if result := s.db.Create(&folder); result.Error != nil {
-		if strings.Contains(result.Error.Error(), "duplicate") || strings.Contains(result.Error.Error(), "UNIQUE") {
+	if err := s.galleryFolderRepo.Create(&folder); err != nil {
+		if strings.Contains(err.Error(), "duplicate") || strings.Contains(err.Error(), "UNIQUE") {
 			c.JSON(http.StatusConflict, i18n.ErrorResponse(i18n.MsgFolderAlreadyInGallery))
 			return
 		}
@@ -95,25 +96,29 @@ func (s *Server) handleAddFolder(c *gin.Context) {
 func (s *Server) handleRemoveFolder(c *gin.Context) {
 	id := c.Param("id")
 
-	var folder domain.GalleryFolder
-	if result := s.db.First(&folder, id); result.Error != nil {
+	var folderID uint
+	if _, err := fmt.Sscanf(id, "%d", &folderID); err != nil {
+		c.JSON(http.StatusBadRequest, i18n.ErrorResponse(i18n.MsgFolderNotFound))
+		return
+	}
+	folder, err := s.galleryFolderRepo.FindByID(folderID)
+	if err != nil {
 		c.JSON(http.StatusNotFound, i18n.ErrorResponse(i18n.MsgFolderNotFound))
 		return
 	}
 
 	// Delete all image files under this folder
 	prefix := folder.Path + "/"
-	result := s.db.Where("path LIKE ?", prefix+"%").Delete(&domain.ImageFile{})
-	filesRemoved := int(result.RowsAffected)
+	filesRemoved, _ := s.imageFileRepo.DeleteByPathPrefix(prefix)
 
 	// Delete the folder record
-	s.db.Delete(&folder)
+	s.galleryFolderRepo.Delete(folder.ID)
 
 	// Invalidate gallery access cache so removal takes effect immediately
 	s.galleryAccess.Invalidate()
 
 	c.JSON(http.StatusOK, dto.RemoveFolderResponse{
 		Message:      string(i18n.MsgFolderRemoved),
-		FilesRemoved: filesRemoved,
+		FilesRemoved: int(filesRemoved),
 	})
 }

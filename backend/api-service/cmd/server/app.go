@@ -30,7 +30,7 @@ type App struct {
 	BackgroundSync    *imaging.BackgroundSyncManager
 	TagScanManager    *imaging.TagScanManager
 	EmbeddingBackfill *imaging.EmbeddingBackfillManager
-	ThumbnailService  *thumbnail.Service
+	ThumbnailService  thumbnail.ThumbnailProvider
 	LoginLimiter      *auth.LoginRateLimiter
 	SessionCleanup    *auth.SessionCleanupJob
 

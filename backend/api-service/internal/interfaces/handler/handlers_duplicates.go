@@ -6,7 +6,6 @@ import (
 	"slices"
 
 	"github.com/flashbacks/api-service/internal/application/imaging"
-	"github.com/flashbacks/api-service/internal/domain"
 	"github.com/flashbacks/api-service/internal/interfaces/dto"
 	"github.com/flashbacks/api-service/internal/interfaces/handler/helpers"
 	"github.com/flashbacks/api-service/internal/interfaces/i18n"
@@ -90,8 +89,7 @@ func (s *Server) handleGetDuplicates(c *gin.Context) {
 	}
 
 	// Get scanned dirs from gallery folders
-	var galleryFolders []domain.GalleryFolder
-	s.db.Order("created_at").Find(&galleryFolders)
+	galleryFolders, _ := s.galleryFolderRepo.FindAll()
 	scannedDirs := make([]string, len(galleryFolders))
 	for i, f := range galleryFolders {
 		scannedDirs[i] = f.Path

@@ -9,6 +9,7 @@ import (
 	"github.com/flashbacks/api-service/internal/application/geo"
 	"github.com/flashbacks/api-service/internal/application/imaging"
 	"github.com/flashbacks/api-service/internal/application/thumbnail"
+	"github.com/flashbacks/api-service/internal/domain/repository"
 	"github.com/flashbacks/api-service/internal/infrastructure/config"
 	"github.com/flashbacks/api-service/internal/infrastructure/geocoder"
 	"github.com/flashbacks/api-service/internal/infrastructure/mcpserver"
@@ -17,15 +18,16 @@ import (
 	"github.com/flashbacks/api-service/internal/interfaces/handler/helpers"
 	"github.com/flashbacks/api-service/internal/interfaces/i18n"
 	"github.com/flashbacks/api-service/internal/interfaces/middleware"
+	"gorm.io/gorm"
 
 	"github.com/gin-gonic/gin"
-	"gorm.io/gorm"
 )
 
 // ServerDeps groups all dependencies for the Server in a single struct,
 // enabling Wire-based dependency injection with a single-parameter constructor.
 type ServerDeps struct {
-	DB                  *gorm.DB
+	DB *gorm.DB // kept for services that still need raw DB access (scan, sync, etc.)
+
 	Config              *config.AppConfig
 	ScanManager         *imaging.ScanManager
 	OcrManager          *imaging.OcrManager
@@ -33,8 +35,7 @@ type ServerDeps struct {
 	BackgroundSync      *imaging.BackgroundSyncManager
 	TagScanManager      *imaging.TagScanManager
 	EmbeddingBackfill   *imaging.EmbeddingBackfillManager
-	ThumbnailService    *thumbnail.Service
-	ThumbnailCache      *imaging.ThumbnailCache
+	ThumbnailProvider   thumbnail.ThumbnailProvider
 	ThumbnailBatch      *helpers.ThumbnailBatch
 	OcrClient           ocr.Client
 	ClusterStorage      *geo.ClusterStorage
@@ -50,13 +51,22 @@ type ServerDeps struct {
 	AgentConfig         agent.AgentConfig
 	ConversationService *agent.ConversationService
 	ExifClient          imaging.ExifClient
+
+	// Repositories (data access layer — no direct DB access in handlers)
+	ImageFileRepo     repository.ImageFileRepository
+	GalleryFolderRepo repository.GalleryFolderRepository
+	LlmRepo           repository.LlmRepository
+	MetadataRepo      repository.MetadataRepository
+	OcrRepo           repository.OcrRepository
+	ImageTagRepo      repository.ImageTagRepository
+	AppSettingsRepo   repository.AppSettingsRepository
+	UserSettingsRepo  repository.UserSettingsRepository
 }
 
 // Server holds the application state
 type Server struct {
 	db                  *gorm.DB
-	thumbnailCache      *imaging.ThumbnailCache
-	thumbnailService    *thumbnail.Service
+	thumbnailProvider   thumbnail.ThumbnailProvider
 	thumbnailBatch      *helpers.ThumbnailBatch
 	scanManager         *imaging.ScanManager
 	ocrManager          *imaging.OcrManager
@@ -79,6 +89,16 @@ type Server struct {
 	agentConfig         agent.AgentConfig
 	conversationService *agent.ConversationService
 	exifClient          imaging.ExifClient
+
+	// Repositories — handlers use these instead of s.db directly
+	imageFileRepo     repository.ImageFileRepository
+	galleryFolderRepo repository.GalleryFolderRepository
+	llmRepo           repository.LlmRepository
+	metadataRepo      repository.MetadataRepository
+	ocrRepo           repository.OcrRepository
+	imageTagRepo      repository.ImageTagRepository
+	appSettingsRepo   repository.AppSettingsRepository
+	userSettingsRepo  repository.UserSettingsRepository
 }
 
 // NewServer creates a new server instance from a dependency struct.
@@ -86,8 +106,7 @@ type Server struct {
 func NewServer(deps ServerDeps) *Server {
 	return &Server{
 		db:                  deps.DB,
-		thumbnailCache:      deps.ThumbnailCache,
-		thumbnailService:    deps.ThumbnailService,
+		thumbnailProvider:   deps.ThumbnailProvider,
 		thumbnailBatch:      deps.ThumbnailBatch,
 		scanManager:         deps.ScanManager,
 		ocrManager:          deps.OcrManager,
@@ -110,6 +129,14 @@ func NewServer(deps ServerDeps) *Server {
 		agentConfig:         deps.AgentConfig,
 		conversationService: deps.ConversationService,
 		exifClient:          deps.ExifClient,
+		imageFileRepo:       deps.ImageFileRepo,
+		galleryFolderRepo:   deps.GalleryFolderRepo,
+		llmRepo:             deps.LlmRepo,
+		metadataRepo:        deps.MetadataRepo,
+		ocrRepo:             deps.OcrRepo,
+		imageTagRepo:        deps.ImageTagRepo,
+		appSettingsRepo:     deps.AppSettingsRepo,
+		userSettingsRepo:    deps.UserSettingsRepo,
 	}
 }
 

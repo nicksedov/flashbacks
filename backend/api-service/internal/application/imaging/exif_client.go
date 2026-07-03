@@ -2,7 +2,6 @@ package imaging
 
 import (
 	"context"
-	"time"
 
 	"github.com/flashbacks/api-service/internal/domain"
 )
@@ -26,13 +25,4 @@ type ExifClient interface {
 	GetMissingImages(ctx context.Context, page, pageSize int) (*domain.MissingImagesResult, error)
 	GetLocationCandidates(ctx context.Context, date string) ([]domain.LocationCandidate, error)
 	ResolveGeolocation(ctx context.Context, lat, lng float64) (*domain.GeolocationCache, error)
-}
-
-// ExifServiceStatus is the status returned to the frontend.
-type ExifServiceStatus struct {
-	Enabled    bool      `json:"enabled"`
-	Health     string    `json:"health"`
-	LastCheck  time.Time `json:"lastCheck"`
-	Error      string    `json:"error"`
-	ServiceURL string    `json:"serviceURL"`
 }

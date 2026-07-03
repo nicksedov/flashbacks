@@ -3,6 +3,8 @@ package helpers
 import (
 	"net/http"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/flashbacks/api-service/internal/domain"
 	"github.com/flashbacks/api-service/internal/interfaces/i18n"
@@ -11,20 +13,60 @@ import (
 	"gorm.io/gorm"
 )
 
-// GalleryAccess provides gallery path validation.
+// defaultGalleryCacheTTL is the default TTL for the gallery folders cache.
+const defaultGalleryCacheTTL = 30 * time.Second
+
+// GalleryAccess provides gallery path validation with an in-memory TTL cache.
 type GalleryAccess struct {
-	db *gorm.DB
+	db        *gorm.DB
+	mu        sync.RWMutex
+	folders   []domain.GalleryFolder
+	updatedAt time.Time
+	ttl       time.Duration
 }
 
-// NewGalleryAccess creates a new GalleryAccess.
+// NewGalleryAccess creates a new GalleryAccess with a 30-second cache TTL.
 func NewGalleryAccess(db *gorm.DB) *GalleryAccess {
-	return &GalleryAccess{db: db}
+	return &GalleryAccess{
+		db:  db,
+		ttl: defaultGalleryCacheTTL,
+	}
+}
+
+// loadFolders loads gallery folders from the database and updates the cache.
+// Caller must hold ga.mu (write lock).
+func (ga *GalleryAccess) loadFolders() {
+	var folders []domain.GalleryFolder
+	ga.db.Find(&folders)
+	ga.folders = folders
+	ga.updatedAt = time.Now()
+}
+
+// getFolders returns cached folders, refreshing from DB if the cache is
+// empty or the TTL has expired.
+func (ga *GalleryAccess) getFolders() []domain.GalleryFolder {
+	ga.mu.RLock()
+	if len(ga.folders) > 0 && time.Since(ga.updatedAt) < ga.ttl {
+		folders := ga.folders
+		ga.mu.RUnlock()
+		return folders
+	}
+	ga.mu.RUnlock()
+
+	ga.mu.Lock()
+	defer ga.mu.Unlock()
+
+	// Double-check after acquiring write lock
+	if len(ga.folders) == 0 || time.Since(ga.updatedAt) >= ga.ttl {
+		ga.loadFolders()
+	}
+	return ga.folders
 }
 
 // IsPathInGallery checks if a path is within any configured gallery folder.
+// Uses a TTL-based in-memory cache to avoid full table scans on every request.
 func (ga *GalleryAccess) IsPathInGallery(path string) bool {
-	var folders []domain.GalleryFolder
-	ga.db.Find(&folders)
+	folders := ga.getFolders()
 
 	for _, f := range folders {
 		if strings.HasPrefix(path, f.Path+"/") || strings.HasPrefix(path, f.Path+"\\") {
@@ -32,6 +74,15 @@ func (ga *GalleryAccess) IsPathInGallery(path string) bool {
 		}
 	}
 	return false
+}
+
+// Invalidate clears the cache, forcing a reload on the next IsPathInGallery call.
+// Should be called after add/remove folder operations.
+func (ga *GalleryAccess) Invalidate() {
+	ga.mu.Lock()
+	defer ga.mu.Unlock()
+	ga.folders = nil
+	ga.updatedAt = time.Time{}
 }
 
 // VerifyGalleryAccess returns an error response if the path is not in a gallery folder.

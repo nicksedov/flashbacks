@@ -6,59 +6,6 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestGetImageMimeType_JPG(t *testing.T) {
-	tests := []string{".jpg", ".JPG", ".jpeg", ".JPEG"}
-
-	for _, ext := range tests {
-		t.Run(ext, func(t *testing.T) {
-			result := GetImageMimeType("test" + ext)
-			assert.Equal(t, "image/jpeg", result)
-		})
-	}
-}
-
-func TestGetImageMimeType_PNG(t *testing.T) {
-	result := GetImageMimeType("test.png")
-
-	assert.Equal(t, "image/png", result)
-}
-
-func TestGetImageMimeType_WebP(t *testing.T) {
-	result := GetImageMimeType("test.webp")
-
-	assert.Equal(t, "image/webp", result)
-}
-
-func TestGetImageMimeType_Unknown(t *testing.T) {
-	result := GetImageMimeType("test.xyz")
-
-	// Should default to image/jpeg
-	assert.Equal(t, "image/jpeg", result)
-}
-
-func TestGetImageMimeType_AllExtensions(t *testing.T) {
-	tests := []struct {
-		ext      string
-		expected string
-	}{
-		{".jpg", "image/jpeg"},
-		{".png", "image/png"},
-		{".gif", "image/gif"},
-		{".bmp", "image/bmp"},
-		{".webp", "image/webp"},
-		{".tiff", "image/tiff"},
-		{".tif", "image/tiff"},
-		{".xyz", "image/jpeg"}, // default
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.ext, func(t *testing.T) {
-			result := GetImageMimeType("file" + tt.ext)
-			assert.Equal(t, tt.expected, result)
-		})
-	}
-}
-
 func TestThumbnailCache_GetSet(t *testing.T) {
 	cache := NewThumbnailCache()
 

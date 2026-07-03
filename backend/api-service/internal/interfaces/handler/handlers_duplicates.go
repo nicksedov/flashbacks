@@ -29,7 +29,9 @@ func (s *Server) handleGetDuplicates(c *gin.Context) {
 
 	pag := helpers.CalcPagination(page, pageSize, int64(totalGroups))
 
-	// Prepare group DTOs with parallel thumbnail generation
+	// Prepare group DTOs with async thumbnail generation.
+	// Cached thumbnails are returned immediately ("generated"), uncached items
+	// are marked "pending" and generated in background goroutines.
 	groupDTOs := make([]dto.DuplicateGroupDTO, len(groups))
 	pageFiles := 0
 
@@ -39,7 +41,6 @@ func (s *Server) handleGetDuplicates(c *gin.Context) {
 
 	// Collect paths for thumbnail generation
 	paths := make([]string, len(groups))
-	pathToIdx := make(map[string]int)
 	for i, g := range groups {
 		fileDTOs := make([]dto.FileDTO, len(g.Files))
 		for j, f := range g.Files {
@@ -53,22 +54,40 @@ func (s *Server) handleGetDuplicates(c *gin.Context) {
 		}
 
 		groupDTOs[i] = dto.DuplicateGroupDTO{
-			Index:     offset + i + 1,
-			Hash:      g.Hash,
-			Size:      g.Size,
-			SizeHuman: helpers.FormatSize(g.Size),
-			Files:     fileDTOs,
+			Index:           offset + i + 1,
+			Hash:            g.Hash,
+			Size:            g.Size,
+			SizeHuman:       helpers.FormatSize(g.Size),
+			Files:           fileDTOs,
+			ThumbnailStatus: "pending",
 		}
 
 		if len(g.Files) > 0 {
 			paths[i] = g.Files[0].Path
-			pathToIdx[g.Files[0].Path] = i
 		}
 	}
 
-	s.thumbnailBatch.GenerateParallel(paths, func(idx int, thumb string) {
-		groupDTOs[idx].Thumbnail = thumb
-	})
+	// Fast path: return cached thumbnails immediately without generation.
+	hasPending := false
+	for i, path := range paths {
+		if path == "" {
+			continue
+		}
+		if thumb, ok := s.thumbnailBatch.TryGetCached(path); ok {
+			groupDTOs[i].Thumbnail = thumb
+			groupDTOs[i].ThumbnailStatus = "generated"
+		} else {
+			hasPending = true
+		}
+	}
+
+	// Launch async generation for pending items — does not block the response.
+	if hasPending {
+		s.thumbnailBatch.GenerateParallelAsync(paths, func(idx int, thumb string) {
+			// Thumbnail is now cached; subsequent requests will find it via TryGetCached.
+			// We don't update the in-flight response — the client polls for it.
+		})
+	}
 
 	// Get scanned dirs from gallery folders
 	var galleryFolders []domain.GalleryFolder

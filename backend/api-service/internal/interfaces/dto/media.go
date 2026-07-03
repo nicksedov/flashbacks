@@ -21,12 +21,13 @@ type DuplicatesResponse struct {
 
 // DuplicateGroupDTO represents a duplicate group in JSON responses
 type DuplicateGroupDTO struct {
-	Index     int       `json:"index"`
-	Hash      string    `json:"hash"`
-	Size      int64     `json:"size"`
-	SizeHuman string    `json:"sizeHuman"`
-	Files     []FileDTO `json:"files"`
-	Thumbnail string    `json:"thumbnail"`
+	Index           int       `json:"index"`
+	Hash            string    `json:"hash"`
+	Size            int64     `json:"size"`
+	SizeHuman       string    `json:"sizeHuman"`
+	Files           []FileDTO `json:"files"`
+	Thumbnail       string    `json:"thumbnail"`
+	ThumbnailStatus string    `json:"thumbnailStatus"` // "generated", "pending", "failed"
 }
 
 // FileDTO represents a file in JSON responses

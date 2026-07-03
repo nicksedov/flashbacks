@@ -352,19 +352,6 @@ func (s *Service) Warmup(imagePaths []string) error {
 	return nil
 }
 
-// GenerateThumbnailPath возвращает относительный путь к миниатюре для указанного файла (относительно корня кэша)
-func (s *Service) GenerateThumbnailPath(filePath string) string {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if !s.cfg.Enabled || !s.initialized {
-		return ""
-	}
-
-	// Возвращаем относительный путь
-	return s.storage.GetPathRelative(filePath)
-}
-
 // UpdateStats обновляет статистику кэша
 func (s *Service) updateStats() {
 	if !s.initialized {

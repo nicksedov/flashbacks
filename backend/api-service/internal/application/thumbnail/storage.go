@@ -292,32 +292,3 @@ func (tcs *ThumbnailCacheStorage) ListFiles() ([]string, error) {
 
 	return files, nil
 }
-
-// PruneExpired удаляет миниатюры, для которых файл оригинала больше не существует
-func (tcs *ThumbnailCacheStorage) PruneExpired(imagePaths map[string]bool) error {
-	tcs.mu.Lock()
-	defer tcs.mu.Unlock()
-
-	// Проходим по всем файлам в кэше
-	err := filepath.Walk(tcs.cacheDir, func(path string, info fs.FileInfo, err error) error {
-		if err != nil {
-			return nil
-		}
-
-		if info.IsDir() {
-			return nil
-		}
-
-		if !strings.HasSuffix(info.Name(), "."+ThumbnailFormat) {
-			return nil
-		}
-
-		// Извлекаем путь к изображению из метаданных или удаляем устаревшую миниатюру
-		// Для простоты удаляем миниатюры, если оригинальный файл не найден
-		// В реальном приложении можно хранить обратное отображение в базе
-
-		return nil
-	})
-
-	return err
-}

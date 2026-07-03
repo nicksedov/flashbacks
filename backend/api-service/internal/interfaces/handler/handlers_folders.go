@@ -70,6 +70,9 @@ func (s *Server) handleAddFolder(c *gin.Context) {
 		return
 	}
 
+	// Invalidate gallery access cache so new folder takes effect immediately
+	s.galleryAccess.Invalidate()
+
 	// Trigger background scan for this folder
 	scanStarted := true
 	if err := s.scanManager.ScanSingleDir(normalizedPath); err != nil {
@@ -105,6 +108,9 @@ func (s *Server) handleRemoveFolder(c *gin.Context) {
 
 	// Delete the folder record
 	s.db.Delete(&folder)
+
+	// Invalidate gallery access cache so removal takes effect immediately
+	s.galleryAccess.Invalidate()
 
 	c.JSON(http.StatusOK, dto.RemoveFolderResponse{
 		Message:      string(i18n.MsgFolderRemoved),

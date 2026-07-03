@@ -19,6 +19,18 @@ func NewThumbnailBatch(svc *thumbnail.Service, cache *imaging.ThumbnailCache) *T
 	return &ThumbnailBatch{svc: svc, cache: cache}
 }
 
+// TryGetCached attempts to retrieve a thumbnail from cache without generating.
+// Returns the thumbnail data URL and true if cached, empty string and false otherwise.
+func (tb *ThumbnailBatch) TryGetCached(filePath string) (string, bool) {
+	if tb.svc != nil && tb.svc.HasThumbnail(filePath) {
+		thumb, err := tb.svc.GetOrGenerate(filePath)
+		if err == nil {
+			return thumb, true
+		}
+	}
+	return "", false
+}
+
 // Generate generates a single thumbnail with service fallback.
 func (tb *ThumbnailBatch) Generate(filePath string) (string, error) {
 	if tb.svc != nil {
@@ -55,6 +67,27 @@ func (tb *ThumbnailBatch) GenerateParallel(paths []string, setFn func(index int,
 		}(i, path)
 	}
 	wg.Wait()
+}
+
+// GenerateParallelAsync launches thumbnail generation in background goroutines
+// without blocking. The setFn callback is called for each successfully generated
+// thumbnail. Use this when the HTTP response should not wait for thumbnail generation.
+func (tb *ThumbnailBatch) GenerateParallelAsync(paths []string, setFn func(index int, thumb string)) {
+	if len(paths) == 0 {
+		return
+	}
+
+	for i, path := range paths {
+		if path == "" {
+			continue
+		}
+		go func(idx int, filePath string) {
+			thumb, err := tb.Generate(filePath)
+			if err == nil {
+				setFn(idx, thumb)
+			}
+		}(i, path)
+	}
 }
 
 // GenerateThumbnailsForDTOs extracts paths from a slice of GalleryImageDTO,

@@ -13,7 +13,7 @@
 #   - Renamed read_all_metadata → dump_exif_raw
 #   - Renamed get_image_metadata → get_cached_metadata (clarifies DB source)
 #
-# Total: 15 tools (8 core + 7 EXIF)
+# Total: 16 tools (8 core + 8 EXIF)
 
 server: api-service
 version: 1.1.0
@@ -189,6 +189,7 @@ tools:
       - name: path
         type: string
         required: true
+        description: Absolute path to the image file
       - name: tag
         type: string
         required: true
@@ -197,6 +198,10 @@ tools:
         type: string
         required: true
         description: Value to write
+      - name: backup_dir
+        type: string
+        required: false
+        description: Directory for backup copies (auto-injected by ExifAgent if not provided)
 
   # ── EXIF: Utilities ────────────────────────────────────────
   - name: strip_exif
@@ -206,11 +211,16 @@ tools:
       - name: path
         type: string
         required: true
+        description: Absolute path to the image file
       - name: tags
         type: array
         items: string
         required: false
         description: Tags to remove (omit to strip all EXIF)
+      - name: backup_dir
+        type: string
+        required: false
+        description: Directory for backup copies (auto-injected by ExifAgent if not provided)
 
   - name: copy_exif
     description: Copy EXIF data from a source image file to a target image file
@@ -219,14 +229,20 @@ tools:
       - name: source_path
         type: string
         required: true
+        description: Absolute path to the source image file
       - name: target_path
         type: string
         required: true
+        description: Absolute path to the target image file
       - name: tags
         type: array
         items: string
         required: false
         description: Specific tags to copy (omit to copy all)
+      - name: backup_dir
+        type: string
+        required: false
+        description: Directory for backup copies (auto-injected by ExifAgent if not provided)
 
   - name: compare_exif
     description: Compare EXIF metadata between two image files, return differences

@@ -59,12 +59,13 @@ type ImageSearchOutput struct {
 }
 
 type SemanticSearchResult struct {
-	ID         uint     `json:"id"`
-	Path       string   `json:"path"`
-	FileName   string   `json:"fileName"`
-	ModTime    string   `json:"modTime,omitempty"`
-	Similarity float64  `json:"similarity"`
-	Tags       []string `json:"tags"`
+	ID         uint              `json:"id"`
+	Path       string            `json:"path"`
+	FileName   string            `json:"fileName"`
+	ModTime    string            `json:"modTime,omitempty"`
+	Similarity float64           `json:"similarity"`
+	Tags       []string          `json:"tags"`
+	MatchType  imaging.MatchType `json:"matchType,omitempty"`
 }
 
 type SemanticSearchOutput struct {
@@ -440,8 +441,8 @@ func clampLimit(limit int) int {
 	if limit <= 0 {
 		return 20
 	}
-	if limit > 100 {
-		return 100
+	if limit > 200 {
+		return 200
 	}
 	return limit
 }
@@ -547,6 +548,7 @@ func (s *FlashbacksMCPServer) querySemanticSearch(query string, limit int) (Sema
 			ModTime:    img.ModTime.Format("2006-01-02 15:04:05"),
 			Similarity: img.Similarity,
 			Tags:       img.Tags,
+			MatchType:  img.MatchType,
 		})
 	}
 

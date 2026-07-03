@@ -24,7 +24,7 @@ export function SmartSearchTab() {
   const { results, total, query, isLoading, error, searched, search, removeResults, reset } = useSmartSearch()
   const [selectedImage, setSelectedImage] = useState<string | null>(null)
   const [inputValue, setInputValue] = useState("")
-  const [limit, setLimit] = useState(50)
+  const [limit, setLimit] = useState(100)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Selection state

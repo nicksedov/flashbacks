@@ -237,7 +237,7 @@ paths:
 
   /api/gallery/smart-search:
     get:
-      summary: Semantic image search using embeddings
+      summary: Semantic image search using embeddings combined with exact tag matching
       operationId: smartSearch
       parameters:
         - name: query
@@ -249,7 +249,8 @@ paths:
           in: query
           schema:
             type: integer
-            default: 50
+            default: 100
+            maximum: 200
       responses:
         "200":
           description: Search results
@@ -508,20 +509,36 @@ components:
     SmartSearchResponse:
       type: object
       properties:
-        results:
+        images:
           type: array
           items:
-            $ref: "#/components/schemas/SearchResult"
+            $ref: "#/components/schemas/SmartSearchResultItem"
+        total:
+          type: integer
+        query:
+          type: string
 
-    SearchResult:
+    SmartSearchResultItem:
       type: object
       properties:
-        file:
-          $ref: "#/components/schemas/MediaFile"
-        score:
+        id:
+          type: integer
+        path:
+          type: string
+        fileName:
+          type: string
+        modTime:
+          type: string
+        similarity:
           type: number
-        distance:
-          type: number
+        tags:
+          type: array
+          items:
+            type: string
+        matchType:
+          type: string
+          enum: [exact, embedding, both]
+          description: How the result was matched — exact tag, embedding similarity, or both
 
     Conversation:
       type: object

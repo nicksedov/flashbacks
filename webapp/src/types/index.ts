@@ -862,6 +862,7 @@ export interface SmartSearchResult {
   modTime?: string
   similarity: number
   tags: string[]
+  matchType?: "exact" | "embedding" | "both"
 }
 
 export interface SmartSearchResponse {

@@ -674,7 +674,7 @@ export function searchByTags(tags: string[], matchAll = false): Promise<TagSearc
 
 // --- Smart Search ---
 
-export function smartSearch(query: string, limit = 20, signal?: AbortSignal): Promise<SmartSearchResponse> {
+export function smartSearch(query: string, limit = 100, signal?: AbortSignal): Promise<SmartSearchResponse> {
   return apiGet<SmartSearchResponse>("/api/gallery/smart-search", {
     q: query,
     limit: String(limit),

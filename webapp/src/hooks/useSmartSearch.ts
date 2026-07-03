@@ -11,7 +11,7 @@ export function useSmartSearch() {
   const [searched, setSearched] = useState(false)
   const abortRef = useRef<AbortController | null>(null)
 
-  const search = useCallback(async (q: string, limit = 20) => {
+  const search = useCallback(async (q: string, limit = 100) => {
     if (!q.trim()) {
       setResults([])
       setTotal(0)

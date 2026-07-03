@@ -14,6 +14,15 @@ import (
 	"gorm.io/gorm"
 )
 
+// MatchType indicates how a search result was matched.
+type MatchType string
+
+const (
+	MatchExact     MatchType = "exact"
+	MatchEmbedding MatchType = "embedding"
+	MatchBoth      MatchType = "both"
+)
+
 // SmartSearchResult represents a single result from a semantic search.
 type SmartSearchResult struct {
 	ImageFileID uint
@@ -21,6 +30,7 @@ type SmartSearchResult struct {
 	ModTime     time.Time
 	Similarity  float64
 	Tags        []string
+	MatchType   MatchType
 }
 
 // SmartSearchResponse holds the complete result of a semantic search query.
@@ -143,6 +153,55 @@ func SearchByEmbedding(db *gorm.DB, query string, limit int) (SmartSearchRespons
 		similarityMap[r.ImageFileID] = 1.0 - r.Distance // cosine distance → similarity
 	}
 
+	// Load file records and tags in batch
+	fullResults := loadFilesAndTags(db, imageIDs, similarityMap, MatchEmbedding)
+
+	return SmartSearchResponse{
+		Images: fullResults,
+		Total:  len(fullResults),
+		Query:  query,
+	}, nil
+}
+
+// SearchByExactTag finds images whose tags match the query after normalization.
+// Query normalization: trim leading/trailing whitespace, collapse multiple spaces into single.
+// Comparison is case-insensitive via LOWER().
+func SearchByExactTag(db *gorm.DB, query string) ([]SmartSearchResult, error) {
+	// Normalize: trim + collapse consecutive whitespace to single space
+	normalized := strings.Join(strings.Fields(query), " ")
+	if normalized == "" {
+		return nil, nil
+	}
+
+	var tags []domain.ImageTag
+	db.Where("LOWER(tag) = LOWER(?)", normalized).Find(&tags)
+
+	if len(tags) == 0 {
+		return nil, nil
+	}
+
+	// Deduplicate by image_file_id
+	seen := make(map[uint]bool)
+	imageIDs := make([]uint, 0, len(tags))
+	for _, t := range tags {
+		if !seen[t.ImageFileID] {
+			seen[t.ImageFileID] = true
+			imageIDs = append(imageIDs, t.ImageFileID)
+		}
+	}
+
+	// Exact tag matches get Similarity = 1.0
+	similarityMap := make(map[uint]float64)
+	for _, id := range imageIDs {
+		similarityMap[id] = 1.0
+	}
+
+	return loadFilesAndTags(db, imageIDs, similarityMap, MatchExact), nil
+}
+
+// loadFilesAndTags batch-loads ImageFile records and tags for the given image IDs,
+// then builds SmartSearchResult slices ordered by imageIDs.
+func loadFilesAndTags(db *gorm.DB, imageIDs []uint, similarityMap map[uint]float64, matchType MatchType) []SmartSearchResult {
 	var files []domain.ImageFile
 	db.Where("id IN ?", imageIDs).Find(&files)
 
@@ -159,7 +218,7 @@ func SearchByEmbedding(db *gorm.DB, query string, limit int) (SmartSearchRespons
 		tagsMap[t.ImageFileID] = append(tagsMap[t.ImageFileID], t.Tag)
 	}
 
-	// Build results preserving similarity ranking order
+	// Build results preserving imageIDs order
 	images := make([]SmartSearchResult, 0, len(files))
 	for _, id := range imageIDs {
 		f, ok := fileMap[id]
@@ -173,18 +232,115 @@ func SearchByEmbedding(db *gorm.DB, query string, limit int) (SmartSearchRespons
 		}
 		sort.Strings(tagStrs)
 
+		sim := similarityMap[id]
+
 		images = append(images, SmartSearchResult{
 			ImageFileID: f.ID,
 			Path:        f.Path,
 			ModTime:     f.ModTime,
-			Similarity:  similarityMap[id],
+			Similarity:  sim,
 			Tags:        tagStrs,
+			MatchType:   matchType,
 		})
 	}
 
+	return images
+}
+
+// MergeAndRankResults combines exact-match and embedding search results,
+// ranks them by match type priority, and removes duplicates.
+//
+// Ranking (descending priority):
+//  1. Both (exact tag + embedding) — Similarity = 1.5 (boosted)
+//  2. Exact tag only — Similarity = 1.0
+//  3. Embedding only — Similarity = original (0.0–1.0)
+func MergeAndRankResults(exactResults, embeddingResults []SmartSearchResult) SmartSearchResponse {
+	if len(exactResults) == 0 && len(embeddingResults) == 0 {
+		return SmartSearchResponse{
+			Images: []SmartSearchResult{},
+			Total:  0,
+		}
+	}
+
+	// Build index of embedding results by ImageFileID
+	embeddingByID := make(map[uint]SmartSearchResult)
+	for _, r := range embeddingResults {
+		embeddingByID[r.ImageFileID] = r
+	}
+
+	// Build index of exact results by ImageFileID
+	exactByID := make(map[uint]SmartSearchResult)
+	for _, r := range exactResults {
+		exactByID[r.ImageFileID] = r
+	}
+
+	// Group results into three categories
+	var bothResults []SmartSearchResult
+	var exactOnly []SmartSearchResult
+	var embeddingOnly []SmartSearchResult
+
+	// Find intersections (both)
+	seenBoth := make(map[uint]bool)
+	// Track original embedding similarity for sorting before boosting
+	bothEmbSim := make(map[uint]float64)
+	for _, r := range exactResults {
+		if emb, ok := embeddingByID[r.ImageFileID]; ok {
+			r.MatchType = MatchBoth
+			r.Similarity = emb.Similarity // temporarily use embedding sim for sorting
+			bothResults = append(bothResults, r)
+			seenBoth[r.ImageFileID] = true
+			bothEmbSim[r.ImageFileID] = emb.Similarity
+		}
+	}
+
+	// Exact-only
+	for _, r := range exactResults {
+		if !seenBoth[r.ImageFileID] {
+			r.MatchType = MatchExact
+			r.Similarity = 1.0
+			exactOnly = append(exactOnly, r)
+		}
+	}
+
+	// Embedding-only
+	for _, r := range embeddingResults {
+		if !seenBoth[r.ImageFileID] {
+			r.MatchType = MatchEmbedding
+			embeddingOnly = append(embeddingOnly, r)
+		}
+	}
+
+	// Sort "both" group by embedding similarity (descending)
+	sortBySimilarity(bothResults)
+	// Boost similarity for "both" results after sorting
+	for i := range bothResults {
+		bothResults[i].Similarity = 1.5
+	}
+	// Sort embedding-only by similarity (descending)
+	sortBySimilarity(embeddingOnly)
+
+	// Merge all three groups: both → exact_only → embedding_only
+	all := make([]SmartSearchResult, 0, len(bothResults)+len(exactOnly)+len(embeddingOnly))
+	all = append(all, bothResults...)
+	all = append(all, exactOnly...)
+	all = append(all, embeddingOnly...)
+
+	// Extract the query from embedding results (or exact results as fallback)
+	query := ""
+	if len(embeddingResults) > 0 {
+		// Query is not tracked per-result; we just return results
+	}
+
 	return SmartSearchResponse{
-		Images: images,
-		Total:  len(images),
+		Images: all,
+		Total:  len(all),
 		Query:  query,
-	}, nil
+	}
+}
+
+// sortBySimilarity sorts results by Similarity in descending order (highest first).
+func sortBySimilarity(results []SmartSearchResult) {
+	sort.Slice(results, func(i, j int) bool {
+		return results[i].Similarity > results[j].Similarity
+	})
 }

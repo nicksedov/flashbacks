@@ -24,7 +24,9 @@ export function GallerySelectionProvider({
   }, [actions])
 
   const moveSelected = useCallback(() => {
-    actions?.move()
+    if (actions?.move) {
+      actions.move()
+    }
   }, [actions])
 
   const selectedCount = actions?.count ?? 0

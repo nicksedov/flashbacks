@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { GalleryImageGrid } from "@/components/gallery/GalleryImageGrid"
 import { useGalleryImages } from "@/hooks/useGalleryImages"
 import { useGalleryFolders } from "@/hooks/useGalleryFolders"
@@ -143,6 +143,14 @@ export function GalleryFoldersView({ onImageClick, onImageDownload, onImageDelet
 
   const selectedCount = selectedIds.size
 
+  // Store callbacks in ref (updated in effect) to stabilize useEffect deps
+  const callbacksRef = useRef({ handleDeleteSelected, handleMoveSelected })
+
+  // Keep ref updated after each render
+  useEffect(() => {
+    callbacksRef.current = { handleDeleteSelected, handleMoveSelected }
+  })
+
   // Register selection actions in context for Header display
   useEffect(() => {
     if (selectedCount > 0) {
@@ -151,8 +159,8 @@ export function GalleryFoldersView({ onImageClick, onImageDownload, onImageDelet
         clear: () => {
           setSelectedIds(new Set())
         },
-        del: handleDeleteSelected,
-        move: handleMoveSelected,
+        del: callbacksRef.current.handleDeleteSelected,
+        move: callbacksRef.current.handleMoveSelected,
       })
     } else {
       registerActions(null)
@@ -160,7 +168,7 @@ export function GalleryFoldersView({ onImageClick, onImageDownload, onImageDelet
     return () => {
       registerActions(null)
     }
-  }, [selectedCount, handleDeleteSelected, handleMoveSelected, registerActions])
+  }, [selectedCount, registerActions])
 
   return (
     <div className="space-y-4">

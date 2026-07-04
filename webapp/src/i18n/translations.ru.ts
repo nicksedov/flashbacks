@@ -462,12 +462,10 @@ export const translationsRu = {
   // EXIF Metadata Service
   "adminPanel.exif.title": "Сервис метаданных EXIF",
   "adminPanel.exif.description": "Внешний сервис для чтения и записи метаданных EXIF изображений",
-  "adminPanel.exif.status": "Статус сервиса",
-  "adminPanel.exif.statusHealthy": "Сервис работает",
+  "adminPanel.exif.status": "Статус сервиса EXIF",
+  "adminPanel.exif.statusHealthy": "Работает",
   "adminPanel.exif.statusUnhealthy": "Сервис недоступен",
-  "adminPanel.exif.statusDisabled": "Отключён",
-  "adminPanel.exif.serviceURL": "URL сервиса",
-  "adminPanel.exif.lastCheck": "Последняя проверка",
+  "adminPanel.exif.statusDisabled": "Отключен",
   "adminPanel.exif.refresh": "Обновить",
   "adminPanel.exif.refreshFailed": "Не удалось проверить статус сервиса EXIF",
 

@@ -53,9 +53,9 @@ export function Header({ onTabChange, onMobileMenuToggle }: HeaderProps) {
             </Button>
             <Button
               type="button"
-              variant="destructive"
+              variant="outline"
               size="sm"
-              className="h-7 px-2 text-xs"
+              className="h-7 px-2 text-xs border-border"
               onClick={selection.deleteSelected}
             >
               <Trash2 className="h-3.5 w-3.5 mr-1" />

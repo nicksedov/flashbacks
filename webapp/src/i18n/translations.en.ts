@@ -462,8 +462,8 @@ export const translationsEn = {
   // EXIF Service Status
   "adminPanel.exif.title": "EXIF Metadata Service",
   "adminPanel.exif.description": "External service for reading and writing image EXIF metadata",
-  "adminPanel.exif.status": "Service Status",
-  "adminPanel.exif.statusHealthy": "Service is running",
+  "adminPanel.exif.status": "EXIF Service Status",
+  "adminPanel.exif.statusHealthy": "Healthy",
   "adminPanel.exif.statusUnhealthy": "Service unavailable",
   "adminPanel.exif.statusDisabled": "Disabled",
   "adminPanel.exif.serviceURL": "Service URL",

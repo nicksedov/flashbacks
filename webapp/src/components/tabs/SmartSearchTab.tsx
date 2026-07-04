@@ -169,6 +169,14 @@ export function SmartSearchTab() {
     }
   }, [results, selectedIds, removeResults, t])
 
+  // Store callbacks in ref (updated in effect) to stabilize useEffect deps
+  const callbacksRef = useRef({ handleDeleteSelected, handleMoveSelected })
+
+  // Keep ref updated after each render
+  useEffect(() => {
+    callbacksRef.current = { handleDeleteSelected, handleMoveSelected }
+  })
+
   // Register selection actions in context for Header display
   useEffect(() => {
     if (selectedCount > 0) {
@@ -177,8 +185,8 @@ export function SmartSearchTab() {
         clear: () => {
           setSelectedIds(new Set())
         },
-        del: handleDeleteSelected,
-        move: handleMoveSelected,
+        del: callbacksRef.current.handleDeleteSelected,
+        move: callbacksRef.current.handleMoveSelected,
       })
     } else {
       registerActions(null)
@@ -186,7 +194,7 @@ export function SmartSearchTab() {
     return () => {
       registerActions(null)
     }
-  }, [selectedCount, handleDeleteSelected, handleMoveSelected, registerActions])
+  }, [selectedCount, registerActions])
 
   // --- Download handler ---
 
@@ -457,14 +465,16 @@ export function SmartSearchTab() {
         idSuffix="-smart"
       />
 
-      {/* Bulk move dialog */}
-      <BulkMoveDialog
-        count={selectedIds.size}
-        open={moveDialogOpen}
-        onCancel={() => setMoveDialogOpen(false)}
-        onConfirm={handleConfirmMove}
-        loading={isMoving}
-      />
+      {/* Bulk move dialog — conditionally mounted to avoid Radix Dialog controlled-state issue (React error #185) */}
+      {moveDialogOpen && (
+        <BulkMoveDialog
+          count={selectedIds.size}
+          open={true}
+          onCancel={() => setMoveDialogOpen(false)}
+          onConfirm={handleConfirmMove}
+          loading={isMoving}
+        />
+      )}
     </div>
   )
 }

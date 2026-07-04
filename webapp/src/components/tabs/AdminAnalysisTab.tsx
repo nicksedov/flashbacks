@@ -883,20 +883,6 @@ export function AdminAnalysisTab() {
             </Button>
           </div>
 
-          {exifStatus?.serviceURL && (
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">{t("adminPanel.exif.serviceURL")}</span>
-              <span className="font-mono text-xs">{exifStatus.serviceURL}</span>
-            </div>
-          )}
-
-          {exifStatus?.lastCheck && (
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">{t("adminPanel.exif.lastCheck")}</span>
-              <span className="text-xs">{new Date(exifStatus.lastCheck).toLocaleString()}</span>
-            </div>
-          )}
-
           {exifStatus?.error && (
             <p className="text-xs text-destructive">{exifStatus.error}</p>
           )}

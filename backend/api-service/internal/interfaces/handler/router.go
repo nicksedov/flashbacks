@@ -67,6 +67,7 @@ func (s *Server) SetupRouter(authMiddleware *middleware.AuthMiddleware, csrfProt
 			protected.POST("/fast-scan", s.handleFastScan)
 			protected.GET("/status", s.handleGetStatus)
 			protected.POST("/delete-files", s.handleDeleteFiles)
+			protected.POST("/move-files", s.handleMoveFiles)
 			protected.GET("/thumbnail", s.handleThumbnail)
 			protected.GET("/folder-patterns", s.handleGetFolderPatterns)
 			protected.POST("/batch-delete", s.handleBatchDelete)

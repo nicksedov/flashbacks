@@ -2,7 +2,7 @@ import { useTranslation } from "@/i18n"
 import { useAuth } from "@/providers/AuthProvider"
 import { useGallerySelection } from "@/providers/useGallerySelection"
 import { getAvatarUrl } from "@/api/endpoints"
-import { LogOut, Settings, User, Menu, X, Trash2 } from "lucide-react"
+import { LogOut, Settings, User, Menu, X, Move, Trash2 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { IconButton } from "@/components/ui/icon-button"
 import { Button } from "@/components/ui/button"
@@ -40,6 +40,16 @@ export function Header({ onTabChange, onMobileMenuToggle }: HeaderProps) {
             >
               <X className="h-3.5 w-3.5 mr-1" />
               {t("gallery.selection.clearSelection")}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-7 px-2 text-xs"
+              onClick={selection.moveSelected}
+            >
+              <Move className="h-3.5 w-3.5 mr-1" />
+              {t("header.moveSelected")}
             </Button>
             <Button
               type="button"

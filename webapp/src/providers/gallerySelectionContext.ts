@@ -4,6 +4,7 @@ export interface RegisteredActions {
   count: number
   clear: () => void
   del: () => void
+  move: () => void
 }
 
 export interface GallerySelectionState {
@@ -11,6 +12,7 @@ export interface GallerySelectionState {
   isActive: boolean
   clearSelection: () => void
   deleteSelected: () => void
+  moveSelected: () => void
   registerActions: (actions: RegisteredActions | null) => void
 }
 

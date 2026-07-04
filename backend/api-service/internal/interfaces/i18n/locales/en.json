@@ -215,5 +215,12 @@
     "manager_not_available": "Tag scan manager not available",
     "paused": "Tag scan paused",
     "resumed": "Tag scan resumed"
+  },
+
+  "description_move_files": "Move files messages",
+  "move_files": {
+    "target_dir_required": "Target directory is required",
+    "no_files_selected": "No files selected",
+    "failed": "Failed to move files"
   }
 }

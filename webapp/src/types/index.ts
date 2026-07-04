@@ -881,6 +881,19 @@ export interface EmbeddingBackfillProgress {
 }
 
 export interface EmbeddingBackfillStatus {
-  running: boolean
-  progress: EmbeddingBackfillProgress
+	running: boolean
+	progress: EmbeddingBackfillProgress
+}
+
+// --- Move Files Types ---
+
+export interface MoveFilesRequest {
+	filePaths: string[]
+	targetDir: string
+}
+
+export interface MoveFilesResponse {
+	success: number
+	failed: number
+	failedFiles?: string[]
 }

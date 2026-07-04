@@ -110,6 +110,21 @@ type BatchDeleteResponse struct {
 	FailedFiles  []string `json:"failedFiles,omitempty"`
 }
 
+// --- Move Files API ---
+
+// MoveFilesRequest represents the request for moving files to a target directory
+type MoveFilesRequest struct {
+	FilePaths    []string `json:"filePaths"`
+	TargetDir    string   `json:"targetDir"`
+}
+
+// MoveFilesResponse represents the response from moving files
+type MoveFilesResponse struct {
+	Success     int      `json:"success"`
+	Failed      int      `json:"failed"`
+	FailedFiles []string `json:"failedFiles,omitempty"`
+}
+
 // --- Thumbnail API ---
 
 // ThumbnailResponse is the JSON response for GET /api/thumbnail

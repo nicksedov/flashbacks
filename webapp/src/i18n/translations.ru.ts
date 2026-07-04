@@ -4,6 +4,7 @@ export const translationsRu = {
   "header.toggleTheme": "Переключить тему",
   "header.toggleLanguage": "Переключить язык",
   "header.menu": "Меню",
+  "header.moveSelected": "Переместить",
 
   // Sidebar
   "sidebar.collapse": "Свернуть",
@@ -850,4 +851,18 @@ export const translationsRu = {
   "smartSearch.backfillRunning": "Генерация эмбеддингов...",
   "smartSearch.backfillProgress": "Обработано {processed} из {total} изображений",
   "smartSearch.limitLabel": "Результатов:",
+
+  // Move files (Перемещение файлов)
+  "moveFiles.title": "Перемещение файлов",
+  "moveFiles.description": "Будет перемещено {count} файлов в выбранную папку.",
+  "moveFiles.selectFolder": "Выберите целевую папку",
+  "moveFiles.noFolders": "Нет доступных папок галереи. Укажите путь вручную ниже.",
+  "moveFiles.customPath": "Указать путь вручную",
+  "moveFiles.targetPathLabel": "Целевой путь",
+  "moveFiles.targetPathPlaceholder": "Введите полный путь, напр. /home/user/photos",
+  "moveFiles.button": "Переместить",
+  "moveFiles.moving": "Перемещение...",
+  "moveFiles.success": "Успешно перемещено {count} файлов.",
+  "moveFiles.successWithFailed": "Успешно перемещено {count} файлов. Ошибок: {failed}.",
+  "moveFiles.errorFailed": "Не удалось переместить файлы",
  } as const

@@ -4,6 +4,7 @@ export const translationsEn = {
   "header.toggleTheme": "Toggle theme",
   "header.toggleLanguage": "Toggle language",
   "header.menu": "Menu",
+  "header.moveSelected": "Move",
 
   // Sidebar
   "sidebar.collapse": "Collapse",
@@ -850,4 +851,18 @@ export const translationsEn = {
   "smartSearch.backfillRunning": "Generating embeddings...",
   "smartSearch.backfillProgress": "{processed} of {total} images processed",
   "smartSearch.limitLabel": "Results:",
+
+  // Move files
+  "moveFiles.title": "Move Files",
+  "moveFiles.description": "This will move {count} file(s) to the selected folder.",
+  "moveFiles.selectFolder": "Select target folder",
+  "moveFiles.noFolders": "No gallery folders available. Enter a custom path below.",
+  "moveFiles.customPath": "Enter custom path",
+  "moveFiles.targetPathLabel": "Target path",
+  "moveFiles.targetPathPlaceholder": "Enter full path, e.g. /home/user/photos",
+  "moveFiles.button": "Move Files",
+  "moveFiles.moving": "Moving...",
+  "moveFiles.success": "Successfully moved {count} file(s).",
+  "moveFiles.successWithFailed": "Successfully moved {count} file(s). Failed: {failed}.",
+  "moveFiles.errorFailed": "Failed to move files",
  } as const

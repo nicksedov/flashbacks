@@ -1,6 +1,7 @@
 package helpers
 
 import (
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -101,6 +102,61 @@ func (fm *FileMover) BatchProcessWithRules(files []struct{ Path string }, keepFo
 		}
 
 		fm.DeleteFromDB(file.Path)
+		result.Success++
+	}
+
+	return result
+}
+
+// FileMoveResult holds the result of a batch file move operation.
+type FileMoveResult struct {
+	Success     int
+	Failed      int
+	FailedFiles []string
+}
+
+// BatchMoveFiles moves multiple files to a target directory.
+// If a file with the same name already exists, it appends a numeric suffix.
+func (fm *FileMover) BatchMoveFiles(filePaths []string, targetDir string) FileMoveResult {
+	var result FileMoveResult
+
+	if err := os.MkdirAll(targetDir, 0755); err != nil {
+		result.Failed = len(filePaths)
+		for _, fp := range filePaths {
+			result.FailedFiles = append(result.FailedFiles, filepath.Base(fp)+": "+err.Error())
+		}
+		return result
+	}
+
+	for _, filePath := range filePaths {
+		baseName := filepath.Base(filePath)
+		destPath := filepath.Join(targetDir, baseName)
+
+		// Handle name conflicts by appending a numeric suffix
+		if _, err := os.Stat(destPath); err == nil {
+			ext := filepath.Ext(baseName)
+			nameWithoutExt := strings.TrimSuffix(baseName, ext)
+			for i := 1; ; i++ {
+				candidate := filepath.Join(targetDir, fmt.Sprintf("%s_%d%s", nameWithoutExt, i, ext))
+				if _, err := os.Stat(candidate); os.IsNotExist(err) {
+					destPath = candidate
+					break
+				}
+			}
+		}
+
+		if err := os.Rename(filePath, destPath); err != nil {
+			result.Failed++
+			result.FailedFiles = append(result.FailedFiles, baseName+": "+err.Error())
+			continue
+		}
+
+		// Update DB record with new path
+		normalizedNewPath := filepath.ToSlash(destPath)
+		fm.db.Model(&domain.ImageFile{}).
+			Where("path = ?", filepath.ToSlash(filePath)).
+			Update("path", normalizedNewPath)
+
 		result.Success++
 	}
 

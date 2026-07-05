@@ -110,6 +110,21 @@ type BatchDeleteResponse struct {
 	FailedFiles  []string `json:"failedFiles,omitempty"`
 }
 
+// --- Move Files API ---
+
+// MoveFilesRequest represents the request for moving files to a target directory
+type MoveFilesRequest struct {
+	FilePaths []string `json:"filePaths"`
+	TargetDir string   `json:"targetDir"`
+}
+
+// MoveFilesResponse represents the response from moving files
+type MoveFilesResponse struct {
+	Success     int      `json:"success"`
+	Failed      int      `json:"failed"`
+	FailedFiles []string `json:"failedFiles,omitempty"`
+}
+
 // --- Thumbnail API ---
 
 // ThumbnailResponse is the JSON response for GET /api/thumbnail
@@ -161,6 +176,30 @@ type AddFolderResponse struct {
 type RemoveFolderResponse struct {
 	Message      string `json:"message"`
 	FilesRemoved int    `json:"filesRemoved"`
+}
+
+// CreateFolderRequest is the JSON request for POST /api/folders/mkdir
+type CreateFolderRequest struct {
+	ParentPath string `json:"parentPath" binding:"required"`
+	FolderName string `json:"folderName" binding:"required"`
+}
+
+// CreateFolderResponse is the JSON response for POST /api/folders/mkdir
+type CreateFolderResponse struct {
+	Message string `json:"message"`
+	Path    string `json:"path"`
+}
+
+// SubdirEntry represents a subdirectory in the folder tree
+type SubdirEntry struct {
+	Name string `json:"name"`
+	Path string `json:"path"`
+}
+
+// SubdirsResponse is the JSON response for GET /api/folders/subdirs
+type SubdirsResponse struct {
+	Subdirs []SubdirEntry `json:"subdirs"`
+	Path    string        `json:"path"`
 }
 
 // --- Gallery Images API ---

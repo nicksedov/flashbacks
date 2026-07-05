@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { GalleryImageGrid } from "@/components/gallery/GalleryImageGrid"
 import { useGalleryImages } from "@/hooks/useGalleryImages"
 import { useGalleryFolders } from "@/hooks/useGalleryFolders"
@@ -9,6 +9,8 @@ import { useIntersectionObserver } from "@/hooks/useIntersectionObserver"
 import { PaginationFooter } from "@/components/ui/pagination-footer"
 import { ViewHeader } from "@/components/ui/view-header"
 import { useGallerySelection } from "@/providers/useGallerySelection"
+import { BulkMoveDialog } from "@/components/gallery/BulkMoveDialog"
+import { moveFiles } from "@/api/endpoints"
 import type { GalleryImageDTO } from "@/types"
 
 interface GalleryFoldersViewProps {
@@ -104,7 +106,50 @@ export function GalleryFoldersView({ onImageClick, onImageDownload, onImageDelet
     onBulkDelete?.(selectedImages, cleanup)
   }, [images, selectedIds, removeImage, onBulkDelete])
 
+  // Move state
+  const [moveDialogOpen, setMoveDialogOpen] = useState(false)
+  const [isMoving, setIsMoving] = useState(false)
+
+  const handleMoveSelected = useCallback(() => {
+    setMoveDialogOpen(true)
+  }, [])
+
+  const handleConfirmMove = useCallback(async (targetDir: string) => {
+    const selectedImages = images.filter((img) => selectedIds.has(img.id))
+    if (selectedImages.length === 0) return
+
+    setIsMoving(true)
+    try {
+      const result = await moveFiles({
+        filePaths: selectedImages.map((img) => img.path),
+        targetDir,
+      })
+      // Remove moved files from view
+      for (const img of selectedImages) {
+        removeImage(img.id)
+      }
+      setSelectedIds(new Set())
+      setMoveDialogOpen(false)
+      if (result.failed > 0) {
+        alert(t("moveFiles.successWithFailed", { count: result.success, failed: result.failed }))
+      }
+    } catch (err) {
+      console.error("Failed to move files:", err)
+      alert(t("moveFiles.errorFailed"))
+    } finally {
+      setIsMoving(false)
+    }
+  }, [images, selectedIds, removeImage, t])
+
   const selectedCount = selectedIds.size
+
+  // Store callbacks in ref (updated in effect) to stabilize useEffect deps
+  const callbacksRef = useRef({ handleDeleteSelected, handleMoveSelected })
+
+  // Keep ref updated after each render
+  useEffect(() => {
+    callbacksRef.current = { handleDeleteSelected, handleMoveSelected }
+  })
 
   // Register selection actions in context for Header display
   useEffect(() => {
@@ -114,7 +159,8 @@ export function GalleryFoldersView({ onImageClick, onImageDownload, onImageDelet
         clear: () => {
           setSelectedIds(new Set())
         },
-        del: handleDeleteSelected,
+        del: callbacksRef.current.handleDeleteSelected,
+        move: callbacksRef.current.handleMoveSelected,
       })
     } else {
       registerActions(null)
@@ -122,7 +168,7 @@ export function GalleryFoldersView({ onImageClick, onImageDownload, onImageDelet
     return () => {
       registerActions(null)
     }
-  }, [selectedCount, handleDeleteSelected, registerActions])
+  }, [selectedCount, registerActions])
 
   return (
     <div className="space-y-4">
@@ -237,6 +283,14 @@ export function GalleryFoldersView({ onImageClick, onImageDownload, onImageDelet
           )}
         </>
       )}
+      {/* Bulk move dialog */}
+      <BulkMoveDialog
+        count={selectedIds.size}
+        open={moveDialogOpen}
+        onCancel={() => setMoveDialogOpen(false)}
+        onConfirm={handleConfirmMove}
+        loading={isMoving}
+      />
     </div>
   )
 }

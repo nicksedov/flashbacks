@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react"
+import { useCallback, useMemo, useRef, useState } from "react"
 
 export interface PrefetchBuffer<R> {
   page: number
@@ -58,8 +58,14 @@ export function useInfiniteScroll<T, R>(
     responseTotal,
     responseHasNext,
     compare,
-    keyExtractor = (item: T) => (item as any).id,
+    keyExtractor: optionsKeyExtractor,
   } = options
+
+  // Stabilize keyExtractor to prevent downstream callback chain instability
+  const keyExtractor = useMemo(
+    () => optionsKeyExtractor ?? ((item: T) => (item as any).id),
+    [optionsKeyExtractor]
+  )
 
   const [items, setItems] = useState<T[]>([])
   const [total, setTotal] = useState(0)

@@ -881,6 +881,49 @@ export interface EmbeddingBackfillProgress {
 }
 
 export interface EmbeddingBackfillStatus {
-  running: boolean
-  progress: EmbeddingBackfillProgress
+	running: boolean
+	progress: EmbeddingBackfillProgress
+}
+
+// --- Move Files Types ---
+
+export interface MoveFilesRequest {
+	filePaths: string[]
+	targetDir: string
+}
+
+export interface MoveFilesResponse {
+	success: number
+	failed: number
+	failedFiles?: string[]
+}
+
+// --- Create Subfolder Types ---
+
+export interface CreateFolderRequest {
+	parentPath: string
+	folderName: string
+}
+
+export interface CreateFolderResponse {
+	message: string
+	path: string
+}
+
+// --- Subdirectory Listing Types ---
+
+export interface SubdirEntry {
+	name: string
+	path: string
+}
+
+export interface SubdirsResponse {
+	subdirs: SubdirEntry[]
+	path: string
+}
+
+export interface MoveFilesResponse {
+	success: number
+	failed: number
+	failedFiles?: string[]
 }

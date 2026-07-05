@@ -3,6 +3,8 @@ package handler
 import (
 	"fmt"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/flashbacks/api-service/internal/domain"
@@ -89,6 +91,86 @@ func (s *Server) handleAddFolder(c *gin.Context) {
 			CreatedAt: folder.CreatedAt.Format(helpers.DateTimeFormat),
 		},
 		ScanStarted: scanStarted,
+	})
+}
+
+// handleCreateSubfolder creates a new directory inside a gallery folder
+func (s *Server) handleCreateSubfolder(c *gin.Context) {
+	var req dto.CreateFolderRequest
+	if !helpers.BindJSON(c, &req) {
+		return
+	}
+
+	// Validate the parent path is within gallery
+	if !s.galleryAccess.IsPathInGallery(req.ParentPath) {
+		c.JSON(http.StatusForbidden, i18n.ErrorResponse(i18n.MsgImageAccessDenied))
+		return
+	}
+
+	// Sanitize folder name (no path separators)
+	if strings.Contains(req.FolderName, "/") || strings.Contains(req.FolderName, "\\") {
+		c.JSON(http.StatusBadRequest, i18n.CreateValidationError(i18n.MsgFolderNameRequired))
+		return
+	}
+
+	newPath := filepath.Join(req.ParentPath, req.FolderName)
+
+	// Check if already exists
+	if _, err := os.Stat(newPath); err == nil {
+		c.JSON(http.StatusConflict, i18n.ErrorResponse(i18n.MsgFolderAlreadyExists))
+		return
+	}
+
+	// Create the directory
+	if err := os.MkdirAll(newPath, 0755); err != nil {
+		c.JSON(http.StatusInternalServerError, i18n.ErrorResponse(i18n.MsgFolderCreateFailed))
+		return
+	}
+
+	c.JSON(http.StatusOK, dto.CreateFolderResponse{
+		Message: string(i18n.MsgFolderCreated),
+		Path:    filepath.ToSlash(newPath),
+	})
+}
+
+// handleListSubdirs lists subdirectories of a given path within gallery
+func (s *Server) handleListSubdirs(c *gin.Context) {
+	path := c.Query("path")
+	if path == "" {
+		c.JSON(http.StatusBadRequest, i18n.ErrorResponse(i18n.MsgFolderParentPathRequired))
+		return
+	}
+
+	// Validate the path is within gallery
+	if !s.galleryAccess.IsPathInGallery(path) {
+		c.JSON(http.StatusForbidden, i18n.ErrorResponse(i18n.MsgImageAccessDenied))
+		return
+	}
+
+	entries, err := os.ReadDir(path)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, i18n.ErrorResponse(i18n.MsgFolderSubdirsReadFailed))
+		return
+	}
+
+	var subdirs []dto.SubdirEntry
+	for _, entry := range entries {
+		if entry.IsDir() {
+			subPath := filepath.Join(path, entry.Name())
+			subdirs = append(subdirs, dto.SubdirEntry{
+				Name: entry.Name(),
+				Path: filepath.ToSlash(subPath),
+			})
+		}
+	}
+
+	if subdirs == nil {
+		subdirs = []dto.SubdirEntry{}
+	}
+
+	c.JSON(http.StatusOK, dto.SubdirsResponse{
+		Subdirs: subdirs,
+		Path:    path,
 	})
 }
 

@@ -245,14 +245,25 @@ func (c *OllamaClient) fetchContextLength(ctx context.Context, modelName string)
 		ModelInfo  map[string]any `json:"model_info"`
 		Parameters string         `json:"parameters"`
 	}
-	err := shortClient.doJSON(ctx, http.MethodGet, "/api/show?name="+modelName, nil, &showResp, nil)
+	err := shortClient.doJSON(ctx, http.MethodPost, "/api/show", map[string]string{"name": modelName}, &showResp, nil)
 	if err != nil {
 		return 0
 	}
 
-	// Try model_info map for known keys
+	// Try model_info map for known keys.
+	// The key format is "{architecture}.context_length" where architecture
+	// varies per model (llama, qwen3, gemma2, mistral, etc.), so we search
+	// for any key ending with ".context_length" + the bare "context_length".
 	for _, key := range []string{"llama.context_length", "transformer.context_length", "context_length"} {
 		if v, ok := showResp.ModelInfo[key]; ok {
+			if n, ok := v.(float64); ok && n > 0 {
+				return int(n)
+			}
+		}
+	}
+	// Fallback: match any key ending with ".context_length" (architecture-agnostic)
+	for k, v := range showResp.ModelInfo {
+		if len(k) > 16 && k[len(k)-16:] == ".context_length" {
 			if n, ok := v.(float64); ok && n > 0 {
 				return int(n)
 			}

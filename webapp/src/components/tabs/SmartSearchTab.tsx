@@ -6,8 +6,9 @@ import { UnifiedLightbox } from "@/components/gallery/UnifiedLightbox"
 import { SmartSearchTile } from "@/components/gallery/SmartSearchTile"
 import { DeleteConfirmDialog } from "@/components/gallery/DeleteConfirmDialog"
 import { BulkDeleteDialog } from "@/components/gallery/BulkDeleteDialog"
+import { BulkMoveDialog } from "@/components/gallery/BulkMoveDialog"
 import { useSmartSearch } from "@/hooks/useSmartSearch"
-import { fetchEmbeddingStatus, startEmbeddingBackfill, stopEmbeddingBackfill, deleteFiles } from "@/api/endpoints"
+import { fetchEmbeddingStatus, startEmbeddingBackfill, stopEmbeddingBackfill, deleteFiles, moveFiles } from "@/api/endpoints"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { usePolling } from "@/hooks/usePolling"
@@ -136,6 +137,46 @@ export function SmartSearchTab() {
     setBulkUseTrash(true)
   }, [results, selectedIds])
 
+  // Move state
+  const [moveDialogOpen, setMoveDialogOpen] = useState(false)
+  const [isMoving, setIsMoving] = useState(false)
+
+  const handleMoveSelected = useCallback(() => {
+    setMoveDialogOpen(true)
+  }, [])
+
+  const handleConfirmMove = useCallback(async (targetDir: string) => {
+    const selectedResults = results.filter((r) => selectedIds.has(r.id))
+    if (selectedResults.length === 0) return
+
+    setIsMoving(true)
+    try {
+      const result = await moveFiles({
+        filePaths: selectedResults.map((r) => r.path),
+        targetDir,
+      })
+      removeResults(selectedResults.map((r) => r.id))
+      setSelectedIds(new Set())
+      setMoveDialogOpen(false)
+      if (result.failed > 0) {
+        alert(t("moveFiles.successWithFailed", { count: result.success, failed: result.failed }))
+      }
+    } catch (err) {
+      console.error("Failed to move files:", err)
+      alert(t("moveFiles.errorFailed"))
+    } finally {
+      setIsMoving(false)
+    }
+  }, [results, selectedIds, removeResults, t])
+
+  // Store callbacks in ref (updated in effect) to stabilize useEffect deps
+  const callbacksRef = useRef({ handleDeleteSelected, handleMoveSelected })
+
+  // Keep ref updated after each render
+  useEffect(() => {
+    callbacksRef.current = { handleDeleteSelected, handleMoveSelected }
+  })
+
   // Register selection actions in context for Header display
   useEffect(() => {
     if (selectedCount > 0) {
@@ -144,7 +185,8 @@ export function SmartSearchTab() {
         clear: () => {
           setSelectedIds(new Set())
         },
-        del: handleDeleteSelected,
+        del: callbacksRef.current.handleDeleteSelected,
+        move: callbacksRef.current.handleMoveSelected,
       })
     } else {
       registerActions(null)
@@ -152,7 +194,7 @@ export function SmartSearchTab() {
     return () => {
       registerActions(null)
     }
-  }, [selectedCount, handleDeleteSelected, registerActions])
+  }, [selectedCount, registerActions])
 
   // --- Download handler ---
 
@@ -422,6 +464,17 @@ export function SmartSearchTab() {
         loading={isDeleting}
         idSuffix="-smart"
       />
+
+      {/* Bulk move dialog — conditionally mounted to avoid Radix Dialog controlled-state issue (React error #185) */}
+      {moveDialogOpen && (
+        <BulkMoveDialog
+          count={selectedIds.size}
+          open={true}
+          onCancel={() => setMoveDialogOpen(false)}
+          onConfirm={handleConfirmMove}
+          loading={isMoving}
+        />
+      )}
     </div>
   )
 }

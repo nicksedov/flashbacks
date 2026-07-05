@@ -23,6 +23,12 @@ export function GallerySelectionProvider({
     actions?.del()
   }, [actions])
 
+  const moveSelected = useCallback(() => {
+    if (actions?.move) {
+      actions.move()
+    }
+  }, [actions])
+
   const selectedCount = actions?.count ?? 0
   const isActive = selectedCount > 0
 
@@ -33,6 +39,7 @@ export function GallerySelectionProvider({
         isActive,
         clearSelection,
         deleteSelected,
+        moveSelected,
         registerActions,
       }}
     >

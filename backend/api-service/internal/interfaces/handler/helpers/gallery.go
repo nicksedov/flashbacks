@@ -63,13 +63,16 @@ func (ga *GalleryAccess) getFolders() []domain.GalleryFolder {
 	return ga.folders
 }
 
-// IsPathInGallery checks if a path is within any configured gallery folder.
+// IsPathInGallery checks if a path is within any configured gallery folder
+// or matches a gallery root folder exactly.
 // Uses a TTL-based in-memory cache to avoid full table scans on every request.
 func (ga *GalleryAccess) IsPathInGallery(path string) bool {
 	folders := ga.getFolders()
 
 	for _, f := range folders {
-		if strings.HasPrefix(path, f.Path+"/") || strings.HasPrefix(path, f.Path+"\\") {
+		if path == f.Path ||
+			strings.HasPrefix(path, f.Path+"/") ||
+			strings.HasPrefix(path, f.Path+"\\") {
 			return true
 		}
 	}

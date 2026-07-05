@@ -149,9 +149,9 @@ const (
 	MsgLlmModelsFailed MessageKey = "llm.models_failed"
 
 	// Geocode / GPS messages
-	MsgGeocodeQueryRequired    MessageKey = "geocode.query_required"
-	MsgGeocodeDateRequired     MessageKey = "geocode.date_required"
-	MsgGeocodeSearchFailed    MessageKey = "geocode.search_failed"
+	MsgGeocodeQueryRequired  MessageKey = "geocode.query_required"
+	MsgGeocodeDateRequired   MessageKey = "geocode.date_required"
+	MsgGeocodeSearchFailed   MessageKey = "geocode.search_failed"
 	MsgGpsUpdateFailed       MessageKey = "geocode.gps_update_failed"
 	MsgGpsInvalidCoordinates MessageKey = "geocode.invalid_coordinates"
 	MsgGpsUpdated            MessageKey = "geocode.gps_updated"
@@ -173,17 +173,30 @@ const (
 
 	// Embedding messages
 	MsgEmbeddingManagerNotAvailable MessageKey = "embedding.manager_not_available"
-	MsgEmbeddingBackfillStarted    MessageKey = "embedding.backfill_started"
-	MsgEmbeddingBackfillStopped    MessageKey = "embedding.backfill_stopped"
-	MsgEmbeddingProviderNotFound   MessageKey = "embedding.provider_not_found"
-	MsgEmbeddingClientFailed       MessageKey = "embedding.client_creation_failed"
-	MsgEmbeddingProbeFailed        MessageKey = "embedding.probe_failed"
-	MsgEmbeddingEmptyVector        MessageKey = "embedding.empty_vector"
+	MsgEmbeddingBackfillStarted     MessageKey = "embedding.backfill_started"
+	MsgEmbeddingBackfillStopped     MessageKey = "embedding.backfill_stopped"
+	MsgEmbeddingProviderNotFound    MessageKey = "embedding.provider_not_found"
+	MsgEmbeddingClientFailed        MessageKey = "embedding.client_creation_failed"
+	MsgEmbeddingProbeFailed         MessageKey = "embedding.probe_failed"
+	MsgEmbeddingEmptyVector         MessageKey = "embedding.empty_vector"
 
 	// Tag scan messages
 	MsgTagScanManagerNotAvailable MessageKey = "tag_scan.manager_not_available"
-	MsgTagScanPaused             MessageKey = "tag_scan.paused"
-	MsgTagScanResumed            MessageKey = "tag_scan.resumed"
+	MsgTagScanPaused              MessageKey = "tag_scan.paused"
+	MsgTagScanResumed             MessageKey = "tag_scan.resumed"
+
+	// Move files messages
+	MsgMoveFilesTargetDirRequired MessageKey = "move_files.target_dir_required"
+	MsgMoveFilesNoFilesSelected   MessageKey = "move_files.no_files_selected"
+	MsgMoveFilesFailed            MessageKey = "move_files.failed"
+
+	// Create folder messages
+	MsgFolderCreateFailed       MessageKey = "folder.create_failed"
+	MsgFolderCreated            MessageKey = "folder.created"
+	MsgFolderNameRequired       MessageKey = "folder.name_required"
+	MsgFolderParentPathRequired MessageKey = "folder.parent_path_required"
+	MsgFolderAlreadyExists      MessageKey = "folder.already_exists"
+	MsgFolderSubdirsReadFailed  MessageKey = "folder.subdirs_read_failed"
 )
 
 // GetMessage returns the message key as string

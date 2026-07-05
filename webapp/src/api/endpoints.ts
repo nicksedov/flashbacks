@@ -10,6 +10,8 @@ import type {
   FolderPatternsResponse,
   BatchDeleteRequest,
   BatchDeleteResponse,
+  MoveFilesRequest,
+  MoveFilesResponse,
   GalleryFoldersResponse,
   AddFolderRequest,
   AddFolderResponse,
@@ -72,6 +74,9 @@ import type {
   EmbeddingBackfillStatus,
   SyncStatusResponse,
   ExifServiceStatus,
+  CreateFolderRequest,
+  CreateFolderResponse,
+  SubdirsResponse,
 } from "@/types"
 
 export function fetchDuplicates(page: number, pageSize: number): Promise<DuplicatesResponse> {
@@ -107,6 +112,18 @@ export function fetchFolderPatterns(): Promise<FolderPatternsResponse> {
 
 export function batchDelete(req: BatchDeleteRequest): Promise<BatchDeleteResponse> {
   return apiPost<BatchDeleteResponse>("/api/batch-delete", req)
+}
+
+export function moveFiles(req: MoveFilesRequest): Promise<MoveFilesResponse> {
+  return apiPost<MoveFilesResponse>("/api/move-files", req)
+}
+
+export function createFolder(req: CreateFolderRequest): Promise<CreateFolderResponse> {
+  return apiPost<CreateFolderResponse>("/api/folders/mkdir", req)
+}
+
+export function fetchSubdirs(path: string, signal?: AbortSignal): Promise<SubdirsResponse> {
+  return apiGet<SubdirsResponse>("/api/folders/subdirs", { path }, signal)
 }
 
 // --- Gallery Folders ---

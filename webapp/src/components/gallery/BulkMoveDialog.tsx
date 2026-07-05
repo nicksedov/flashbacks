@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useTranslation } from "@/i18n"
 import {
   Dialog,
@@ -11,7 +11,9 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { fetchFolders } from "@/api/endpoints"
+import { Separator } from "@/components/ui/separator"
+import { fetchFolders, createFolder } from "@/api/endpoints"
+import { GalleryFolderTree } from "./GalleryFolderTree"
 import type { GalleryFolderDTO } from "@/types"
 
 interface BulkMoveDialogProps {
@@ -29,7 +31,8 @@ interface BulkMoveDialogProps {
 
 /**
  * Dialog for selecting a target folder and confirming bulk file move.
- * Shows available gallery root folders and allows custom path input.
+ * Shows a collapsible folder tree of gallery folders with subdirectory navigation
+ * and the ability to create new subfolders.
  */
 export function BulkMoveDialog({
   count,
@@ -41,102 +44,132 @@ export function BulkMoveDialog({
   const { t } = useTranslation()
   const [folders, setFolders] = useState<GalleryFolderDTO[]>([])
   const [selectedFolder, setSelectedFolder] = useState<string>("")
-  const [customPath, setCustomPath] = useState("")
-  const [useCustomPath, setUseCustomPath] = useState(false)
+  const [newFolderName, setNewFolderName] = useState("")
+  const [isCreating, setIsCreating] = useState(false)
+  const [createError, setCreateError] = useState<string | null>(null)
 
-  // Load gallery folders when dialog opens
+  // Load gallery folders and reset form state when dialog opens
   useEffect(() => {
     if (open) {
-      fetchFolders().then((res) => {
-        setFolders(res.folders)
-      }).catch(() => {
-        setFolders([])
-      })
       setSelectedFolder("")
-      setCustomPath("")
-      setUseCustomPath(false)
+      setNewFolderName("")
+      setCreateError(null)
+      fetchFolders()
+        .then((res) => setFolders(res.folders))
+        .catch(() => setFolders([]))
     }
   }, [open])
 
   const handleConfirm = () => {
-    const targetDir = useCustomPath ? customPath.trim() : selectedFolder
-    if (!targetDir) return
-    onConfirm(targetDir)
+    if (!selectedFolder) return
+    onConfirm(selectedFolder)
   }
 
-  const canConfirm = useCustomPath
-    ? customPath.trim().length > 0
-    : selectedFolder.length > 0
+  const handleSelect = useCallback((path: string) => {
+    setSelectedFolder(path)
+  }, [])
+
+  const handleCreateFolder = useCallback(async () => {
+    const name = newFolderName.trim()
+    if (!name || !selectedFolder) return
+
+    setIsCreating(true)
+    setCreateError(null)
+
+    try {
+      const res = await createFolder({
+        parentPath: selectedFolder,
+        folderName: name,
+      })
+      // Select the newly created folder
+      setSelectedFolder(res.path)
+      setNewFolderName("")
+    } catch (err) {
+      setCreateError(err instanceof Error ? err.message : "Failed to create folder")
+    } finally {
+      setIsCreating(false)
+    }
+  }, [newFolderName, selectedFolder])
+
+  const rootPaths = folders.map((f) => f.path)
+  const canConfirm = selectedFolder.length > 0
+  const canCreate = selectedFolder.length > 0 && newFolderName.trim().length > 0
 
   return (
     <Dialog open={open} onOpenChange={(open) => !open && onCancel()}>
-      <DialogContent>
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{t("moveFiles.title")}</DialogTitle>
           <DialogDescription>
             {t("moveFiles.description", { count })}
           </DialogDescription>
         </DialogHeader>
+
         <div className="space-y-4">
-          {/* Gallery folders */}
+          {/* Folder tree */}
           <div className="space-y-2">
             <Label className="text-sm font-medium">
               {t("moveFiles.selectFolder")}
             </Label>
-            {folders.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                {t("moveFiles.noFolders")}
-              </p>
-            ) : (
-              <div className="max-h-48 overflow-y-auto space-y-1 rounded-md border p-2">
-                {folders.map((folder) => (
-                  <button
-                    key={folder.id}
-                    type="button"
-                    className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors ${
-                      !useCustomPath && selectedFolder === folder.path
-                        ? "bg-primary text-primary-foreground"
-                        : "hover:bg-accent hover:text-accent-foreground"
-                    }`}
-                    onClick={() => {
-                      setSelectedFolder(folder.path)
-                      setUseCustomPath(false)
-                    }}
-                  >
-                    {folder.path}
-                  </button>
-                ))}
-              </div>
-            )}
+            <GalleryFolderTree
+              rootPaths={rootPaths}
+              selectedPath={selectedFolder}
+              onSelect={handleSelect}
+              isLoading={folders.length === 0}
+              className="max-h-60 overflow-y-auto p-1"
+            />
           </div>
 
-          {/* Custom path toggle */}
-          <div className="flex items-center gap-2">
-            <label className="flex items-center gap-2 text-sm cursor-pointer">
-              <input
-                type="checkbox"
-                checked={useCustomPath}
-                onChange={(e) => setUseCustomPath(e.target.checked)}
-                className="h-4 w-4 rounded border-gray-300"
-              />
-              {t("moveFiles.customPath")}
-            </label>
-          </div>
-
-          {useCustomPath && (
-            <div className="space-y-2">
-              <Label htmlFor="target-path" className="text-sm">
-                {t("moveFiles.targetPathLabel")}
-              </Label>
-              <Input
-                id="target-path"
-                value={customPath}
-                onChange={(e) => setCustomPath(e.target.value)}
-                placeholder={t("moveFiles.targetPathPlaceholder")}
-              />
+          {/* Selected folder display */}
+          {selectedFolder && (
+            <div className="text-xs text-muted-foreground bg-muted rounded-md px-3 py-2 truncate">
+              {selectedFolder}
             </div>
           )}
+
+          <Separator />
+
+          {/* Create new folder */}
+          <div className="space-y-2">
+            <Label className="text-sm font-medium">
+              {t("moveFiles.createFolder")}
+            </Label>
+            <div className="flex gap-2">
+              <Input
+                value={newFolderName}
+                onChange={(e) => {
+                  setNewFolderName(e.target.value)
+                  setCreateError(null)
+                }}
+                placeholder={t("moveFiles.newFolderPlaceholder")}
+                disabled={!selectedFolder || isCreating}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && canCreate && !isCreating) {
+                    handleCreateFolder()
+                  }
+                }}
+              />
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleCreateFolder}
+                disabled={!canCreate || isCreating}
+                className="shrink-0"
+              >
+                {isCreating ? t("common.saving") : t("moveFiles.createButton")}
+              </Button>
+            </div>
+            {createError && (
+              <p className="text-xs text-destructive">{createError}</p>
+            )}
+            {!selectedFolder && (
+              <p className="text-xs text-muted-foreground">
+                {t("moveFiles.selectFolderFirst")}
+              </p>
+            )}
+          </div>
         </div>
+
         <DialogFooter>
           <Button variant="outline" onClick={onCancel} disabled={loading}>
             {t("common.cancel")}

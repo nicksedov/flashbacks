@@ -73,6 +73,8 @@ func (s *Server) SetupRouter(authMiddleware *middleware.AuthMiddleware, csrfProt
 			protected.POST("/batch-delete", s.handleBatchDelete)
 			protected.GET("/folders", s.handleGetFolders)
 			protected.POST("/folders", s.handleAddFolder)
+			protected.POST("/folders/mkdir", s.handleCreateSubfolder)
+			protected.GET("/folders/subdirs", s.handleListSubdirs)
 			protected.DELETE("/folders/:id", s.handleRemoveFolder)
 			protected.GET("/gallery", s.handleGetGalleryImages)
 			protected.GET("/gallery/calendar", s.handleGetGalleryCalendar)

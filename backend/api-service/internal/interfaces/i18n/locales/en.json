@@ -54,7 +54,13 @@
     "added": "Folder added to gallery",
     "not_found": "Folder not found",
     "removed": "Folder removed from gallery",
-    "remove_failed": "Failed to remove folder"
+    "remove_failed": "Failed to remove folder",
+    "create_failed": "Failed to create folder",
+    "created": "Folder created",
+    "name_required": "Folder name is required",
+    "parent_path_required": "Parent path is required",
+    "already_exists": "Folder already exists",
+    "subdirs_read_failed": "Failed to read subdirectories"
   },
 
   "description_image": "Image messages",

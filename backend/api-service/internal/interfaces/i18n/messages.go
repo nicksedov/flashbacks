@@ -189,6 +189,14 @@ const (
 	MsgMoveFilesTargetDirRequired MessageKey = "move_files.target_dir_required"
 	MsgMoveFilesNoFilesSelected   MessageKey = "move_files.no_files_selected"
 	MsgMoveFilesFailed            MessageKey = "move_files.failed"
+
+	// Create folder messages
+	MsgFolderCreateFailed       MessageKey = "folder.create_failed"
+	MsgFolderCreated            MessageKey = "folder.created"
+	MsgFolderNameRequired       MessageKey = "folder.name_required"
+	MsgFolderParentPathRequired MessageKey = "folder.parent_path_required"
+	MsgFolderAlreadyExists      MessageKey = "folder.already_exists"
+	MsgFolderSubdirsReadFailed  MessageKey = "folder.subdirs_read_failed"
 )
 
 // GetMessage returns the message key as string

@@ -84,11 +84,6 @@ type openAIToolCallResp struct {
 	} `json:"function"`
 }
 
-type openAIMessage struct {
-	Role    string          `json:"role"`
-	Content []openAIContent `json:"content"`
-}
-
 type openAIContent struct {
 	Type     string          `json:"type"`
 	Text     string          `json:"text,omitempty"`

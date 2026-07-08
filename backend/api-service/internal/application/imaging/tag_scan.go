@@ -459,9 +459,13 @@ func (tsm *TagScanManager) processImage(imageFile domain.ImageFile) {
 		return
 	}
 
-	// Get active provider
+	// Get VL provider (fall back to active/chat provider if not set)
+	alias := settings.VlProvider
+	if alias == "" {
+		alias = settings.ActiveProvider
+	}
 	var provider domain.LlmProvider
-	if err := tsm.db.Where("alias = ?", settings.ActiveProvider).First(&provider).Error; err != nil {
+	if err := tsm.db.Where("alias = ?", alias).First(&provider).Error; err != nil {
 		log.Printf("Tag scan: failed to load provider settings: %v", err)
 		tsm.mu.Lock()
 		tsm.progress.LastError = "Failed to load LLM provider settings"

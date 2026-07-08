@@ -517,7 +517,8 @@ type LlmProviderDTO struct {
 // LlmSettingsResponse for GET /api/llm/settings
 type LlmSettingsResponse struct {
 	ID                     uint             `json:"id"`
-	ActiveProvider         string           `json:"activeProvider"` // References LlmProvider.Alias
+	ActiveProvider         string           `json:"activeProvider"` // Chat/text LLM provider alias
+	VlProvider             string           `json:"vlProvider"`     // VL (vision-language) provider alias for image analysis
 	TagScanEnabled         bool             `json:"tagScanEnabled"`
 	TagScanStartHour       int              `json:"tagScanStartHour"`
 	TagScanStartMinute     int              `json:"tagScanStartMinute"`
@@ -531,9 +532,10 @@ type LlmSettingsResponse struct {
 	Providers              []LlmProviderDTO `json:"providers"`
 }
 
-// UpdateLlmSettingsRequest for PUT /api/llm/settings (active provider + tag scan only)
+// UpdateLlmSettingsRequest for PUT /api/llm/settings (chat provider, VL provider + tag scan)
 type UpdateLlmSettingsRequest struct {
-	ActiveProvider         *string `json:"activeProvider"` // References LlmProvider.Alias
+	ActiveProvider         *string `json:"activeProvider"` // Chat/text LLM provider alias
+	VlProvider             *string `json:"vlProvider"`     // VL provider alias for image analysis
 	TagScanEnabled         *bool   `json:"tagScanEnabled,omitempty"`
 	TagScanStartHour       *int    `json:"tagScanStartHour,omitempty"`
 	TagScanStartMinute     *int    `json:"tagScanStartMinute,omitempty"`

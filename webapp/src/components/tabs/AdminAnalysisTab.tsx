@@ -24,6 +24,7 @@ const ALLOWED_PROVIDER_TYPES: LlmProviderType[] = ["ollama", "ollama_cloud", "op
 const EMPTY_SETTINGS: LlmSettingsResponse = {
   id: 0,
   activeProvider: "",
+  vlProvider: "",
   tagScanEnabled: false,
   tagScanStartHour: 23,
   tagScanStartMinute: 0,
@@ -83,12 +84,20 @@ export function AdminAnalysisTab() {
   const [isEmbeddingProbing, setIsEmbeddingProbing] = useState(false)
   const [embeddingProbeError, setEmbeddingProbeError] = useState<string | null>(null)
  
-  // Helper to get current active provider
+  // Helper to get current active chat provider
   const getCurrentProvider = useCallback(
     (): LlmProviderDTO | undefined => {
       return llmSettings.providers.find((p) => p.alias === llmSettings.activeProvider)
     },
     [llmSettings.providers, llmSettings.activeProvider]
+  )
+
+  // Helper to get current VL provider
+  const getCurrentVLProvider = useCallback(
+    (): LlmProviderDTO | undefined => {
+      return llmSettings.providers.find((p) => p.alias === llmSettings.vlProvider)
+    },
+    [llmSettings.providers, llmSettings.vlProvider]
   )
 
   // Probe embedding dimension by calling the backend probe endpoint.
@@ -318,26 +327,38 @@ export function AdminAnalysisTab() {
   const handleSaveLlmSettings = useCallback(async () => {
     setIsLlmSaving(true)
     try {
-      const currentProvider = getCurrentProvider()
-
-      // Save active provider only (tag scan has its own handler)
+      // Save both chat and VL provider selections
       await updateLlmSettings({
         activeProvider: llmSettings.activeProvider,
+        vlProvider: llmSettings.vlProvider,
       })
 
-      // Save current provider settings if exists — uses dedicated provider endpoint
+      // Save chat provider settings if exists
+      const currentProvider = getCurrentProvider()
       if (currentProvider) {
       	const provUpdate: { apiUrl?: string; apiKey?: string; model?: string } = {
       		apiUrl: currentProvider.apiUrl,
       		model: currentProvider.model,
       	}
-      	// Only send API key if it was changed by the user (not masked)
-      	// Masked key format: "XXXX...XXXX" (4 chars + "..." + 4 chars = 11 chars)
       	const isMasked = /^.{4}\.\.\..{4}$/.test(currentProvider.apiKey) && currentProvider.apiKey.length === 11
       	if (!isMasked) {
       		provUpdate.apiKey = currentProvider.apiKey
       	}
       	await updateLlmProvider(currentProvider.alias, provUpdate)
+      }
+
+      // Save VL provider settings if different from chat provider
+      const vlProvider = getCurrentVLProvider()
+      if (vlProvider && vlProvider.alias !== currentProvider?.alias) {
+        const vlUpdate: { apiUrl?: string; apiKey?: string; model?: string } = {
+          apiUrl: vlProvider.apiUrl,
+          model: vlProvider.model,
+        }
+        const isMasked = /^.{4}\.\.\..{4}$/.test(vlProvider.apiKey) && vlProvider.apiKey.length === 11
+        if (!isMasked) {
+          vlUpdate.apiKey = vlProvider.apiKey
+        }
+        await updateLlmProvider(vlProvider.alias, vlUpdate)
       }
 
       toast.success(t("llm_ocr.settingsSaved"))
@@ -348,7 +369,7 @@ export function AdminAnalysisTab() {
     } finally {
       setIsLlmSaving(false)
     }
-  }, [llmSettings, loadLlmSettings, getCurrentProvider, t])
+  }, [llmSettings, loadLlmSettings, getCurrentProvider, getCurrentVLProvider, t])
 
   // Embedding provider change handler
   const handleEmbeddingProviderChange = useCallback((value: string) => {
@@ -510,7 +531,13 @@ export function AdminAnalysisTab() {
     setLlmSettings((prev) => ({ ...prev, activeProvider: value }))
     setLlmFormDirty(true)
     loadModelsForProvider(value)
-  }, [loadModelsForProvider, llmSettings.providers])
+  }, [loadModelsForProvider])
+
+  const handleVlProviderChange = useCallback((value: string) => {
+    setLlmSettings((prev) => ({ ...prev, vlProvider: value }))
+    setLlmFormDirty(true)
+    loadModelsForProvider(value)
+  }, [loadModelsForProvider])
 
   // Tag Scan handlers
   const loadTagScanStatus = useCallback(async () => {
@@ -889,14 +916,14 @@ export function AdminAnalysisTab() {
         </CardContent>
       </Card>
 
-      {/* VL LLM Settings */}
+      {/* Chat LLM Settings */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Wand2 className="h-5 w-5" />
-            {t("llm_ocr.vlSettings")}
+            {t("llm_ocr.chatSettings")}
           </CardTitle>
-          <CardDescription>{t("llm_ocr.vlSettingsDescription")}</CardDescription>
+          <CardDescription>{t("llm_ocr.chatSettingsDescription")}</CardDescription>
         </CardHeader>
         <CardContent>
           {isLlmLoading ? (
@@ -905,14 +932,14 @@ export function AdminAnalysisTab() {
             </div>
           ) : (
             <div className="space-y-4">
-              {/* Active Provider Selection */}
+              {/* Chat Provider Selection */}
               <div className="space-y-2">
-                <Label htmlFor="llm-provider">{t("llm_ocr.provider")}</Label>
+                <Label htmlFor="chat-llm-provider">{t("llm_ocr.provider")}</Label>
                 <Select
                   value={llmSettings.activeProvider}
                   onValueChange={handleActiveProviderChange}
                 >
-                  <SelectTrigger id="llm-provider">
+                  <SelectTrigger id="chat-llm-provider">
                     <SelectValue placeholder={t("llm_providers.selectProvider")} />
                   </SelectTrigger>
                   <SelectContent>
@@ -1136,6 +1163,76 @@ export function AdminAnalysisTab() {
                   )}
                 </Button>
               </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* VL LLM Settings */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Wand2 className="h-5 w-5" />
+            {t("llm_ocr.vlSettings")}
+          </CardTitle>
+          <CardDescription>{t("llm_ocr.vlSettingsDescription")}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {isLlmLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {/* VL Provider Selection */}
+              <div className="space-y-2">
+                <Label htmlFor="vl-llm-provider">{t("llm_ocr.provider")}</Label>
+                <Select
+                  value={llmSettings.vlProvider}
+                  onValueChange={handleVlProviderChange}
+                >
+                  <SelectTrigger id="vl-llm-provider">
+                    <SelectValue placeholder={t("llm_providers.selectProvider")} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {llmSettings.providers.map((p) => (
+                      <SelectItem key={p.alias} value={p.alias}>
+                        {p.alias} ({getProviderLabel(p.name)})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* VL Provider Config */}
+              {getCurrentVLProvider() && getCurrentVLProvider()!.alias !== currentProvider?.alias && (
+                <ProviderConfigForm
+                  provider={getCurrentVLProvider()!}
+                  providers={llmSettings.providers}
+                  availableModels={availableModels}
+                  isModelsLoading={isModelsLoading}
+                  showModelInput={showModelInput}
+                  onFieldChange={handleProviderFieldChange}
+                  onAliasUpdate={handleAliasUpdate}
+                  onDelete={handleDeleteProvider}
+                  onLoadModels={handleLoadModels}
+                  onToggleModelInput={setShowModelInput}
+                  isSaving={isLlmSaving}
+                  namePrefix="vl"
+                />
+              )}
+
+              {getCurrentVLProvider() && getCurrentVLProvider()!.alias === currentProvider?.alias && (
+                <p className="text-sm text-muted-foreground py-2">
+                  {t("llm_ocr.vlSameAsChat")}
+                </p>
+              )}
+
+              {llmSettings.providers.length === 0 && (
+                <p className="text-sm text-muted-foreground text-center py-4">
+                  {t("llm_providers.noProviders")}
+                </p>
+              )}
             </div>
           )}
         </CardContent>

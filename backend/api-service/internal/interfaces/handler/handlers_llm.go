@@ -53,6 +53,7 @@ func (s *Server) handleGetLlmSettings(c *gin.Context) {
 	c.JSON(http.StatusOK, dto.LlmSettingsResponse{
 		ID:                     settings.ID,
 		ActiveProvider:         settings.ActiveProvider,
+		VlProvider:             settings.VlProvider,
 		TagScanEnabled:         settings.TagScanEnabled,
 		TagScanStartHour:       settings.TagScanStartHour,
 		TagScanStartMinute:     settings.TagScanStartMinute,
@@ -67,7 +68,7 @@ func (s *Server) handleGetLlmSettings(c *gin.Context) {
 	})
 }
 
-// handleUpdateLlmSettings updates only LLM global settings (active provider + tag scan schedule)
+// handleUpdateLlmSettings updates LLM global settings (chat provider, VL provider, tag scan schedule)
 func (s *Server) handleUpdateLlmSettings(c *gin.Context) {
 	var req dto.UpdateLlmSettingsRequest
 	if !helpers.BindJSON(c, &req) {
@@ -78,6 +79,9 @@ func (s *Server) handleUpdateLlmSettings(c *gin.Context) {
 	globalUpdates := make(map[string]interface{})
 	if req.ActiveProvider != nil {
 		globalUpdates["active_provider"] = *req.ActiveProvider
+	}
+	if req.VlProvider != nil {
+		globalUpdates["vl_provider"] = *req.VlProvider
 	}
 	if req.TagScanEnabled != nil {
 		globalUpdates["tag_scan_enabled"] = *req.TagScanEnabled
@@ -113,6 +117,7 @@ func (s *Server) handleUpdateLlmSettings(c *gin.Context) {
 	if err == gorm.ErrRecordNotFound {
 		settings = &domain.LlmSettings{
 			ActiveProvider:     "ollama_1",
+			VlProvider:         "ollama_1",
 			TagScanEnabled:     true,
 			TagScanStartHour:   22,
 			TagScanStartMinute: 0,
@@ -121,6 +126,9 @@ func (s *Server) handleUpdateLlmSettings(c *gin.Context) {
 		}
 		if req.ActiveProvider != nil {
 			settings.ActiveProvider = *req.ActiveProvider
+		}
+		if req.VlProvider != nil {
+			settings.VlProvider = *req.VlProvider
 		}
 		if req.TagScanEnabled != nil {
 			settings.TagScanEnabled = *req.TagScanEnabled
@@ -347,7 +355,7 @@ func (s *Server) handleLlmRecognize(c *gin.Context) {
 		return
 	}
 
-	llmClient, provider, ok := s.llmFactory.CreateClient(c)
+	llmClient, provider, ok := s.llmFactory.CreateVLClient(c)
 	if !ok {
 		return
 	}
@@ -613,7 +621,7 @@ func (s *Server) handleAiAction(c *gin.Context) {
 		return
 	}
 
-	llmClient, provider, ok := s.llmFactory.CreateClient(c)
+	llmClient, provider, ok := s.llmFactory.CreateVLClient(c)
 	if !ok {
 		return
 	}

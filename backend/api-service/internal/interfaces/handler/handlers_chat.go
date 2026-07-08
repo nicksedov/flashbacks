@@ -9,7 +9,6 @@ import (
 
 	"github.com/flashbacks/api-service/internal/application/agent"
 	"github.com/flashbacks/api-service/internal/domain"
-	"github.com/flashbacks/api-service/internal/infrastructure/llm"
 	"github.com/flashbacks/api-service/internal/interfaces/dto"
 	"github.com/flashbacks/api-service/internal/interfaces/i18n"
 	"github.com/flashbacks/api-service/internal/interfaces/middleware"
@@ -173,16 +172,10 @@ func (s *Server) handleSendMessage(c *gin.Context) {
 		return
 	}
 
-	// Create LLM chat client from active provider
-	client, _, ok := s.llmFactory.CreateClient(c)
+	// Create LLM chat client from chat provider
+	chatClient, _, ok := s.llmFactory.CreateChatClient(c)
 	if !ok {
-		return // Error already written by CreateClient
-	}
-
-	chatClient, ok := llm.NewChatClient(client)
-	if !ok {
-		s.respondError(c, http.StatusInternalServerError, i18n.MsgChatLlmNoChatSupport)
-		return
+		return // Error already written by CreateChatClient
 	}
 
 	// Resolve max tokens from model cache

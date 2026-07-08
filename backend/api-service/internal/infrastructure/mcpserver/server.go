@@ -114,13 +114,20 @@ func (s *FlashbacksMCPServer) ExecuteTool(ctx context.Context, name string, argu
 	}
 }
 
-// createLLMClient creates an LLM client from the active provider in the database.
-func (s *FlashbacksMCPServer) createLLMClient() (llm.Client, string, string, error) {
+// createVLClient creates a VL (vision-language) LLM client from the VlProvider setting.
+// Falls back to ActiveProvider if VlProvider is not configured.
+func (s *FlashbacksMCPServer) createVLClient() (llm.Client, string, string, error) {
 	var settings struct {
 		ActiveProvider string `json:"activeProvider"`
+		VlProvider     string `json:"vlProvider"`
 	}
-	if err := s.db.Table("llm_settings").Select("active_provider").First(&settings).Error; err != nil {
+	if err := s.db.Table("llm_settings").Select("active_provider, vl_provider").First(&settings).Error; err != nil {
 		return nil, "", "", fmt.Errorf("LLM settings not found")
+	}
+
+	alias := settings.VlProvider
+	if alias == "" {
+		alias = settings.ActiveProvider
 	}
 
 	var provider struct {
@@ -131,9 +138,9 @@ func (s *FlashbacksMCPServer) createLLMClient() (llm.Client, string, string, err
 	}
 	if err := s.db.Table("llm_providers").
 		Select("name, api_url, api_key, model").
-		Where("alias = ?", settings.ActiveProvider).
+		Where("alias = ?", alias).
 		First(&provider).Error; err != nil {
-		return nil, "", "", fmt.Errorf("LLM provider '%s' not found", settings.ActiveProvider)
+		return nil, "", "", fmt.Errorf("LLM provider '%s' not found", alias)
 	}
 
 	client, err := llm.NewClient(provider.Name, provider.ApiUrl, provider.ApiKey, provider.Model, s.maxMegapixels)

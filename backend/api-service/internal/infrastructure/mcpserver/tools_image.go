@@ -243,7 +243,7 @@ func (s *FlashbacksMCPServer) runImageAction(imagePath, action, question, langua
 	}
 
 	// Create LLM client
-	client, providerName, modelName, err := s.createLLMClient()
+	client, providerName, modelName, err := s.createVLClient()
 	if err != nil {
 		return nil, err
 	}

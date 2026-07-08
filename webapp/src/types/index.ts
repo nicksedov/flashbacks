@@ -540,7 +540,8 @@ export interface LlmProviderDTO {
 
 export interface LlmSettingsResponse {
   id: number
-  activeProvider: string // References LlmProvider.alias
+  activeProvider: string // Chat/text LLM provider alias
+  vlProvider: string // VL (vision-language) provider alias for image analysis
   tagScanEnabled?: boolean
   tagScanStartHour?: number
   tagScanStartMinute?: number
@@ -555,7 +556,8 @@ export interface LlmSettingsResponse {
 }
 
 export interface UpdateLlmSettingsRequest {
-  activeProvider?: string // References LlmProvider.alias
+  activeProvider?: string // Chat/text LLM provider alias
+  vlProvider?: string // VL provider alias for image analysis
   providerAlias?: string // Which provider to update/delete (by alias)
   providerName?: LlmProviderType // For new providers
   providerApiUrl?: string

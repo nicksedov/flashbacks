@@ -76,6 +76,7 @@ func InitDatabase(cfg *config.AppConfig) (*gorm.DB, error) {
 		db.Create(&domain.LlmSettings{
 			ID:             1,
 			ActiveProvider: "ollama_1",
+			VlProvider:     "ollama_1",
 		})
 	}
 

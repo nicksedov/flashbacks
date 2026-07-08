@@ -45,6 +45,7 @@ func (sl *SettingsLoader) LlmSettings() domain.LlmSettings {
 	if err := sl.db.First(&settings).Error; err != nil {
 		return domain.LlmSettings{
 			ActiveProvider: "ollama_1",
+			VlProvider:     "ollama_1",
 		}
 	}
 	return settings

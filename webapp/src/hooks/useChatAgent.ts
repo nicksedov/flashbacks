@@ -9,22 +9,28 @@ import {
 } from "@/api/endpoints"
 
 interface UseChatAgentReturn {
-  conversation: Conversation | null
-  conversations: Conversation[]
-  messages: ChatMessage[]
-  isStreaming: boolean
-  error: string | null
-  tokenCount: number
-  maxTokens: number
-  isTokenLimitReached: boolean
-  currentImagePath: string | null
-  createNewConversation: (imagePath?: string) => Promise<void>
-  loadConversation: (id: number) => Promise<void>
-  loadConversations: (imagePath?: string) => Promise<void>
-  removeConversation: (id: number) => Promise<void>
-  sendMessage: (content: string) => void
-  abortStream: () => void
-  resetForImage: (imagePath: string) => void
+	conversation: Conversation | null
+	conversations: Conversation[]
+	messages: ChatMessage[]
+	isStreaming: boolean
+	error: string | null
+	tokenCount: number
+	maxTokens: number
+	isTokenLimitReached: boolean
+	currentImagePath: string | null
+	// DeepSeek-specific extended usage info
+	promptTokens: number
+	completionTokens: number
+	promptCacheHitTokens: number
+	promptCacheMissTokens: number
+	reasoningTokens: number
+	createNewConversation: (imagePath?: string) => Promise<void>
+	loadConversation: (id: number) => Promise<void>
+	loadConversations: (imagePath?: string) => Promise<void>
+	removeConversation: (id: number) => Promise<void>
+	sendMessage: (content: string) => void
+	abortStream: () => void
+	resetForImage: (imagePath: string) => void
 }
 
 export function useChatAgent(language: string = "en"): UseChatAgentReturn {
@@ -39,6 +45,13 @@ export function useChatAgent(language: string = "en"): UseChatAgentReturn {
   const tokenCount = conversation?.tokenCount ?? 0
   const maxTokens = conversation?.maxTokens ?? 0
   const isTokenLimitReached = maxTokens > 0 && tokenCount >= maxTokens
+ 
+  // DeepSeek-specific extended usage state
+  const [promptTokens, setPromptTokens] = useState(0)
+  const [completionTokens, setCompletionTokens] = useState(0)
+  const [promptCacheHitTokens, setPromptCacheHitTokens] = useState(0)
+  const [promptCacheMissTokens, setPromptCacheMissTokens] = useState(0)
+  const [reasoningTokens, setReasoningTokens] = useState(0)
 
   const createNewConversation = useCallback(async (imagePath?: string) => {
     try {
@@ -107,6 +120,7 @@ export function useChatAgent(language: string = "en"): UseChatAgentReturn {
   const resetForImage = useCallback((imagePath: string) => {
     setConversation(null)
     setMessages([])
+    setConversations([])
     setError(null)
     setCurrentImagePath(imagePath)
   }, [])
@@ -235,6 +249,12 @@ export function useChatAgent(language: string = "en"): UseChatAgentReturn {
               tokenCount: event.tokenCount,
               maxTokens: event.maxTokens,
             } : prev)
+            // Update DeepSeek-specific extended usage
+            if (event.promptTokens !== undefined) setPromptTokens(event.promptTokens)
+            if (event.completionTokens !== undefined) setCompletionTokens(event.completionTokens)
+            if (event.promptCacheHitTokens !== undefined) setPromptCacheHitTokens(event.promptCacheHitTokens)
+            if (event.promptCacheMissTokens !== undefined) setPromptCacheMissTokens(event.promptCacheMissTokens)
+            if (event.reasoningTokens !== undefined) setReasoningTokens(event.reasoningTokens)
             break
 
           case "error":
@@ -248,6 +268,14 @@ export function useChatAgent(language: string = "en"): UseChatAgentReturn {
             // The server stores tool call info (name/args) and tool results (role "tool")
             // as separate messages, losing the merged toolCalls[].result data that was
             // built during streaming. Reloading would make thumbnails disappear.
+            // Refresh conversations list to sync server-side updates (e.g. title generated from first user message)
+            fetchConversations(conversation?.imagePath ?? undefined)
+              .then(list => {
+                setConversations(list)
+                const updated = list.find(c => c.id === conversation?.id)
+                if (updated) setConversation(updated)
+              })
+              .catch(() => {})
             break
         }
       },
@@ -256,21 +284,26 @@ export function useChatAgent(language: string = "en"): UseChatAgentReturn {
   }, [conversation, isStreaming, isTokenLimitReached])
 
   return {
-    conversation,
-    conversations,
-    messages,
-    isStreaming,
-    error,
-    tokenCount,
-    maxTokens,
-    isTokenLimitReached,
-    currentImagePath,
-    createNewConversation,
-    loadConversation,
-    loadConversations,
-    removeConversation,
-    sendMessage,
-    abortStream,
-    resetForImage,
+  	conversation,
+  	conversations,
+  	messages,
+  	isStreaming,
+  	error,
+  	tokenCount,
+  	maxTokens,
+  	isTokenLimitReached,
+  	currentImagePath,
+  	promptTokens,
+  	completionTokens,
+  	promptCacheHitTokens,
+  	promptCacheMissTokens,
+  	reasoningTokens,
+  	createNewConversation,
+  	loadConversation,
+  	loadConversations,
+  	removeConversation,
+  	sendMessage,
+  	abortStream,
+  	resetForImage,
   }
 }

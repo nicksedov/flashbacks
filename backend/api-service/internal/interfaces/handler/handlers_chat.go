@@ -9,6 +9,7 @@ import (
 
 	"github.com/flashbacks/api-service/internal/application/agent"
 	"github.com/flashbacks/api-service/internal/domain"
+	"github.com/flashbacks/api-service/internal/infrastructure/llm"
 	"github.com/flashbacks/api-service/internal/interfaces/dto"
 	"github.com/flashbacks/api-service/internal/interfaces/i18n"
 	"github.com/flashbacks/api-service/internal/interfaces/middleware"
@@ -199,6 +200,12 @@ func (s *Server) handleSendMessage(c *gin.Context) {
 				Error:      event.Error,
 				TokenCount: event.TokenCount,
 				MaxTokens:  event.MaxTokens,
+				// DeepSeek-specific extended usage fields
+				PromptTokens:          event.PromptTokens,
+				CompletionTokens:      event.CompletionTokens,
+				PromptCacheHitTokens:  event.PromptCacheHitTokens,
+				PromptCacheMissTokens: event.PromptCacheMissTokens,
+				ReasoningTokens:       event.ReasoningTokens,
 			})
 			fmt.Fprintf(w, "data: %s\n\n", data)
 			if f, ok := w.(http.Flusher); ok {
@@ -223,15 +230,26 @@ func (s *Server) handleSendMessage(c *gin.Context) {
 }
 
 // resolveMaxTokens resolves max tokens from active provider/model cache, falling back to config default.
+// For DeepSeek providers, also checks the known model registry as a fallback.
 func (s *Server) resolveMaxTokens(c *gin.Context) int {
 	llmSettings := s.settingsLoader.LlmSettings()
 	provider, ok := s.settingsLoader.LlmProvider(llmSettings.ActiveProvider)
 	if !ok {
 		return s.agentConfig.MaxConversationTokens
 	}
+
+	// Try database cache first
 	modelMax := s.conversationService.ResolveModelMaxTokens(provider.Alias, provider.Model)
 	if modelMax > 0 {
 		return modelMax
 	}
+
+	// For DeepSeek, fall back to the known model registry
+	if provider.Name == "deepseek" {
+		// Create a temporary client just to resolve the context window
+		dsClient := llm.NewDeepSeekClient(provider.ApiUrl, provider.ApiKey, provider.Model)
+		return dsClient.ContextWindow()
+	}
+
 	return s.agentConfig.MaxConversationTokens
 }

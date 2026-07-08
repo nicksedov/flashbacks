@@ -33,10 +33,23 @@ type ChatRequest struct {
 	Tools    []ToolDefinition
 }
 
+// ChatUsage carries token usage information from an LLM chat response.
+// DeepSeek-specific extended fields (PromptCacheHitTokens, PromptCacheMissTokens,
+// ReasoningTokens) are populated only when the provider returns them.
+type ChatUsage struct {
+	PromptTokens          int `json:"promptTokens"`
+	CompletionTokens      int `json:"completionTokens"`
+	TotalTokens           int `json:"totalTokens"`
+	PromptCacheHitTokens  int `json:"promptCacheHitTokens,omitempty"`  // DeepSeek: prompt_cache_hit_tokens
+	PromptCacheMissTokens int `json:"promptCacheMissTokens,omitempty"` // DeepSeek: prompt_cache_miss_tokens
+	ReasoningTokens       int `json:"reasoningTokens,omitempty"`       // DeepSeek: completion_tokens_details.reasoning_tokens
+}
+
 // ChatResponse is the output from ChatClient.Chat.
 type ChatResponse struct {
 	Message    ChatMessage
-	StopReason string // "end_turn" or "tool_use"
+	StopReason string     // "end_turn" or "tool_use"
+	Usage      *ChatUsage // Token usage from the API response (nil if not provided)
 }
 
 // ChatClient extends Client with conversational capabilities including tool use.

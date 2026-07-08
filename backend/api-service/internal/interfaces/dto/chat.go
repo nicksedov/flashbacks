@@ -52,4 +52,11 @@ type SSEEvent struct {
 	Error      string `json:"error,omitempty"`
 	TokenCount int    `json:"tokenCount,omitempty"`
 	MaxTokens  int    `json:"maxTokens,omitempty"`
+
+	// DeepSeek-specific extended usage fields
+	PromptTokens          int `json:"promptTokens,omitempty"`
+	CompletionTokens      int `json:"completionTokens,omitempty"`
+	PromptCacheHitTokens  int `json:"promptCacheHitTokens,omitempty"`
+	PromptCacheMissTokens int `json:"promptCacheMissTokens,omitempty"`
+	ReasoningTokens       int `json:"reasoningTokens,omitempty"`
 }

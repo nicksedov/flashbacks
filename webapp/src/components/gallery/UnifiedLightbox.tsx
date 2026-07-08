@@ -106,6 +106,11 @@ export function UnifiedLightbox({
     sendMessage,
     abortStream,
     resetForImage,
+    promptTokens,
+    completionTokens,
+    promptCacheHitTokens,
+    promptCacheMissTokens,
+    reasoningTokens,
   } = useChatAgent(language)
 
   // Reset conversation state and load/create when image changes
@@ -232,6 +237,11 @@ export function UnifiedLightbox({
                 onNewConversation={handleNewConversation}
                 onDeleteConversation={handleDeleteConversation}
                 onLoadConversation={handleLoadConversation}
+                promptTokens={promptTokens}
+                completionTokens={completionTokens}
+                promptCacheHitTokens={promptCacheHitTokens}
+                promptCacheMissTokens={promptCacheMissTokens}
+                reasoningTokens={reasoningTokens}
               />
             )}
             {activeMode === "exif" && (
@@ -291,6 +301,11 @@ function ChatPanelContent(props: {
   onNewConversation: () => void
   onDeleteConversation: () => void
   onLoadConversation: (id: number) => void
+  promptTokens?: number
+  completionTokens?: number
+  promptCacheHitTokens?: number
+  promptCacheMissTokens?: number
+  reasoningTokens?: number
 }) {
   return (
     <ChatPanel

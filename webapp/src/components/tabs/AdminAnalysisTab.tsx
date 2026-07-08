@@ -16,10 +16,11 @@ const PROVIDER_LABELS: Record<LlmProviderType, string> = {
   ollama: "Ollama",
   ollama_cloud: "Ollama Cloud",
   openai: "OpenAI API compatible",
+  deepseek: "DeepSeek",
 }
 
 // Allowed provider types for new providers
-const ALLOWED_PROVIDER_TYPES: LlmProviderType[] = ["ollama", "ollama_cloud", "openai"]
+const ALLOWED_PROVIDER_TYPES: LlmProviderType[] = ["ollama", "ollama_cloud", "openai", "deepseek"]
 
 const EMPTY_SETTINGS: LlmSettingsResponse = {
   id: 0,
@@ -500,8 +501,14 @@ export function AdminAnalysisTab() {
   	}
 
   	// Resolve API URL: ollama_cloud uses predefined URL, others use user input with defaults
-  	const defaultApiUrl = newProviderType === "ollama" ? "http://localhost:11434" : newProviderType === "ollama_cloud" ? "https://ollama.com" : "https://api.openai.com"
-  	const apiUrl = newProviderType === "ollama_cloud" ? defaultApiUrl : (newProviderApiUrl.trim() || defaultApiUrl)
+  	const defaultApiUrl = newProviderType === "ollama"
+  		? "http://localhost:11434"
+  		: newProviderType === "ollama_cloud"
+  			? "https://ollama.com"
+  			: newProviderType === "deepseek"
+  				? "https://api.deepseek.com"
+  				: "https://api.openai.com"
+  	const apiUrl = (newProviderType === "ollama_cloud" || newProviderType === "deepseek") ? defaultApiUrl : (newProviderApiUrl.trim() || defaultApiUrl)
 
   	setIsLlmSaving(true)
   	try {
@@ -509,7 +516,7 @@ export function AdminAnalysisTab() {
   			alias: newProviderAlias.trim(),
   			name: newProviderType,
   			apiUrl,
-  			apiKey: (newProviderType === "ollama_cloud" || newProviderType === "openai") ? newProviderApiKey : undefined,
+  			apiKey: (newProviderType === "ollama_cloud" || newProviderType === "openai" || newProviderType === "deepseek") ? newProviderApiKey : undefined,
   			model: newProviderModel || "minicpm-v",
   		})
   		toast.success(t("llm_ocr.settingsSaved"))
@@ -1020,15 +1027,15 @@ export function AdminAnalysisTab() {
                         <Label htmlFor="new-apiurl">API URL</Label>
                         <Input
                           id="new-apiurl"
-                          placeholder={newProviderType === "ollama" ? "http://localhost:11434" : "https://api.openai.com"}
+                          placeholder={newProviderType === "ollama" ? "http://localhost:11434" : newProviderType === "deepseek" ? "https://api.deepseek.com" : "https://api.openai.com"}
                           value={newProviderApiUrl}
                           onChange={(e) => setNewProviderApiUrl(e.target.value)}
                         />
                       </div>
                     )}
 
-                    {/* API Key (only for Ollama Cloud and OpenAI) */}
-                    {(newProviderType === "ollama_cloud" || newProviderType === "openai") && (
+                    {/* API Key (only for Ollama Cloud, OpenAI, and DeepSeek) */}
+                    {(newProviderType === "ollama_cloud" || newProviderType === "openai" || newProviderType === "deepseek") && (
                       <div className="space-y-2">
                         <Label htmlFor="new-apikey">API Key</Label>
                         <Input

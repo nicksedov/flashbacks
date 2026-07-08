@@ -526,7 +526,7 @@ export interface OcrClassificationStatusResponse {
 
 // --- LLM OCR Types ---
 
-export type LlmProviderType = "ollama" | "ollama_cloud" | "openai"
+export type LlmProviderType = "ollama" | "ollama_cloud" | "openai" | "deepseek"
 
 export interface LlmProviderDTO {
   id: number
@@ -826,9 +826,15 @@ export interface SSEDoneEvent {
 }
 
 export interface SSETokenUsageEvent {
-  type: "token_usage"
-  tokenCount: number
-  maxTokens: number
+	type: "token_usage"
+	tokenCount: number
+	maxTokens: number
+	// DeepSeek-specific extended usage fields
+	promptTokens?: number
+	completionTokens?: number
+	promptCacheHitTokens?: number
+	promptCacheMissTokens?: number
+	reasoningTokens?: number
 }
 
 export type SSEEvent = SSEToolCallEvent | SSEToolResultEvent | SSEMessageEvent | SSEErrorEvent | SSEDoneEvent | SSETokenUsageEvent

@@ -51,6 +51,13 @@ type ToolEvent struct {
 	Error      string `json:"error,omitempty"`
 	TokenCount int    `json:"tokenCount,omitempty"`
 	MaxTokens  int    `json:"maxTokens,omitempty"`
+
+	// DeepSeek-specific extended usage fields (populated when provider returns them)
+	PromptTokens          int `json:"promptTokens,omitempty"`
+	CompletionTokens      int `json:"completionTokens,omitempty"`
+	PromptCacheHitTokens  int `json:"promptCacheHitTokens,omitempty"`
+	PromptCacheMissTokens int `json:"promptCacheMissTokens,omitempty"`
+	ReasoningTokens       int `json:"reasoningTokens,omitempty"`
 }
 
 // ToolEventHandler is called during agent execution to stream events.
@@ -168,9 +175,21 @@ func (a *Agent) ProcessMessage(ctx context.Context, convID uint, userMessage str
 
 			if eventHandler != nil {
 				eventHandler(ToolEvent{Type: "message", Content: resp.Message.Content})
-				// Emit token usage event
+				// Emit token usage event with optional DeepSeek-specific fields
 				tokenCount, _ := a.conversationService.CountTokens(ctx, convID)
-				eventHandler(ToolEvent{Type: "token_usage", TokenCount: tokenCount, MaxTokens: effectiveMax})
+				usageEvent := ToolEvent{
+					Type:       "token_usage",
+					TokenCount: tokenCount,
+					MaxTokens:  effectiveMax,
+				}
+				if resp.Usage != nil {
+					usageEvent.PromptTokens = resp.Usage.PromptTokens
+					usageEvent.CompletionTokens = resp.Usage.CompletionTokens
+					usageEvent.PromptCacheHitTokens = resp.Usage.PromptCacheHitTokens
+					usageEvent.PromptCacheMissTokens = resp.Usage.PromptCacheMissTokens
+					usageEvent.ReasoningTokens = resp.Usage.ReasoningTokens
+				}
+				eventHandler(usageEvent)
 				eventHandler(ToolEvent{Type: "done"})
 			}
 

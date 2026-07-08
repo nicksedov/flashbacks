@@ -122,13 +122,12 @@ func (s *ConversationService) AddMessage(ctx context.Context, convID uint, msg d
 		Count(&count)
 
 	if count == 1 && msg.Role == "user" {
-		title := msg.Content
-		if len(title) > 50 {
-			title = title[:50] + "..."
-		}
-		s.db.Model(&domain.Conversation{}).
+		title := truncateUTF8(msg.Content, 50)
+		if err := s.db.Model(&domain.Conversation{}).
 			Where("id = ?", convID).
-			Update("title", title)
+			Update("title", title).Error; err != nil {
+			return fmt.Errorf("failed to update conversation title: %w", err)
+		}
 	}
 
 	return nil
@@ -267,10 +266,7 @@ func (s *ConversationService) GenerateDisplaySummary(ctx context.Context, convID
 		// Fallback: use first user message as summary
 		for _, m := range messages {
 			if m.Role == "user" {
-				summary := m.Content
-				if len(summary) > 100 {
-					summary = summary[:100] + "..."
-				}
+				summary := truncateUTF8(m.Content, 100)
 				s.db.Model(&domain.Conversation{}).Where("id = ?", convID).Update("summary", summary)
 				return
 			}
@@ -297,10 +293,7 @@ func (s *ConversationService) GenerateDisplaySummary(ctx context.Context, convID
 		// Fallback to first user message
 		for _, m := range messages {
 			if m.Role == "user" {
-				summary := m.Content
-				if len(summary) > 100 {
-					summary = summary[:100] + "..."
-				}
+				summary := truncateUTF8(m.Content, 100)
 				s.db.Model(&domain.Conversation{}).Where("id = ?", convID).Update("summary", summary)
 				return
 			}
@@ -308,10 +301,7 @@ func (s *ConversationService) GenerateDisplaySummary(ctx context.Context, convID
 		return
 	}
 
-	summary := resp.Message.Content
-	if len(summary) > 100 {
-		summary = summary[:100] + "..."
-	}
+	summary := truncateUTF8(resp.Message.Content, 100)
 	s.db.Model(&domain.Conversation{}).Where("id = ?", convID).Update("summary", summary)
 }
 
@@ -336,6 +326,17 @@ func MessagesToChatMessages(messages []domain.ConversationMessage) []llm.ChatMes
 		result = append(result, cm)
 	}
 	return result
+}
+
+// truncateUTF8 truncates a string to a maximum number of runes (not bytes),
+// appending "..." if truncated. This ensures valid UTF-8 is never broken
+// mid-character.
+func truncateUTF8(s string, maxRunes int) string {
+	runes := []rune(s)
+	if len(runes) > maxRunes {
+		return string(runes[:maxRunes]) + "..."
+	}
+	return s
 }
 
 // estimateTokens provides a rough token count estimate.

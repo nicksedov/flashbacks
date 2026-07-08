@@ -40,6 +40,12 @@ interface ChatPanelProps {
   onDeleteConversation: () => void
   onLoadConversation: (id: number) => void
   className?: string
+  // DeepSeek-specific extended usage info
+  promptTokens?: number
+  completionTokens?: number
+  promptCacheHitTokens?: number
+  promptCacheMissTokens?: number
+  reasoningTokens?: number
 }
 
 interface Suggestion {
@@ -308,6 +314,9 @@ export function ChatPanel({
   onDeleteConversation,
   onLoadConversation,
   className,
+  promptCacheHitTokens,
+  promptCacheMissTokens,
+  reasoningTokens,
 }: ChatPanelProps) {
   const { t } = useTranslation()
   const [input, setInput] = useState("")
@@ -417,6 +426,24 @@ export function ChatPanel({
               <span className="text-xs text-muted-foreground tabular-nums whitespace-nowrap">
                 {formatNumber(tokenCount)} / {formatNumber(maxTokens)}
               </span>
+              {/* DeepSeek cache hit indicator */}
+              {(promptCacheHitTokens ?? 0) > 0 && (
+                <span
+                  className="text-[10px] text-green-600 dark:text-green-400 tabular-nums shrink-0"
+                  title={`Cache hit: ${formatNumber(promptCacheHitTokens ?? 0)}\nCache miss: ${formatNumber(promptCacheMissTokens ?? 0)}`}
+                >
+                  ⚡{((promptCacheHitTokens ?? 0) / ((promptCacheHitTokens ?? 0) + (promptCacheMissTokens ?? 1)) * 100).toFixed(0)}%
+                </span>
+              )}
+              {/* DeepSeek reasoning tokens indicator */}
+              {(reasoningTokens ?? 0) > 0 && (
+                <span
+                  className="text-[10px] text-violet-600 dark:text-violet-400 tabular-nums shrink-0"
+                  title={`Reasoning tokens: ${formatNumber(reasoningTokens ?? 0)}`}
+                >
+                  🧠{formatNumber(reasoningTokens ?? 0)}
+                </span>
+              )}
             </div>
           ) : (
             <span className="text-sm font-semibold flex-1 min-w-0">{t("chat.title")}</span>

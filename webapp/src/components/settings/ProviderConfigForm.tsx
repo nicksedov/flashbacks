@@ -12,6 +12,7 @@ const PROVIDER_LABELS: Record<LlmProviderType, string> = {
   ollama: "Ollama",
   ollama_cloud: "Ollama Cloud",
   openai: "OpenAI API compatible",
+  deepseek: "DeepSeek",
 }
 
 interface ProviderConfigFormProps {

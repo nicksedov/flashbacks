@@ -25,4 +25,5 @@ const (
 	ProviderOllama      = "ollama"
 	ProviderOllamaCloud = "ollama_cloud"
 	ProviderOpenAI      = "openai"
+	ProviderDeepSeek    = "deepseek"
 )

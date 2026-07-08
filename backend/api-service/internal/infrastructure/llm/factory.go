@@ -17,6 +17,11 @@ func NewClient(provider, baseURL, apiKey, model string, maxImageMegapixels float
 			return nil, fmt.Errorf("API key is required for OpenAI provider")
 		}
 		return NewOpenAIClient(baseURL, apiKey, model, maxImageMegapixels), nil
+	case ProviderDeepSeek:
+		if apiKey == "" {
+			return nil, fmt.Errorf("API key is required for DeepSeek provider")
+		}
+		return NewDeepSeekClient(baseURL, apiKey, model), nil
 	default:
 		return nil, fmt.Errorf("unsupported LLM provider: %s", provider)
 	}

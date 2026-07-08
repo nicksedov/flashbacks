@@ -3,7 +3,9 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/flashbacks/api-service/internal/domain"
 	"github.com/flashbacks/api-service/internal/infrastructure/llm"
@@ -229,6 +231,45 @@ func TestAutoTitleTruncated(t *testing.T) {
 	got, _ := svc.GetConversationByID(context.Background(), conv.ID)
 	if len(got.Title) > 54 { // 50 + "..."
 		t.Errorf("title too long: %q (len=%d)", got.Title, len(got.Title))
+	}
+}
+
+func TestAutoTitleCyrillicUTF8(t *testing.T) {
+	db, cleanup := testutil.NewTestDB(t)
+	defer cleanup()
+
+	svc := NewConversationService(db)
+	conv, _ := svc.CreateConversation(context.Background(), 1, "", "ru")
+
+	// 60 Cyrillic characters = 120 bytes; the old byte-slice at [:50] would
+	// split a 2-byte character and produce invalid UTF-8 like 0xd0 0x2e.
+	longCyrillic := "Описать изображение на этой фотографии в высоком разрешении и деталях"
+	svc.AddMessage(context.Background(), conv.ID, domain.ConversationMessage{Role: "user", Content: longCyrillic})
+
+	got, _ := svc.GetConversationByID(context.Background(), conv.ID)
+
+	// Title must be valid UTF-8
+	if !utf8.ValidString(got.Title) {
+		t.Errorf("title contains invalid UTF-8: %q", got.Title)
+	}
+
+	// Title must be truncated (50 runes + "...")
+	if len([]rune(got.Title)) > 54 {
+		t.Errorf("title too long: %q (runes=%d)", got.Title, len([]rune(got.Title)))
+	}
+
+	// Title must end with "..."
+	if !strings.HasSuffix(got.Title, "...") {
+		t.Errorf("title should end with '...': %q", got.Title)
+	}
+
+	// Title must be a valid prefix of the original (by runes)
+	origRunes := []rune(longCyrillic)
+	titleRunes := []rune(strings.TrimSuffix(got.Title, "..."))
+	for i := 0; i < len(titleRunes); i++ {
+		if titleRunes[i] != origRunes[i] {
+			t.Errorf("title rune %d mismatch: got %q, expected %q", i, titleRunes[i], origRunes[i])
+		}
 	}
 }
 

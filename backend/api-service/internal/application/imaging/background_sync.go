@@ -88,6 +88,16 @@ func (bsm *BackgroundSyncManager) Start(syncDays []time.Weekday, hour int, minut
 	bsm.timezoneOffset = timezoneOffset
 	bsm.stopCh = make(chan struct{})
 	bsm.scheduleCh = make(chan struct{})
+
+	// Load persisted last sync stats from DB so they survive restarts
+	var settings domain.AppSettings
+	if result := bsm.db.First(&settings, 1); result.Error == nil {
+		bsm.lastSyncAt = settings.LastSyncAt
+		bsm.lastSyncNew = settings.LastSyncNew
+		bsm.lastSyncUpdated = settings.LastSyncUpdated
+		bsm.lastSyncDeleted = settings.LastSyncDeleted
+		bsm.lastSyncThumbnails = settings.LastSyncThumbnails
+	}
 	bsm.mu.Unlock()
 
 	log.Printf("Starting background gallery sync (days=%v at %02d:%02d, tzOffset=%d min)", syncDays, hour, minute, timezoneOffset)

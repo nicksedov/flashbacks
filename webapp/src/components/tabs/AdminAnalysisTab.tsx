@@ -440,6 +440,7 @@ export function AdminAnalysisTab() {
       } catch {
         setLlmSettings(EMPTY_SETTINGS)
       } finally {
+        isInitialLoad.current = false
         setIsLlmLoading(false)
       }
 

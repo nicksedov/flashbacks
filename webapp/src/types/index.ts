@@ -815,7 +815,12 @@ export interface SmartSearchResponse {
 
 export interface EmbeddingBackfillStatus {
 	running: boolean
-	progress: EmbeddingBackfillProgress
+	progress: {
+		total: number
+		processed: number
+		remaining: number
+		lastError: string
+	}
 }
 
 // --- Move Files Types ---

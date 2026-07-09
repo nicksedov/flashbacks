@@ -93,10 +93,6 @@ export interface BatchDeleteResponse {
   failedFiles?: string[]
 }
 
-export interface ApiError {
-  error: string
-}
-
 // --- Gallery Folder Types ---
 
 export interface GalleryFolderDTO {
@@ -428,22 +424,6 @@ export interface UsersListResponse {
   total: number
 }
 
-export interface AuditLogDTO {
-  id: number
-  actorUserId: number | null
-  action: string
-  targetType: string
-  targetId: number | null
-  meta: string
-  createdAt: string
-}
-
-export interface AuditLogsResponse {
-  logs: AuditLogDTO[]
-  total: number
-  page: number
-}
-
 // --- OCR Status Types ---
 
 export interface OCRStatus {
@@ -594,16 +574,6 @@ export interface LlmOcrRequest {
   force?: boolean
 }
 
-export interface LlmOcrResponse {
-  success: boolean
-  markdownContent?: string
-  language: string
-  provider: string
-  model: string
-  processingTimeMs: number
-  error?: string
-}
-
 export interface LlmRecognizeStatusResponse {
   status: "processing" | "completed" | "failed" | "not_found"
   markdownContent?: string
@@ -651,18 +621,6 @@ export interface ThumbnailCacheStatsResponse {
   initialized: boolean
 }
 
-export interface ThumbnailCacheStatusResponse {
-  enabled: boolean
-  cacheDir: string
-  filesCount: number
-  totalSize: number
-  totalSizeHuman: string
-}
-
-export interface WarmupThumbnailsRequest {
-  filePaths: string[]
-}
-
 // --- AI Assistant Types ---
 
 export type AiActionType = "describe" | "tags" | "recognizeText" | "askQuestion"
@@ -684,17 +642,6 @@ export interface AiActionStartResponse {
 export interface AiActionStatusResponse {
   taskId: string
   status: string  // "processing", "completed", "failed"
-  action: AiActionType
-  result?: string
-  tags?: string[]  // Only for "tags" action
-  error?: string
-  provider?: string
-  model?: string
-  processingTimeMs?: number
-}
-
-export interface AiActionResponse {
-  success: boolean
   action: AiActionType
   result?: string
   tags?: string[]  // Only for "tags" action
@@ -794,10 +741,6 @@ export interface CreateConversationRequest {
   language?: string
 }
 
-export interface SendMessageRequest {
-  content: string
-}
-
 // SSE event types from the agent
 export interface SSEToolCallEvent {
   type: "tool_call"
@@ -842,18 +785,6 @@ export type SSEEvent = SSEToolCallEvent | SSEToolResultEvent | SSEMessageEvent |
 
 // --- Tag Search Types ---
 
-export interface TagSearchResult {
-  id: number
-  path: string
-  fileName: string
-  modTime?: string
-}
-
-export interface TagSearchResponse {
-  images: TagSearchResult[]
-  total: number
-}
-
 // --- Smart Search Types ---
 
 // --- Image Tags Types ---
@@ -881,13 +812,6 @@ export interface SmartSearchResponse {
 }
 
 // --- Embedding Backfill Types ---
-
-export interface EmbeddingBackfillProgress {
-  total: number
-  processed: number
-  remaining: number
-  lastError: string
-}
 
 export interface EmbeddingBackfillStatus {
 	running: boolean
@@ -929,10 +853,4 @@ export interface SubdirEntry {
 export interface SubdirsResponse {
 	subdirs: SubdirEntry[]
 	path: string
-}
-
-export interface MoveFilesResponse {
-	success: number
-	failed: number
-	failedFiles?: string[]
 }

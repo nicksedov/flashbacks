@@ -44,7 +44,6 @@ import type {
   UpdateUserRequest,
   ResetPasswordRequest,
   UsersListResponse,
-  AuditLogsResponse,
   OCRStatusResponse,
   OcrDocumentsResponse,
   OcrDataResponse,
@@ -57,7 +56,6 @@ import type {
   LlmOcrDataResponse,
   LlmModelsResponse,
   ThumbnailCacheStatsResponse,
-  WarmupThumbnailsRequest,
   TagScanStatusResponse,
   GeocodeSearchResponse,
   UpdateGpsRequest,
@@ -69,7 +67,6 @@ import type {
   ChatMessage,
   CreateConversationRequest,
   SSEEvent,
-  TagSearchResponse,
   SmartSearchResponse,
   EmbeddingBackfillStatus,
   SyncStatusResponse,
@@ -347,10 +344,6 @@ export function logout(): Promise<{ message: string }> {
   return apiPost<{ message: string }>("/api/auth/logout")
 }
 
-export function fetchCurrentUser(): Promise<{ user: import("@/types").UserDTO }> {
-  return apiGet<{ user: import("@/types").UserDTO }>("/api/auth/me")
-}
-
 export function changePassword(req: ChangePasswordRequest): Promise<ChangePasswordResponse> {
   return apiPost<ChangePasswordResponse>("/api/auth/change-password", req)
 }
@@ -400,10 +393,6 @@ export function deleteUser(id: number): Promise<{ message: string }> {
 
 export function resetUserPassword(id: number, req: ResetPasswordRequest): Promise<{ message: string }> {
   return apiPost<{ message: string }>(`/api/admin/users/${id}/reset-password`, req)
-}
-
-export function fetchAuditLogs(page: number): Promise<AuditLogsResponse> {
-  return apiGet<AuditLogsResponse>("/api/admin/audit", { page: String(page) })
 }
 
 // --- OCR Status ---
@@ -536,10 +525,6 @@ export function fetchThumbnailCacheStats(): Promise<ThumbnailCacheStatsResponse>
 
 export function invalidateAllThumbnails(): Promise<{ message: string }> {
   return apiDelete<{ message: string }>("/api/thumbnail/cache/invalidate-all")
-}
-
-export function warmupThumbnails(req: WarmupThumbnailsRequest): Promise<{ message: string }> {
-  return apiPost<{ message: string }>("/api/thumbnail/cache/warmup", req)
 }
 
 export function enableThumbnailCache(): Promise<{ message: string }> {
@@ -677,15 +662,6 @@ export function sendMessageStream(
     if (err.name !== "AbortError") {
       onEvent({ type: "error", error: err.message })
     }
-  })
-}
-
-// --- Tag Search ---
-
-export function searchByTags(tags: string[], matchAll = false): Promise<TagSearchResponse> {
-  return apiGet<TagSearchResponse>("/api/gallery/tag-search", {
-    tags: tags.join(","),
-    matchAll: matchAll ? "true" : "false",
   })
 }
 

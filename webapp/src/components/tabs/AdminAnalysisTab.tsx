@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -74,17 +74,17 @@ export function AdminAnalysisTab() {
   // LLM Settings state - provider selections only (no CRUD)
   const [llmSettings, setLlmSettings] = useState<LlmSettingsResponse>(EMPTY_SETTINGS)
   const [isLlmLoading, setIsLlmLoading] = useState(false)
-  const [isLlmSaving, setIsLlmSaving] = useState(false)
-  const [llmFormDirty, setLlmFormDirty] = useState(false)
 
   // Embedding LLM Settings state
   const [embeddingProviderAlias, setEmbeddingProviderAlias] = useState("")
-  const [isEmbeddingFormDirty, setIsEmbeddingFormDirty] = useState(false)
-  const [isEmbeddingSaving, setIsEmbeddingSaving] = useState(false)
   const [embeddingDimension, setEmbeddingDimension] = useState<number | null>(null)
   const [embeddingBatchSize, setEmbeddingBatchSize] = useState<number>(50)
   const [isEmbeddingProbing, setIsEmbeddingProbing] = useState(false)
   const [embeddingProbeError, setEmbeddingProbeError] = useState<string | null>(null)
+
+  // Refs for auto-save logic
+  const isInitialLoad = useRef(true)
+  const batchSizeDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Probe embedding dimension by calling the backend probe endpoint.
   const probeDimension = useCallback(async (alias: string, model: string) => {
@@ -216,88 +216,66 @@ export function AdminAnalysisTab() {
     }
   }, [])
 
-  const loadLlmSettings = useCallback(async () => {
-    try {
-      setIsLlmLoading(true)
-      const settings = await fetchLlmSettings()
-      setLlmSettings(settings)
-      setLlmFormDirty(false)
-      // Update tag scan state from LLM settings
-      setTagScanEnabled(settings.tagScanEnabled ?? false)
-      setTagScanStartHour(settings.tagScanStartHour ?? 23)
-      setTagScanStartMinute(settings.tagScanStartMinute ?? 0)
-      setTagScanEndHour(settings.tagScanEndHour ?? 7)
-      setTagScanEndMinute(settings.tagScanEndMinute ?? 0)
-      // Initialize embedding state from settings
-      const embAlias = settings.embeddingProviderAlias || settings.activeProvider
-      setEmbeddingProviderAlias(embAlias)
-      setEmbeddingDimension(settings.embeddingDimension || 1024)
-      setEmbeddingBatchSize(settings.embeddingBatchSize || 50)
-      setIsEmbeddingFormDirty(false)
-    } catch {
-      setLlmSettings(EMPTY_SETTINGS)
-    } finally {
-      setIsLlmLoading(false)
+  // Auto-save Chat LLM provider on change
+  const handleActiveProviderChange = useCallback((value: string) => {
+    if (isInitialLoad.current) {
+      setLlmSettings((prev) => ({ ...prev, activeProvider: value }))
+      return
     }
-  }, [])
-
-  // Simplified save: only provider selections, no provider config saving
-  const handleSaveLlmSettings = useCallback(async () => {
-    setIsLlmSaving(true)
-    try {
-      await updateLlmSettings({
-        activeProvider: llmSettings.activeProvider,
-        vlProvider: llmSettings.vlProvider,
+    setLlmSettings((prev) => {
+      const updated = { ...prev, activeProvider: value }
+      updateLlmSettings({
+        activeProvider: value,
+        vlProvider: updated.vlProvider,
+      }).then(() => {
+        toast.success(t("llm_ocr.settingsSaved"))
+      }).catch(() => {
+        toast.error(t("llm_ocr.settingsSaveFailed"))
       })
-      toast.success(t("llm_ocr.settingsSaved"))
-      setLlmFormDirty(false)
-      await loadLlmSettings()
-    } catch {
-      toast.error(t("llm_ocr.settingsSaveFailed"))
-    } finally {
-      setIsLlmSaving(false)
-    }
-  }, [llmSettings.activeProvider, llmSettings.vlProvider, loadLlmSettings, t])
+      return updated
+    })
+  }, [t])
 
-  // Embedding provider change handler
+  // Auto-save VL LLM provider on change
+  const handleVlProviderChange = useCallback((value: string) => {
+    if (isInitialLoad.current) {
+      setLlmSettings((prev) => ({ ...prev, vlProvider: value }))
+      return
+    }
+    setLlmSettings((prev) => {
+      const updated = { ...prev, vlProvider: value }
+      updateLlmSettings({
+        activeProvider: updated.activeProvider,
+        vlProvider: value,
+      }).then(() => {
+        toast.success(t("llm_ocr.settingsSaved"))
+      }).catch(() => {
+        toast.error(t("llm_ocr.settingsSaveFailed"))
+      })
+      return updated
+    })
+  }, [t])
+
+  // Auto-save Embedding provider on change
   const handleEmbeddingProviderChange = useCallback((value: string) => {
+    if (isInitialLoad.current) {
+      setEmbeddingProviderAlias(value)
+      return
+    }
     setEmbeddingProviderAlias(value)
-    setIsEmbeddingFormDirty(true)
     setEmbeddingDimension(null)
-    // Probe dimension using the provider's configured model
     const selectedProvider = llmSettings.providers.find((p) => p.alias === value)
     if (selectedProvider?.model) {
       probeDimension(value, selectedProvider.model)
     }
-  }, [llmSettings.providers, probeDimension])
-
-  // Save embedding settings - provider selection only (model is part of provider config)
-  const handleSaveEmbeddingSettings = useCallback(async () => {
-    setIsEmbeddingSaving(true)
-    try {
-      await updateLlmSettings({
-        embeddingProviderAlias,
-        embeddingBatchSize,
-      })
+    updateLlmSettings({
+      embeddingProviderAlias: value,
+    }).then(() => {
       toast.success(t("llm_ocr.settingsSaved"))
-      setIsEmbeddingFormDirty(false)
-      await loadLlmSettings()
-    } catch {
+    }).catch(() => {
       toast.error(t("llm_ocr.settingsSaveFailed"))
-    } finally {
-      setIsEmbeddingSaving(false)
-    }
-  }, [embeddingProviderAlias, embeddingBatchSize, loadLlmSettings, t])
-
-  const handleActiveProviderChange = useCallback((value: string) => {
-    setLlmSettings((prev) => ({ ...prev, activeProvider: value }))
-    setLlmFormDirty(true)
-  }, [])
-
-  const handleVlProviderChange = useCallback((value: string) => {
-    setLlmSettings((prev) => ({ ...prev, vlProvider: value }))
-    setLlmFormDirty(true)
-  }, [])
+    })
+  }, [llmSettings.providers, probeDimension, t])
 
   // Tag Scan handlers
   const loadTagScanStatus = useCallback(async () => {
@@ -406,6 +384,27 @@ export function AdminAnalysisTab() {
     }
   }, [])
 
+  // Debounced auto-save for embedding batch size
+  useEffect(() => {
+    if (isInitialLoad.current) return
+
+    if (batchSizeDebounceRef.current) {
+      clearTimeout(batchSizeDebounceRef.current)
+    }
+
+    batchSizeDebounceRef.current = setTimeout(() => {
+      updateLlmSettings({ embeddingBatchSize }).catch(() => {
+        toast.error(t("llm_ocr.settingsSaveFailed"))
+      })
+    }, 800)
+
+    return () => {
+      if (batchSizeDebounceRef.current) {
+        clearTimeout(batchSizeDebounceRef.current)
+      }
+    }
+  }, [embeddingBatchSize, t])
+
   useEffect(() => {
     const init = async () => {
       // Load OCR status
@@ -424,7 +423,6 @@ export function AdminAnalysisTab() {
         setIsLlmLoading(true)
         const settings = await fetchLlmSettings()
         setLlmSettings(settings)
-        setLlmFormDirty(false)
         setTagScanEnabled(settings.tagScanEnabled ?? false)
         setTagScanStartHour(settings.tagScanStartHour ?? 23)
         setTagScanStartMinute(settings.tagScanStartMinute ?? 0)
@@ -434,7 +432,6 @@ export function AdminAnalysisTab() {
         setEmbeddingProviderAlias(embAlias)
         setEmbeddingDimension(settings.embeddingDimension || 1024)
         setEmbeddingBatchSize(settings.embeddingBatchSize || 50)
-        setIsEmbeddingFormDirty(false)
         // Probe dimension using the provider's configured model
         const embProvider = settings.providers.find((p) => p.alias === embAlias)
         if (embAlias && embProvider?.model) {
@@ -718,22 +715,6 @@ export function AdminAnalysisTab() {
                 </p>
               )}
 
-              {/* Save Button */}
-              <div className="flex justify-end pt-2">
-                <Button
-                  onClick={handleSaveLlmSettings}
-                  disabled={isLlmSaving || !llmFormDirty}
-                >
-                  {isLlmSaving ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      {t("common.saving")}
-                    </>
-                  ) : (
-                    t("common.save")
-                  )}
-                </Button>
-              </div>
             </div>
           )}
         </CardContent>
@@ -882,7 +863,6 @@ export function AdminAnalysisTab() {
                     const num = parseInt(e.target.value, 10)
                     if (!isNaN(num) && num >= 1) {
                       setEmbeddingBatchSize(num)
-                      setIsEmbeddingFormDirty(true)
                     } else if (e.target.value === "") {
                       setEmbeddingBatchSize(0)
                     }
@@ -898,23 +878,6 @@ export function AdminAnalysisTab() {
                   {t("llm_providers.noProviders")}
                 </p>
               )}
-
-              {/* Save Button */}
-              <div className="flex justify-end pt-2">
-                <Button
-                  onClick={handleSaveEmbeddingSettings}
-                  disabled={isEmbeddingSaving || !isEmbeddingFormDirty}
-                >
-                  {isEmbeddingSaving ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      {t("common.saving")}
-                    </>
-                  ) : (
-                    t("common.save")
-                  )}
-                </Button>
-              </div>
             </div>
           )}
         </CardContent>

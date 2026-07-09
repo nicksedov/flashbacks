@@ -44,6 +44,7 @@ export const translationsRu = {
   "common.saving": "Сохранение...",
   "common.actions": "Действия",
   "common.delete": "Удалить",
+  "common.edit": "Редактировать",
 
   // Settings tab
   "settings.title": "Галерея",
@@ -442,6 +443,7 @@ export const translationsRu = {
   "adminPanel.adminSettingsDescription": "Системные настройки для администраторов",
   "adminSettings.tabs.general": "Основные",
   "adminSettings.tabs.analysis": "Инструменты анализа",
+  "adminSettings.tabs.llmProviders": "LLM провайдеры",
   "adminPanel.ocr.title": "Поиск документов с OCR",
   "adminPanel.ocr.description": "Поиск и классификация изображений для обнаружения текстовых документов с помощью OCR",
   "adminPanel.ocr.scanAll": "Сканировать все",
@@ -787,6 +789,17 @@ export const translationsRu = {
   "llm_providers.modelsLoaded": "Загружено {count} моделей",
   "llm_providers.modelsLoadFailed": "Не удалось загрузить список моделей",
   "llm_providers.providerLabel": "Провайдер: {alias}",
+  "llm_providers.modelsCount": "{count} моделей",
+  "llm_providers.noModelsLoaded": "Модели не загружены. Нажмите обновить для загрузки.",
+  "llm_providers.usageChatAssistant": "ИИ-ассистент",
+  "llm_providers.usageImageAnalysis": "Анализ изображений",
+  "llm_providers.usageEmbeddings": "Эмбеддинги",
+  "llm_providers.usageShortChat": "Чат",
+  "llm_providers.usageShortVL": "VL",
+  "llm_providers.usageShortEmb": "Emb",
+  "llm_providers.cannotDeleteInUse": "Нельзя удалить провайдера, используемого для: {usages}. Сначала измените настройку во вкладке Инструменты анализа.",
+  "llm_providers.cannotDeleteInUseTooltip": "Провайдер используется и не может быть удалён",
+  "llm_providers.manageInProvidersTab": "Управление в LLM провайдерах",
 
   // Чат / Агент
   "chat.title": "ИИ-ассистент",

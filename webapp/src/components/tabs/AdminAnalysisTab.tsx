@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -6,11 +6,33 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
-import { fetchOCRStatus, startOcrClassification, startOcrClassificationChanges, stopOcrClassification, fetchOcrClassificationStatus, fetchLlmSettings, updateLlmSettings, createLlmProvider, updateLlmProvider, deleteLlmProvider, fetchLlmModels, fetchTagScanStatus, pauseTagScan, resumeTagScan, updateSettings, fetchSettings, probeEmbeddingDimension, fetchExifServiceStatus } from "@/api/endpoints"
-import { Shield, Loader2, Zap, Wand2, Play, Square, RefreshCw, Plus, Database } from "lucide-react"
+import {
+  fetchOCRStatus,
+  startOcrClassification,
+  startOcrClassificationChanges,
+  stopOcrClassification,
+  fetchOcrClassificationStatus,
+  fetchLlmSettings,
+  updateLlmSettings,
+  fetchTagScanStatus,
+  pauseTagScan,
+  resumeTagScan,
+  updateSettings,
+  fetchSettings,
+  probeEmbeddingDimension,
+  fetchExifServiceStatus,
+} from "@/api/endpoints"
+import { Shield, Loader2, Zap, Wand2, Play, Square, RefreshCw, Database } from "lucide-react"
 import { useTranslation } from "@/i18n"
-import type { OCRStatus, OcrClassificationStatusResponse, LlmSettingsResponse, LlmProviderDTO, LlmModelDTO, TagScanStatusResponse, LlmProviderType, ExifServiceStatus } from "@/types"
-import { ProviderConfigForm } from "@/components/settings/ProviderConfigForm"
+import type {
+  OCRStatus,
+  OcrClassificationStatusResponse,
+  LlmSettingsResponse,
+  TagScanStatusResponse,
+  LlmProviderType,
+  ExifServiceStatus,
+} from "@/types"
+
 // Provider type display labels
 const PROVIDER_LABELS: Record<LlmProviderType, string> = {
   ollama: "Ollama",
@@ -18,9 +40,6 @@ const PROVIDER_LABELS: Record<LlmProviderType, string> = {
   openai: "OpenAI API compatible",
   deepseek: "DeepSeek",
 }
-
-// Allowed provider types for new providers
-const ALLOWED_PROVIDER_TYPES: LlmProviderType[] = ["ollama", "ollama_cloud", "openai", "deepseek"]
 
 const EMPTY_SETTINGS: LlmSettingsResponse = {
   id: 0,
@@ -52,57 +71,22 @@ export function AdminAnalysisTab() {
   const [exifStatus, setExifStatus] = useState<ExifServiceStatus | null>(null)
   const [isExifLoading, setIsExifLoading] = useState(false)
 
-  // LLM Settings state
+  // LLM Settings state - provider selections only (no CRUD)
   const [llmSettings, setLlmSettings] = useState<LlmSettingsResponse>(EMPTY_SETTINGS)
   const [isLlmLoading, setIsLlmLoading] = useState(false)
   const [isLlmSaving, setIsLlmSaving] = useState(false)
   const [llmFormDirty, setLlmFormDirty] = useState(false)
-  const [availableModels, setAvailableModels] = useState<LlmModelDTO[]>([])
-  const [isModelsLoading, setIsModelsLoading] = useState(false)
-  const [showModelInput, setShowModelInput] = useState(false)
-
-  // Frontend mirror of DB-backed model cache for instant provider switching
-  const modelCacheRef = useRef<Record<string, LlmModelDTO[]>>({})
-
-  // New provider form state
-  const [showNewProvider, setShowNewProvider] = useState(false)
-  const [newProviderType, setNewProviderType] = useState<LlmProviderType>("ollama")
-  const [newProviderAlias, setNewProviderAlias] = useState("")
-  const [newProviderApiUrl, setNewProviderApiUrl] = useState("")
-  const [newProviderApiKey, setNewProviderApiKey] = useState("")
-  const [newProviderModel, setNewProviderModel] = useState("minicpm-v")
 
   // Embedding LLM Settings state
   const [embeddingProviderAlias, setEmbeddingProviderAlias] = useState("")
-  const [embeddingModel, setEmbeddingModel] = useState("qwen3-embedding:4b")
-  const [embeddingAvailableModels, setEmbeddingAvailableModels] = useState<LlmModelDTO[]>([])
-  const [embeddingIsModelsLoading, setEmbeddingIsModelsLoading] = useState(false)
-  const [embeddingShowModelInput, setEmbeddingShowModelInput] = useState(false)
   const [isEmbeddingFormDirty, setIsEmbeddingFormDirty] = useState(false)
   const [isEmbeddingSaving, setIsEmbeddingSaving] = useState(false)
   const [embeddingDimension, setEmbeddingDimension] = useState<number | null>(null)
   const [embeddingBatchSize, setEmbeddingBatchSize] = useState<number>(50)
   const [isEmbeddingProbing, setIsEmbeddingProbing] = useState(false)
   const [embeddingProbeError, setEmbeddingProbeError] = useState<string | null>(null)
- 
-  // Helper to get current active chat provider
-  const getCurrentProvider = useCallback(
-    (): LlmProviderDTO | undefined => {
-      return llmSettings.providers.find((p) => p.alias === llmSettings.activeProvider)
-    },
-    [llmSettings.providers, llmSettings.activeProvider]
-  )
-
-  // Helper to get current VL provider
-  const getCurrentVLProvider = useCallback(
-    (): LlmProviderDTO | undefined => {
-      return llmSettings.providers.find((p) => p.alias === llmSettings.vlProvider)
-    },
-    [llmSettings.providers, llmSettings.vlProvider]
-  )
 
   // Probe embedding dimension by calling the backend probe endpoint.
-  // The backend also persists the dimension into LlmSettings on success.
   const probeDimension = useCallback(async (alias: string, model: string) => {
     if (!alias || !model) return
     setIsEmbeddingProbing(true)
@@ -116,70 +100,6 @@ export function AdminAnalysisTab() {
       setIsEmbeddingProbing(false)
     }
   }, [t])
-
-  // Load models for a provider: uses frontend cache if available, otherwise fetches from backend (which uses DB cache).
-  // Pass forceRefresh=true to bypass both caches and re-fetch from the LLM provider.
-  const loadModelsForProvider = useCallback(
-    async (providerAlias: string, forceRefresh = false) => {
-      if (!providerAlias) return
-
-      // Check frontend cache first (mirrors DB cache, populated from settings response or prior fetches)
-      if (!forceRefresh && modelCacheRef.current[providerAlias]) {
-        setAvailableModels(modelCacheRef.current[providerAlias])
-        setShowModelInput(false)
-        return
-      }
-
-      setIsModelsLoading(true)
-      try {
-        const response = await fetchLlmModels(providerAlias, forceRefresh)
-        if (response.success && response.models.length > 0) {
-          modelCacheRef.current[providerAlias] = response.models
-          setAvailableModels(response.models)
-          setShowModelInput(false)
-          toast.success(t("llm_providers.modelsLoaded", { count: response.models.length }))
-        } else {
-          toast.error(response.error || t("llm_providers.modelsLoadFailed"))
-        }
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : t("llm_providers.modelsLoadFailed"))
-      } finally {
-        setIsModelsLoading(false)
-      }
-    },
-    [t]
-  )
-
-  // Load embedding models for a provider: uses same frontend cache, writes to embedding-specific state
-  const loadEmbeddingModelsForProvider = useCallback(
-    async (providerAlias: string, forceRefresh = false) => {
-      if (!providerAlias) return
-
-      if (!forceRefresh && modelCacheRef.current[providerAlias]) {
-        setEmbeddingAvailableModels(modelCacheRef.current[providerAlias])
-        setEmbeddingShowModelInput(false)
-        return
-      }
-
-      setEmbeddingIsModelsLoading(true)
-      try {
-        const response = await fetchLlmModels(providerAlias, forceRefresh)
-        if (response.success && response.models.length > 0) {
-          modelCacheRef.current[providerAlias] = response.models
-          setEmbeddingAvailableModels(response.models)
-          setEmbeddingShowModelInput(false)
-          toast.success(t("llm_providers.modelsLoaded", { count: response.models.length }))
-        } else {
-          toast.error(response.error || t("llm_providers.modelsLoadFailed"))
-        }
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : t("llm_providers.modelsLoadFailed"))
-      } finally {
-        setEmbeddingIsModelsLoading(false)
-      }
-    },
-    [t]
-  )
 
   // Tag Scan state
   const [tagScanEnabled, setTagScanEnabled] = useState(false)
@@ -302,9 +222,6 @@ export function AdminAnalysisTab() {
       const settings = await fetchLlmSettings()
       setLlmSettings(settings)
       setLlmFormDirty(false)
-      setShowNewProvider(false)
-      setNewProviderAlias("")
-      setNewProviderApiUrl("")
       // Update tag scan state from LLM settings
       setTagScanEnabled(settings.tagScanEnabled ?? false)
       setTagScanStartHour(settings.tagScanStartHour ?? 23)
@@ -314,7 +231,6 @@ export function AdminAnalysisTab() {
       // Initialize embedding state from settings
       const embAlias = settings.embeddingProviderAlias || settings.activeProvider
       setEmbeddingProviderAlias(embAlias)
-      setEmbeddingModel(settings.embeddingModel || "qwen3-embedding:4b")
       setEmbeddingDimension(settings.embeddingDimension || 1024)
       setEmbeddingBatchSize(settings.embeddingBatchSize || 50)
       setIsEmbeddingFormDirty(false)
@@ -325,98 +241,44 @@ export function AdminAnalysisTab() {
     }
   }, [])
 
+  // Simplified save: only provider selections, no provider config saving
   const handleSaveLlmSettings = useCallback(async () => {
     setIsLlmSaving(true)
     try {
-      // Save both chat and VL provider selections
       await updateLlmSettings({
         activeProvider: llmSettings.activeProvider,
         vlProvider: llmSettings.vlProvider,
       })
-
-      // Save chat provider settings if exists
-      const currentProvider = getCurrentProvider()
-      if (currentProvider) {
-      	const provUpdate: { apiUrl?: string; apiKey?: string; model?: string } = {
-      		apiUrl: currentProvider.apiUrl,
-      		model: currentProvider.model,
-      	}
-      	const isMasked = /^.{4}\.\.\..{4}$/.test(currentProvider.apiKey) && currentProvider.apiKey.length === 11
-      	if (!isMasked) {
-      		provUpdate.apiKey = currentProvider.apiKey
-      	}
-      	await updateLlmProvider(currentProvider.alias, provUpdate)
-      }
-
-      // Save VL provider settings if different from chat provider
-      const vlProvider = getCurrentVLProvider()
-      if (vlProvider && vlProvider.alias !== currentProvider?.alias) {
-        const vlUpdate: { apiUrl?: string; apiKey?: string; model?: string } = {
-          apiUrl: vlProvider.apiUrl,
-          model: vlProvider.model,
-        }
-        const isMasked = /^.{4}\.\.\..{4}$/.test(vlProvider.apiKey) && vlProvider.apiKey.length === 11
-        if (!isMasked) {
-          vlUpdate.apiKey = vlProvider.apiKey
-        }
-        await updateLlmProvider(vlProvider.alias, vlUpdate)
-      }
-
       toast.success(t("llm_ocr.settingsSaved"))
       setLlmFormDirty(false)
       await loadLlmSettings()
     } catch {
-    	toast.error(t("llm_ocr.settingsSaveFailed"))
+      toast.error(t("llm_ocr.settingsSaveFailed"))
     } finally {
       setIsLlmSaving(false)
     }
-  }, [llmSettings, loadLlmSettings, getCurrentProvider, getCurrentVLProvider, t])
+  }, [llmSettings.activeProvider, llmSettings.vlProvider, loadLlmSettings, t])
 
   // Embedding provider change handler
   const handleEmbeddingProviderChange = useCallback((value: string) => {
     setEmbeddingProviderAlias(value)
     setIsEmbeddingFormDirty(true)
     setEmbeddingDimension(null)
-    loadEmbeddingModelsForProvider(value)
-    // Re-probe dimension if a model is already selected
-    if (embeddingModel) {
-      probeDimension(value, embeddingModel)
+    // Probe dimension using the provider's configured model
+    const selectedProvider = llmSettings.providers.find((p) => p.alias === value)
+    if (selectedProvider?.model) {
+      probeDimension(value, selectedProvider.model)
     }
-  }, [loadEmbeddingModelsForProvider, embeddingModel, probeDimension])
+  }, [llmSettings.providers, probeDimension])
 
-  // Embedding model change handler
-  const handleEmbeddingModelChange = useCallback((value: string) => {
-    setEmbeddingModel(value)
-    setIsEmbeddingFormDirty(true)
-    setEmbeddingDimension(null)
-    // Trigger probe for new model
-    if (embeddingProviderAlias) {
-      probeDimension(embeddingProviderAlias, value)
-    }
-  }, [embeddingProviderAlias, probeDimension])
-
-  // Save embedding settings
+  // Save embedding settings - provider selection only (model is part of provider config)
   const handleSaveEmbeddingSettings = useCallback(async () => {
     setIsEmbeddingSaving(true)
     try {
       await updateLlmSettings({
         embeddingProviderAlias,
-        embeddingModel,
         embeddingBatchSize,
       })
-      // Also save embedding provider config (apiUrl, apiKey, model) if provider exists
-      const embProvider = llmSettings.providers.find((p) => p.alias === embeddingProviderAlias)
-      if (embProvider) {
-        const provUpdate: { apiUrl?: string; apiKey?: string; model?: string } = {
-          apiUrl: embProvider.apiUrl,
-          model: embProvider.model,
-        }
-        const isMasked = /^.{4}\.{3}.{4}$/.test(embProvider.apiKey) && embProvider.apiKey.length === 11
-        if (!isMasked) {
-          provUpdate.apiKey = embProvider.apiKey
-        }
-        await updateLlmProvider(embProvider.alias, provUpdate)
-      }
       toast.success(t("llm_ocr.settingsSaved"))
       setIsEmbeddingFormDirty(false)
       await loadLlmSettings()
@@ -425,126 +287,17 @@ export function AdminAnalysisTab() {
     } finally {
       setIsEmbeddingSaving(false)
     }
-  }, [embeddingProviderAlias, embeddingModel, embeddingBatchSize, llmSettings.providers, loadLlmSettings, t])
-
-  // Update a field on a specific provider identified by alias
-  const handleProviderFieldChange = useCallback((alias: string, field: keyof LlmProviderDTO, value: string | boolean) => {
-    setLlmSettings((prev) => {
-      const providers = prev.providers.map((p) => {
-        if (p.alias === alias) {
-          return { ...p, [field]: value }
-        }
-        return p
-      })
-      return { ...prev, providers }
-    })
-    setLlmFormDirty(true)
-  }, [])
-
-  // Update alias for a specific provider (backend + local)
-  const handleAliasUpdate = useCallback(async (oldAlias: string, newAlias: string) => {
-  	if (!newAlias.trim() || newAlias === oldAlias) return
- 
-  	// Check uniqueness
-  	if (llmSettings.providers.some((p) => p.alias === newAlias && p.alias !== oldAlias)) {
-  		toast.error(t("llm_providers.aliasMustBeUnique"))
-  		return
-  	}
- 
-  	setIsLlmSaving(true)
-  	try {
-  		await updateLlmProvider(oldAlias, { alias: newAlias })
-  		toast.success(t("llm_ocr.settingsSaved"))
-  		// Migrate frontend cache to new alias
-  		if (modelCacheRef.current[oldAlias]) {
-  			modelCacheRef.current[newAlias] = modelCacheRef.current[oldAlias]
-  			delete modelCacheRef.current[oldAlias]
-  		}
-  		await loadLlmSettings()
-  	} catch {
-  		toast.error(t("llm_ocr.settingsSaveFailed"))
-  	} finally {
-  		setIsLlmSaving(false)
-  	}
-  }, [llmSettings.providers, loadLlmSettings, t])
-
-  // Delete a provider
-  const handleDeleteProvider = useCallback(async (alias: string) => {
-  	if (!confirm(t("llm_providers.deleteConfirm", { alias }))) return
- 
-  	setIsLlmSaving(true)
-  	try {
-  		await deleteLlmProvider(alias)
-  		toast.success(t("llm_ocr.settingsSaved"))
-  		setLlmFormDirty(false)
-  		// Clean up frontend cache for deleted provider
-  		delete modelCacheRef.current[alias]
-  		await loadLlmSettings()
-  	} catch {
-  		toast.error(t("llm_ocr.settingsSaveFailed"))
-  	} finally {
-  		setIsLlmSaving(false)
-  	}
-  }, [loadLlmSettings, t])
-
-  // Add a new provider
-  const handleAddProvider = useCallback(async () => {
-  	if (!newProviderAlias.trim()) {
-  		toast.error("Alias is required")
-  		return
-  	}
-
-  	// Check uniqueness
-  	if (llmSettings.providers.some((p) => p.alias === newProviderAlias.trim())) {
-  		toast.error(t("llm_providers.aliasMustBeUnique"))
-  		return
-  	}
-
-  	// Resolve API URL: ollama_cloud uses predefined URL, others use user input with defaults
-  	const defaultApiUrl = newProviderType === "ollama"
-  		? "http://localhost:11434"
-  		: newProviderType === "ollama_cloud"
-  			? "https://ollama.com"
-  			: newProviderType === "deepseek"
-  				? "https://api.deepseek.com"
-  				: "https://api.openai.com"
-  	const apiUrl = (newProviderType === "ollama_cloud" || newProviderType === "deepseek") ? defaultApiUrl : (newProviderApiUrl.trim() || defaultApiUrl)
-
-  	setIsLlmSaving(true)
-  	try {
-  		await createLlmProvider({
-  			alias: newProviderAlias.trim(),
-  			name: newProviderType,
-  			apiUrl,
-  			apiKey: (newProviderType === "ollama_cloud" || newProviderType === "openai" || newProviderType === "deepseek") ? newProviderApiKey : undefined,
-  			model: newProviderModel || "minicpm-v",
-  		})
-  		toast.success(t("llm_ocr.settingsSaved"))
-  		setShowNewProvider(false)
-  		setNewProviderAlias("")
-  		setNewProviderApiUrl("")
-  		setNewProviderApiKey("")
-  		setNewProviderModel("minicpm-v")
-  		setLlmFormDirty(false)
-  		await loadLlmSettings()
-  	} catch {
-  		toast.error(t("llm_ocr.settingsSaveFailed"))
-  	} finally {
-  		setIsLlmSaving(false)
-  	}
-  }, [newProviderAlias, newProviderType, newProviderApiUrl, newProviderApiKey, newProviderModel, llmSettings.providers, loadLlmSettings, t])
+  }, [embeddingProviderAlias, embeddingBatchSize, loadLlmSettings, t])
 
   const handleActiveProviderChange = useCallback((value: string) => {
     setLlmSettings((prev) => ({ ...prev, activeProvider: value }))
     setLlmFormDirty(true)
-    loadModelsForProvider(value)
-  }, [loadModelsForProvider])
+  }, [])
 
   const handleVlProviderChange = useCallback((value: string) => {
     setLlmSettings((prev) => ({ ...prev, vlProvider: value }))
     setLlmFormDirty(true)
-    loadModelsForProvider(value)
-  }, [loadModelsForProvider])
+  }, [])
 
   // Tag Scan handlers
   const loadTagScanStatus = useCallback(async () => {
@@ -569,7 +322,6 @@ export function AdminAnalysisTab() {
       })
       toast.success(t("tagScan.saved"))
       setTagScanFormDirty(false)
-      // Sync tag scan state into llmSettings so subsequent LLM saves don't overwrite the schedule
       setLlmSettings((prev) => ({
         ...prev,
         tagScanEnabled,
@@ -588,11 +340,11 @@ export function AdminAnalysisTab() {
 
   const handleTagScanFieldChange = useCallback((field: string, value: string | boolean | number) => {
     switch (field) {
-      case "tagScanEnabled": setTagScanEnabled(value as boolean); break;
-      case "tagScanStartHour": setTagScanStartHour(value as number); break;
-      case "tagScanStartMinute": setTagScanStartMinute(value as number); break;
-      case "tagScanEndHour": setTagScanEndHour(value as number); break;
-      case "tagScanEndMinute": setTagScanEndMinute(value as number); break;
+      case "tagScanEnabled": setTagScanEnabled(value as boolean); break
+      case "tagScanStartHour": setTagScanStartHour(value as number); break
+      case "tagScanStartMinute": setTagScanStartMinute(value as number); break
+      case "tagScanEndHour": setTagScanEndHour(value as number); break
+      case "tagScanEndMinute": setTagScanEndMinute(value as number); break
     }
     setTagScanFormDirty(true)
   }, [])
@@ -654,12 +406,6 @@ export function AdminAnalysisTab() {
     }
   }, [])
 
-  const handleLoadModels = useCallback(async () => {
-    const currentProvider = getCurrentProvider()
-    if (!currentProvider) return
-    await loadModelsForProvider(currentProvider.alias, true)
-  }, [getCurrentProvider, loadModelsForProvider])
-
   useEffect(() => {
     const init = async () => {
       // Load OCR status
@@ -679,34 +425,20 @@ export function AdminAnalysisTab() {
         const settings = await fetchLlmSettings()
         setLlmSettings(settings)
         setLlmFormDirty(false)
-        setShowNewProvider(false)
-        setNewProviderAlias("")
-        setNewProviderApiUrl("")
         setTagScanEnabled(settings.tagScanEnabled ?? false)
         setTagScanStartHour(settings.tagScanStartHour ?? 23)
         setTagScanStartMinute(settings.tagScanStartMinute ?? 0)
         setTagScanEndHour(settings.tagScanEndHour ?? 7)
         setTagScanEndMinute(settings.tagScanEndMinute ?? 0)
-
-        // Seed frontend cache from DB-backed cachedModels included in settings response
-        for (const p of settings.providers) {
-          if (p.cachedModels && p.cachedModels.length > 0) {
-            modelCacheRef.current[p.alias] = p.cachedModels
-          }
-        }
-        // Auto-populate models for active provider (instant from cache, or auto-fetch)
-        if (settings.activeProvider) {
-          loadModelsForProvider(settings.activeProvider)
-        }
-        // Initialize embedding state
         const embAlias = settings.embeddingProviderAlias || settings.activeProvider
         setEmbeddingProviderAlias(embAlias)
-        setEmbeddingModel(settings.embeddingModel || "qwen3-embedding:4b")
         setEmbeddingDimension(settings.embeddingDimension || 1024)
         setEmbeddingBatchSize(settings.embeddingBatchSize || 50)
         setIsEmbeddingFormDirty(false)
-        if (embAlias) {
-          loadEmbeddingModelsForProvider(embAlias)
+        // Probe dimension using the provider's configured model
+        const embProvider = settings.providers.find((p) => p.alias === embAlias)
+        if (embAlias && embProvider?.model) {
+          probeDimension(embAlias, embProvider.model)
         }
       } catch {
         setLlmSettings(EMPTY_SETTINGS)
@@ -731,7 +463,7 @@ export function AdminAnalysisTab() {
 
     init()
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loadModelsForProvider, loadEmbeddingModelsForProvider])
+  }, [probeDimension])
 
   // Load app settings to sync ocrConcurrentWorkers
   useEffect(() => {
@@ -742,18 +474,24 @@ export function AdminAnalysisTab() {
     })
   }, [])
 
-  const currentProvider = getCurrentProvider()
+  // Provider type display name lookup
+  const getProviderLabel = (name: LlmProviderType): string => PROVIDER_LABELS[name] ?? name
 
-  // Compute current embedding provider from shared providers list
-  const embeddingProvider = useMemo(
-    () => llmSettings.providers.find((p) => p.alias === embeddingProviderAlias),
-    [llmSettings.providers, embeddingProviderAlias]
+  // Get current provider info for display
+  const currentProvider = useMemo(
+    () => llmSettings.providers.find((p) => p.alias === llmSettings.activeProvider),
+    [llmSettings.providers, llmSettings.activeProvider],
   )
 
-  // Provider type display name lookup
-  const getProviderLabel = (name: LlmProviderType): string => {
-  	return PROVIDER_LABELS[name] ?? name
-  }
+  const currentVLProvider = useMemo(
+    () => llmSettings.providers.find((p) => p.alias === llmSettings.vlProvider),
+    [llmSettings.providers, llmSettings.vlProvider],
+  )
+
+  const currentEmbeddingProvider = useMemo(
+    () => llmSettings.providers.find((p) => p.alias === embeddingProviderAlias),
+    [llmSettings.providers, embeddingProviderAlias],
+  )
 
   return (
     <div className="space-y-6">
@@ -923,7 +661,7 @@ export function AdminAnalysisTab() {
         </CardContent>
       </Card>
 
-      {/* Chat LLM Settings */}
+      {/* Chat LLM Settings — provider selection only */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -959,22 +697,18 @@ export function AdminAnalysisTab() {
                 </Select>
               </div>
 
-              {/* Current Provider Settings */}
+              {/* Current provider info */}
               {currentProvider && (
-                <ProviderConfigForm
-                  provider={currentProvider}
-                  providers={llmSettings.providers}
-                  availableModels={availableModels}
-                  isModelsLoading={isModelsLoading}
-                  showModelInput={showModelInput}
-                  onFieldChange={handleProviderFieldChange}
-                  onAliasUpdate={handleAliasUpdate}
-                  onDelete={handleDeleteProvider}
-                  onLoadModels={handleLoadModels}
-                  onToggleModelInput={setShowModelInput}
-                  isSaving={isLlmSaving}
-                  namePrefix="vl"
-                />
+                <div className="rounded-lg border p-3 text-sm text-muted-foreground">
+                  <span className="font-medium text-foreground">
+                    {currentProvider.alias}
+                  </span>{" "}
+                  ({getProviderLabel(currentProvider.name)}) — {t("llm_ocr.model")}:{" "}
+                  <span className="font-mono text-xs">{currentProvider.model}</span>
+                  <span className="block mt-1 text-xs text-muted-foreground">
+                    {t("llm_providers.manageInProvidersTab")}
+                  </span>
+                </div>
               )}
 
               {/* No providers message */}
@@ -983,176 +717,6 @@ export function AdminAnalysisTab() {
                   {t("llm_providers.noProviders")}
                 </p>
               )}
-
-              {/* Add New Provider */}
-              <div className="border-t pt-4">
-                {showNewProvider ? (
-                  <div className="space-y-3 rounded-lg border p-4">
-                    <h4 className="text-sm font-medium">{t("llm_providers.newProvider")}</h4>
-
-                    {/* Provider Type */}
-                    <div className="space-y-2">
-                      <Label>{t("llm_providers.type")}</Label>
-                      <Select
-                        value={newProviderType}
-                        onValueChange={(v) => setNewProviderType(v as LlmProviderType)}
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {ALLOWED_PROVIDER_TYPES.map((type) => (
-                            <SelectItem key={type} value={type}>
-                              {getProviderLabel(type)}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    {/* Alias */}
-                    <div className="space-y-2">
-                      <Label htmlFor="new-alias">{t("llm_providers.alias")}</Label>
-                      <Input
-                        id="new-alias"
-                        placeholder={t("llm_providers.aliasPlaceholder")}
-                        value={newProviderAlias}
-                        onChange={(e) => setNewProviderAlias(e.target.value)}
-                      />
-                    </div>
-
-                    {/* API URL (hidden for ollama_cloud — predefined) */}
-                    {newProviderType !== "ollama_cloud" && (
-                      <div className="space-y-2">
-                        <Label htmlFor="new-apiurl">API URL</Label>
-                        <Input
-                          id="new-apiurl"
-                          placeholder={newProviderType === "ollama" ? "http://localhost:11434" : newProviderType === "deepseek" ? "https://api.deepseek.com" : "https://api.openai.com"}
-                          value={newProviderApiUrl}
-                          onChange={(e) => setNewProviderApiUrl(e.target.value)}
-                        />
-                      </div>
-                    )}
-
-                    {/* API Key (only for Ollama Cloud, OpenAI, and DeepSeek) */}
-                    {(newProviderType === "ollama_cloud" || newProviderType === "openai" || newProviderType === "deepseek") && (
-                      <div className="space-y-2">
-                        <Label htmlFor="new-apikey">API Key</Label>
-                        <Input
-                          id="new-apikey"
-                          type="password"
-                          autoComplete="new-password"
-                          placeholder="sk-..."
-                          value={newProviderApiKey}
-                          onChange={(e) => setNewProviderApiKey(e.target.value)}
-                        />
-                      </div>
-                    )}
-
-                    {/* Model */}
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <Label htmlFor="new-model">{t("llm_ocr.model")}</Label>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={handleLoadModels}
-                          disabled={isModelsLoading || !llmSettings.activeProvider}
-                          className="h-6 px-2 text-xs"
-                        >
-                          {isModelsLoading ? (
-                            <Loader2 className="mr-1 h-3 w-3 animate-spin" />
-                          ) : (
-                            <RefreshCw className="mr-1 h-3 w-3" />
-                          )}
-                          {t("llm_providers.loadModels")}
-                        </Button>
-                      </div>
-
-                      {availableModels.length > 0 && !showModelInput ? (
-                        <div className="space-y-2">
-                          <Select
-                            value={newProviderModel}
-                            onValueChange={(value) => setNewProviderModel(value)}
-                          >
-                            <SelectTrigger id="new-model">
-                              <SelectValue placeholder={t("llm_providers.selectModel")} />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {availableModels.map((model) => (
-                                <SelectItem key={model.id} value={model.id}>
-                                  {model.name}
-                                  {model.size ? ` (${(model.size / 1073741824).toFixed(1)} GB)` : ""}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <Button
-                            variant="link"
-                            size="sm"
-                            className="px-0 h-auto text-xs"
-                            onClick={() => setShowModelInput(true)}
-                          >
-                            {t("llm_providers.enterModelManually")}
-                          </Button>
-                        </div>
-                      ) : (
-                        <div className="space-y-2">
-                          <Input
-                            id="new-model"
-                            placeholder="minicpm-v"
-                            value={newProviderModel}
-                            onChange={(e) => setNewProviderModel(e.target.value)}
-                          />
-                          {availableModels.length > 0 && showModelInput && (
-                            <Button
-                              variant="link"
-                              size="sm"
-                              className="px-0 h-auto text-xs"
-                              onClick={() => setShowModelInput(false)}
-                            >
-                              {t("llm_providers.selectFromModels")}
-                            </Button>
-                          )}
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="flex gap-2 justify-end">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          setShowNewProvider(false)
-                          setNewProviderAlias("")
-                          setNewProviderApiUrl("")
-                          setNewProviderApiKey("")
-                        }}
-                      >
-                        {t("common.cancel")}
-                      </Button>
-                      <Button
-                        size="sm"
-                        onClick={handleAddProvider}
-                        disabled={isLlmSaving || !newProviderAlias.trim()}
-                      >
-                        {isLlmSaving ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Plus className="mr-1 h-4 w-4" />}
-                        {t("llm_providers.add")}
-                      </Button>
-                    </div>
-                  </div>
-                ) : (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setShowNewProvider(true)}
-                    className="w-full"
-                  >
-                    <Plus className="mr-1.5 h-4 w-4" />
-                    {t("llm_providers.addProvider")}
-                  </Button>
-                )}
-              </div>
 
               {/* Save Button */}
               <div className="flex justify-end pt-2">
@@ -1175,7 +739,7 @@ export function AdminAnalysisTab() {
         </CardContent>
       </Card>
 
-      {/* VL LLM Settings */}
+      {/* VL LLM Settings — provider selection only */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -1211,25 +775,18 @@ export function AdminAnalysisTab() {
                 </Select>
               </div>
 
-              {/* VL Provider Config */}
-              {getCurrentVLProvider() && getCurrentVLProvider()!.alias !== currentProvider?.alias && (
-                <ProviderConfigForm
-                  provider={getCurrentVLProvider()!}
-                  providers={llmSettings.providers}
-                  availableModels={availableModels}
-                  isModelsLoading={isModelsLoading}
-                  showModelInput={showModelInput}
-                  onFieldChange={handleProviderFieldChange}
-                  onAliasUpdate={handleAliasUpdate}
-                  onDelete={handleDeleteProvider}
-                  onLoadModels={handleLoadModels}
-                  onToggleModelInput={setShowModelInput}
-                  isSaving={isLlmSaving}
-                  namePrefix="vl"
-                />
+              {/* VL Provider info */}
+              {currentVLProvider && currentVLProvider.alias !== currentProvider?.alias && (
+                <div className="rounded-lg border p-3 text-sm text-muted-foreground">
+                  <span className="font-medium text-foreground">
+                    {currentVLProvider.alias}
+                  </span>{" "}
+                  ({getProviderLabel(currentVLProvider.name)}) — {t("llm_ocr.model")}:{" "}
+                  <span className="font-mono text-xs">{currentVLProvider.model}</span>
+                </div>
               )}
 
-              {getCurrentVLProvider() && getCurrentVLProvider()!.alias === currentProvider?.alias && (
+              {currentVLProvider && currentVLProvider.alias === currentProvider?.alias && (
                 <p className="text-sm text-muted-foreground py-2">
                   {t("llm_ocr.vlSameAsChat")}
                 </p>
@@ -1281,26 +838,15 @@ export function AdminAnalysisTab() {
                 </Select>
               </div>
 
-              {/* Embedding Provider Config */}
-              {embeddingProvider && (
-                <ProviderConfigForm
-                  provider={{ ...embeddingProvider, model: embeddingModel }}
-                  providers={llmSettings.providers}
-                  availableModels={embeddingAvailableModels}
-                  isModelsLoading={embeddingIsModelsLoading}
-                  showModelInput={embeddingShowModelInput}
-                  onFieldChange={(_alias, field, value) => {
-                    if (field === "model") {
-                      handleEmbeddingModelChange(value as string)
-                    }
-                  }}
-                  onAliasUpdate={async () => {}}
-                  onDelete={async () => {}}
-                  onLoadModels={() => loadEmbeddingModelsForProvider(embeddingProviderAlias, true)}
-                  onToggleModelInput={setEmbeddingShowModelInput}
-                  isSaving={isEmbeddingSaving}
-                  namePrefix="embedding"
-                />
+              {/* Embedding Provider info (read-only, model from provider config) */}
+              {currentEmbeddingProvider && (
+                <div className="rounded-lg border p-3 text-sm text-muted-foreground">
+                  <span className="font-medium text-foreground">
+                    {currentEmbeddingProvider.alias}
+                  </span>{" "}
+                  ({getProviderLabel(currentEmbeddingProvider.name)}) — {t("llm_ocr.model")}:{" "}
+                  <span className="font-mono text-xs">{currentEmbeddingProvider.model}</span>
+                </div>
               )}
 
               {/* Embedding Dimension (auto-detected) */}

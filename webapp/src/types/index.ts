@@ -631,6 +631,7 @@ export interface LlmModelDTO {
   name: string
   size?: number
   contextLength?: number
+  capabilities?: string[]
 }
 
 export interface LlmModelsResponse {

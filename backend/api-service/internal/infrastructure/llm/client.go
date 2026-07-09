@@ -14,10 +14,11 @@ type Client interface {
 
 // ModelInfo represents information about an available LLM model
 type ModelInfo struct {
-	ID            string `json:"id"`
-	Name          string `json:"name"`
-	Size          int64  `json:"size,omitempty"`
-	ContextLength int    `json:"contextLength,omitempty"` // 0 = unknown
+	ID            string   `json:"id"`
+	Name          string   `json:"name"`
+	Size          int64    `json:"size,omitempty"`
+	ContextLength int      `json:"contextLength,omitempty"` // 0 = unknown
+	Capabilities  []string `json:"capabilities,omitempty"`  // e.g. ["chat","tool_calling","vision","embedding"]
 }
 
 // Provider type enumeration

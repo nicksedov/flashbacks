@@ -447,7 +447,7 @@ export function AdminGeneralTab() {
           </div>
 
           {/* Time selectors */}
-          <div className="flex items-center gap-4">
+          <div className="flex items-end gap-4">
             <div className="space-y-2">
               <Label htmlFor="daily-sync-hour">{t("settings.dailySync.hour")}</Label>
               <Select
@@ -486,15 +486,13 @@ export function AdminGeneralTab() {
               </Select>
             </div>
 
-            <div className="flex items-end">
-              <Button
-                onClick={handleSaveSchedule}
-                disabled={isSavingSchedule}
-                size="sm"
-              >
-                {isSavingSchedule ? t("common.saving") : t("settings.dailySync.save")}
-              </Button>
-            </div>
+            <Button
+              onClick={handleSaveSchedule}
+              disabled={isSavingSchedule}
+              size="sm"
+            >
+              {isSavingSchedule ? t("common.saving") : t("settings.dailySync.save")}
+            </Button>
           </div>
 
           {/* Sync Status */}

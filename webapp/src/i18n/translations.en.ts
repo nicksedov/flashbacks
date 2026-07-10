@@ -44,6 +44,7 @@ export const translationsEn = {
   "common.saving": "Saving...",
   "common.actions": "Actions",
   "common.delete": "Delete",
+  "common.edit": "Edit",
 
   // Settings tab
   "settings.title": "Gallery",
@@ -442,6 +443,7 @@ export const translationsEn = {
   "adminPanel.adminSettingsDescription": "System-wide configuration for administrators",
   "adminSettings.tabs.general": "General",
   "adminSettings.tabs.analysis": "Analysis Tools",
+  "adminSettings.tabs.llmProviders": "LLM Providers",
   "adminPanel.ocr.title": "OCR Document Search",
   "adminPanel.ocr.description": "Search and classify images to find text documents using OCR",
   "adminPanel.ocr.scanAll": "Scan All",
@@ -789,6 +791,17 @@ export const translationsEn = {
   "llm_providers.modelsLoaded": "Loaded {count} models",
   "llm_providers.modelsLoadFailed": "Failed to load model list",
   "llm_providers.providerLabel": "Provider: {alias}",
+  "llm_providers.modelsCount": "{count} model(s)",
+  "llm_providers.noModelsLoaded": "No models loaded. Click refresh to fetch.",
+  "llm_providers.usageChatAssistant": "AI Assistant",
+  "llm_providers.usageImageAnalysis": "Image Analysis",
+  "llm_providers.usageEmbeddings": "Embeddings",
+  "llm_providers.usageShortChat": "Chat",
+  "llm_providers.usageShortVL": "VL",
+  "llm_providers.usageShortEmb": "Emb",
+  "llm_providers.cannotDeleteInUse": "Cannot delete provider currently used for: {usages}. Change the setting in the Analysis Tools tab first.",
+  "llm_providers.cannotDeleteInUseTooltip": "Provider is currently in use and cannot be deleted",
+  "llm_providers.manageInProvidersTab": "Manage in LLM Providers",
 
   // Chat / Agent
   "chat.title": "AI Assistant",

@@ -196,7 +196,7 @@ type ollamaModel struct {
 }
 
 // ListModels returns a list of available models from Ollama server.
-// It also fetches context length for each model via /api/show concurrently.
+// It also fetches context length and capabilities for each model via /api/show concurrently.
 func (c *OllamaClient) ListModels(ctx context.Context) ([]ModelInfo, error) {
 	var tagsResp ollamaTagsResponse
 	if err := c.doJSON(ctx, http.MethodGet, "/api/tags", nil, &tagsResp, nil); err != nil {
@@ -212,7 +212,7 @@ func (c *OllamaClient) ListModels(ctx context.Context) ([]ModelInfo, error) {
 		}
 	}
 
-	// Fetch context length concurrently for each model (bounded to 4 goroutines)
+	// Fetch model details concurrently for each model (bounded to 4 goroutines)
 	const maxConcurrency = 4
 	sem := make(chan struct{}, maxConcurrency)
 	var wg sync.WaitGroup
@@ -223,12 +223,15 @@ func (c *OllamaClient) ListModels(ctx context.Context) ([]ModelInfo, error) {
 			defer wg.Done()
 			sem <- struct{}{}
 			defer func() { <-sem }()
-			ctxLen := c.fetchContextLength(ctx, models[idx].Name)
+			ctxLen, caps := c.fetchModelDetails(ctx, models[idx].Name)
+			mu.Lock()
 			if ctxLen > 0 {
-				mu.Lock()
 				models[idx].ContextLength = ctxLen
-				mu.Unlock()
 			}
+			if len(caps) > 0 {
+				models[idx].Capabilities = caps
+			}
+			mu.Unlock()
 		}(i)
 	}
 	wg.Wait()
@@ -236,39 +239,63 @@ func (c *OllamaClient) ListModels(ctx context.Context) ([]ModelInfo, error) {
 	return models, nil
 }
 
-// fetchContextLength calls /api/show to extract context_length for a model.
-func (c *OllamaClient) fetchContextLength(ctx context.Context, modelName string) int {
+// fetchModelDetails calls /api/show to extract context_length and capabilities for a model.
+func (c *OllamaClient) fetchModelDetails(ctx context.Context, modelName string) (int, []string) {
 	// Use a short-lived client with 30s timeout for this call
 	shortClient := newAPIClient(c.baseURL, 30*time.Second, c.headers)
 
 	var showResp struct {
-		ModelInfo  map[string]any `json:"model_info"`
-		Parameters string         `json:"parameters"`
+		ModelInfo    map[string]any `json:"model_info"`
+		Parameters   string         `json:"parameters"`
+		Capabilities []string       `json:"capabilities"`
 	}
 	err := shortClient.doJSON(ctx, http.MethodPost, "/api/show", map[string]string{"name": modelName}, &showResp, nil)
 	if err != nil {
-		return 0
+		return 0, nil
 	}
 
-	// Try model_info map for known keys.
-	// The key format is "{architecture}.context_length" where architecture
-	// varies per model (llama, qwen3, gemma2, mistral, etc.), so we search
-	// for any key ending with ".context_length" + the bare "context_length".
-	for _, key := range []string{"llama.context_length", "transformer.context_length", "context_length"} {
-		if v, ok := showResp.ModelInfo[key]; ok {
-			if n, ok := v.(float64); ok && n > 0 {
-				return int(n)
+	// Extract context_length from model_info map using the architecture key.
+	// The model_info contains "general.architecture" (e.g. "qwen3vl") and
+	// the corresponding "<arch>.context_length" key (e.g. "qwen3vl.context_length").
+	var ctxLen int
+	if arch, ok := showResp.ModelInfo["general.architecture"]; ok {
+		if archStr, ok := arch.(string); ok && archStr != "" {
+			contextKey := archStr + ".context_length"
+			if v, ok := showResp.ModelInfo[contextKey]; ok {
+				if n, ok := v.(float64); ok && n > 0 {
+					ctxLen = int(n)
+				}
 			}
 		}
 	}
-	// Fallback: match any key ending with ".context_length" (architecture-agnostic)
-	for k, v := range showResp.ModelInfo {
-		if len(k) > 16 && k[len(k)-16:] == ".context_length" {
-			if n, ok := v.(float64); ok && n > 0 {
-				return int(n)
+	if ctxLen == 0 {
+		// Fallback: match any key ending with ".context_length" (architecture-agnostic)
+		for k, v := range showResp.ModelInfo {
+			if len(k) > 16 && k[len(k)-16:] == ".context_length" {
+				if n, ok := v.(float64); ok && n > 0 {
+					ctxLen = int(n)
+					break
+				}
 			}
 		}
 	}
 
-	return 0
+	// Map Ollama capability names to standardized names used in the frontend.
+	// Ollama returns snake_case like "tools", "embedding" - normalize to match
+	// the frontend ModelCapability type: "chat", "tool_calling", "vision", "embedding".
+	caps := make([]string, 0, len(showResp.Capabilities))
+	for _, c := range showResp.Capabilities {
+		switch c {
+		case "tools":
+			caps = append(caps, "tool_calling")
+		case "embedding":
+			caps = append(caps, "embedding")
+		case "vision":
+			caps = append(caps, "vision")
+		case "chat":
+			caps = append(caps, "chat")
+		}
+	}
+
+	return ctxLen, caps
 }

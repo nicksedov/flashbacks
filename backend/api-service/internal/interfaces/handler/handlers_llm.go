@@ -188,13 +188,13 @@ func (s *Server) handleProbeEmbeddingDimension(c *gin.Context) {
 		return
 	}
 
-	_, err := s.llmRepo.GetProviderByAlias(req.ProviderAlias)
+	provider, err := s.llmRepo.GetProviderByAlias(req.ProviderAlias)
 	if err != nil {
 		s.respondError(c, http.StatusNotFound, i18n.MsgEmbeddingProviderNotFound)
 		return
 	}
 
-	embeddingClient, err := llm.NewEmbeddingClient("", "", "", req.Model)
+	embeddingClient, err := llm.NewEmbeddingClient(provider.Name, provider.ApiUrl, provider.ApiKey, req.Model)
 	if err != nil {
 		s.respondError(c, http.StatusInternalServerError, i18n.MsgEmbeddingClientFailed)
 		return
@@ -571,6 +571,7 @@ func (s *Server) handleGetLlmModels(c *gin.Context) {
 			Name:          m.Name,
 			Size:          m.Size,
 			ContextLength: m.ContextLength,
+			Capabilities:  m.Capabilities,
 		}
 	}
 

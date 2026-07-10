@@ -43,8 +43,8 @@ func NewOpenAIClient(baseURL, apiKey, model string, maxImageMegapixels float64) 
 // normalization the client would build paths like /v1/v1/models → 404.
 func normalizeOpenAIBaseURL(baseURL string) string {
 	baseURL = strings.TrimRight(baseURL, "/")
-	if strings.HasSuffix(baseURL, "/v1") {
-		baseURL = strings.TrimSuffix(baseURL, "/v1")
+	if before, ok :=strings.CutSuffix(baseURL, "/v1"); ok  {
+		baseURL = before
 	}
 	return baseURL
 }

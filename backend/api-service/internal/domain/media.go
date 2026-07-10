@@ -263,6 +263,18 @@ func EmbeddingTableName(modelName string) string {
 	return "tag_embeddings_" + SanitizeModelName(modelName)
 }
 
+// ImageProcessingError tracks permanent processing errors for an image file
+// (e.g. corrupt/truncated JPEGs that cannot be decoded). Images with an entry
+// in this table are excluded from tag scan processing to prevent endless retries.
+type ImageProcessingError struct {
+	ID          uint      `gorm:"primaryKey" json:"id"`
+	ImageFileID uint      `gorm:"uniqueIndex;not null" json:"imageFileId"`
+	Action      string    `gorm:"not null;default:'tags'" json:"action"`
+	Error       string    `gorm:"type:text;not null" json:"error"`
+	CreatedAt   time.Time `json:"createdAt"`
+	UpdatedAt   time.Time `json:"updatedAt"`
+}
+
 // OcrLlmRecognition stores VL LLM OCR recognition results
 type OcrLlmRecognition struct {
 	ID                  uint      `gorm:"primaryKey" json:"id"`

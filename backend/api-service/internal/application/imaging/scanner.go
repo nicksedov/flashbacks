@@ -563,6 +563,7 @@ func FindDuplicatesPaginated(db *gorm.DB, offset, limit int) ([]domain.Duplicate
 func deleteImageFileCascade(db *gorm.DB, imageFileID uint) {
 	db.Where("image_file_id = ?", imageFileID).Delete(&domain.ImageTag{})
 	db.Where("image_file_id = ?", imageFileID).Delete(&domain.OcrLlmRecognition{})
+	db.Where("image_file_id = ?", imageFileID).Delete(&domain.ImageProcessingError{})
 	// Delete bounding boxes before their parent classifications
 	db.Where("classification_id IN (SELECT id FROM ocr_classifications WHERE image_file_id = ?)", imageFileID).
 		Delete(&domain.OcrBoundingBox{})

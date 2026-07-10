@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -116,7 +116,7 @@ export function AdminLlmProvidersTab() {
   const [isSaving, setIsSaving] = useState(false)
 
   // Model cache
-  const modelCacheRef = useRef<Record<string, LlmModelDTO[]>>({})
+  const [modelCache, setModelCache] = useState<Record<string, LlmModelDTO[]>>({})
   const [expandedProviderAlias, setExpandedProviderAlias] = useState<string | null>(null)
   const [loadingModelsAlias, setLoadingModelsAlias] = useState<string | null>(null)
 
@@ -143,11 +143,15 @@ export function AdminLlmProvidersTab() {
       const settings = await fetchLlmSettings()
       setLlmSettings(settings)
       // Seed model cache from cachedModels in response
-      for (const p of settings.providers) {
-        if (p.cachedModels && p.cachedModels.length > 0) {
-          modelCacheRef.current[p.alias] = p.cachedModels
+      setModelCache((prev) => {
+        const next = { ...prev }
+        for (const p of settings.providers) {
+          if (p.cachedModels && p.cachedModels.length > 0) {
+            next[p.alias] = p.cachedModels
+          }
         }
-      }
+        return next
+      })
     } catch {
       setLlmSettings(null)
     } finally {
@@ -156,21 +160,37 @@ export function AdminLlmProvidersTab() {
   }, [])
 
   useEffect(() => {
-    loadSettings()
-  }, [loadSettings])
+    ;(async () => {
+      try {
+        const settings = await fetchLlmSettings()
+        setLlmSettings(settings)
+        setModelCache((prev) => {
+          const next = { ...prev }
+          for (const p of settings.providers) {
+            if (p.cachedModels && p.cachedModels.length > 0) {
+              next[p.alias] = p.cachedModels
+            }
+          }
+          return next
+        })
+      } catch {
+        setLlmSettings(null)
+      }
+    })()
+  }, [])
 
   // Load models for a provider
   const loadModelsForProvider = useCallback(
     async (alias: string, forceRefresh = false) => {
       if (!alias) return
-      if (!forceRefresh && modelCacheRef.current[alias]) {
-        return modelCacheRef.current[alias]
+      if (!forceRefresh && modelCache[alias]) {
+        return modelCache[alias]
       }
       setLoadingModelsAlias(alias)
       try {
         const response = await fetchLlmModels(alias, forceRefresh)
         if (response.success && response.models.length > 0) {
-          modelCacheRef.current[alias] = response.models
+          setModelCache((prev) => ({ ...prev, [alias]: response.models }))
           return response.models
         }
         return null
@@ -180,7 +200,7 @@ export function AdminLlmProvidersTab() {
         setLoadingModelsAlias(null)
       }
     },
-    [],
+    [modelCache],
   )
 
   const handleToggleModels = useCallback(
@@ -270,12 +290,12 @@ export function AdminLlmProvidersTab() {
       setEditingModelsLoaded(false)
 
       // Auto-load models if not already cached
-      if (!modelCacheRef.current[provider.alias]) {
+      if (!modelCache[provider.alias]) {
         await loadModelsForProvider(provider.alias)
       }
       setEditingModelsLoaded(true)
     },
-    [loadModelsForProvider],
+    [loadModelsForProvider, modelCache],
   )
 
   const cancelEditing = useCallback(() => {
@@ -319,9 +339,13 @@ export function AdminLlmProvidersTab() {
         }
 
         // Handle alias rename in cache
-        if (update.alias && modelCacheRef.current[oldAlias]) {
-          modelCacheRef.current[update.alias] = modelCacheRef.current[oldAlias]
-          delete modelCacheRef.current[oldAlias]
+        if (update.alias && modelCache[oldAlias]) {
+          setModelCache((prev) => {
+            const next = { ...prev }
+            next[update.alias!] = prev[oldAlias]
+            delete next[oldAlias]
+            return next
+          })
         }
 
         toast.success(t("llm_ocr.settingsSaved"))
@@ -333,7 +357,7 @@ export function AdminLlmProvidersTab() {
         setIsSaving(false)
       }
     },
-    [editingAliasValue, editingApiUrl, editingApiKey, editingModel, llmSettings?.providers, loadSettings, t],
+    [editingAliasValue, editingApiUrl, editingApiKey, editingModel, llmSettings?.providers, loadSettings, t, modelCache],
   )
 
   // Delete provider
@@ -357,7 +381,11 @@ export function AdminLlmProvidersTab() {
       try {
         await deleteLlmProvider(alias)
         toast.success(t("llm_ocr.settingsSaved"))
-        delete modelCacheRef.current[alias]
+        setModelCache((prev) => {
+          const next = { ...prev }
+          delete next[alias]
+          return next
+        })
         if (expandedProviderAlias === alias) setExpandedProviderAlias(null)
         await loadSettings()
       } catch {
@@ -403,7 +431,7 @@ export function AdminLlmProvidersTab() {
               {providers.map((provider) => {
                 const usages = isProviderInUse(provider.alias)
                 const isExpanded = expandedProviderAlias === provider.alias
-                const models = modelCacheRef.current[provider.alias] ?? []
+                const models = modelCache[provider.alias] ?? []
                 const isLoadingModels = loadingModelsAlias === provider.alias
                 const isEditingThis = editingProviderAlias === provider.alias
 

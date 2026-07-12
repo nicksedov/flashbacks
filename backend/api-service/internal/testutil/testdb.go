@@ -45,6 +45,7 @@ func NewTestDB(t *testing.T) (*gorm.DB, func()) {
 		&domain.LlmProviderModelCache{},
 		&domain.GeolocationCache{},
 		&domain.TagEmbedding{},
+		&domain.ImageProcessingError{},
 	); err != nil {
 		t.Fatalf("failed to migrate test database: %v", err)
 	}

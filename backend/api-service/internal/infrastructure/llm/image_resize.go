@@ -2,6 +2,7 @@ package llm
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"image"
 	"image/jpeg"
@@ -11,6 +12,40 @@ import (
 
 	"github.com/disintegration/imaging"
 )
+
+// DecodeError wraps an image.Decode failure with the file path.
+// Use errors.As to detect permanent image corruption errors.
+type DecodeError struct {
+	Path string
+	Err  error
+}
+
+func (e *DecodeError) Error() string {
+	return fmt.Sprintf("failed to decode image %s: %v", e.Path, e.Err)
+}
+
+func (e *DecodeError) Unwrap() error { return e.Err }
+
+// IsPermanentError reports whether an error from an AI action is permanent
+// (i.e. the image file itself is broken and retrying won't help).
+// It checks for DecodeError sentinel and recognized format-specific messages.
+func IsPermanentError(err error) bool {
+	if err == nil {
+		return false
+	}
+	var de *DecodeError
+	if errors.As(err, &de) {
+		return true
+	}
+	// Fallback for errors that arrive via non-standard wrapping paths
+	// (e.g. third-party clients that construct their own error messages).
+	msg := err.Error()
+	return strings.Contains(msg, "invalid JPEG format") ||
+		strings.Contains(msg, "missing SOS marker") ||
+		strings.Contains(msg, "invalid PNG format") ||
+		strings.Contains(msg, "invalid WebP format") ||
+		strings.Contains(msg, "image: unknown format")
+}
 
 // roundToMultipleOf32 rounds v to the nearest multiple of 32 (minimum 32).
 func roundToMultipleOf32(v int) int {
@@ -35,7 +70,7 @@ func resizeImageForLLM(imagePath string, maxMegapixels float64) ([]byte, string,
 
 	img, _, err := image.Decode(file)
 	if err != nil {
-		return nil, "", fmt.Errorf("failed to decode image: %w", err)
+		return nil, "", &DecodeError{Path: imagePath, Err: err}
 	}
 
 	bounds := img.Bounds()

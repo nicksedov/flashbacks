@@ -146,9 +146,13 @@ func (fm *FileMover) BatchMoveFiles(filePaths []string, targetDir string) FileMo
 		}
 
 		if err := os.Rename(filePath, destPath); err != nil {
-			result.Failed++
-			result.FailedFiles = append(result.FailedFiles, baseName+": "+err.Error())
-			continue
+			// Fallback: copy + delete for cross-device / permission-denied
+			// scenarios (e.g. Docker host mounts).
+			if copyErr := copyAndDelete(filePath, destPath); copyErr != nil {
+				result.Failed++
+				result.FailedFiles = append(result.FailedFiles, baseName+": "+copyErr.Error())
+				continue
+			}
 		}
 
 		// Update DB record with new path
@@ -186,6 +190,42 @@ func CheckPathsConflict(a, b string) bool {
 	return pathsConflict(a, b) != ""
 }
 
+// copyAndDelete copies src to dst, then removes src. It handles cross-device
+// links and permission-denied scenarios (e.g. Docker host mounts) where
+// os.Rename would fail.
+func copyAndDelete(src, dst string) error {
+	srcFile, openErr := os.Open(src)
+	if openErr != nil {
+		return openErr
+	}
+	defer srcFile.Close()
+
+	dstFile, createErr := os.Create(dst)
+	if createErr != nil {
+		return createErr
+	}
+
+	if _, copyErr := io.Copy(dstFile, srcFile); copyErr != nil {
+		dstFile.Close()
+		os.Remove(dst)
+		return copyErr
+	}
+
+	// Ensure the destination is synced before removing the source.
+	if syncErr := dstFile.Sync(); syncErr != nil {
+		dstFile.Close()
+		os.Remove(dst)
+		return syncErr
+	}
+	dstFile.Close()
+
+	if removeErr := os.Remove(src); removeErr != nil {
+		return fmt.Errorf("copied but failed to remove source: %w", removeErr)
+	}
+
+	return nil
+}
+
 func (fm *FileMover) moveToTrash(filePath, trashDir string) error {
 	baseName := filepath.Base(filePath)
 	destPath := filepath.Join(trashDir, baseName)
@@ -196,7 +236,11 @@ func (fm *FileMover) moveToTrash(filePath, trashDir string) error {
 		destPath = filepath.Join(trashDir, nameWithoutExt+"_"+time.Now().Format(TrashTimestampFormat)+ext)
 	}
 
-	return os.Rename(filePath, destPath)
+	if err := os.Rename(filePath, destPath); err != nil {
+		return copyAndDelete(filePath, destPath)
+	}
+
+	return nil
 }
 
 func pathsConflict(a, b string) string {

@@ -17,6 +17,7 @@ import (
 type TagScanProgress struct {
 	Total        int
 	Scanned      int
+	Skipped      int // files permanently skipped (corrupt/unreadable)
 	Remaining    int
 	CurrentImage string
 	LastError    string
@@ -31,6 +32,9 @@ type TagScanStatus struct {
 	WindowOpen bool
 	Progress   TagScanProgress
 }
+
+// actionTags is the AI action used by the tag scan background process.
+const actionTags = "tags"
 
 // TagScanManager manages background tag scanning of gallery images
 type TagScanManager struct {
@@ -194,6 +198,7 @@ func (tsm *TagScanManager) GetStatus() TagScanStatus {
 		var total int64
 		tsm.db.Table("image_files").
 			Joins("LEFT JOIN image_tags ON image_files.id = image_tags.image_file_id").
+			Scopes(withoutPermanentErrors).
 			Where("image_tags.id IS NULL").
 			Count(&total)
 		progress.Total = int(total)
@@ -318,10 +323,11 @@ func (tsm *TagScanManager) calculateNextWindowOpen() time.Time {
 // scanWindow runs scanning while within the configured time window
 func (tsm *TagScanManager) scanWindow() {
 	log.Println("Tag scan: scanWindow entered, counting untagged images")
-	// Count total untagged images
+	// Count total untagged images (excluding files with permanent errors)
 	var total int64
 	tsm.db.Table("image_files").
 		Joins("LEFT JOIN image_tags ON image_files.id = image_tags.image_file_id").
+		Scopes(withoutPermanentErrors).
 		Where("image_tags.id IS NULL").
 		Count(&total)
 
@@ -378,11 +384,12 @@ func (tsm *TagScanManager) scanWindow() {
 		default:
 		}
 
-		// Find next untagged image
+		// Find next untagged image (excluding files with permanent processing errors)
 		var imageFile domain.ImageFile
 		err := tsm.db.Table("image_files").
 			Select("image_files.*").
 			Joins("LEFT JOIN image_tags ON image_files.id = image_tags.image_file_id").
+			Scopes(withoutPermanentErrors).
 			Where("image_tags.id IS NULL AND image_files.id > ?", tsm.cursor).
 			Order("image_files.id ASC").
 			First(&imageFile).Error
@@ -496,6 +503,25 @@ func (tsm *TagScanManager) processImage(imageFile domain.ImageFile) {
 		tsm.mu.Lock()
 		tsm.progress.LastError = fmt.Sprintf("Failed to tag %s: %v", imageFile.Path, err)
 		tsm.mu.Unlock()
+
+		// If the error is permanent (e.g. corrupt image file), save a processing
+		// error record so the file won't be retried on subsequent scan passes.
+		if llm.IsPermanentError(err) {
+			log.Printf("Tag scan: marking %s as permanently failed (corrupt file)", imageFile.Path)
+			tsm.mu.Lock()
+			tsm.progress.Skipped++
+			tsm.mu.Unlock()
+			rec := domain.ImageProcessingError{
+				ImageFileID: imageFile.ID,
+				Action:      actionTags,
+				Error:       err.Error(),
+			}
+			if dbErr := tsm.db.Where("image_file_id = ?", imageFile.ID).
+				Assign(rec).
+				FirstOrCreate(&rec).Error; dbErr != nil {
+				log.Printf("Tag scan: failed to save processing error: %v", dbErr)
+			}
+		}
 		return
 	}
 	log.Printf("Tag scan: ExecuteAiAction returned %d tags for ID=%d", len(result.Tags), imageFile.ID)
@@ -535,4 +561,12 @@ func (tsm *TagScanManager) processImage(imageFile domain.ImageFile) {
 			}()
 		}
 	}
+}
+
+// withoutPermanentErrors is a GORM scope that excludes images with a permanent
+// processing error (e.g. corrupt/unreadable JPEGs) from tag scan queries.
+func withoutPermanentErrors(db *gorm.DB) *gorm.DB {
+	return db.
+		Joins("LEFT JOIN image_processing_errors ON image_processing_errors.image_file_id = image_files.id").
+		Where("image_processing_errors.id IS NULL")
 }

@@ -615,6 +615,7 @@ func (bsm *BackgroundSyncManager) InvalidateTagsAndEmbeddingsAsync(imageFileID u
 // so they are re-generated on the next tag scan or embedding backfill pass.
 func (bsm *BackgroundSyncManager) InvalidateTagsAndEmbeddings(imageFileID uint) {
 	bsm.db.Where("image_file_id = ?", imageFileID).Delete(&domain.ImageTag{})
+	bsm.db.Where("image_file_id = ?", imageFileID).Delete(&domain.ImageProcessingError{})
 	if result := bsm.db.Where("image_file_id = ?", imageFileID).Delete(&domain.TagEmbedding{}); result.Error == nil && result.RowsAffected > 0 {
 		log.Printf("Background sync: invalidated tags and embeddings for image %d", imageFileID)
 	}

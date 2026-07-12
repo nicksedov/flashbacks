@@ -53,6 +53,7 @@ func InitDatabase(cfg *config.AppConfig) (*gorm.DB, error) {
 		&domain.Conversation{},
 		&domain.ConversationMessage{},
 		&domain.TagEmbedding{},
+		&domain.ImageProcessingError{},
 	); err != nil {
 		return nil, fmt.Errorf("failed to migrate database: %w", err)
 	}

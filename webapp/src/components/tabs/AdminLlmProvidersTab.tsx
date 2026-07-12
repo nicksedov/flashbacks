@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -116,7 +116,7 @@ export function AdminLlmProvidersTab() {
   const [isSaving, setIsSaving] = useState(false)
 
   // Model cache
-  const modelCacheRef = useRef<Record<string, LlmModelDTO[]>>({})
+  const [modelCache, setModelCache] = useState<Record<string, LlmModelDTO[]>>({})
   const [expandedProviderAlias, setExpandedProviderAlias] = useState<string | null>(null)
   const [loadingModelsAlias, setLoadingModelsAlias] = useState<string | null>(null)
 
@@ -134,6 +134,8 @@ export function AdminLlmProvidersTab() {
   const [editingApiUrl, setEditingApiUrl] = useState("")
   const [editingApiKey, setEditingApiKey] = useState("")
   const [editingModel, setEditingModel] = useState("")
+  const [editingManualModel, setEditingManualModel] = useState(false)
+  const [editingModelsLoaded, setEditingModelsLoaded] = useState(false)
 
   const loadSettings = useCallback(async () => {
     setIsLoading(true)
@@ -141,11 +143,15 @@ export function AdminLlmProvidersTab() {
       const settings = await fetchLlmSettings()
       setLlmSettings(settings)
       // Seed model cache from cachedModels in response
-      for (const p of settings.providers) {
-        if (p.cachedModels && p.cachedModels.length > 0) {
-          modelCacheRef.current[p.alias] = p.cachedModels
+      setModelCache((prev) => {
+        const next = { ...prev }
+        for (const p of settings.providers) {
+          if (p.cachedModels && p.cachedModels.length > 0) {
+            next[p.alias] = p.cachedModels
+          }
         }
-      }
+        return next
+      })
     } catch {
       setLlmSettings(null)
     } finally {
@@ -154,21 +160,37 @@ export function AdminLlmProvidersTab() {
   }, [])
 
   useEffect(() => {
-    loadSettings()
-  }, [loadSettings])
+    ;(async () => {
+      try {
+        const settings = await fetchLlmSettings()
+        setLlmSettings(settings)
+        setModelCache((prev) => {
+          const next = { ...prev }
+          for (const p of settings.providers) {
+            if (p.cachedModels && p.cachedModels.length > 0) {
+              next[p.alias] = p.cachedModels
+            }
+          }
+          return next
+        })
+      } catch {
+        setLlmSettings(null)
+      }
+    })()
+  }, [])
 
   // Load models for a provider
   const loadModelsForProvider = useCallback(
     async (alias: string, forceRefresh = false) => {
       if (!alias) return
-      if (!forceRefresh && modelCacheRef.current[alias]) {
-        return modelCacheRef.current[alias]
+      if (!forceRefresh && modelCache[alias]) {
+        return modelCache[alias]
       }
       setLoadingModelsAlias(alias)
       try {
         const response = await fetchLlmModels(alias, forceRefresh)
         if (response.success && response.models.length > 0) {
-          modelCacheRef.current[alias] = response.models
+          setModelCache((prev) => ({ ...prev, [alias]: response.models }))
           return response.models
         }
         return null
@@ -178,7 +200,7 @@ export function AdminLlmProvidersTab() {
         setLoadingModelsAlias(null)
       }
     },
-    [],
+    [modelCache],
   )
 
   const handleToggleModels = useCallback(
@@ -256,17 +278,30 @@ export function AdminLlmProvidersTab() {
     t,
   ])
 
-  // Start editing a provider
-  const startEditing = useCallback((provider: LlmProviderDTO) => {
-    setEditingProviderAlias(provider.alias)
-    setEditingAliasValue(provider.alias)
-    setEditingApiUrl(provider.apiUrl)
-    setEditingApiKey(provider.apiKey)
-    setEditingModel(provider.model)
-  }, [])
+  // Start editing a provider — auto-load models if not cached
+  const startEditing = useCallback(
+    async (provider: LlmProviderDTO) => {
+      setEditingProviderAlias(provider.alias)
+      setEditingAliasValue(provider.alias)
+      setEditingApiUrl(provider.apiUrl)
+      setEditingApiKey(provider.apiKey)
+      setEditingModel(provider.model)
+      setEditingManualModel(false)
+      setEditingModelsLoaded(false)
+
+      // Auto-load models if not already cached
+      if (!modelCache[provider.alias]) {
+        await loadModelsForProvider(provider.alias)
+      }
+      setEditingModelsLoaded(true)
+    },
+    [loadModelsForProvider, modelCache],
+  )
 
   const cancelEditing = useCallback(() => {
     setEditingProviderAlias(null)
+    setEditingManualModel(false)
+    setEditingModelsLoaded(false)
   }, [])
 
   // Save provider edits
@@ -304,9 +339,13 @@ export function AdminLlmProvidersTab() {
         }
 
         // Handle alias rename in cache
-        if (update.alias && modelCacheRef.current[oldAlias]) {
-          modelCacheRef.current[update.alias] = modelCacheRef.current[oldAlias]
-          delete modelCacheRef.current[oldAlias]
+        if (update.alias && modelCache[oldAlias]) {
+          setModelCache((prev) => {
+            const next = { ...prev }
+            next[update.alias!] = prev[oldAlias]
+            delete next[oldAlias]
+            return next
+          })
         }
 
         toast.success(t("llm_ocr.settingsSaved"))
@@ -318,7 +357,7 @@ export function AdminLlmProvidersTab() {
         setIsSaving(false)
       }
     },
-    [editingAliasValue, editingApiUrl, editingApiKey, editingModel, llmSettings?.providers, loadSettings, t],
+    [editingAliasValue, editingApiUrl, editingApiKey, editingModel, llmSettings?.providers, loadSettings, t, modelCache],
   )
 
   // Delete provider
@@ -342,7 +381,11 @@ export function AdminLlmProvidersTab() {
       try {
         await deleteLlmProvider(alias)
         toast.success(t("llm_ocr.settingsSaved"))
-        delete modelCacheRef.current[alias]
+        setModelCache((prev) => {
+          const next = { ...prev }
+          delete next[alias]
+          return next
+        })
         if (expandedProviderAlias === alias) setExpandedProviderAlias(null)
         await loadSettings()
       } catch {
@@ -388,8 +431,9 @@ export function AdminLlmProvidersTab() {
               {providers.map((provider) => {
                 const usages = isProviderInUse(provider.alias)
                 const isExpanded = expandedProviderAlias === provider.alias
-                const models = modelCacheRef.current[provider.alias] ?? []
+                const models = modelCache[provider.alias] ?? []
                 const isLoadingModels = loadingModelsAlias === provider.alias
+                const isEditingThis = editingProviderAlias === provider.alias
 
                 return (
                   <Card key={provider.alias}>
@@ -457,7 +501,7 @@ export function AdminLlmProvidersTab() {
                     </CardHeader>
 
                     {/* Edit form inline */}
-                    {editingProviderAlias === provider.alias && (
+                    {isEditingThis && (
                       <CardContent className="border-t pt-4 space-y-3">
                         <div className="space-y-2">
                           <Label>{t("llm_providers.alias")}</Label>
@@ -501,18 +545,65 @@ export function AdminLlmProvidersTab() {
                           </div>
                         )}
 
+                        {/* Model field — dropdown from llm_provider_model_caches, with manual input fallback */}
                         <div className="space-y-2">
                           <Label>{t("llm_ocr.model")}</Label>
-                          <Input
-                            value={editingModel}
-                            onChange={(e) => setEditingModel(e.target.value)}
-                            disabled={isSaving}
-                            placeholder={
-                              provider.name === "ollama" || provider.name === "ollama_cloud"
-                                ? "minicpm-v"
-                                : "gpt-4-vision-preview"
-                            }
-                          />
+                          {!editingModelsLoaded || isLoadingModels ? (
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                              <span>{t("llm_providers.loadModels")}...</span>
+                            </div>
+                          ) : models.length > 0 && !editingManualModel ? (
+                            <div className="space-y-2">
+                              <Select
+                                value={editingModel}
+                                onValueChange={(value) => setEditingModel(value)}
+                              >
+                                <SelectTrigger>
+                                  <SelectValue placeholder={t("llm_providers.selectModel")} />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {models.map((model) => (
+                                    <SelectItem key={model.id} value={model.id}>
+                                      {model.name}
+                                      {model.size ? ` (${(model.size / 1073741824).toFixed(1)} GB)` : ""}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <Button
+                                variant="link"
+                                size="sm"
+                                className="px-0 h-auto text-xs"
+                                onClick={() => setEditingManualModel(true)}
+                              >
+                                {t("llm_providers.enterModelManually")}
+                              </Button>
+                            </div>
+                          ) : (
+                            <div className="space-y-2">
+                              <Input
+                                value={editingModel}
+                                onChange={(e) => setEditingModel(e.target.value)}
+                                disabled={isSaving}
+                                placeholder={
+                                  provider.name === "ollama" || provider.name === "ollama_cloud"
+                                    ? "minicpm-v"
+                                    : "gpt-4-vision-preview"
+                                }
+                              />
+                              {models.length > 0 && editingManualModel && (
+                                <Button
+                                  variant="link"
+                                  size="sm"
+                                  className="px-0 h-auto text-xs"
+                                  onClick={() => setEditingManualModel(false)}
+                                >
+                                  {t("llm_providers.selectFromModels")}
+                                </Button>
+                              )}
+                            </div>
+                          )}
                         </div>
 
                         <div className="flex gap-2 justify-end pt-1">
@@ -677,7 +768,7 @@ export function AdminLlmProvidersTab() {
                     </div>
                   )}
 
-                  {/* Model */}
+                  {/* Model - text input only for new providers (no cached models yet) */}
                   <div className="space-y-2">
                     <Label htmlFor="new-model">{t("llm_ocr.model")}</Label>
                     <Input

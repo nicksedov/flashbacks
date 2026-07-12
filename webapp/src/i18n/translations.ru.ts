@@ -884,4 +884,15 @@ export const translationsRu = {
   "moveFiles.success": "Успешно перемещено {count} файлов.",
   "moveFiles.successWithFailed": "Успешно перемещено {count} файлов. Ошибок: {failed}.",
   "moveFiles.errorFailed": "Не удалось переместить файлы",
+  // Gallery folders view (Режим Папки)
+  "gallery.subModes.folders": "Папки",
+  "gallery.folders.root": "Корень галереи",
+  "gallery.folders.upOneLevel": "Подняться на уровень вверх",
+  "gallery.folders.up": "Вверх",
+  "gallery.folders.empty": "Нет настроенных папок галереи",
+  "gallery.folders.emptyFolder": "Эта папка пуста",
+  "gallery.folders.subfolders": "Папки",
+  "gallery.folders.imagesCount": "{count} изображений",
+  "gallery.folders.loadMore": "Загрузить ещё",
+  "gallery.folders.rootFolders": "Папки галереи",
  } as const

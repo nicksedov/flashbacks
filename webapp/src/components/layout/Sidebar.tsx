@@ -58,6 +58,7 @@ export function Sidebar({
 
   const gallerySubItems: SubItem[] = [
     { value: "gallery-all-images", icon: Folder, label: t("gallery.subModes.allImages") },
+    { value: "gallery-folders", icon: Folder, label: t("gallery.subModes.folders") },
     { value: "gallery-calendar", icon: Calendar, label: t("gallery.subModes.calendar") },
     { value: "gallery-geolocation", icon: MapPin, label: t("gallery.subModes.geolocation") },
   ]

@@ -23,7 +23,7 @@ const AdminSettingsTab = lazy(() => import("@/components/tabs/AdminSettingsTab")
 const AdminPanel = lazy(() => import("@/components/auth/AdminPanel").then(module => ({ default: module.AdminPanel })))
 const SmartSearchTab = lazy(() => import("@/components/tabs/SmartSearchTab").then(module => ({ default: module.SmartSearchTab })))
 
-type TabValue = "settings" | "gallery-all-images" | "gallery-calendar" | "gallery-geolocation" | "gallery-trash" | "deduplication" | "ocr" | "exif" | "smart-search" | "profile" | "admin-settings" | "admin-users"
+type TabValue = "settings" | "gallery-all-images" | "gallery-calendar" | "gallery-geolocation" | "gallery-folders" | "gallery-trash" | "deduplication" | "ocr" | "exif" | "smart-search" | "profile" | "admin-settings" | "admin-users"
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<TabValue>("gallery-all-images")
@@ -152,6 +152,12 @@ export default function App() {
               <TabsContent value="gallery-geolocation">
                 <Suspense fallback={<div className="flex items-center justify-center py-20"><div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" /></div>}>
                   <GalleryTab galleryMode="geolocation" />
+                </Suspense>
+              </TabsContent>
+
+              <TabsContent value="gallery-folders">
+                <Suspense fallback={<div className="flex items-center justify-center py-20"><div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" /></div>}>
+                  <GalleryTab galleryMode="folders" />
                 </Suspense>
               </TabsContent>
 

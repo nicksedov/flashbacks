@@ -886,4 +886,15 @@ export const translationsEn = {
   "moveFiles.success": "Successfully moved {count} file(s).",
   "moveFiles.successWithFailed": "Successfully moved {count} file(s). Failed: {failed}.",
   "moveFiles.errorFailed": "Failed to move files",
+  // Gallery folders view
+  "gallery.subModes.folders": "Folders",
+  "gallery.folders.root": "Gallery root",
+  "gallery.folders.upOneLevel": "Go up one level",
+  "gallery.folders.up": "Up",
+  "gallery.folders.empty": "No gallery folders configured",
+  "gallery.folders.emptyFolder": "This folder is empty",
+  "gallery.folders.subfolders": "Folders",
+  "gallery.folders.imagesCount": "{count} images",
+  "gallery.folders.loadMore": "Load more images",
+  "gallery.folders.rootFolders": "Gallery Folders",
  } as const

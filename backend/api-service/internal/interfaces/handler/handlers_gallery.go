@@ -27,12 +27,20 @@ func (s *Server) handleGetGalleryImages(c *gin.Context) {
 	view := c.DefaultQuery("view", "list")
 	sortOrder := c.DefaultQuery("sortOrder", "newest")
 	searchQuery := c.DefaultQuery("search", "")
+	dirPath := c.DefaultQuery("dirPath", "")
 
 	// Build base query with optional search filter
 	query := s.db.Model(&domain.ImageFile{})
 	if searchQuery != "" {
 		pattern := "%" + searchQuery + "%"
 		query = query.Where("path ILIKE ?", pattern)
+	}
+	if dirPath != "" {
+		// Filter images directly in this directory (not recursive into subdirs).
+		// path LIKE 'dirPath/%' matches direct children; path NOT LIKE 'dirPath/%/%' excludes nested subdirectories.
+		dirPattern := dirPath + "/%"
+		subdirPattern := dirPath + "/%/%"
+		query = query.Where("path LIKE ? AND path NOT LIKE ?", dirPattern, subdirPattern)
 	}
 
 	var totalImages int64

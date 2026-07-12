@@ -1,7 +1,8 @@
 import { useCallback, useRef, useState } from "react"
-import { GalleryFoldersView } from "@/components/gallery/GalleryFoldersView"
+import { GalleryAllImagesView } from "@/components/gallery/GalleryAllImagesView"
 import { GalleryCalendarView } from "@/components/gallery/GalleryCalendarView"
 import { GalleryGeolocationView } from "@/components/gallery/GalleryGeolocationView"
+import { GalleryFoldersView } from "@/components/gallery/GalleryFoldersView"
 import { UnifiedLightbox } from "@/components/gallery/UnifiedLightbox"
 import { DeleteConfirmDialog } from "@/components/gallery/DeleteConfirmDialog"
 import { BulkDeleteDialog } from "@/components/gallery/BulkDeleteDialog"
@@ -13,7 +14,7 @@ import { downloadImage } from "@/lib/downloadImage"
 import type { GalleryImageDTO } from "@/types"
 
 interface GalleryTabProps {
-  galleryMode: "folders" | "calendar" | "geolocation"
+  galleryMode: "allImages" | "calendar" | "geolocation" | "folders"
 }
 
 export function GalleryTab({ galleryMode }: GalleryTabProps) {
@@ -103,8 +104,8 @@ export function GalleryTab({ galleryMode }: GalleryTabProps) {
 
   return (
     <div className={galleryMode === "geolocation" ? "space-y-2" : "space-y-4"}>
-      {galleryMode === "folders" ? (
-        <GalleryFoldersView
+      {galleryMode === "allImages" ? (
+        <GalleryAllImagesView
           onImageClick={handleImageClick}
           onImageDownload={handleImageDownload}
           onImageDelete={handleImageDelete}
@@ -112,6 +113,12 @@ export function GalleryTab({ galleryMode }: GalleryTabProps) {
         />
       ) : galleryMode === "calendar" ? (
         <GalleryCalendarView
+          onImageClick={handleImageClick}
+          onImageDownload={handleImageDownload}
+          onImageDelete={handleImageDelete}
+        />
+      ) : galleryMode === "folders" ? (
+        <GalleryFoldersView
           onImageClick={handleImageClick}
           onImageDownload={handleImageDownload}
           onImageDelete={handleImageDelete}

@@ -1,296 +1,464 @@
-import { useCallback, useEffect, useRef, useState } from "react"
-import { GalleryImageGrid } from "@/components/gallery/GalleryImageGrid"
-import { useGalleryImages } from "@/hooks/useGalleryImages"
+import { useCallback, useEffect, useMemo, useState } from "react"
+import {
+  Folder,
+  FolderOpen,
+  ArrowUp,
+  ChevronRight,
+  Home,
+  ImageIcon,
+} from "lucide-react"
 import { useGalleryFolders } from "@/hooks/useGalleryFolders"
-import { Skeleton } from "@/components/ui/skeleton"
-import { ImageIcon, ArrowDown, ArrowUp, Search, X } from "lucide-react"
-import { useTranslation } from "@/i18n"
+import { useGalleryImages } from "@/hooks/useGalleryImages"
 import { useIntersectionObserver } from "@/hooks/useIntersectionObserver"
-import { PaginationFooter } from "@/components/ui/pagination-footer"
-import { ViewHeader } from "@/components/ui/view-header"
-import { useGallerySelection } from "@/providers/useGallerySelection"
-import { BulkMoveDialog } from "@/components/gallery/BulkMoveDialog"
-import { moveFiles } from "@/api/endpoints"
-import type { GalleryImageDTO } from "@/types"
+import { fetchSubdirs } from "@/api/endpoints"
+import { useTranslation } from "@/i18n"
+import { Skeleton } from "@/components/ui/skeleton"
+import { cn } from "@/lib/utils"
+import type { GalleryImageDTO, SubdirEntry } from "@/types"
 
 interface GalleryFoldersViewProps {
   onImageClick: (image: GalleryImageDTO) => void
   onImageDownload?: (image: GalleryImageDTO) => void
   onImageDelete?: (image: GalleryImageDTO, removeThumbnail: () => void) => void
-  onBulkDelete?: (selectedImages: GalleryImageDTO[], cleanup: () => void) => void
 }
 
-export function GalleryFoldersView({ onImageClick, onImageDownload, onImageDelete, onBulkDelete }: GalleryFoldersViewProps) {
-  const [sortOrder, setSortOrder] = useState<"newest" | "oldest">("newest")
-  const [searchInput, setSearchInput] = useState("")
-  const [searchQuery, setSearchQuery] = useState("")
-  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
-  const { images, totalImages, hasMore, isLoading, error, initialized, loadMore, removeImage } =
-    useGalleryImages("folders", sortOrder, searchQuery || undefined)
-  const { folders: rootFolders } = useGalleryFolders()
-  const { t } = useTranslation()
-  const { registerActions } = useGallerySelection()
+interface BreadcrumbSegment {
+  name: string
+  path: string
+}
 
-  // Debounce search input (500ms delay)
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setSearchQuery(searchInput)
-    }, 500)
+/**
+ * Compute the longest common path prefix from a list of absolute paths.
+ * Returns empty string if fewer than 2 paths or no common prefix beyond "/".
+ * Example: ["/storage/gallery/photo", "/storage/gallery/camera"] → "/storage/gallery"
+ */
+function getCommonPathPrefix(paths: string[]): string {
+  if (paths.length < 2) return ""
 
-    return () => clearTimeout(timer)
-  }, [searchInput])
+  const parts = paths.map((p) => p.split("/").filter(Boolean))
+  const minLen = Math.min(...parts.map((p) => p.length))
 
-  const sentinelRef = useIntersectionObserver({
-    onIntersect: loadMore,
-    enabled: hasMore && !isLoading,
-    dependencies: [hasMore, isLoading, loadMore],
-  })
+  if (minLen === 0) return ""
 
-  useEffect(() => {
-    if (!initialized && !isLoading) {
-      loadMore()
-    }
-  }, [initialized, isLoading, loadMore])
-
-  const handleSortToggle = () => {
-    setSortOrder(prev => prev === "newest" ? "oldest" : "newest")
-  }
-
-  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setSearchInput(e.target.value)
-  }
-
-  const handleClearSearch = () => {
-    setSearchInput("")
-    setSearchQuery("")
-  }
-
-  const handleToggleSelection = useCallback((image: GalleryImageDTO) => {
-    const next = new Set(selectedIds)
-    if (next.has(image.id)) {
-      next.delete(image.id)
+  let commonCount = 0
+  for (let i = 0; i < minLen; i++) {
+    const segment = parts[0][i]
+    if (parts.every((p) => p[i] === segment)) {
+      commonCount++
     } else {
-      next.add(image.id)
+      break
     }
-    setSelectedIds(next)
-  }, [selectedIds])
+  }
 
-  const handleImageClick = useCallback((image: GalleryImageDTO) => {
-    onImageClick(image)
-  }, [onImageClick])
+  if (commonCount === 0) return ""
+  return "/" + parts[0].slice(0, commonCount).join("/")
+}
 
-  const handleRangeSelection = useCallback((startImage: GalleryImageDTO, endImage: GalleryImageDTO) => {
-    if (startImage.dirPath !== endImage.dirPath) return
+/**
+ * Compute the relative path by stripping the base prefix.
+ * Returns the path unchanged if basePath is empty or path doesn't start with it.
+ */
+function relativePath(path: string, basePath: string): string {
+  if (!basePath) return path
+  if (!path.startsWith(basePath)) return path
+  const rel = path.slice(basePath.length)
+  return rel.startsWith("/") ? rel.slice(1) : rel
+}
 
-    const folderImages = images.filter((img) => img.dirPath === endImage.dirPath)
-    const startIndex = folderImages.findIndex((img) => img.id === startImage.id)
-    const endIndex = folderImages.findIndex((img) => img.id === endImage.id)
-    if (startIndex === -1 || endIndex === -1) return
+/**
+ * File-manager style folder browser for the gallery.
+ * Shows root gallery folders initially, then allows drilling into subdirectories.
+ * When root folders share a common path prefix, it becomes the virtual base —
+ * intermediate directories are hidden from breadcrumbs and root folder names.
+ * Displays folders first, then image thumbnails.
+ */
+export function GalleryFoldersView(props: GalleryFoldersViewProps) {
+  const { onImageClick } = props
+  const { t } = useTranslation()
+  const { folders: rootFolders } = useGalleryFolders()
 
-    const [minIndex, maxIndex] = startIndex < endIndex ? [startIndex, endIndex] : [endIndex, startIndex]
-    const next = new Set(selectedIds)
-    for (let i = minIndex; i <= maxIndex; i++) {
-      next.add(folderImages[i].id)
+  // Compute common base path from root gallery folders
+  const basePath = useMemo(
+    () => getCommonPathPrefix(rootFolders.map((f) => f.path)),
+    [rootFolders]
+  )
+
+  // Current directory path: null = root (gallery folders / virtual base)
+  const [currentPath, setCurrentPath] = useState<string | null>(null)
+
+  // Subdirectories in current path
+  const [subdirs, setSubdirs] = useState<SubdirEntry[]>([])
+  const [subdirsLoading, setSubdirsLoading] = useState(false)
+
+  // Images in current path (using the gallery images hook with dirPath filter)
+  const {
+    images,
+    totalImages,
+    hasMore,
+    isLoading: imagesLoading,
+    error: imagesError,
+    initialized: imagesInitialized,
+    loadMore,
+  } = useGalleryImages("folders", "newest", undefined, currentPath ?? undefined)
+
+  // Clear subdirs when going back to root
+  useEffect(() => {
+    if (currentPath === null) {
+      setSubdirs([])
+      setSubdirsLoading(false)
     }
-    setSelectedIds(next)
-  }, [images, selectedIds])
+  }, [currentPath])
 
-  const handleDeleteSelected = useCallback(() => {
-    const selectedImages = images.filter((img) => selectedIds.has(img.id))
-    const cleanup = () => {
-      for (const img of selectedImages) {
-        removeImage(img.id)
+  // Load subdirectories when currentPath changes to a non-null value
+  useEffect(() => {
+    if (currentPath === null) return
+    let cancelled = false
+    setSubdirsLoading(true)
+    fetchSubdirs(currentPath)
+      .then((res) => {
+        if (!cancelled) setSubdirs(res.subdirs)
+      })
+      .catch(() => {
+        if (!cancelled) setSubdirs([])
+      })
+      .finally(() => {
+        if (!cancelled) setSubdirsLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [currentPath])
+
+  // Compute breadcrumbs relative to basePath
+  const breadcrumbs: BreadcrumbSegment[] = []
+  if (currentPath !== null && basePath) {
+    // When basePath exists, build breadcrumbs only from the relative portion
+    const rel = relativePath(currentPath, basePath)
+    if (rel) {
+      const parts = rel.split("/").filter(Boolean)
+      let acc = basePath
+      for (const part of parts) {
+        acc += "/" + part
+        breadcrumbs.push({ name: part, path: acc })
       }
-      setSelectedIds(new Set())
     }
-    onBulkDelete?.(selectedImages, cleanup)
-  }, [images, selectedIds, removeImage, onBulkDelete])
+  } else if (currentPath !== null) {
+    // No common base path — use full path for breadcrumbs (original behavior)
+    const parts = currentPath.split("/").filter(Boolean)
+    let acc = ""
+    for (const part of parts) {
+      acc += "/" + part
+      breadcrumbs.push({ name: part, path: acc })
+    }
+  }
 
-  // Move state
-  const [moveDialogOpen, setMoveDialogOpen] = useState(false)
-  const [isMoving, setIsMoving] = useState(false)
-
-  const handleMoveSelected = useCallback(() => {
-    setMoveDialogOpen(true)
+  // Navigate into a folder
+  const handleEnterFolder = useCallback((path: string) => {
+    setCurrentPath(path)
   }, [])
 
-  const handleConfirmMove = useCallback(async (targetDir: string) => {
-    const selectedImages = images.filter((img) => selectedIds.has(img.id))
-    if (selectedImages.length === 0) return
-
-    setIsMoving(true)
-    try {
-      const result = await moveFiles({
-        filePaths: selectedImages.map((img) => img.path),
-        targetDir,
-      })
-      // Remove moved files from view
-      for (const img of selectedImages) {
-        removeImage(img.id)
+  // Navigate up one level
+  const handleGoUp = useCallback(() => {
+    if (currentPath === null) return
+    const parts = currentPath.split("/").filter(Boolean)
+    // When basePath exists, go back to root if we are at basePath + 1 segment
+    if (basePath) {
+      const baseParts = basePath.split("/").filter(Boolean)
+      if (parts.length <= baseParts.length + 1) {
+        setCurrentPath(null)
+        return
       }
-      setSelectedIds(new Set())
-      setMoveDialogOpen(false)
-      if (result.failed > 0) {
-        alert(t("moveFiles.successWithFailed", { count: result.success, failed: result.failed }))
-      }
-    } catch (err) {
-      console.error("Failed to move files:", err)
-      alert(t("moveFiles.errorFailed"))
-    } finally {
-      setIsMoving(false)
+    } else if (parts.length <= 1) {
+      setCurrentPath(null)
+      return
     }
-  }, [images, selectedIds, removeImage, t])
+    parts.pop()
+    setCurrentPath("/" + parts.join("/"))
+  }, [currentPath, basePath])
 
-  const selectedCount = selectedIds.size
+  // Navigate to a breadcrumb segment
+  const handleBreadcrumbClick = useCallback((path: string) => {
+    setCurrentPath(path)
+  }, [])
 
-  // Store callbacks in ref (updated in effect) to stabilize useEffect deps
-  const callbacksRef = useRef({ handleDeleteSelected, handleMoveSelected })
+  // Navigate to root
+  const handleGoRoot = useCallback(() => {
+    setCurrentPath(null)
+  }, [])
 
-  // Keep ref updated after each render
+  // Load initial images
   useEffect(() => {
-    callbacksRef.current = { handleDeleteSelected, handleMoveSelected }
+    if (!imagesInitialized && !imagesLoading) {
+      loadMore()
+    }
+  }, [imagesInitialized, imagesLoading, loadMore])
+
+  // Intersection observer sentinel for automatic infinite scroll
+  const sentinelRef = useIntersectionObserver({
+    onIntersect: loadMore,
+    enabled: hasMore && !imagesLoading,
+    dependencies: [hasMore, imagesLoading, loadMore],
   })
 
-  // Register selection actions in context for Header display
-  useEffect(() => {
-    if (selectedCount > 0) {
-      registerActions({
-        count: selectedCount,
-        clear: () => {
-          setSelectedIds(new Set())
-        },
-        del: callbacksRef.current.handleDeleteSelected,
-        move: callbacksRef.current.handleMoveSelected,
-      })
-    } else {
-      registerActions(null)
-    }
-    return () => {
-      registerActions(null)
-    }
-  }, [selectedCount, registerActions])
+  const isLoading = (currentPath !== null && subdirsLoading) || !imagesInitialized
+
+  // Home button tooltip: show base path when applicable
+  const homeTitle = basePath
+    ? basePath
+    : t("gallery.folders.root")
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-3">
-        <ViewHeader
-          icon={ImageIcon}
-          textKey={totalImages === 1 ? "gallery.imageCountOne" : "gallery.imageCount"}
-          textValues={{ count: totalImages.toLocaleString() }}
-          isLoading={!initialized}
-        />
+      {/* Breadcrumbs + Up button bar */}
+      <div className="flex items-center gap-2 flex-wrap min-h-9">
+        {/* Root home button */}
+        <button
+          type="button"
+          onClick={handleGoRoot}
+          className={cn(
+            "inline-flex items-center gap-1 rounded-md px-2 py-1 text-sm transition-colors",
+            currentPath === null
+              ? "bg-primary/10 text-primary font-medium"
+              : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+          )}
+          title={homeTitle}
+        >
+          <Home className="h-4 w-4" />
+        </button>
 
-        {/* Right side: search and sort */}
-        <div className="flex items-center gap-2">
-          {/* Search input */}
-          <div className="relative">
-            <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <input
-              type="text"
-              value={searchInput}
-              onChange={handleSearchChange}
-              placeholder={t("gallery.search.placeholder")}
-              className="h-9 w-70 rounded-md border bg-background pl-8 pr-8 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-            />
-            {searchInput && (
+        {/* Breadcrumbs */}
+        {breadcrumbs.map((segment, idx) => {
+          const isLast = idx === breadcrumbs.length - 1
+          return (
+            <span key={segment.path} className="flex items-center gap-1">
+              <ChevronRight className="h-3 w-3 text-muted-foreground flex-shrink-0" />
               <button
-                onClick={handleClearSearch}
-                className="absolute right-1 top-1/2 -translate-y-1/2 h-6 w-6 rounded-sm hover:bg-accent flex items-center justify-center"
-                title={t("gallery.search.clear")}
+                type="button"
+                onClick={() => handleBreadcrumbClick(segment.path)}
+                className={cn(
+                  "rounded-md px-2 py-1 text-sm transition-colors truncate max-w-[200px]",
+                  isLast
+                    ? "bg-primary/10 text-primary font-medium"
+                    : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                )}
+                title={segment.path}
               >
-                <X className="h-3 w-3 text-muted-foreground" />
+                {segment.name}
               </button>
-            )}
-          </div>
+            </span>
+          )
+        })}
 
-          {/* Sort button */}
+        {/* Up button (only when inside a folder) */}
+        {currentPath !== null && (
           <button
-            onClick={handleSortToggle}
-            className="inline-flex items-center gap-2 rounded-md bg-transparent px-3 py-2 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-            title={sortOrder === "newest" ? t("gallery.sortNewest") : t("gallery.sortOldest")}
+            type="button"
+            onClick={handleGoUp}
+            className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors ml-auto"
+            title={t("gallery.folders.upOneLevel")}
           >
-            {sortOrder === "newest" ? (
-              <ArrowDown className="h-4 w-4" />
-            ) : (
-              <ArrowUp className="h-4 w-4" />
-            )}
-            <span>{sortOrder === "newest" ? t("gallery.sortNewest") : t("gallery.sortOldest")}</span>
+            <ArrowUp className="h-4 w-4" />
+            <span className="hidden sm:inline">{t("gallery.folders.up")}</span>
           </button>
-        </div>
+        )}
       </div>
 
-      {error && (
+      {/* Error state */}
+      {imagesError && (
         <div className="rounded-lg border border-destructive/20 bg-destructive/10 p-4 text-sm text-destructive">
-          {error}
+          {imagesError}
         </div>
       )}
 
-      {!initialized ? (
+      {/* Loading state */}
+      {isLoading && currentPath !== null && (
         <div className="space-y-3">
           {Array.from({ length: 3 }).map((_, i) => (
             <Skeleton key={i} className="h-40 w-full rounded-lg" />
           ))}
         </div>
-      ) : images.length === 0 && !isLoading ? (
+      )}
+
+      {/* Root level: show gallery root folders */}
+      {currentPath === null && !isLoading && (
+        <RootFoldersGrid
+          folders={rootFolders}
+          basePath={basePath}
+          onEnterFolder={handleEnterFolder}
+          emptyText={t("gallery.folders.empty")}
+          emptyHint={t("gallery.emptyHint")}
+        />
+      )}
+
+      {/* Inside folder: show subfolders + images */}
+      {currentPath !== null && !isLoading && subdirs.length === 0 && images.length === 0 && (
         <div className="rounded-lg border border-dashed p-12 text-center">
-          <ImageIcon className="mx-auto h-10 w-10 text-muted-foreground/50" />
+          <FolderOpen className="mx-auto h-10 w-10 text-muted-foreground/50" />
           <p className="mt-2 text-sm font-medium text-muted-foreground">
-            {t("gallery.empty")}
-          </p>
-          <p className="text-xs text-muted-foreground/70">
-            {t("gallery.emptyHint")}
+            {t("gallery.folders.emptyFolder")}
           </p>
         </div>
-      ) : (
-        <>
-          {searchQuery && images.length === 0 && !isLoading ? (
-            <div className="rounded-lg border border-dashed p-12 text-center">
-              <Search className="mx-auto h-10 w-10 text-muted-foreground/50" />
-              <p className="mt-2 text-sm font-medium text-muted-foreground">
-                {t("gallery.search.noResults", { query: searchQuery })}
-              </p>
-              <p className="text-xs text-muted-foreground/70">
-                {t("gallery.search.noResultsHint")}
-              </p>
-            </div>
-          ) : (
-            <>
-              {searchQuery && (
-                <div className="text-xs text-muted-foreground px-0.5">
-                  {t("gallery.search.resultsCount", { shown: images.length, total: totalImages })}
-                </div>
-              )}
-              <GalleryImageGrid
-                images={images}
-                onImageClick={handleImageClick}
-                onImageDownload={onImageDownload}
-                onImageDelete={(image) => onImageDelete?.(image, () => removeImage(image.id))}
-                rootFolders={rootFolders}
-                selectedIds={selectedIds}
-                selectionModeActive={selectedIds.size > 0}
-                onToggleSelection={handleToggleSelection}
-                onRangeSelection={handleRangeSelection}
-              />
-
-              <div ref={sentinelRef} className="h-4" />
-
-              <PaginationFooter
-                isLoading={isLoading}
-                hasMore={hasMore}
-                totalCount={totalImages}
-              />
-            </>
-          )}
-        </>
       )}
-      {/* Bulk move dialog */}
-      <BulkMoveDialog
-        count={selectedIds.size}
-        open={moveDialogOpen}
-        onCancel={() => setMoveDialogOpen(false)}
-        onConfirm={handleConfirmMove}
-        loading={isMoving}
-      />
+
+      {currentPath !== null && !isLoading && (subdirs.length > 0 || images.length > 0) && (
+        <div className="space-y-6">
+          {/* Subdirectories section */}
+          {subdirs.length > 0 && (
+            <div>
+              <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
+                {t("gallery.folders.subfolders")}
+              </h3>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-3">
+                {subdirs.map((subdir) => (
+                  <FolderTile
+                    key={subdir.path}
+                    name={subdir.name}
+                    path={subdir.path}
+                    onEnter={handleEnterFolder}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Images section */}
+          {images.length > 0 && (
+            <div>
+              <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
+                {t("gallery.folders.imagesCount", { count: totalImages })}
+              </h3>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-3">
+                {images.map((image) => (
+                  <ImageTile
+                    key={image.id}
+                    image={image}
+                    onClick={onImageClick}
+                  />
+                ))}
+              </div>
+
+              {/* Sentinel for automatic infinite scroll */}
+              <div ref={sentinelRef} className="h-4" />
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Sub-components ────────────────────────────────────────────────
+
+interface RootFoldersGridProps {
+  folders: { id: number; path: string; fileCount: number; createdAt: string }[]
+  basePath: string
+  onEnterFolder: (path: string) => void
+  emptyText: string
+  emptyHint: string
+}
+
+function RootFoldersGrid({ folders, basePath, onEnterFolder, emptyText, emptyHint }: RootFoldersGridProps) {
+  const { t } = useTranslation()
+
+  if (folders.length === 0) {
+    return (
+      <div className="rounded-lg border border-dashed p-12 text-center">
+        <Folder className="mx-auto h-10 w-10 text-muted-foreground/50" />
+        <p className="mt-2 text-sm font-medium text-muted-foreground">{emptyText}</p>
+        <p className="text-xs text-muted-foreground/70">{emptyHint}</p>
+      </div>
+    )
+  }
+
+  return (
+    <div>
+      <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
+        {t("gallery.folders.rootFolders")}
+      </h3>
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-3">
+        {folders.map((folder) => {
+          const displayName = basePath
+            ? relativePath(folder.path, basePath) || folder.path.split("/").filter(Boolean).pop() || folder.path
+            : folder.path.split("/").filter(Boolean).pop() || folder.path
+          return (
+            <FolderTile
+              key={folder.id}
+              name={displayName}
+              path={folder.path}
+              fileCount={folder.fileCount}
+              onEnter={onEnterFolder}
+            />
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+interface FolderTileProps {
+  name: string
+  path: string
+  fileCount?: number
+  onEnter: (path: string) => void
+}
+
+function FolderTile({ name, path, fileCount, onEnter }: FolderTileProps) {
+  const { t } = useTranslation()
+
+  return (
+    <button
+      type="button"
+      onDoubleClick={() => onEnter(path)}
+      className="flex flex-col items-center gap-2 rounded-lg border border-border bg-card p-4 text-center transition-colors hover:bg-accent hover:border-primary/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      title={path}
+    >
+      <Folder className="h-10 w-10 text-amber-500 flex-shrink-0" />
+      <span className="text-xs font-medium text-foreground line-clamp-2 break-all leading-tight">
+        {name}
+      </span>
+      {fileCount !== undefined && (
+        <span className="text-[10px] text-muted-foreground">
+          {t("gallery.folderImageCount", { count: fileCount.toString() })}
+        </span>
+      )}
+    </button>
+  )
+}
+
+interface ImageTileProps {
+  image: GalleryImageDTO
+  onClick: (image: GalleryImageDTO) => void
+}
+
+function ImageTile({ image, onClick }: ImageTileProps) {
+  const handleClick = () => onClick(image)
+
+  return (
+    <div
+      className="group relative flex flex-col rounded-lg border border-border bg-card overflow-hidden transition-colors hover:border-primary/30 cursor-pointer"
+      onClick={handleClick}
+      onDoubleClick={handleClick}
+    >
+      {/* Thumbnail */}
+      <div className="aspect-square bg-muted flex items-center justify-center overflow-hidden">
+        {image.thumbnail ? (
+          <img
+            src={image.thumbnail}
+            alt={image.fileName}
+            className="h-full w-full object-cover"
+            loading="lazy"
+          />
+        ) : (
+          <ImageIcon className="h-8 w-8 text-muted-foreground/50" />
+        )}
+      </div>
+
+      {/* File name */}
+      <div className="p-1.5">
+        <p className="text-[11px] text-foreground line-clamp-2 break-all leading-tight" title={image.fileName}>
+          {image.fileName}
+        </p>
+      </div>
     </div>
   )
 }

@@ -144,7 +144,8 @@ export function fetchGalleryImages(
   pageSize: number,
   view: string,
   sortOrder: string = "newest",
-  search?: string
+  search?: string,
+  dirPath?: string
 ): Promise<GalleryImagesResponse> {
   const params: Record<string, string> = {
     page: String(page),
@@ -154,6 +155,9 @@ export function fetchGalleryImages(
   }
   if (search) {
     params.search = search
+  }
+  if (dirPath) {
+    params.dirPath = dirPath
   }
   return apiGet<GalleryImagesResponse>("/api/gallery", params)
 }

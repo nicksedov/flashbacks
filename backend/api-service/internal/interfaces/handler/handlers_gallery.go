@@ -27,12 +27,20 @@ func (s *Server) handleGetGalleryImages(c *gin.Context) {
 	view := c.DefaultQuery("view", "list")
 	sortOrder := c.DefaultQuery("sortOrder", "newest")
 	searchQuery := c.DefaultQuery("search", "")
+	dirPath := c.DefaultQuery("dirPath", "")
 
 	// Build base query with optional search filter
 	query := s.db.Model(&domain.ImageFile{})
 	if searchQuery != "" {
 		pattern := "%" + searchQuery + "%"
 		query = query.Where("path ILIKE ?", pattern)
+	}
+	if dirPath != "" {
+		// Filter images directly in this directory (not recursive into subdirs).
+		// path LIKE 'dirPath/%' matches direct children; path NOT LIKE 'dirPath/%/%' excludes nested subdirectories.
+		dirPattern := dirPath + "/%"
+		subdirPattern := dirPath + "/%/%"
+		query = query.Where("path LIKE ? AND path NOT LIKE ?", dirPattern, subdirPattern)
 	}
 
 	var totalImages int64
@@ -41,16 +49,19 @@ func (s *Server) handleGetGalleryImages(c *gin.Context) {
 	pag := helpers.CalcPagination(page, pageSize, totalImages)
 
 	var files []domain.ImageFile
-	orderClause := "mod_time DESC"
 	if sortOrder == "oldest" {
-		orderClause = "mod_time ASC"
+		query.Order("mod_time ASC")
+	} else if sortOrder == "none" {
+		// No explicit ordering — natural/insertion order
+	} else {
+		query.Order("mod_time DESC")
 	}
-	query.Order(orderClause).Offset(offset).Limit(pageSize).Find(&files)
+	query.Offset(offset).Limit(pageSize).Find(&files)
 
 	imageDTOs := helpers.BuildGalleryImageDTOs(files)
 
-	// Generate thumbnails in parallel if thumbnail or folders view
-	if (view == "thumbnails" || view == "folders") && len(files) > 0 {
+	// Generate thumbnails in parallel for views that show image grids
+	if (view == "thumbnails" || view == "folders" || view == "allImages") && len(files) > 0 {
 		s.thumbnailBatch.GenerateThumbnailsForDTOs(imageDTOs)
 	}
 

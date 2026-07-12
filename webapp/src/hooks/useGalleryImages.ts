@@ -5,32 +5,34 @@ import { useInfiniteScroll } from "./useInfiniteScroll"
 
 const PAGE_SIZE = 50
 
-export function useGalleryImages(view: string, sortOrder: string = "newest", search?: string) {
+export function useGalleryImages(view: string, sortOrder: string = "newest", search?: string, dirPath?: string) {
   const viewRef = useRef(view)
   const sortOrderRef = useRef(sortOrder)
   const searchRef = useRef(search)
+  const dirPathRef = useRef(dirPath)
 
   const { items, total, hasMore, isLoading, error, initialized, loadMore, reset, removeItem } =
     useInfiniteScroll<GalleryImageDTO, GalleryImagesResponse>({
-      fetchFn: (page, pageSize) => fetchGalleryImages(page, pageSize, viewRef.current, sortOrderRef.current, searchRef.current),
+      fetchFn: (page, pageSize) => fetchGalleryImages(page, pageSize, viewRef.current, sortOrderRef.current, searchRef.current, dirPathRef.current),
       pageSize: PAGE_SIZE,
       transform: (response) => response.images,
       responseTotal: (response) => response.totalImages,
       responseHasNext: (response) => response.hasNextPage,
     })
 
-  // Reset when view, sortOrder, or search changes
+  // Reset when view, sortOrder, search, or dirPath changes
   useEffect(() => {
-    if (viewRef.current !== view || sortOrderRef.current !== sortOrder || searchRef.current !== search) {
+    if (viewRef.current !== view || sortOrderRef.current !== sortOrder || searchRef.current !== search || dirPathRef.current !== dirPath) {
       viewRef.current = view
       sortOrderRef.current = sortOrder
       searchRef.current = search
+      dirPathRef.current = dirPath
       reset()
     }
-  }, [view, sortOrder, search, reset])
+  }, [view, sortOrder, search, dirPath, reset])
 
   const resetWithView = useCallback(
-    (newView?: string, newSortOrder?: string, newSearch?: string) => {
+    (newView?: string, newSortOrder?: string, newSearch?: string, newDirPath?: string) => {
       if (newView !== undefined) {
         viewRef.current = newView
       }
@@ -39,6 +41,9 @@ export function useGalleryImages(view: string, sortOrder: string = "newest", sea
       }
       if (newSearch !== undefined) {
         searchRef.current = newSearch
+      }
+      if (newDirPath !== undefined) {
+        dirPathRef.current = newDirPath
       }
       reset()
     },

@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from "react"
-import { GalleryFoldersView } from "@/components/gallery/GalleryFoldersView"
+import { GalleryAllImagesView } from "@/components/gallery/GalleryAllImagesView"
 import { GalleryCalendarView } from "@/components/gallery/GalleryCalendarView"
 import { GalleryGeolocationView } from "@/components/gallery/GalleryGeolocationView"
 import { UnifiedLightbox } from "@/components/gallery/UnifiedLightbox"
@@ -13,7 +13,7 @@ import { downloadImage } from "@/lib/downloadImage"
 import type { GalleryImageDTO } from "@/types"
 
 interface GalleryTabProps {
-  galleryMode: "folders" | "calendar" | "geolocation"
+  galleryMode: "allImages" | "calendar" | "geolocation"
 }
 
 export function GalleryTab({ galleryMode }: GalleryTabProps) {
@@ -103,8 +103,8 @@ export function GalleryTab({ galleryMode }: GalleryTabProps) {
 
   return (
     <div className={galleryMode === "geolocation" ? "space-y-2" : "space-y-4"}>
-      {galleryMode === "folders" ? (
-        <GalleryFoldersView
+      {galleryMode === "allImages" ? (
+        <GalleryAllImagesView
           onImageClick={handleImageClick}
           onImageDownload={handleImageDownload}
           onImageDelete={handleImageDelete}

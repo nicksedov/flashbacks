@@ -23,10 +23,10 @@ const AdminSettingsTab = lazy(() => import("@/components/tabs/AdminSettingsTab")
 const AdminPanel = lazy(() => import("@/components/auth/AdminPanel").then(module => ({ default: module.AdminPanel })))
 const SmartSearchTab = lazy(() => import("@/components/tabs/SmartSearchTab").then(module => ({ default: module.SmartSearchTab })))
 
-type TabValue = "settings" | "gallery-folders" | "gallery-calendar" | "gallery-geolocation" | "gallery-trash" | "deduplication" | "ocr" | "exif" | "smart-search" | "profile" | "admin-settings" | "admin-users"
+type TabValue = "settings" | "gallery-all-images" | "gallery-calendar" | "gallery-geolocation" | "gallery-trash" | "deduplication" | "ocr" | "exif" | "smart-search" | "profile" | "admin-settings" | "admin-users"
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<TabValue>("gallery-folders")
+  const [activeTab, setActiveTab] = useState<TabValue>("gallery-all-images")
   const [isCheckingGallery, setIsCheckingGallery] = useState(true)
   const [forceLogout, setForceLogout] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
@@ -137,9 +137,9 @@ export default function App() {
                 </Suspense>
               </TabsContent>
 
-              <TabsContent value="gallery-folders">
+              <TabsContent value="gallery-all-images">
                 <Suspense fallback={<div className="flex items-center justify-center py-20"><div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" /></div>}>
-                  <GalleryTab galleryMode="folders" />
+                  <GalleryTab galleryMode="allImages" />
                 </Suspense>
               </TabsContent>
 

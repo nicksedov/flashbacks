@@ -41,16 +41,19 @@ func (s *Server) handleGetGalleryImages(c *gin.Context) {
 	pag := helpers.CalcPagination(page, pageSize, totalImages)
 
 	var files []domain.ImageFile
-	orderClause := "mod_time DESC"
 	if sortOrder == "oldest" {
-		orderClause = "mod_time ASC"
+		query.Order("mod_time ASC")
+	} else if sortOrder == "none" {
+		// No explicit ordering — natural/insertion order
+	} else {
+		query.Order("mod_time DESC")
 	}
-	query.Order(orderClause).Offset(offset).Limit(pageSize).Find(&files)
+	query.Offset(offset).Limit(pageSize).Find(&files)
 
 	imageDTOs := helpers.BuildGalleryImageDTOs(files)
 
-	// Generate thumbnails in parallel if thumbnail or folders view
-	if (view == "thumbnails" || view == "folders") && len(files) > 0 {
+	// Generate thumbnails in parallel for views that show image grids
+	if (view == "thumbnails" || view == "folders" || view == "allImages") && len(files) > 0 {
 		s.thumbnailBatch.GenerateThumbnailsForDTOs(imageDTOs)
 	}
 

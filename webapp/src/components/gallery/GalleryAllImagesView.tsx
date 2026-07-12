@@ -3,7 +3,7 @@ import { GalleryImageGrid } from "@/components/gallery/GalleryImageGrid"
 import { useGalleryImages } from "@/hooks/useGalleryImages"
 import { useGalleryFolders } from "@/hooks/useGalleryFolders"
 import { Skeleton } from "@/components/ui/skeleton"
-import { ImageIcon, ArrowDown, ArrowUp, Search, X } from "lucide-react"
+import { ImageIcon, ArrowDown, ArrowUp, Search, X, List } from "lucide-react"
 import { useTranslation } from "@/i18n"
 import { useIntersectionObserver } from "@/hooks/useIntersectionObserver"
 import { PaginationFooter } from "@/components/ui/pagination-footer"
@@ -13,20 +13,20 @@ import { BulkMoveDialog } from "@/components/gallery/BulkMoveDialog"
 import { moveFiles } from "@/api/endpoints"
 import type { GalleryImageDTO } from "@/types"
 
-interface GalleryFoldersViewProps {
+interface GalleryAllImagesViewProps {
   onImageClick: (image: GalleryImageDTO) => void
   onImageDownload?: (image: GalleryImageDTO) => void
   onImageDelete?: (image: GalleryImageDTO, removeThumbnail: () => void) => void
   onBulkDelete?: (selectedImages: GalleryImageDTO[], cleanup: () => void) => void
 }
 
-export function GalleryFoldersView({ onImageClick, onImageDownload, onImageDelete, onBulkDelete }: GalleryFoldersViewProps) {
-  const [sortOrder, setSortOrder] = useState<"newest" | "oldest">("newest")
+export function GalleryAllImagesView({ onImageClick, onImageDownload, onImageDelete, onBulkDelete }: GalleryAllImagesViewProps) {
+  const [sortOrder, setSortOrder] = useState<"newest" | "oldest" | "none">("newest")
   const [searchInput, setSearchInput] = useState("")
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
   const { images, totalImages, hasMore, isLoading, error, initialized, loadMore, removeImage } =
-    useGalleryImages("folders", sortOrder, searchQuery || undefined)
+    useGalleryImages("allImages", sortOrder, searchQuery || undefined)
   const { folders: rootFolders } = useGalleryFolders()
   const { t } = useTranslation()
   const { registerActions } = useGallerySelection()
@@ -53,7 +53,11 @@ export function GalleryFoldersView({ onImageClick, onImageDownload, onImageDelet
   }, [initialized, isLoading, loadMore])
 
   const handleSortToggle = () => {
-    setSortOrder(prev => prev === "newest" ? "oldest" : "newest")
+    setSortOrder(prev => {
+      if (prev === "newest") return "oldest"
+      if (prev === "oldest") return "none"
+      return "newest"
+    })
   }
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -207,14 +211,24 @@ export function GalleryFoldersView({ onImageClick, onImageDownload, onImageDelet
           <button
             onClick={handleSortToggle}
             className="inline-flex items-center gap-2 rounded-md bg-transparent px-3 py-2 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-            title={sortOrder === "newest" ? t("gallery.sortNewest") : t("gallery.sortOldest")}
+            title={
+              sortOrder === "newest" ? t("gallery.sortNewest") :
+              sortOrder === "oldest" ? t("gallery.sortOldest") :
+              t("gallery.sortNone")
+            }
           >
             {sortOrder === "newest" ? (
               <ArrowDown className="h-4 w-4" />
-            ) : (
+            ) : sortOrder === "oldest" ? (
               <ArrowUp className="h-4 w-4" />
+            ) : (
+              <List className="h-4 w-4" />
             )}
-            <span>{sortOrder === "newest" ? t("gallery.sortNewest") : t("gallery.sortOldest")}</span>
+            <span>
+              {sortOrder === "newest" ? t("gallery.sortNewest") :
+               sortOrder === "oldest" ? t("gallery.sortOldest") :
+               t("gallery.sortNone")}
+            </span>
           </button>
         </div>
       </div>

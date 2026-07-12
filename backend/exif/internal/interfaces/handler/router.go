@@ -54,6 +54,27 @@ func (h *Handler) HandleHealth(c *gin.Context) {
 	})
 }
 
+// HandleGetPreview extracts an embedded preview/thumbnail image from a file
+// using exiftool. This is useful for large/panoramic JPEGs that Go's standard
+// image.Decode cannot handle. Returns raw image bytes with content-type header.
+func (h *Handler) HandleGetPreview(c *gin.Context) {
+	path := c.Query("path")
+	if path == "" {
+		c.JSON(http.StatusBadRequest, dto.ErrorResponse{Error: "path query parameter is required"})
+		return
+	}
+
+	data, err := h.exifService.ExtractPreviewImage(filepath.FromSlash(path))
+	if err != nil {
+		c.JSON(http.StatusNotFound, dto.ErrorResponse{Error: err.Error()})
+		return
+	}
+
+	c.Header("Content-Type", "image/jpeg")
+	c.Header("Cache-Control", "public, max-age=86400")
+	c.Data(http.StatusOK, "image/jpeg", data)
+}
+
 // HandleGetMetadata reads EXIF metadata from a file or from DB by imageFileId.
 // Supports two mutually exclusive query parameters:
 //   - path: absolute file path (reads from file)
@@ -635,6 +656,9 @@ func SetupRouter(db *gorm.DB, exifSvc *application.ExifService, gpsWriter *appli
 		exif.GET("/metadata/batch", h.HandleGetMetadataBatch)         // NEW: batch get
 		exif.GET("/metadata/calendar", h.HandleGetCalendar)           // NEW: calendar gallery
 		exif.GET("/metadata/geo-points", h.HandleGetGeoPoints)        // NEW: GPS points for clustering
+
+		// Preview extraction for images Go cannot decode (e.g. large panoramic JPEGs)
+		exif.GET("/preview", h.HandleGetPreview)
 
 		// Existing GPS endpoints
 		exif.PUT("/gps", h.HandleUpdateGPS)

@@ -295,7 +295,7 @@ func PrepareOcrImage(imagePath string, scaleFactor float64, angle float64) ([]by
 
 	img, _, err := image.Decode(file)
 	if err != nil {
-		return nil, fmt.Errorf("failed to decode image: %w", err)
+		return nil, fmt.Errorf("failed to decode image %s: %w", imagePath, err)
 	}
 
 	// Scale by scaleFactor

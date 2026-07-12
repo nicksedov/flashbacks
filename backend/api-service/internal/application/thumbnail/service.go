@@ -243,7 +243,7 @@ func (s *Service) generateThumbnail(filePath string) ([]byte, error) {
 
 	img, _, err := image.Decode(file)
 	if err != nil {
-		return nil, fmt.Errorf("failed to decode image: %w", err)
+		return nil, fmt.Errorf("failed to decode image %s: %w", filePath, err)
 	}
 
 	bounds := img.Bounds()

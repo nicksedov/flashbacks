@@ -62,6 +62,7 @@ export function useCursorInfiniteScroll<T, R>(
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [initialized, setInitialized] = useState(false)
+  const [nextCursor, setNextCursor] = useState<string | null>(null)
   const nextCursorRef = useRef<string | null>(null)
 
   // Synchronous loading guard — ref writes are immediate (no React batching),
@@ -107,6 +108,7 @@ export function useCursorInfiniteScroll<T, R>(
 
       const cursor = responseNextCursorRef.current(result)
       nextCursorRef.current = cursor
+      setNextCursor(cursor)
       setHasMore(cursor !== null)
 
       if (responseTotalRef.current) {
@@ -136,11 +138,12 @@ export function useCursorInfiniteScroll<T, R>(
     setError(null)
     setInitialized(false)
     nextCursorRef.current = null
+    setNextCursor(null)
   }, [])
 
   const removeItem = useCallback(
     (key: string | number) => {
-      setItems((prev) => prev.filter((item) => (item as any).id !== key))
+      setItems((prev) => prev.filter((item) => (item as unknown as { id: string | number }).id !== key))
       setTotal((prev) => Math.max(0, prev - 1))
     },
     []
@@ -153,7 +156,7 @@ export function useCursorInfiniteScroll<T, R>(
     isLoading,
     error,
     initialized,
-    nextCursor: nextCursorRef.current,
+    nextCursor,
     loadMore,
     reset,
     removeItem,

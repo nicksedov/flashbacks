@@ -25,4 +25,8 @@ type ExifClient interface {
 	GetMissingImages(ctx context.Context, page, pageSize int) (*domain.MissingImagesResult, error)
 	GetLocationCandidates(ctx context.Context, date string) ([]domain.LocationCandidate, error)
 	ResolveGeolocation(ctx context.Context, lat, lng float64) (*domain.GeolocationCache, error)
+
+	// ExtractPreview fetches an embedded preview/thumbnail from a JPEG via the EXIF service.
+	// Returns raw image bytes (typically JPEG) for images that Go cannot decode directly.
+	ExtractPreview(ctx context.Context, filePath string) ([]byte, error)
 }

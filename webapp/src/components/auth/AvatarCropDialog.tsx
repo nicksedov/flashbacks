@@ -33,10 +33,7 @@ export function AvatarCropDialog({ open, onOpenChange, imageFile, onApply }: Ava
 
   // Load image when file changes
   useEffect(() => {
-    if (!imageFile) {
-      setImage(null)
-      return
-    }
+    if (!imageFile) return
     const url = URL.createObjectURL(imageFile)
     const img = new Image()
     img.onload = () => {

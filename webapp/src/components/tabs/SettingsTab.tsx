@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useState } from "react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
@@ -17,15 +17,6 @@ export function SettingsTab() {
   const [selectedTheme, setSelectedTheme] = useState<Theme>(theme as Theme)
   const [selectedLanguage, setSelectedLanguage] = useState<"en" | "ru">(language)
   const [isSaving, setIsSaving] = useState(false)
-
-  // Sync local state with settings when they change
-  useEffect(() => {
-    setSelectedTheme(theme)
-  }, [theme])
-
-  useEffect(() => {
-    setSelectedLanguage(language)
-  }, [language])
 
   const handleSavePreferences = useCallback(async () => {
     setIsSaving(true)

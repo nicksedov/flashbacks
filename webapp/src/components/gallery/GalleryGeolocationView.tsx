@@ -122,6 +122,17 @@ function MapBoundsController() {
   return null
 }
 
+// MapEvents component to track zoom — must be declared outside the parent component
+function MapZoomTracker({ onZoomChange }: { onZoomChange: (zoom: number) => void }) {
+  const map = useMap()
+  useMapEvents({
+    zoomend: () => {
+      onZoomChange(map.getZoom())
+    },
+  })
+  return null
+}
+
 export function GalleryGeolocationView({ onImageClick, onImageDownload, onImageDelete }: GalleryGeolocationViewProps) {
   const { t } = useTranslation()
   const [viewMode, setViewMode] = useState<GeoViewMode>("map")
@@ -142,7 +153,9 @@ export function GalleryGeolocationView({ onImageClick, onImageDownload, onImageD
   // Track if we ever found any geo images globally
   useEffect(() => {
     if (totalImages > 0) {
+      /* eslint-disable react-hooks/set-state-in-effect */
       setHasAnyGeoImages(true)
+      /* eslint-enable react-hooks/set-state-in-effect */
     }
   }, [totalImages])
 
@@ -200,16 +213,6 @@ export function GalleryGeolocationView({ onImageClick, onImageDownload, onImageD
     enabled: viewMode === "grid" && hasMore && !imagesLoading,
     dependencies: [viewMode, hasMore, imagesLoading, loadMore],
   })
-
-  // MapEvents component to track zoom
-  const MapZoomTracker = () => {
-    const map = useMapEvents({
-      zoomend: () => {
-        setMapZoom(map.getZoom())
-      },
-    })
-    return null
-  }
 
   if (viewMode === "grid" && selectedClusterId) {
     return (
@@ -297,7 +300,7 @@ export function GalleryGeolocationView({ onImageClick, onImageDownload, onImageD
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             />
             <MapBoundsController />
-            <MapZoomTracker />
+            <MapZoomTracker onZoomChange={setMapZoom} />
             <MapEventHandler onBoundsChange={handleBoundsChange} />
 
             {clusters.map((cluster) => (

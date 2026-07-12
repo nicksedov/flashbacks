@@ -71,8 +71,29 @@ export function useDuplicates(page: number, pageSize: number) {
   }, [page, pageSize, consumePrefetch, startPrefetch])
 
   useEffect(() => {
-    load()
-  }, [load])
+    let cancelled = false
+    ;(async () => {
+      try {
+        const prefetched = consumePrefetch(page, pageSize)
+        const result = prefetched ?? await fetchDuplicates(page, pageSize)
+        if (cancelled) return
+        setData(result)
+        setError(null)
+        // Prefetch the next page in background
+        if (result.hasNextPage) {
+          startPrefetch(page + 1, pageSize)
+        }
+      } catch (err) {
+        if (cancelled) return
+        setError(err instanceof Error ? err.message : "Failed to load duplicates")
+      } finally {
+        if (!cancelled) setIsLoading(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [page, pageSize, consumePrefetch, startPrefetch])
 
   return { data, isLoading, error, refetch: load }
 }

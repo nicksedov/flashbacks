@@ -160,6 +160,8 @@ func (s *ConversationService) CountTokens(ctx context.Context, convID uint) (int
 
 // SummarizeOlderMessages compresses older messages into a summary to reduce context size.
 // Keeps the last `keepRecent` messages intact and summarizes everything before them.
+// Adjusts the split point to avoid breaking tool-call/tool-result message pairs:
+// a "tool" role message must always be preceded by an "assistant" message with matching tool_calls.
 func (s *ConversationService) SummarizeOlderMessages(ctx context.Context, convID uint, keepRecent int, chatClient llm.ChatClient) error {
 	var messages []domain.ConversationMessage
 	if err := s.db.Where("conversation_id = ?", convID).Order("created_at ASC, id ASC").Find(&messages).Error; err != nil {
@@ -170,8 +172,17 @@ func (s *ConversationService) SummarizeOlderMessages(ctx context.Context, convID
 		return nil // Nothing to summarize
 	}
 
-	toSummarize := messages[:len(messages)-keepRecent]
-	toKeep := messages[len(messages)-keepRecent:]
+	// Find a safe split point that doesn't break tool-call/tool-result pairs.
+	// Start from the default split and walk backward if needed.
+	splitIdx := len(messages) - keepRecent
+	splitIdx = findSafeSummarizeSplit(messages, splitIdx)
+
+	if splitIdx <= 0 {
+		return nil // Cannot safely summarize anything
+	}
+
+	toSummarize := messages[:splitIdx]
+	toKeep := messages[splitIdx:]
 
 	// Build text to summarize
 	var sb strings.Builder
@@ -326,6 +337,87 @@ func MessagesToChatMessages(messages []domain.ConversationMessage) []llm.ChatMes
 		result = append(result, cm)
 	}
 	return result
+}
+
+// findSafeSummarizeSplit walks backward from the proposed split index to find a
+// boundary that does not break tool-call/tool-result pairs. A "tool" message
+// must always have its corresponding "assistant" message with matching
+// tool_calls on the same side of the split.
+func findSafeSummarizeSplit(messages []domain.ConversationMessage, splitIdx int) int {
+	if splitIdx <= 0 || splitIdx >= len(messages) {
+		return splitIdx
+	}
+
+	// Collect tool_call IDs that appear in the "keep" (right) portion.
+	// If any of those IDs were produced by an assistant message in the
+	// "summarize" (left) portion, we must move the split left to include
+	// that assistant message (and all subsequent messages up to the tool result).
+	keepToolIDs := make(map[string]bool)
+	for i := splitIdx; i < len(messages); i++ {
+		if messages[i].Role == "tool" && messages[i].ToolCallID != "" {
+			keepToolIDs[messages[i].ToolCallID] = true
+		}
+	}
+
+	if len(keepToolIDs) == 0 {
+		return splitIdx // No orphan risk
+	}
+
+	// Find the earliest assistant message in the "toSummarize" portion whose
+	// tool_call IDs appear in the "toKeep" portion. Move the split to include
+	// that assistant and everything after it.
+	for i := splitIdx - 1; i >= 0; i-- {
+		if messages[i].Role == "assistant" && messages[i].ToolCallsJSON != "" {
+			var toolCalls []llm.ToolCall
+			if err := json.Unmarshal([]byte(messages[i].ToolCallsJSON), &toolCalls); err == nil {
+				for _, tc := range toolCalls {
+					if keepToolIDs[tc.ID] {
+						// This assistant produced a tool call whose result is in the keep portion.
+						// Move split to include this assistant message.
+						return i
+					}
+				}
+			}
+		}
+	}
+
+	return splitIdx
+}
+
+// SanitizeChatMessages removes or fixes messages that would cause API errors.
+// Specifically, it ensures every "tool" role message has a preceding
+// "assistant" message with a matching tool_call ID. Orphan tool messages
+// (those without a matching preceding assistant tool_call) are converted
+// to "system" role messages so they don't break the API contract.
+func SanitizeChatMessages(messages []llm.ChatMessage) []llm.ChatMessage {
+	// First pass: collect all tool_call IDs from assistant messages.
+	toolCallIDs := make(map[string]bool)
+	for _, m := range messages {
+		if m.Role == "assistant" {
+			for _, tc := range m.ToolCalls {
+				toolCallIDs[tc.ID] = true
+			}
+		}
+	}
+
+	// Second pass: fix orphan tool messages.
+	cleaned := make([]llm.ChatMessage, 0, len(messages))
+	for _, m := range messages {
+		if m.Role == "tool" {
+			if m.ToolCallID == "" || !toolCallIDs[m.ToolCallID] {
+				// Orphan tool message: convert to system to preserve context
+				// without violating the API contract.
+				cleaned = append(cleaned, llm.ChatMessage{
+					Role:    "system",
+					Content: "[orphan tool result]: " + m.Content,
+				})
+				continue
+			}
+		}
+		cleaned = append(cleaned, m)
+	}
+
+	return cleaned
 }
 
 // truncateUTF8 truncates a string to a maximum number of runes (not bytes),

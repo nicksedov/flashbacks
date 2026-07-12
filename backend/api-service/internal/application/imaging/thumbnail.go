@@ -59,7 +59,7 @@ func GenerateThumbnail(imagePath string, cache *ThumbnailCache) (string, error) 
 
 	img, _, err := image.Decode(file)
 	if err != nil {
-		return "", fmt.Errorf("failed to decode image: %w", err)
+		return "", fmt.Errorf("failed to decode image %s: %w", imagePath, err)
 	}
 
 	bounds := img.Bounds()

@@ -63,7 +63,7 @@ export function useInfiniteScroll<T, R>(
 
   // Stabilize keyExtractor to prevent downstream callback chain instability
   const keyExtractor = useMemo(
-    () => optionsKeyExtractor ?? ((item: T) => (item as any).id),
+    () => optionsKeyExtractor ?? ((item: T) => (item as unknown as { id: string | number }).id),
     [optionsKeyExtractor]
   )
 

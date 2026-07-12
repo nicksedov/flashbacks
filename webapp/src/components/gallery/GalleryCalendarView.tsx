@@ -55,7 +55,8 @@ export function GalleryCalendarView({ onImageClick, onImageDownload, onImageDele
   // Initial load on mount
   useEffect(() => {
     calendar.loadMore()
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Sync calendar widget to show the month of loaded images (only on initial load)
   useEffect(() => {
@@ -69,6 +70,7 @@ export function GalleryCalendarView({ onImageClick, onImageDownload, onImageDele
   // Update monthYear ref when calendar widget changes month
   useEffect(() => {
     calendar.setMonthYear(calendarMonthKey)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [calendarMonthKey])
 
   // Fetch all dates for timeline markers on mount
@@ -157,6 +159,7 @@ export function GalleryCalendarView({ onImageClick, onImageDownload, onImageDele
 
     observer.observe(sentinel)
     return () => observer.disconnect()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [calendar.hasMore, calendar.isLoading, calendar.loadMore])
 
   // Auto-load remaining pages for the target date after navigation.
@@ -173,12 +176,15 @@ export function GalleryCalendarView({ onImageClick, onImageDownload, onImageDele
     const idx = calendar.groups.findIndex((g) => g.date === pendingDateLoad)
     // Terminal conditions: clear pendingDateLoad and stop
     if (idx === -1 || idx !== calendar.groups.length - 1 || !calendar.hasMore) {
+      /* eslint-disable react-hooks/set-state-in-effect */
       setPendingDateLoad(null)
+      /* eslint-enable react-hooks/set-state-in-effect */
       return
     }
     // Transient condition: loadMore() is in progress, wait for it to finish
     if (calendar.isLoading) return
     calendar.loadMore()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingDateLoad, calendar.groups, calendar.hasMore, calendar.isLoading, calendar.loadMore])
 
   // Handlers

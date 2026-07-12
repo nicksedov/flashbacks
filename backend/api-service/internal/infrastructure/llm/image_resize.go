@@ -44,7 +44,9 @@ func IsPermanentError(err error) bool {
 		strings.Contains(msg, "missing SOS marker") ||
 		strings.Contains(msg, "invalid PNG format") ||
 		strings.Contains(msg, "invalid WebP format") ||
-		strings.Contains(msg, "image: unknown format")
+		strings.Contains(msg, "image: unknown format") ||
+		strings.Contains(msg, "unexpected EOF") ||
+		strings.Contains(msg, "unexpected end of file")
 }
 
 // roundToMultipleOf32 rounds v to the nearest multiple of 32 (minimum 32).

@@ -4,7 +4,7 @@ import { I18nProvider, type Language } from "@/i18n"
 import { fetchUserSettings, fetchSettings, updateUserSettings } from "@/api/endpoints"
 import type { UpdateUserSettingsRequest } from "@/types"
 import { SettingsContext } from "./settingsContext"
-import { useAuth } from "./AuthProvider"
+import { useAuth } from "./useAuth"
 
 interface SettingsProviderProps {
   children: ReactNode

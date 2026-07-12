@@ -9,6 +9,7 @@ import (
 	"log"
 	"math"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -61,9 +62,11 @@ func (s *ExifService) release(et *exiftool.Exiftool) {
 func (s *ExifService) ExtractMetadata(filePath string) (*domain.ImageMetadata, error) {
 	meta := &domain.ImageMetadata{}
 
-	if w, h, err := getImageDimensions(filePath); err == nil {
+	if w, h, err := s.getImageDimensions(filePath); err == nil {
 		meta.Width = w
 		meta.Height = h
+	} else {
+		log.Printf("EXIF: failed to get image dimensions for %s: %v", filepath.Base(filePath), err)
 	}
 
 	if s.IsAvailable() {
@@ -244,6 +247,27 @@ func (s *ExifService) EnrichMissingMetadata(filePath string, meta *domain.ImageM
 	return enriched
 }
 
+// ExtractPreviewImage extracts an embedded preview/thumbnail image from a file
+// using exiftool. This is useful for large/panoramic JPEGs that Go's standard
+// image.Decode cannot handle. Returns the raw image bytes (typically JPEG).
+func (s *ExifService) ExtractPreviewImage(filePath string) ([]byte, error) {
+	if !s.IsAvailable() {
+		return nil, fmt.Errorf("exiftool not available")
+	}
+
+	// Try PreviewImage first (larger, better quality), fall back to ThumbnailImage, JpgFromRaw
+	for _, tag := range []string{"PreviewImage", "ThumbnailImage", "JpgFromRaw"} {
+		cmd := exec.Command("exiftool", "-b", "-"+tag, filePath)
+		data, err := cmd.Output()
+		if err == nil && len(data) > 0 {
+			log.Printf("EXIF: extracted %s (%d bytes) from %s", tag, len(data), filepath.Base(filePath))
+			return data, nil
+		}
+	}
+
+	return nil, fmt.Errorf("no embedded preview found in %s", filePath)
+}
+
 // ReadAllTags returns a complete EXIF tag dump for a file.
 func (s *ExifService) ReadAllTags(filePath string) (map[string]string, error) {
 	if !s.IsAvailable() {
@@ -271,18 +295,43 @@ func (s *ExifService) ReadAllTags(filePath string) (map[string]string, error) {
 
 // --- internal helpers ---
 
-func getImageDimensions(filePath string) (int, int, error) {
+// getImageDimensions attempts to read image dimensions, first using Go's
+// standard image.DecodeConfig, falling back to exiftool for JPEG/panoramic
+// files that Go's decoder cannot handle (e.g. large progressive JPEGs).
+func (s *ExifService) getImageDimensions(filePath string) (int, int, error) {
 	f, err := os.Open(filePath)
 	if err != nil {
 		return 0, 0, err
 	}
 	defer f.Close()
 
+	// For JPEG files, try a quick header check: if the first bytes are JPEG SOI marker (0xFF 0xD8),
+	// we can skip the full DecodeConfig for files that Go can't handle.
 	cfg, _, err := image.DecodeConfig(f)
-	if err != nil {
-		return 0, 0, err
+	if err == nil {
+		return cfg.Width, cfg.Height, nil
 	}
-	return cfg.Width, cfg.Height, nil
+
+	// Fallback: try exiftool for images Go cannot decode (e.g. large panoramic JPEGs
+	// that produce "unexpected EOF" due to progressive encoding edge cases).
+	if s.IsAvailable() {
+		et := s.acquire()
+		fileInfos := et.ExtractMetadata(filePath)
+		s.release(et)
+
+		if len(fileInfos) > 0 && fileInfos[0].Err == nil {
+			fi := fileInfos[0]
+			w, werr := fi.GetInt("ImageWidth")
+			h, herr := fi.GetInt("ImageHeight")
+			if werr == nil && herr == nil && w > 0 && h > 0 {
+				log.Printf("EXIF: got dimensions via exiftool fallback for %s: %dx%d",
+					filepath.Base(filePath), w, h)
+				return int(w), int(h), nil
+			}
+		}
+	}
+
+	return 0, 0, fmt.Errorf("failed to get dimensions for %s: %w", filePath, err)
 }
 
 func (s *ExifService) extractExifFields(filePath string, meta *domain.ImageMetadata) {

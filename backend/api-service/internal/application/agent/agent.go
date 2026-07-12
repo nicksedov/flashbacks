@@ -147,10 +147,16 @@ func (a *Agent) ProcessMessage(ctx context.Context, convID uint, userMessage str
 	// Prepend system prompt
 	fullMessages := append([]llm.ChatMessage{{Role: "system", Content: systemPrompt}}, chatMessages...)
 
+	// Sanitize messages to prevent API errors from orphan tool messages
+	fullMessages = SanitizeChatMessages(fullMessages)
+
 	var allToolCalls []ToolCallInfo
 
 	// Agent loop: iterate until the LLM produces a final text response or max rounds exceeded
 	for round := 0; round < a.config.MaxToolRounds; round++ {
+		// Sanitize before each API call in case tool execution added orphan messages
+		fullMessages = SanitizeChatMessages(fullMessages)
+
 		resp, err := chatClient.Chat(ctx, llm.ChatRequest{
 			Messages: fullMessages,
 			Tools:    toolDefs,

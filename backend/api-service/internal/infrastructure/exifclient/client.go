@@ -758,3 +758,28 @@ func (c *HTTPExifClient) ResolveGeolocation(ctx context.Context, lat, lng float6
 		NameEng:      geoResp.NameEng,
 	}, nil
 }
+
+// ExtractPreview fetches an embedded preview/thumbnail image from a file
+// via the EXIF service. Used as a fallback when Go's image.Decode cannot
+// handle large/panoramic JPEGs. Returns raw JPEG bytes.
+func (c *HTTPExifClient) ExtractPreview(ctx context.Context, filePath string) ([]byte, error) {
+	u := fmt.Sprintf("%s/exif/preview?path=%s", c.baseURL, url.PathEscape(filePath))
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("EXIF service preview request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("EXIF service returned %d: %s", resp.StatusCode, string(body))
+	}
+
+	return io.ReadAll(resp.Body)
+}

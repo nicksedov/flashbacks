@@ -3,9 +3,9 @@ import { useTranslation } from "@/i18n"
 import {
   Settings, ImageIcon, FileScan, Shield, Users, ChevronDown, ChevronRight,
   Folder, Calendar, FileText, MapPin, Trash2, Database, Search,
-  PanelLeftClose, PanelLeftOpen, X,
+  PanelLeftClose, PanelLeftOpen, X, Images,
 } from "lucide-react"
-import { useAuth } from "@/providers/AuthProvider"
+import { useAuth } from "@/providers/useAuth"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 
@@ -57,7 +57,7 @@ export function Sidebar({
   )
 
   const gallerySubItems: SubItem[] = [
-    { value: "gallery-all-images", icon: Folder, label: t("gallery.subModes.allImages") },
+    { value: "gallery-all-images", icon: Images, label: t("gallery.subModes.allImages") },
     { value: "gallery-folders", icon: Folder, label: t("gallery.subModes.folders") },
     { value: "gallery-calendar", icon: Calendar, label: t("gallery.subModes.calendar") },
     { value: "gallery-geolocation", icon: MapPin, label: t("gallery.subModes.geolocation") },

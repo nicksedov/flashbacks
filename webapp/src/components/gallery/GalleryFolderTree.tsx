@@ -47,13 +47,18 @@ export function GalleryFolderTree({
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set())
   const [loadingPaths, setLoadingPaths] = useState<Set<string>>(new Set())
   const treeNodesRef = useRef(treeNodes)
-  treeNodesRef.current = treeNodes
+
+  // Sync treeNodes to ref after render
+  useEffect(() => {
+    treeNodesRef.current = treeNodes
+  }, [treeNodes])
 
   /**
    * Auto-expand ancestor folders of the selected path, and reload a parent's
    * children when a newly created subfolder is detected (exists server-side
    * but is not yet present in the cached tree).
    */
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (!selectedPath) return
 
@@ -151,7 +156,8 @@ export function GalleryFolderTree({
           return next
         })
       })
-  }, [selectedPath])
+/* eslint-enable react-hooks/set-state-in-effect */
+}, [selectedPath])
 
   // Sync tree nodes when rootPaths change
   if (rootPaths.length !== treeNodes.length ||

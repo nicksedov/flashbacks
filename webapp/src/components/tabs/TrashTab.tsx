@@ -10,23 +10,27 @@ export function TrashTab() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const loadTrash = useCallback(() => {
-    setLoading(true)
-    setError(null)
-    fetchTrashList()
-      .then((data) => {
-        setFiles(data)
-        setLoading(false)
-      })
-      .catch((err) => {
-        setError(err.message)
-        setLoading(false)
-      })
-  }, [])
-
   useEffect(() => {
-    loadTrash()
-  }, [loadTrash])
+    let cancelled = false
+    ;(async () => {
+      try {
+        const data = await fetchTrashList()
+        if (!cancelled) {
+          setFiles(data)
+          setError(null)
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : "Failed to load trash")
+        }
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const handleRestore = useCallback(async (file: TrashFileDTO) => {
     try {

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react"
+import { useState, useCallback, useEffect } from "react"
 import { useTranslation } from "@/i18n"
 import {
   Dialog,
@@ -48,16 +48,18 @@ export function BulkMoveDialog({
   const [isCreating, setIsCreating] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
 
-  // Load gallery folders and reset form state when dialog opens
+  // Load gallery folders when dialog opens
   useEffect(() => {
-    if (open) {
-      setSelectedFolder("")
-      setNewFolderName("")
-      setCreateError(null)
-      fetchFolders()
-        .then((res) => setFolders(res.folders))
-        .catch(() => setFolders([]))
-    }
+    if (!open) return
+    // Reset form state before fetching
+    /* eslint-disable react-hooks/set-state-in-effect */
+    setSelectedFolder("")
+    setNewFolderName("")
+    setCreateError(null)
+    /* eslint-enable react-hooks/set-state-in-effect */
+    fetchFolders()
+      .then((res) => setFolders(res.folders))
+      .catch(() => setFolders([]))
   }, [open])
 
   const handleConfirm = () => {

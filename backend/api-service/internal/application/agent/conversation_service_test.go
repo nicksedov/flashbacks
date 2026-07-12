@@ -633,3 +633,203 @@ func TestToolCallsJSON_RoundTrip(t *testing.T) {
 		t.Errorf("arguments mismatch: %s vs %s", restored[0].Arguments, args)
 	}
 }
+
+func TestSanitizeChatMessages_NoOrphans(t *testing.T) {
+	messages := []llm.ChatMessage{
+		{Role: "system", Content: "You are helpful"},
+		{Role: "user", Content: "Hello"},
+		{
+			Role:    "assistant",
+			Content: "",
+			ToolCalls: []llm.ToolCall{
+				{ID: "call_1", Name: "search", Arguments: json.RawMessage(`{}`)},
+			},
+		},
+		{Role: "tool", Content: "result", ToolCallID: "call_1"},
+		{Role: "assistant", Content: "Here's what I found"},
+	}
+
+	result := SanitizeChatMessages(messages)
+	if len(result) != len(messages) {
+		t.Errorf("expected %d messages, got %d", len(messages), len(result))
+	}
+}
+
+func TestSanitizeChatMessages_OrphanToolMessage(t *testing.T) {
+	messages := []llm.ChatMessage{
+		{Role: "system", Content: "You are helpful"},
+		{Role: "user", Content: "Hello"},
+		// Orphan: tool message without preceding assistant with tool_calls
+		{Role: "tool", Content: "orphan result", ToolCallID: "missing_call"},
+		{Role: "assistant", Content: "Final answer"},
+	}
+
+	result := SanitizeChatMessages(messages)
+	if len(result) != 4 {
+		t.Fatalf("expected 4 messages, got %d", len(result))
+	}
+
+	// The orphan tool message should be converted to system role
+	if result[2].Role != "system" {
+		t.Errorf("expected orphan tool message converted to 'system', got %q", result[2].Role)
+	}
+	if !strings.Contains(result[2].Content, "orphan result") {
+		t.Errorf("expected preserved content in converted message, got %q", result[2].Content)
+	}
+}
+
+func TestSanitizeChatMessages_ToolMessageWithoutToolCallID(t *testing.T) {
+	messages := []llm.ChatMessage{
+		{Role: "user", Content: "Hello"},
+		{Role: "tool", Content: "no tool_call_id", ToolCallID: ""},
+	}
+
+	result := SanitizeChatMessages(messages)
+	if len(result) != 2 {
+		t.Fatalf("expected 2 messages, got %d", len(result))
+	}
+	if result[1].Role != "system" {
+		t.Errorf("expected tool message without ID converted to 'system', got %q", result[1].Role)
+	}
+}
+
+func TestSanitizeChatMessages_MismatchedToolCallID(t *testing.T) {
+	messages := []llm.ChatMessage{
+		{Role: "user", Content: "Hello"},
+		{
+			Role:    "assistant",
+			Content: "",
+			ToolCalls: []llm.ToolCall{
+				{ID: "call_real", Name: "search", Arguments: json.RawMessage(`{}`)},
+			},
+		},
+		// Tool message references a different ID than the assistant's tool_call
+		{Role: "tool", Content: "result", ToolCallID: "call_other"},
+	}
+
+	result := SanitizeChatMessages(messages)
+	if len(result) != 3 {
+		t.Fatalf("expected 3 messages, got %d", len(result))
+	}
+	if result[2].Role != "system" {
+		t.Errorf("expected mismatched tool message converted to 'system', got %q", result[2].Role)
+	}
+}
+
+func TestSanitizeChatMessages_MultipleToolCalls(t *testing.T) {
+	messages := []llm.ChatMessage{
+		{Role: "user", Content: "Search and describe"},
+		{
+			Role:    "assistant",
+			Content: "",
+			ToolCalls: []llm.ToolCall{
+				{ID: "call_search", Name: "search", Arguments: json.RawMessage(`{}`)},
+				{ID: "call_describe", Name: "describe", Arguments: json.RawMessage(`{}`)},
+			},
+		},
+		{Role: "tool", Content: "search result", ToolCallID: "call_search"},
+		{Role: "tool", Content: "describe result", ToolCallID: "call_describe"},
+	}
+
+	result := SanitizeChatMessages(messages)
+	if len(result) != 4 {
+		t.Errorf("expected 4 messages, got %d", len(result))
+	}
+	// All should pass through clean
+	for _, m := range result {
+		if m.Role == "system" && strings.Contains(m.Content, "[orphan") {
+			t.Errorf("unexpected orphan conversion: %+v", m)
+		}
+	}
+}
+
+func TestSanitizeChatMessages_MixedValidAndOrphan(t *testing.T) {
+	messages := []llm.ChatMessage{
+		{Role: "user", Content: "First question"},
+		{
+			Role:    "assistant",
+			Content: "",
+			ToolCalls: []llm.ToolCall{
+				{ID: "call_valid", Name: "search", Arguments: json.RawMessage(`{}`)},
+			},
+		},
+		{Role: "tool", Content: "valid result", ToolCallID: "call_valid"},
+		{Role: "assistant", Content: "Answer 1"},
+		{Role: "user", Content: "Second question"},
+		// Orphan: no preceding assistant with tool_calls
+		{Role: "tool", Content: "orphan result", ToolCallID: "call_missing"},
+	}
+
+	result := SanitizeChatMessages(messages)
+
+	// The valid tool message should stay as "tool"
+	if result[2].Role != "tool" {
+		t.Errorf("expected valid tool message to stay as 'tool', got %q", result[2].Role)
+	}
+	// The orphan should be converted
+	if result[5].Role != "system" {
+		t.Errorf("expected orphan tool message converted to 'system', got %q", result[5].Role)
+	}
+}
+
+func TestFindSafeSummarizeSplit_NoTools(t *testing.T) {
+	messages := []domain.ConversationMessage{
+		{Role: "user", Content: "msg1"},
+		{Role: "assistant", Content: "reply1"},
+		{Role: "user", Content: "msg2"},
+		{Role: "assistant", Content: "reply2"},
+		{Role: "user", Content: "msg3"},
+		{Role: "assistant", Content: "reply3"},
+	}
+
+	// Split at 4 (keep last 2)
+	split := findSafeSummarizeSplit(messages, 4)
+	if split != 4 {
+		t.Errorf("expected split at 4 for no-tool messages, got %d", split)
+	}
+}
+
+func TestFindSafeSummarizeSplit_ToolPairAcrossBoundary(t *testing.T) {
+	toolCallsJSON := `[{"id":"call_1","name":"search","arguments":{}}]`
+	messages := []domain.ConversationMessage{
+		{Role: "user", Content: "msg1"},
+		{Role: "user", Content: "msg2"},
+		{Role: "user", Content: "msg3"},
+		{Role: "assistant", Content: "", ToolCallsJSON: toolCallsJSON},
+		{Role: "tool", Content: "result", ToolCallID: "call_1"},
+		{Role: "assistant", Content: "final answer"},
+	}
+
+	// Default split would be at index 4 (keep last 2: tool result + final answer),
+	// but that would orphan the tool result. Should adjust to index 3.
+	split := findSafeSummarizeSplit(messages, 4)
+	if split != 3 {
+		t.Errorf("expected split adjusted to 3 to keep tool pair intact, got %d", split)
+	}
+}
+
+func TestFindSafeSummarizeSplit_ToolPairSafe(t *testing.T) {
+	toolCallsJSON := `[{"id":"call_1","name":"search","arguments":{}}]`
+	messages := []domain.ConversationMessage{
+		{Role: "user", Content: "msg1"},
+		{Role: "assistant", Content: "reply1"},
+		{Role: "user", Content: "msg2"},
+		{Role: "assistant", Content: "", ToolCallsJSON: toolCallsJSON},
+		{Role: "tool", Content: "result", ToolCallID: "call_1"},
+		{Role: "assistant", Content: "final answer"},
+	}
+
+	// Split at 6 (keep last 0 = keep all). Should stay at 6.
+	split := findSafeSummarizeSplit(messages, 6)
+	if split != 6 {
+		t.Errorf("expected split at 6, got %d", split)
+	}
+
+	// Split at 2 (keep last 4 = all tool-related messages are in keep).
+	// The tool pair (assistant+tool) is at indices 3-4, both in keep portion.
+	// No adjustment needed.
+	split = findSafeSummarizeSplit(messages, 2)
+	if split != 2 {
+		t.Errorf("expected split at 2 (tool pair intact in keep), got %d", split)
+	}
+}

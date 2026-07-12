@@ -5,7 +5,6 @@ import {
   ArrowUp,
   ChevronRight,
   Home,
-  ImageIcon,
 } from "lucide-react"
 import { useGalleryFolders } from "@/hooks/useGalleryFolders"
 import { useGalleryImages } from "@/hooks/useGalleryImages"
@@ -14,6 +13,7 @@ import { fetchSubdirs } from "@/api/endpoints"
 import { useTranslation } from "@/i18n"
 import { Skeleton } from "@/components/ui/skeleton"
 import { cn } from "@/lib/utils"
+import { ImageTile } from "./ImageTile"
 import type { GalleryImageDTO, SubdirEntry } from "@/types"
 
 interface GalleryFoldersViewProps {
@@ -73,7 +73,7 @@ function relativePath(path: string, basePath: string): string {
  * Displays folders first, then image thumbnails.
  */
 export function GalleryFoldersView(props: GalleryFoldersViewProps) {
-  const { onImageClick } = props
+  const { onImageClick, onImageDownload, onImageDelete } = props
   const { t } = useTranslation()
   const { folders: rootFolders } = useGalleryFolders()
 
@@ -99,6 +99,7 @@ export function GalleryFoldersView(props: GalleryFoldersViewProps) {
     error: imagesError,
     initialized: imagesInitialized,
     loadMore,
+    removeImage,
   } = useGalleryImages("folders", "newest", undefined, currentPath ?? undefined)
 
   // Clear subdirs when going back to root
@@ -311,7 +312,7 @@ export function GalleryFoldersView(props: GalleryFoldersViewProps) {
               <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
                 {t("gallery.folders.subfolders")}
               </h3>
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-3">
+              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-7 xl:grid-cols-8 gap-1.5">
                 {subdirs.map((subdir) => (
                   <FolderTile
                     key={subdir.path}
@@ -330,12 +331,14 @@ export function GalleryFoldersView(props: GalleryFoldersViewProps) {
               <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
                 {t("gallery.folders.imagesCount", { count: totalImages })}
               </h3>
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-3">
+              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-7 xl:grid-cols-8 gap-1.5">
                 {images.map((image) => (
                   <ImageTile
                     key={image.id}
                     image={image}
                     onClick={onImageClick}
+                    onImageDownload={onImageDownload}
+                    onImageDelete={onImageDelete ? () => onImageDelete(image, () => removeImage(image.id)) : undefined}
                   />
                 ))}
               </div>
@@ -378,7 +381,7 @@ function RootFoldersGrid({ folders, basePath, onEnterFolder, emptyText, emptyHin
       <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
         {t("gallery.folders.rootFolders")}
       </h3>
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-3">
+      <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-7 xl:grid-cols-8 gap-1.5">
         {folders.map((folder) => {
           const displayName = basePath
             ? relativePath(folder.path, basePath) || folder.path.split("/").filter(Boolean).pop() || folder.path
@@ -406,62 +409,28 @@ interface FolderTileProps {
 }
 
 function FolderTile({ name, path, fileCount, onEnter }: FolderTileProps) {
-  const { t } = useTranslation()
-
-  return (
-    <button
-      type="button"
-      onDoubleClick={() => onEnter(path)}
-      className="flex flex-col items-center gap-2 rounded-lg border border-border bg-card p-4 text-center transition-colors hover:bg-accent hover:border-primary/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-      title={path}
-    >
-      <Folder className="h-10 w-10 text-amber-500 flex-shrink-0" />
-      <span className="text-xs font-medium text-foreground line-clamp-2 break-all leading-tight">
-        {name}
-      </span>
-      {fileCount !== undefined && (
-        <span className="text-[10px] text-muted-foreground">
-          {t("gallery.folderImageCount", { count: fileCount.toString() })}
-        </span>
-      )}
-    </button>
-  )
-}
-
-interface ImageTileProps {
-  image: GalleryImageDTO
-  onClick: (image: GalleryImageDTO) => void
-}
-
-function ImageTile({ image, onClick }: ImageTileProps) {
-  const handleClick = () => onClick(image)
-
   return (
     <div
-      className="group relative flex flex-col rounded-lg border border-border bg-card overflow-hidden transition-colors hover:border-primary/30 cursor-pointer"
-      onClick={handleClick}
-      onDoubleClick={handleClick}
+      role="button"
+      tabIndex={0}
+      className="group flex flex-col cursor-pointer"
+      onClick={() => onEnter(path)}
+      onDoubleClick={() => onEnter(path)}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onEnter(path); } }}
+      title={path}
     >
-      {/* Thumbnail */}
-      <div className="aspect-square bg-muted flex items-center justify-center overflow-hidden">
-        {image.thumbnail ? (
-          <img
-            src={image.thumbnail}
-            alt={image.fileName}
-            className="h-full w-full object-cover"
-            loading="lazy"
-          />
-        ) : (
-          <ImageIcon className="h-8 w-8 text-muted-foreground/50" />
+      <div className="relative aspect-square overflow-hidden rounded-lg border bg-card transition-all hover:ring-2 hover:ring-ring flex items-center justify-center">
+        <Folder className="h-12 w-12 text-amber-500" />
+        {fileCount !== undefined && (
+          <span className="absolute top-1.5 right-1.5 text-[10px] font-medium text-muted-foreground bg-background/80 rounded px-1.5 py-0.5">
+            {fileCount}
+          </span>
         )}
       </div>
-
-      {/* File name */}
-      <div className="p-1.5">
-        <p className="text-[11px] text-foreground line-clamp-2 break-all leading-tight" title={image.fileName}>
-          {image.fileName}
-        </p>
-      </div>
+      <p className="text-[11px] text-muted-foreground truncate mt-1 px-0.5 w-full text-center" title={name}>
+        {name}
+      </p>
     </div>
   )
 }
+

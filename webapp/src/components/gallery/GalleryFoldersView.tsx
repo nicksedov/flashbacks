@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import {
   Folder,
   FolderOpen,
@@ -28,8 +28,48 @@ interface BreadcrumbSegment {
 }
 
 /**
+ * Compute the longest common path prefix from a list of absolute paths.
+ * Returns empty string if fewer than 2 paths or no common prefix beyond "/".
+ * Example: ["/storage/gallery/photo", "/storage/gallery/camera"] → "/storage/gallery"
+ */
+function getCommonPathPrefix(paths: string[]): string {
+  if (paths.length < 2) return ""
+
+  const parts = paths.map((p) => p.split("/").filter(Boolean))
+  const minLen = Math.min(...parts.map((p) => p.length))
+
+  if (minLen === 0) return ""
+
+  let commonCount = 0
+  for (let i = 0; i < minLen; i++) {
+    const segment = parts[0][i]
+    if (parts.every((p) => p[i] === segment)) {
+      commonCount++
+    } else {
+      break
+    }
+  }
+
+  if (commonCount === 0) return ""
+  return "/" + parts[0].slice(0, commonCount).join("/")
+}
+
+/**
+ * Compute the relative path by stripping the base prefix.
+ * Returns the path unchanged if basePath is empty or path doesn't start with it.
+ */
+function relativePath(path: string, basePath: string): string {
+  if (!basePath) return path
+  if (!path.startsWith(basePath)) return path
+  const rel = path.slice(basePath.length)
+  return rel.startsWith("/") ? rel.slice(1) : rel
+}
+
+/**
  * File-manager style folder browser for the gallery.
  * Shows root gallery folders initially, then allows drilling into subdirectories.
+ * When root folders share a common path prefix, it becomes the virtual base —
+ * intermediate directories are hidden from breadcrumbs and root folder names.
  * Displays folders first, then image thumbnails.
  */
 export function GalleryFoldersView(props: GalleryFoldersViewProps) {
@@ -37,7 +77,13 @@ export function GalleryFoldersView(props: GalleryFoldersViewProps) {
   const { t } = useTranslation()
   const { folders: rootFolders } = useGalleryFolders()
 
-  // Current directory path: null = root (gallery folders)
+  // Compute common base path from root gallery folders
+  const basePath = useMemo(
+    () => getCommonPathPrefix(rootFolders.map((f) => f.path)),
+    [rootFolders]
+  )
+
+  // Current directory path: null = root (gallery folders / virtual base)
   const [currentPath, setCurrentPath] = useState<string | null>(null)
 
   // Subdirectories in current path
@@ -83,9 +129,21 @@ export function GalleryFoldersView(props: GalleryFoldersViewProps) {
     }
   }, [currentPath])
 
-  // Compute breadcrumbs from current path
+  // Compute breadcrumbs relative to basePath
   const breadcrumbs: BreadcrumbSegment[] = []
-  if (currentPath !== null) {
+  if (currentPath !== null && basePath) {
+    // When basePath exists, build breadcrumbs only from the relative portion
+    const rel = relativePath(currentPath, basePath)
+    if (rel) {
+      const parts = rel.split("/").filter(Boolean)
+      let acc = basePath
+      for (const part of parts) {
+        acc += "/" + part
+        breadcrumbs.push({ name: part, path: acc })
+      }
+    }
+  } else if (currentPath !== null) {
+    // No common base path — use full path for breadcrumbs (original behavior)
     const parts = currentPath.split("/").filter(Boolean)
     let acc = ""
     for (const part of parts) {
@@ -103,13 +161,20 @@ export function GalleryFoldersView(props: GalleryFoldersViewProps) {
   const handleGoUp = useCallback(() => {
     if (currentPath === null) return
     const parts = currentPath.split("/").filter(Boolean)
-    if (parts.length <= 1) {
+    // When basePath exists, go back to root if we are at basePath + 1 segment
+    if (basePath) {
+      const baseParts = basePath.split("/").filter(Boolean)
+      if (parts.length <= baseParts.length + 1) {
+        setCurrentPath(null)
+        return
+      }
+    } else if (parts.length <= 1) {
       setCurrentPath(null)
-    } else {
-      parts.pop()
-      setCurrentPath("/" + parts.join("/"))
+      return
     }
-  }, [currentPath])
+    parts.pop()
+    setCurrentPath("/" + parts.join("/"))
+  }, [currentPath, basePath])
 
   // Navigate to a breadcrumb segment
   const handleBreadcrumbClick = useCallback((path: string) => {
@@ -137,6 +202,11 @@ export function GalleryFoldersView(props: GalleryFoldersViewProps) {
 
   const isLoading = (currentPath !== null && subdirsLoading) || !imagesInitialized
 
+  // Home button tooltip: show base path when applicable
+  const homeTitle = basePath
+    ? basePath
+    : t("gallery.folders.root")
+
   return (
     <div className="space-y-4">
       {/* Breadcrumbs + Up button bar */}
@@ -151,7 +221,7 @@ export function GalleryFoldersView(props: GalleryFoldersViewProps) {
               ? "bg-primary/10 text-primary font-medium"
               : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
           )}
-          title={t("gallery.folders.root")}
+          title={homeTitle}
         >
           <Home className="h-4 w-4" />
         </button>
@@ -213,6 +283,7 @@ export function GalleryFoldersView(props: GalleryFoldersViewProps) {
       {currentPath === null && !isLoading && (
         <RootFoldersGrid
           folders={rootFolders}
+          basePath={basePath}
           onEnterFolder={handleEnterFolder}
           emptyText={t("gallery.folders.empty")}
           emptyHint={t("gallery.emptyHint")}
@@ -280,12 +351,13 @@ export function GalleryFoldersView(props: GalleryFoldersViewProps) {
 
 interface RootFoldersGridProps {
   folders: { id: number; path: string; fileCount: number; createdAt: string }[]
+  basePath: string
   onEnterFolder: (path: string) => void
   emptyText: string
   emptyHint: string
 }
 
-function RootFoldersGrid({ folders, onEnterFolder, emptyText, emptyHint }: RootFoldersGridProps) {
+function RootFoldersGrid({ folders, basePath, onEnterFolder, emptyText, emptyHint }: RootFoldersGridProps) {
   const { t } = useTranslation()
 
   if (folders.length === 0) {
@@ -304,15 +376,20 @@ function RootFoldersGrid({ folders, onEnterFolder, emptyText, emptyHint }: RootF
         {t("gallery.folders.rootFolders")}
       </h3>
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-3">
-        {folders.map((folder) => (
-          <FolderTile
-            key={folder.id}
-            name={folder.path.split("/").filter(Boolean).pop() || folder.path}
-            path={folder.path}
-            fileCount={folder.fileCount}
-            onEnter={onEnterFolder}
-          />
-        ))}
+        {folders.map((folder) => {
+          const displayName = basePath
+            ? relativePath(folder.path, basePath) || folder.path.split("/").filter(Boolean).pop() || folder.path
+            : folder.path.split("/").filter(Boolean).pop() || folder.path
+          return (
+            <FolderTile
+              key={folder.id}
+              name={displayName}
+              path={folder.path}
+              fileCount={folder.fileCount}
+              onEnter={onEnterFolder}
+            />
+          )
+        })}
       </div>
     </div>
   )

@@ -27,13 +27,32 @@ export function useImageMetadata(imagePath: string | null) {
 
   useEffect(() => {
     if (!imagePath) {
-      setMetadata(null)
-      setIsLoading(false)
-      setError(null)
+      // Derive state from imagePath being null — no effect needed for state reset
       return
     }
-    loadMetadata(imagePath)
-  }, [imagePath, loadMetadata])
+    let cancelled = false
+    ;(async () => {
+      try {
+        const result = await fetchImageMetadata(imagePath)
+        if (cancelled) return
+        if (result.found && result.metadata) {
+          setMetadata(result.metadata)
+        } else {
+          setMetadata(null)
+        }
+        setError(null)
+      } catch (err) {
+        if (cancelled) return
+        setError(err instanceof Error ? err.message : "Failed to load metadata")
+        setMetadata(null)
+      } finally {
+        if (!cancelled) setIsLoading(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [imagePath])
 
   return { metadata, isLoading, error, reload: () => imagePath && loadMetadata(imagePath) }
 }

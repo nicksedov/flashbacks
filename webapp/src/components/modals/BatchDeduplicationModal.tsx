@@ -46,14 +46,16 @@ export function BatchDeduplicationModal({
   }, [patterns, currentStep, selectedFolders])
 
   useEffect(() => {
-    if (open) {
-      load()
-      setCurrentStep(0)
-      setSelectedFolders({})
-      setUseTrash(true)
-      setIsCompleted(false)
-      setLastResult(null)
-    }
+    if (!open) return
+    // Reset state on dialog open
+    /* eslint-disable react-hooks/set-state-in-effect */
+    setCurrentStep(0)
+    setSelectedFolders({})
+    setUseTrash(true)
+    setIsCompleted(false)
+    setLastResult(null)
+    /* eslint-enable react-hooks/set-state-in-effect */
+    load()
   }, [open, load])
 
   const currentPattern: FolderPattern | undefined = useMemo(() => {

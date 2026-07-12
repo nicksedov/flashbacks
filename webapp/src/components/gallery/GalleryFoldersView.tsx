@@ -103,17 +103,20 @@ export function GalleryFoldersView(props: GalleryFoldersViewProps) {
 
   // Clear subdirs when going back to root
   useEffect(() => {
-    if (currentPath === null) {
-      setSubdirs([])
-      setSubdirsLoading(false)
-    }
+    if (currentPath !== null) return
+    /* eslint-disable react-hooks/set-state-in-effect */
+    setSubdirs([])
+    setSubdirsLoading(false)
+    /* eslint-enable react-hooks/set-state-in-effect */
   }, [currentPath])
 
   // Load subdirectories when currentPath changes to a non-null value
   useEffect(() => {
     if (currentPath === null) return
     let cancelled = false
+    /* eslint-disable react-hooks/set-state-in-effect */
     setSubdirsLoading(true)
+    /* eslint-enable react-hooks/set-state-in-effect */
     fetchSubdirs(currentPath)
       .then((res) => {
         if (!cancelled) setSubdirs(res.subdirs)

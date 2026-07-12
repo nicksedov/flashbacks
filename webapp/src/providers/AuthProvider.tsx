@@ -1,20 +1,7 @@
-import { createContext, useCallback, useContext, useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { fetchAuthStatus, logout as apiLogout } from "@/api/endpoints"
+import { AuthContext } from "./authContext"
 import type { UserDTO } from "@/types"
-
-interface AuthContextType {
-  user: UserDTO | null
-  isAuthenticated: boolean
-  isBootstrapMode: boolean
-  isBootstrapVerified: boolean
-  isLoading: boolean
-  login: (user: UserDTO) => void
-  logout: () => Promise<void>
-  updateUser: (user: UserDTO) => void
-  setBootstrapVerified: (verified: boolean) => void
-}
-
-const AuthContext = createContext<AuthContextType | null>(null)
 
 interface AuthProviderProps {
   children: React.ReactNode
@@ -26,27 +13,31 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [isBootstrapVerified, setIsBootstrapVerified] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
 
-  const checkAuthStatus = useCallback(async () => {
-    try {
-      const status = await fetchAuthStatus()
-      if (status.isAuthenticated && status.user) {
-        setUser(status.user)
-        setIsBootstrapMode(false)
-      } else {
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const status = await fetchAuthStatus()
+        if (cancelled) return
+        if (status.isAuthenticated && status.user) {
+          setUser(status.user)
+          setIsBootstrapMode(false)
+        } else {
+          setUser(null)
+          setIsBootstrapMode(status.isBootstrapMode)
+        }
+      } catch {
+        if (cancelled) return
         setUser(null)
-        setIsBootstrapMode(status.isBootstrapMode)
+        setIsBootstrapMode(false)
+      } finally {
+        if (!cancelled) setIsLoading(false)
       }
-    } catch {
-      setUser(null)
-      setIsBootstrapMode(false)
-    } finally {
-      setIsLoading(false)
+    })()
+    return () => {
+      cancelled = true
     }
   }, [])
-
-  useEffect(() => {
-    checkAuthStatus()
-  }, [checkAuthStatus])
 
   const login = useCallback((loggedInUser: UserDTO) => {
     setUser(loggedInUser)
@@ -89,12 +80,4 @@ export function AuthProvider({ children }: AuthProviderProps) {
       {children}
     </AuthContext.Provider>
   )
-}
-
-export function useAuth(): AuthContextType {
-  const context = useContext(AuthContext)
-  if (!context) {
-    throw new Error("useAuth must be used within an AuthProvider")
-  }
-  return context
 }

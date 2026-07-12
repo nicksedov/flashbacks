@@ -1,5 +1,5 @@
 import { useTranslation } from "@/i18n"
-import { useAuth } from "@/providers/AuthProvider"
+import { useAuth } from "@/providers/useAuth"
 import { useGallerySelection } from "@/providers/useGallerySelection"
 import { getAvatarUrl } from "@/api/endpoints"
 import { LogOut, Settings, User, Menu, X, Move, Trash2 } from "lucide-react"

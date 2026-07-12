@@ -5,7 +5,7 @@ import {
   Folder, Calendar, FileText, MapPin, Trash2, Database, Search,
   PanelLeftClose, PanelLeftOpen, X,
 } from "lucide-react"
-import { useAuth } from "@/providers/AuthProvider"
+import { useAuth } from "@/providers/useAuth"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 

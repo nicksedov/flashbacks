@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react"
-import { useAuth } from "@/providers/AuthProvider"
+import { useAuth } from "@/providers/useAuth"
 import { changePassword as apiChangePassword, updateProfile as apiUpdateProfile, uploadAvatar, deleteAvatar, getAvatarUrl } from "@/api/endpoints"
 import type { ChangePasswordResponse } from "@/types"
 import { toast } from "sonner"
@@ -28,7 +28,7 @@ export function UserProfile() {
   const [cropOpen, setCropOpen] = useState(false)
   const [cropFile, setCropFile] = useState<File | null>(null)
   const [isUploading, setIsUploading] = useState(false)
-  const [avatarVersion, setAvatarVersion] = useState(Date.now())
+  const [avatarVersion, setAvatarVersion] = useState(() => Date.now())
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -39,6 +39,7 @@ export function UserProfile() {
     return () => {
       window.removeEventListener("navigate-to-login", handleNavigateToLogin as EventListener)
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   if (!user) return null

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react"
-import { useAuth } from "@/providers/AuthProvider"
+import { useAuth } from "@/providers/useAuth"
 import { fetchUsers, createUser, updateUser, deleteUser, resetUserPassword } from "@/api/endpoints"
 import { toast } from "sonner"
 import { Loader2, Trash2, KeyRound, Pencil, Save, X, Users, UserPlus } from "lucide-react"

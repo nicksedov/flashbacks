@@ -1,4 +1,4 @@
-import { useCallback, useRef } from "react"
+import { useCallback, useEffect, useRef } from "react"
 import { fetchGeoImages } from "@/api/endpoints"
 import type { GalleryImageDTO, GeoImagesResponse } from "@/types"
 import { useInfiniteScroll } from "./useInfiniteScroll"
@@ -9,9 +9,9 @@ export function useGeoImages(clusterId: string | null) {
   const clusterIdRef = useRef(clusterId)
 
   // Keep clusterIdRef in sync
-  if (clusterIdRef.current !== clusterId) {
+  useEffect(() => {
     clusterIdRef.current = clusterId
-  }
+  }, [clusterId])
 
   const { items, total, hasMore, isLoading, error, initialized, loadMore, reset, removeItem } =
     useInfiniteScroll<GalleryImageDTO, GeoImagesResponse>({

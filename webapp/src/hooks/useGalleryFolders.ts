@@ -7,6 +7,26 @@ export function useGalleryFolders() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const result = await fetchFolders()
+        if (cancelled) return
+        setFolders(result.folders)
+        setError(null)
+      } catch (err) {
+        if (cancelled) return
+        setError(err instanceof Error ? err.message : "Failed to load folders")
+      } finally {
+        if (!cancelled) setIsLoading(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
   const load = useCallback(async () => {
     setIsLoading(true)
     setError(null)
@@ -19,10 +39,6 @@ export function useGalleryFolders() {
       setIsLoading(false)
     }
   }, [])
-
-  useEffect(() => {
-    load()
-  }, [load])
 
   const add = useCallback(
     async (path: string): Promise<AddFolderResponse> => {

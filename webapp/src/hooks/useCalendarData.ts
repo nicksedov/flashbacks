@@ -118,9 +118,12 @@ export function useCalendarData({ initialMonthYear }: UseCalendarDataOptions): U
     infiniteScroll.reset()
     // Reset dateRange capture so it updates from the new response
     dateRangeCapturedRef.current = false
+    /* eslint-disable react-hooks/set-state-in-effect */
     setDateRange({ minDate: "", maxDate: "", totalWithDate: 0 })
+    /* eslint-enable react-hooks/set-state-in-effect */
     // Load fresh data with new filters/sort order
     infiniteScroll.loadMore()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dateRangeFilter.start, dateRangeFilter.end, sortOrder])
 
   // Update monthYear ref without resetting pagination

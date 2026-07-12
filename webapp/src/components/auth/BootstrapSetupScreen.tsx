@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { useAuth } from "@/providers/AuthProvider"
+import { useAuth } from "@/providers/useAuth"
 import { bootstrapSetup as apiBootstrapSetup } from "@/api/endpoints"
 import { toast } from "sonner"
 import { Loader2, Settings } from "lucide-react"

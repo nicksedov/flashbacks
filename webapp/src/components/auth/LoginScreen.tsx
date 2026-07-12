@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react"
-import { useAuth } from "@/providers/AuthProvider"
+import { useAuth } from "@/providers/useAuth"
 import { login as apiLogin, fetchAuthStatus } from "@/api/endpoints"
 import { toast } from "sonner"
 import { Loader2, ShieldAlert, WifiOff } from "lucide-react"

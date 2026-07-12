@@ -61,11 +61,26 @@ export function useDataLoader<T, R, A = unknown, M = unknown>(
   }, [fetchFn, transform])
 
   useEffect(() => {
-    if (autoLoad) {
-      load()
+    if (!autoLoad) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const result = await fetchFn()
+        if (cancelled) return
+        setData(transform(result))
+        setError(null)
+      } catch (err) {
+        if (cancelled) return
+        setError(err instanceof Error ? err.message : "Failed to load data")
+      } finally {
+        if (!cancelled) setIsLoading(false)
+      }
+    })()
+    return () => {
+      cancelled = true
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoLoad, load, ...deps])
+  }, [autoLoad, fetchFn, transform, ...deps])
 
   const add = useCallback(
     async (item: A) => {
@@ -84,7 +99,7 @@ export function useDataLoader<T, R, A = unknown, M = unknown>(
     async (id: number | string) => {
       if (!removeFn) throw new Error("removeFn not provided")
       const result = await removeFn(id)
-      setData((prev) => prev.filter((item) => (item as any).id !== id))
+      setData((prev) => prev.filter((item) => (item as unknown as { id: string | number }).id !== id))
       return result
     },
     [removeFn]

@@ -6,7 +6,7 @@ import { Header } from "@/components/layout/Header"
 import { fetchFolders } from "@/api/endpoints"
 import { useTranslation } from "@/i18n"
 import { useSettings } from "@/providers/useSettings"
-import { useAuth } from "@/providers/AuthProvider"
+import { useAuth } from "@/providers/useAuth"
 import { GallerySelectionProvider } from "@/providers/GallerySelectionContext"
 import { LoginScreen } from "@/components/auth/LoginScreen"
 import { BootstrapSetupScreen } from "@/components/auth/BootstrapSetupScreen"
@@ -48,22 +48,23 @@ export default function App() {
 
   // On mount, check if gallery has folders. If not, force settings tab.
   useEffect(() => {
-    async function checkGallery() {
+    if (!isAuthenticated) return
+    let cancelled = false
+    ;(async () => {
       try {
         const result = await fetchFolders()
+        if (cancelled) return
         if (result.totalFolders === 0) {
           setActiveTab("settings")
         }
       } catch {
         // If API fails, still allow normal navigation
       } finally {
-        setIsCheckingGallery(false)
+        if (!cancelled) setIsCheckingGallery(false)
       }
-    }
-    if (isAuthenticated) {
-      checkGallery()
-    } else {
-      setIsCheckingGallery(false)
+    })()
+    return () => {
+      cancelled = true
     }
   }, [isAuthenticated])
 

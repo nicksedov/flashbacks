@@ -911,7 +911,9 @@ export const translationsEn = {
   // Image Enhancement comparison
   "enhance.labelBefore": "Before",
   "enhance.labelAfter": "After",
-  "enhance.accept": "Accept",
+  "enhance.replace": "Replace original",
+  "enhance.replacing": "Replacing...",
+  "enhance.saveCopy": "Save as copy",
+  "enhance.savingCopy": "Saving...",
   "enhance.reject": "Reject",
-  "enhance.applying": "Applying...",
  } as const

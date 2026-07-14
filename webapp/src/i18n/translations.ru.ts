@@ -909,7 +909,9 @@ export const translationsRu = {
   // Image Enhancement comparison
   "enhance.labelBefore": "До",
   "enhance.labelAfter": "После",
-  "enhance.accept": "Принять",
+  "enhance.replace": "Заменить оригинал",
+  "enhance.replacing": "Замена...",
+  "enhance.saveCopy": "Сохранить копией",
+  "enhance.savingCopy": "Сохранение...",
   "enhance.reject": "Отклонить",
-  "enhance.applying": "Применение...",
  } as const

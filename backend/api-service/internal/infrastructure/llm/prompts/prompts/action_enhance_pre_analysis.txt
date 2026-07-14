@@ -11,4 +11,4 @@ Focus on identifying the most impactful issues:
 
 Output ONLY a bullet-point list of specific, actionable enhancement instructions in English that an image editing AI can directly apply. Each point should be a concrete instruction like "increase sharpness on facial features", "reduce chromatic noise in shadows", "boost contrast in midtones", etc.
 
-Be concise — limit to 3-5 most impactful recommendations.
+Be concise — limit to 4-6 most impactful recommendations.

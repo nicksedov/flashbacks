@@ -126,7 +126,8 @@ func (s *Server) SetupRouter(authMiddleware *middleware.AuthMiddleware, csrfProt
 			protected.GET("/image-tags", s.handleGetImageTags)
 
 			// Image enhancement endpoints
-			protected.POST("/image/enhance/accept", s.handleAcceptEnhancement)
+			protected.POST("/image/enhance/replace", s.handleReplaceEnhancement)
+			protected.POST("/image/enhance/save-copy", s.handleSaveCopyEnhancement)
 			protected.POST("/image/enhance/reject", s.handleRejectEnhancement)
 			protected.GET("/image-enhanced", s.handleServeEnhancedImage)
 

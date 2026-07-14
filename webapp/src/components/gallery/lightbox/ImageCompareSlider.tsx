@@ -1,23 +1,27 @@
 import { useCallback, useRef, useState, type MouseEvent, type TouchEvent } from "react"
-import { Check, X, GripVertical } from "lucide-react"
+import { Check, Copy, X, GripVertical } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useTranslation } from "@/i18n"
 
 interface ImageCompareSliderProps {
   originalUrl: string
   enhancedUrl: string
-  onAccept: () => void
+  onReplace: () => void
+  onSaveCopy: () => void
   onReject: () => void
-  isAccepting?: boolean
+  isReplacing?: boolean
+  isSavingCopy?: boolean
   isRejecting?: boolean
 }
 
 export function ImageCompareSlider({
   originalUrl,
   enhancedUrl,
-  onAccept,
+  onReplace,
+  onSaveCopy,
   onReject,
-  isAccepting = false,
+  isReplacing = false,
+  isSavingCopy = false,
   isRejecting = false,
 }: ImageCompareSliderProps) {
   const { t } = useTranslation()
@@ -117,20 +121,30 @@ export function ImageCompareSlider({
           variant="outline"
           size="sm"
           onClick={onReject}
-          disabled={isAccepting || isRejecting}
+          disabled={isReplacing || isSavingCopy || isRejecting}
           className="gap-1.5"
         >
           <X className="h-4 w-4" />
           {t("enhance.reject")}
         </Button>
         <Button
+          variant="outline"
           size="sm"
-          onClick={onAccept}
-          disabled={isAccepting || isRejecting}
+          onClick={onSaveCopy}
+          disabled={isReplacing || isSavingCopy || isRejecting}
+          className="gap-1.5"
+        >
+          <Copy className="h-4 w-4" />
+          {isSavingCopy ? t("enhance.savingCopy") : t("enhance.saveCopy")}
+        </Button>
+        <Button
+          size="sm"
+          onClick={onReplace}
+          disabled={isReplacing || isSavingCopy || isRejecting}
           className="gap-1.5"
         >
           <Check className="h-4 w-4" />
-          {isAccepting ? t("enhance.applying") : t("enhance.accept")}
+          {isReplacing ? t("enhance.replacing") : t("enhance.replace")}
         </Button>
       </div>
     </div>

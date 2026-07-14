@@ -532,6 +532,28 @@ func (h *Handler) HandleBatchUpdateGPS(c *gin.Context) {
 	})
 }
 
+// HandleCopyExif copies all EXIF metadata (including GPS) from source to target file.
+func (h *Handler) HandleCopyExif(c *gin.Context) {
+	var req dto.CopyExifRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, dto.ErrorResponse{Error: "invalid request body"})
+		return
+	}
+
+	sourcePath := filepath.FromSlash(req.SourcePath)
+	targetPath := filepath.FromSlash(req.TargetPath)
+
+	if err := application.CopyExif(sourcePath, targetPath, nil, ""); err != nil {
+		c.JSON(http.StatusInternalServerError, dto.ErrorResponse{Error: err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, dto.CopyExifResponse{
+		Success: true,
+		Message: fmt.Sprintf("EXIF copied from %s to %s", filepath.Base(sourcePath), filepath.Base(targetPath)),
+	})
+}
+
 // HandleGetLocationCandidates returns location suggestions from same-day photos.
 func (h *Handler) HandleGetLocationCandidates(c *gin.Context) {
 	dateParam := c.Query("date")
@@ -667,6 +689,9 @@ func SetupRouter(db *gorm.DB, exifSvc *application.ExifService, gpsWriter *appli
 		// Missing and location-candidates
 		exif.GET("/missing", h.HandleGetMissingImages)                  // NEW: paginated missing images
 		exif.GET("/location-candidates", h.HandleGetLocationCandidates) // Existing
+
+		// Copy EXIF between files (used by image enhancement workflow)
+		exif.POST("/copy-exif", h.HandleCopyExif)
 
 		// Geolocation
 		exif.GET("/geolocation", h.HandleResolveGeolocation) // NEW: resolve geolocation

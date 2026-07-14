@@ -15,7 +15,7 @@ import { useImageDimensions } from "@/hooks/useImageDimensions"
 import { useFileExport } from "@/hooks/useFileExport"
 import { useChatAgent } from "@/hooks/useChatAgent"
 import { useImageMetadata } from "@/hooks/useImageMetadata"
-import { acceptEnhancement, rejectEnhancement } from "@/api/endpoints"
+import { replaceEnhancement, saveCopyEnhancement, rejectEnhancement } from "@/api/endpoints"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
 import { Camera, MapPin, MapPinPlus, Image as ImageIcon, Pencil, FileText } from "lucide-react"
@@ -65,7 +65,8 @@ export function UnifiedLightbox({
   const [standardImageVersion, setStandardImageVersion] = useState(0)
   const processedEnhanceRef = useRef<Set<string>>(new Set())
   const [enhancedPath, setEnhancedPath] = useState<string | null>(null)
-  const [isAccepting, setIsAccepting] = useState(false)
+  const [isReplacing, setIsReplacing] = useState(false)
+  const [isSavingCopy, setIsSavingCopy] = useState(false)
   const [isRejecting, setIsRejecting] = useState(false)
 
   // Reset per-image state when imagePath changes (during render, not in effect)
@@ -203,17 +204,31 @@ export function UnifiedLightbox({
   const cacheParam = standardImageVersion > 0 ? { _t: standardImageVersion } : undefined
   const standardImageUrl = imagePath ? buildImageUrl(imagePath, "/api/image", cacheParam) : ""
 
-  const handleAcceptEnhancement = useCallback(async () => {
+  const handleReplaceEnhancement = useCallback(async () => {
     if (!imagePath) return
-    setIsAccepting(true)
+    setIsReplacing(true)
     try {
-      await acceptEnhancement({ imagePath })
+      await replaceEnhancement({ imagePath })
       setEnhancedPath(null)
       setStandardImageVersion(v => v + 1)
     } catch {
       // Error is handled silently - image stays in comparison mode
     } finally {
-      setIsAccepting(false)
+      setIsReplacing(false)
+    }
+  }, [imagePath])
+
+  const handleSaveCopyEnhancement = useCallback(async () => {
+    if (!imagePath) return
+    setIsSavingCopy(true)
+    try {
+      await saveCopyEnhancement({ imagePath })
+      setEnhancedPath(null)
+      // No need to bump image version — original is unchanged
+    } catch {
+      // Error is handled silently
+    } finally {
+      setIsSavingCopy(false)
     }
   }, [imagePath])
 
@@ -273,9 +288,11 @@ export function UnifiedLightbox({
             <ImageCompareSlider
               originalUrl={standardImageUrl}
               enhancedUrl={enhancedImageUrl}
-              onAccept={handleAcceptEnhancement}
+              onReplace={handleReplaceEnhancement}
+              onSaveCopy={handleSaveCopyEnhancement}
               onReject={handleRejectEnhancement}
-              isAccepting={isAccepting}
+              isReplacing={isReplacing}
+              isSavingCopy={isSavingCopy}
               isRejecting={isRejecting}
             />
           </div>

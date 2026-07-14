@@ -29,4 +29,7 @@ type ExifClient interface {
 	// ExtractPreview fetches an embedded preview/thumbnail from a JPEG via the EXIF service.
 	// Returns raw image bytes (typically JPEG) for images that Go cannot decode directly.
 	ExtractPreview(ctx context.Context, filePath string) ([]byte, error)
+
+	// CopyExif copies all EXIF metadata (including GPS) from source file to target file.
+	CopyExif(ctx context.Context, sourcePath, targetPath string) error
 }

@@ -54,6 +54,7 @@ func (s *Server) handleGetLlmSettings(c *gin.Context) {
 		ID:                     settings.ID,
 		ActiveProvider:         settings.ActiveProvider,
 		VlProvider:             settings.VlProvider,
+		ImgEditProvider:        settings.ImgEditProvider,
 		TagScanEnabled:         settings.TagScanEnabled,
 		TagScanStartHour:       settings.TagScanStartHour,
 		TagScanStartMinute:     settings.TagScanStartMinute,
@@ -82,6 +83,9 @@ func (s *Server) handleUpdateLlmSettings(c *gin.Context) {
 	}
 	if req.VlProvider != nil {
 		globalUpdates["vl_provider"] = *req.VlProvider
+	}
+	if req.ImgEditProvider != nil {
+		globalUpdates["img_edit_provider"] = *req.ImgEditProvider
 	}
 	if req.TagScanEnabled != nil {
 		globalUpdates["tag_scan_enabled"] = *req.TagScanEnabled
@@ -118,6 +122,7 @@ func (s *Server) handleUpdateLlmSettings(c *gin.Context) {
 		settings = &domain.LlmSettings{
 			ActiveProvider:     "ollama_1",
 			VlProvider:         "ollama_1",
+			ImgEditProvider:    "ollama_1",
 			TagScanEnabled:     true,
 			TagScanStartHour:   22,
 			TagScanStartMinute: 0,
@@ -129,6 +134,9 @@ func (s *Server) handleUpdateLlmSettings(c *gin.Context) {
 		}
 		if req.VlProvider != nil {
 			settings.VlProvider = *req.VlProvider
+		}
+		if req.ImgEditProvider != nil {
+			settings.ImgEditProvider = *req.ImgEditProvider
 		}
 		if req.TagScanEnabled != nil {
 			settings.TagScanEnabled = *req.TagScanEnabled

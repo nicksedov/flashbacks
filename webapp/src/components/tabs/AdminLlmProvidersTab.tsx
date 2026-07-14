@@ -23,6 +23,7 @@ import {
   Eye,
   MessageSquare,
   Brain,
+  Wand2,
 } from "lucide-react"
 import { useTranslation } from "@/i18n"
 import type { LlmSettingsResponse, LlmProviderDTO, LlmModelDTO, LlmProviderType } from "@/types"
@@ -33,9 +34,10 @@ const PROVIDER_LABELS: Record<LlmProviderType, string> = {
   ollama_cloud: "Ollama Cloud",
   openai: "OpenAI API compatible",
   deepseek: "DeepSeek",
+  alibaba: "Alibaba Cloud",
 }
 
-const ALLOWED_PROVIDER_TYPES: LlmProviderType[] = ["ollama", "ollama_cloud", "openai", "deepseek"]
+const ALLOWED_PROVIDER_TYPES: LlmProviderType[] = ["ollama", "ollama_cloud", "openai", "deepseek", "alibaba"]
 
 // Capability labels
 type ModelCapability = "chat" | "tool_calling" | "vision" | "embedding"
@@ -76,6 +78,9 @@ function inferCapabilities(
     caps.push("tool_calling")
   } else if (providerType === "ollama" || providerType === "ollama_cloud") {
     caps.push("tool_calling") // Ollama supports tool calling with compatible models
+  } else if (providerType === "alibaba") {
+    // Alibaba DashScope supports tool calling with Qwen models
+    caps.push("tool_calling")
   }
 
   // Vision support heuristics
@@ -83,6 +88,7 @@ function inferCapabilities(
   const visionModels = [
     "minicpm", "llava", "bakllava", "cogvlm", "vision", "gpt-4o", "gpt-4-vision",
     "gemini", "claude", "pixtral", "llama3.2-vision", "qwen2-vl", "qwen-vl",
+    "qwen-vl-plus", "qwen-vl-max", "qwen-image-edit",
     "deepseek-vl", "internvl", "glm-4v",
   ]
   if (visionModels.some((vm) => modelLower.includes(vm))) {
@@ -94,6 +100,11 @@ function inferCapabilities(
     }
   } else if (providerType === "openai") {
     if (modelLower.includes("gpt-4") || modelLower.includes("gpt-4o") || modelLower.includes("vision")) {
+      caps.push("vision")
+    }
+  } else if (providerType === "alibaba") {
+    // Alibaba Qwen VL and image edit models are vision-capable
+    if (modelLower.includes("qwen-vl") || modelLower.includes("qwen-image-edit")) {
       caps.push("vision")
     }
   }
@@ -189,18 +200,25 @@ export function AdminLlmProvidersTab() {
       setLoadingModelsAlias(alias)
       try {
         const response = await fetchLlmModels(alias, forceRefresh)
-        if (response.success && response.models.length > 0) {
-          setModelCache((prev) => ({ ...prev, [alias]: response.models }))
-          return response.models
+        if (response.success) {
+          if (response.models.length > 0) {
+            setModelCache((prev) => ({ ...prev, [alias]: response.models }))
+            return response.models
+          }
+          toast.info(t("llm_providers.modelsLoaded", { count: 0 }))
+          return null
         }
+        // Show error from backend
+        toast.error(response.error || t("llm_providers.modelsLoadFailed"))
         return null
-      } catch {
+      } catch (err) {
+        toast.error(t("llm_providers.modelsLoadFailed"))
         return null
       } finally {
         setLoadingModelsAlias(null)
       }
     },
-    [modelCache],
+    [modelCache, t],
   )
 
   const handleToggleModels = useCallback(
@@ -234,7 +252,9 @@ export function AdminLlmProvidersTab() {
           ? "https://ollama.com"
           : newProviderType === "deepseek"
             ? "https://api.deepseek.com"
-            : "https://api.openai.com"
+            : newProviderType === "alibaba"
+              ? "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
+              : "https://api.openai.com"
 
     const apiUrl =
       newProviderType === "ollama_cloud" || newProviderType === "deepseek"
@@ -250,7 +270,8 @@ export function AdminLlmProvidersTab() {
         apiKey:
           newProviderType === "ollama_cloud" ||
           newProviderType === "openai" ||
-          newProviderType === "deepseek"
+          newProviderType === "deepseek" ||
+          newProviderType === "alibaba"
             ? newProviderApiKey
             : undefined,
         model: newProviderModel || "minicpm-v",
@@ -370,6 +391,7 @@ export function AdminLlmProvidersTab() {
         const usages: string[] = []
         if (llmSettings.activeProvider === alias) usages.push(t("llm_providers.usageChatAssistant"))
         if (llmSettings.vlProvider === alias) usages.push(t("llm_providers.usageImageAnalysis"))
+        if (llmSettings.imgEditProvider === alias) usages.push(t("llm_providers.usageImageEdit"))
         if (llmSettings.embeddingProviderAlias === alias) usages.push(t("llm_providers.usageEmbeddings"))
         if (usages.length > 0) {
           toast.error(t("llm_providers.cannotDeleteInUse", { usages: usages.join(", ") }))
@@ -404,6 +426,7 @@ export function AdminLlmProvidersTab() {
     const usages: string[] = []
     if (llmSettings.activeProvider === alias) usages.push(t("llm_providers.usageChatAssistant"))
     if (llmSettings.vlProvider === alias) usages.push(t("llm_providers.usageImageAnalysis"))
+    if (llmSettings.imgEditProvider === alias) usages.push(t("llm_providers.usageImageEdit"))
     if (llmSettings.embeddingProviderAlias === alias) usages.push(t("llm_providers.usageEmbeddings"))
     return usages
   }
@@ -464,6 +487,12 @@ export function AdminLlmProvidersTab() {
                                   {t("llm_providers.usageShortEmb")}
                                 </Badge>
                               )}
+                              {usages.includes(t("llm_providers.usageImageEdit")) && (
+                                <Badge variant="outline" className="text-xs gap-1">
+                                  <Wand2 className="h-3 w-3" />
+                                  {t("llm_providers.usageShortImgEdit")}
+                                </Badge>
+                              )}
                             </div>
                           )}
                         </div>
@@ -492,7 +521,9 @@ export function AdminLlmProvidersTab() {
                       </div>
                       <CardDescription className="flex flex-col gap-1">
                         <span className="text-xs">
-                          API URL: {provider.name === "ollama_cloud" ? "https://ollama.com" : provider.apiUrl}
+                          API URL: {provider.name === "ollama_cloud"
+                            ? "https://ollama.com"
+                            : provider.apiUrl}
                         </span>
                         <span className="text-xs">
                           {t("llm_ocr.model")}: {provider.model}
@@ -525,13 +556,15 @@ export function AdminLlmProvidersTab() {
                                   ? "http://localhost:11434"
                                   : provider.name === "deepseek"
                                     ? "https://api.deepseek.com"
-                                    : "https://api.openai.com"
+                                    : provider.name === "alibaba"
+                                      ? "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
+                                      : "https://api.openai.com"
                               }
                             />
                           </div>
                         )}
 
-                        {(provider.name === "openai" || provider.name === "ollama_cloud" || provider.name === "deepseek") && (
+                        {(provider.name === "openai" || provider.name === "ollama_cloud" || provider.name === "deepseek" || provider.name === "alibaba") && (
                           <div className="space-y-2">
                             <Label>API Key</Label>
                             <Input
@@ -589,7 +622,9 @@ export function AdminLlmProvidersTab() {
                                 placeholder={
                                   provider.name === "ollama" || provider.name === "ollama_cloud"
                                     ? "minicpm-v"
-                                    : "gpt-4-vision-preview"
+                                    : provider.name === "alibaba"
+                                      ? "qwen-image-edit-plus"
+                                      : "gpt-4-vision-preview"
                                 }
                               />
                               {models.length > 0 && editingManualModel && (
@@ -743,7 +778,9 @@ export function AdminLlmProvidersTab() {
                             ? "http://localhost:11434"
                             : newProviderType === "deepseek"
                               ? "https://api.deepseek.com"
-                              : "https://api.openai.com"
+                              : newProviderType === "alibaba"
+                                ? "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
+                                : "https://api.openai.com"
                         }
                         value={newProviderApiUrl}
                         onChange={(e) => setNewProviderApiUrl(e.target.value)}
@@ -754,7 +791,8 @@ export function AdminLlmProvidersTab() {
                   {/* API Key */}
                   {(newProviderType === "ollama_cloud" ||
                     newProviderType === "openai" ||
-                    newProviderType === "deepseek") && (
+                    newProviderType === "deepseek" ||
+                    newProviderType === "alibaba") && (
                     <div className="space-y-2">
                       <Label htmlFor="new-apikey">API Key</Label>
                       <Input
@@ -776,7 +814,9 @@ export function AdminLlmProvidersTab() {
                       placeholder={
                         newProviderType === "ollama" || newProviderType === "ollama_cloud"
                           ? "minicpm-v"
-                          : "gpt-4-vision-preview"
+                          : newProviderType === "alibaba"
+                            ? "qwen-image-edit-plus"
+                            : "gpt-4-vision-preview"
                       }
                       value={newProviderModel}
                       onChange={(e) => setNewProviderModel(e.target.value)}

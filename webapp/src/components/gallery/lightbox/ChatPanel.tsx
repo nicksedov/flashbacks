@@ -17,6 +17,7 @@ import {
   ScanText,
   Calendar,
   History,
+  Wand2,
 } from "lucide-react"
 import type { ChatMessage, ChatToolCallInfo, Conversation } from "@/types"
 import type { TranslationKey } from "@/i18n"
@@ -97,8 +98,8 @@ function ToolCallItem({ toolCall, isStreaming }: { toolCall: ChatToolCallInfo; i
       {expanded && toolCall.result && (
         <div className="border-t border-border/50 px-2 py-1.5 max-h-40 overflow-y-auto bg-muted/30">
           <pre className="whitespace-pre-wrap text-xs font-mono text-muted-foreground">
-            {toolCall.result.length > 500
-              ? toolCall.result.slice(0, 500) + "..."
+            {toolCall.result.length > 2000
+              ? toolCall.result.slice(0, 2000) + "..."
               : toolCall.result}
           </pre>
         </div>
@@ -346,6 +347,11 @@ export function ChatPanel({
       icon: <Calendar className="h-3.5 w-3.5" />,
       labelKey: "chat.suggest_date",
       messageKey: "chat.suggest_date_msg",
+    },
+    {
+      icon: <Wand2 className="h-3.5 w-3.5" />,
+      labelKey: "chat.suggest_enhance",
+      messageKey: "chat.suggest_enhance_msg",
     },
   ]
 

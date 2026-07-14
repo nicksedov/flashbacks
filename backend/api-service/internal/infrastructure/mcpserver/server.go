@@ -67,6 +67,7 @@ func (s *FlashbacksMCPServer) ToolDefinitions() []llm.ToolDefinition {
 		recognizeTextToolDef(),
 		generateTagsToolDef(),
 		askAboutImageToolDef(),
+		enhanceImageQualityToolDef(),
 		searchByDateToolDef(),
 		searchByLocationToolDef(),
 		searchByPathToolDef(),
@@ -99,6 +100,8 @@ func (s *FlashbacksMCPServer) ExecuteTool(ctx context.Context, name string, argu
 		return s.executeGenerateTags(ctx, arguments)
 	case "ask_about_image":
 		return s.executeAskAboutImage(ctx, arguments)
+	case "enhance_image_quality":
+		return s.executeEnhanceImageQuality(ctx, arguments)
 	case "search_by_date":
 		return s.executeSearchByDate(ctx, arguments)
 	case "search_by_location":
@@ -115,17 +118,57 @@ func (s *FlashbacksMCPServer) ExecuteTool(ctx context.Context, name string, argu
 }
 
 // createVLClient creates a VL (vision-language) LLM client from the VlProvider setting.
-// Falls back to ActiveProvider if VlProvider is not configured.
+// Does NOT fall back to ActiveProvider — requires an explicit VL provider configuration.
 func (s *FlashbacksMCPServer) createVLClient() (llm.Client, string, string, error) {
 	var settings struct {
-		ActiveProvider string `json:"activeProvider"`
-		VlProvider     string `json:"vlProvider"`
+		VlProvider string `json:"vlProvider"`
 	}
-	if err := s.db.Table("llm_settings").Select("active_provider, vl_provider").First(&settings).Error; err != nil {
+	if err := s.db.Table("llm_settings").Select("vl_provider").First(&settings).Error; err != nil {
 		return nil, "", "", fmt.Errorf("LLM settings not found")
 	}
 
 	alias := settings.VlProvider
+	if alias == "" {
+		return nil, "", "", fmt.Errorf("VL provider is not configured — please set a VL LLM provider in Admin Settings > Analysis Tools")
+	}
+
+	var provider struct {
+		Name   string `json:"name"`
+		ApiUrl string `json:"apiUrl"`
+		ApiKey string `json:"apiKey"`
+		Model  string `json:"model"`
+	}
+	if err := s.db.Table("llm_providers").
+		Select("name, api_url, api_key, model").
+		Where("alias = ?", alias).
+		First(&provider).Error; err != nil {
+		return nil, "", "", fmt.Errorf("LLM provider '%s' not found", alias)
+	}
+
+	client, err := llm.NewClient(provider.Name, provider.ApiUrl, provider.ApiKey, provider.Model, s.maxMegapixels)
+	if err != nil {
+		return nil, "", "", fmt.Errorf("failed to create LLM client: %w", err)
+	}
+
+	return client, provider.Name, provider.Model, nil
+}
+
+// createImgEditClient creates an LLM client from the ImgEditProvider setting.
+// Falls back to VlProvider, then ActiveProvider if ImgEditProvider is not configured.
+func (s *FlashbacksMCPServer) createImgEditClient() (llm.Client, string, string, error) {
+	var settings struct {
+		ActiveProvider  string `json:"activeProvider"`
+		VlProvider      string `json:"vlProvider"`
+		ImgEditProvider string `json:"imgEditProvider"`
+	}
+	if err := s.db.Table("llm_settings").Select("active_provider, vl_provider, img_edit_provider").First(&settings).Error; err != nil {
+		return nil, "", "", fmt.Errorf("LLM settings not found")
+	}
+
+	alias := settings.ImgEditProvider
+	if alias == "" {
+		alias = settings.VlProvider
+	}
 	if alias == "" {
 		alias = settings.ActiveProvider
 	}

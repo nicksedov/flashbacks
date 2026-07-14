@@ -2,9 +2,14 @@ package mcpserver
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
+	"os"
+	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -15,6 +20,32 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
+
+// dataURLPattern matches base64-encoded data URLs (data:image/...;base64,...).
+var dataURLPattern = regexp.MustCompile(`data:([^;]+);base64,([A-Za-z0-9+/=]+)`)
+
+// extractAndSaveDataURL scans text for a base64 data URL and, if found,
+// decodes it and writes the result to destPath.
+func extractAndSaveDataURL(text, destPath string) (bool, error) {
+	matches := dataURLPattern.FindStringSubmatch(text)
+	if len(matches) < 3 {
+		return false, nil
+	}
+	mimeType := matches[1]
+	b64Data := matches[2]
+
+	decoded, err := base64.StdEncoding.DecodeString(b64Data)
+	if err != nil {
+		return false, fmt.Errorf("failed to decode base64 image data: %w", err)
+	}
+
+	if err := os.WriteFile(destPath, decoded, 0644); err != nil {
+		return false, fmt.Errorf("failed to write enhanced image to %s: %w", destPath, err)
+	}
+
+	log.Printf("extractAndSaveDataURL: saved enhanced image (%s, %d bytes) to %s", mimeType, len(decoded), destPath)
+	return true, nil
+}
 
 // --- Tool input/output types ---
 
@@ -30,6 +61,11 @@ type AskAboutImageInput struct {
 	ImagePath string `json:"image_path" jsonschema:"Path to the image file"`
 	Question  string `json:"question" jsonschema:"The question to ask about the image"`
 	Language  string `json:"language,omitempty" jsonschema:"Response language code (en, ru). Defaults to en"`
+}
+
+type EnhanceImageQualityInput struct {
+	ImagePath   string `json:"image_path" jsonschema:"Path to the image file"`
+	Instruction string `json:"instruction,omitempty" jsonschema:"Optional specific enhancement instruction (e.g. 'increase resolution', 'reduce blur', 'improve detail')"`
 }
 
 type ImageAnalysisOutput struct {
@@ -86,6 +122,21 @@ func askAboutImageToolDef() llm.ToolDefinition {
 	}
 }
 
+func enhanceImageQualityToolDef() llm.ToolDefinition {
+	return llm.ToolDefinition{
+		Name:        "enhance_image_quality",
+		Description: "Analyze and improve image quality: enhance details, reduce blur, upscale resolution. Creates a backup of the original image before modification.",
+		Parameters: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"image_path":  map[string]any{"type": "string", "description": "Path to the image file"},
+				"instruction": map[string]any{"type": "string", "description": "Optional specific enhancement instruction (e.g. 'increase resolution', 'reduce blur', 'improve details')"},
+			},
+			"required": []string{"image_path"},
+		},
+	}
+}
+
 // --- Registration ---
 
 func (s *FlashbacksMCPServer) registerImageTools() {
@@ -103,6 +154,11 @@ func (s *FlashbacksMCPServer) registerImageTools() {
 		Name:        "ask_about_image",
 		Description: "Answer a specific question about an image",
 	}, s.handleAskAboutImage)
+
+	mcp.AddTool(s.server, &mcp.Tool{
+		Name:        "enhance_image_quality",
+		Description: "Analyze and improve image quality: enhance details, reduce blur, upscale resolution. Creates a backup of the original image before modification.",
+	}, s.handleEnhanceImageQuality)
 }
 
 // --- MCP SDK handlers ---
@@ -138,6 +194,24 @@ func (s *FlashbacksMCPServer) handleGenerateTags(ctx context.Context, req *mcp.C
 	tagsText := strings.Join(result.Tags, ", ")
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{&mcp.TextContent{Text: tagsText}},
+	}, output, nil
+}
+
+func (s *FlashbacksMCPServer) handleEnhanceImageQuality(ctx context.Context, req *mcp.CallToolRequest, input EnhanceImageQualityInput) (*mcp.CallToolResult, ImageAnalysisOutput, error) {
+	instruction := input.Instruction
+
+	result, err := s.runImageEnhancement(input.ImagePath, instruction, "en")
+	if err != nil {
+		return nil, ImageAnalysisOutput{}, err
+	}
+	output := ImageAnalysisOutput{
+		Content:          result.Result,
+		Provider:         result.Provider,
+		Model:            result.Model,
+		ProcessingTimeMs: result.ProcessingTimeMs,
+	}
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{&mcp.TextContent{Text: result.Result}},
 	}, output, nil
 }
 
@@ -203,6 +277,19 @@ func (s *FlashbacksMCPServer) executeAskAboutImage(ctx context.Context, args jso
 	return result.Result, nil
 }
 
+func (s *FlashbacksMCPServer) executeEnhanceImageQuality(ctx context.Context, args json.RawMessage) (string, error) {
+	var input EnhanceImageQualityInput
+	if err := json.Unmarshal(args, &input); err != nil {
+		return "", fmt.Errorf("invalid arguments: %w", err)
+	}
+
+	result, err := s.runImageEnhancement(input.ImagePath, input.Instruction, "en")
+	if err != nil {
+		return "", err
+	}
+	return result.Result, nil
+}
+
 // --- Shared logic ---
 
 type imageActionResult struct {
@@ -213,9 +300,151 @@ type imageActionResult struct {
 	ProcessingTimeMs int
 }
 
+// enhancementResult is the JSON-serialized result returned by enhance_image_quality.
+// The frontend parses this to determine whether a comparison view should be shown.
+type enhancementResult struct {
+	Message      string `json:"message"`
+	EnhancedPath string `json:"enhancedPath,omitempty"`
+	Status       string `json:"status"` // "pending_approval" or "no_change"
+	Prompt       string `json:"prompt,omitempty"`
+}
+
 // runImageAction executes an AI action on an image identified by its path.
 // For the "tags" action, it checks the image_tags cache first and saves
 // newly generated tags back to the cache.
+// backupOriginalImage copies the original image to the exifBackupDir for safekeeping.
+func (s *FlashbacksMCPServer) backupOriginalImage(imagePath string) error {
+	var settings domain.AppSettings
+	if err := s.db.First(&settings, 1).Error; err != nil {
+		return fmt.Errorf("app settings not found: %w", err)
+	}
+	if settings.ExifBackupDir == "" {
+		return nil // no backup directory configured, skip
+	}
+
+	// Copy the original file to the backup directory
+	// Keep the same filename structure to allow restoration
+	dest := filepath.Join(settings.ExifBackupDir, filepath.Base(imagePath))
+	input, err := os.Open(imagePath)
+	if err != nil {
+		return fmt.Errorf("failed to open original image: %w", err)
+	}
+	defer input.Close()
+
+	output, err := os.Create(dest)
+	if err != nil {
+		return fmt.Errorf("failed to create backup at %s: %w", dest, err)
+	}
+	defer output.Close()
+
+	if _, err := io.Copy(output, input); err != nil {
+		return fmt.Errorf("failed to copy image to backup: %w", err)
+	}
+
+	log.Printf("enhance_image_quality: backed up original to %s", dest)
+	return nil
+}
+
+// runImageEnhancement performs AI-powered image quality enhancement.
+// Uses a two-step process:
+//  1. Pre-analyze the image with a VL LLM to get enhancement recommendations
+//  2. Call the image editing LLM with dynamic, image-specific enhancement instructions
+//
+// The enhanced image is saved to a temporary file (originalPath + ".enhanced").
+// The result includes a JSON payload with the temp path so the frontend can
+// show a before/after comparison and let the user accept or reject the changes.
+func (s *FlashbacksMCPServer) runImageEnhancement(imagePath, instruction, language string) (*imageActionResult, error) {
+	if language == "" {
+		language = "en"
+	}
+
+	// Resolve image file from DB
+	var imageFile domain.ImageFile
+	if err := s.db.Where("path = ?", imagePath).First(&imageFile).Error; err != nil {
+		return nil, fmt.Errorf("image not found: %s", imagePath)
+	}
+
+	// Step 1: Pre-analyze image with VL LLM to generate enhancement recommendations.
+	// This step is mandatory — it provides image-specific guidance to the editing LLM.
+	recommendations := instruction
+	vlClient, _, _, vlErr := s.createVLClient()
+	if vlErr != nil {
+		return nil, fmt.Errorf("pre-analysis VL client unavailable: %w", vlErr)
+	}
+	preAnalysisPrompt := prompts.BuildEnhancePreAnalysisPrompt(language)
+	preAnalysisResult, analyzeErr := vlClient.Recognize(
+		context.Background(), imageFile.Path,
+		preAnalysisPrompt,
+		"Analyze this image for quality issues and provide enhancement recommendations.",
+	)
+	if analyzeErr == nil && preAnalysisResult != "" {
+		if recommendations != "" {
+			recommendations = recommendations + "\n\nAuto-detected issues:\n" + preAnalysisResult
+		} else {
+			recommendations = preAnalysisResult
+		}
+	}
+
+	// Step 2: Call image editing LLM with dynamic, image-specific recommendations
+	client, providerName, modelName, err := s.createImgEditClient()
+	if err != nil {
+		return nil, err
+	}
+
+	systemPrompt := prompts.BuildActionPrompt("enhanceQuality", recommendations, language)
+	userMessage := prompts.BuildActionUserMessage("enhanceQuality")
+	if recommendations != "" {
+		userMessage = fmt.Sprintf("Enhance this image by applying the following improvements: %s", recommendations)
+	}
+	fullPrompt := "System: " + systemPrompt + "\n\nUser: " + userMessage
+
+	// Call LLM
+	startTime := time.Now()
+	response, err := client.Recognize(context.Background(), imageFile.Path, systemPrompt, userMessage)
+	processingTime := int(time.Since(startTime).Milliseconds())
+
+	if err != nil {
+		return nil, fmt.Errorf("image editing LLM call failed: %w", err)
+	}
+
+	// Save enhanced image to a temporary file (originalPath + ".enhanced")
+	// instead of overwriting the original. The user will decide to accept or reject.
+	enhancedPath := imageFile.Path + ".enhanced"
+	saved, saveErr := extractAndSaveDataURL(response, enhancedPath)
+	if saveErr != nil {
+		log.Printf("runImageEnhancement: failed to save enhanced image: %v", saveErr)
+	}
+
+	if saved {
+		resultJSON, _ := json.Marshal(enhancementResult{
+			Message:      "Image enhancement completed. A preview is available for comparison.",
+			EnhancedPath: enhancedPath,
+			Status:       "pending_approval",
+			Prompt:       fullPrompt,
+		})
+		return &imageActionResult{
+			Result:           string(resultJSON),
+			Provider:         providerName,
+			Model:            modelName,
+			ProcessingTimeMs: processingTime,
+		}, nil
+	}
+
+	// No image data in response — the model returned text only.
+	resultJSON, _ := json.Marshal(enhancementResult{
+		Message: response + "\n\n⚠️ The model did not return enhanced image data. The original file was not modified.",
+		Status:  "no_change",
+		Prompt:  fullPrompt,
+	})
+	log.Printf("runImageEnhancement: LLM returned text-only response (no image data) for %s", imageFile.Path)
+	return &imageActionResult{
+		Result:           string(resultJSON),
+		Provider:         providerName,
+		Model:            modelName,
+		ProcessingTimeMs: processingTime,
+	}, nil
+}
+
 func (s *FlashbacksMCPServer) runImageAction(imagePath, action, question, language string) (*imageActionResult, error) {
 	if language == "" {
 		language = "en"

@@ -136,8 +136,8 @@ export const translationsEn = {
   "trash.saveFailed": "Failed to save trash directory",
 
   // EXIF Backup settings
-  "exifBackup.title": "EXIF Backup",
-  "exifBackup.description": "Configure the directory where original files are backed up before EXIF modifications.",
+  "exifBackup.title": "Backup for Modified Files",
+  "exifBackup.description": "Configure the directory where original files are backed up before modifications: EXIF edits, image quality enhancement, and other visual improvements.",
   "exifBackup.dirLabel": "Backup directory",
   "exifBackup.dirPlaceholder": "Enter path, e.g. C:\\Backups or /home/user/exif-backup",
   "exifBackup.save": "Save",
@@ -679,6 +679,14 @@ export const translationsEn = {
   "llm_ocr.embeddingDimensionUnknown": "Unknown — select a model to detect",
     "llm_ocr.embeddingBatchSize": "Embedding Batch Size",
     "llm_ocr.embeddingBatchSizeDescription": "Number of images processed per embedding API call. Higher values speed up backfill but use more memory.",
+
+  // Image Edit LLM Settings
+  "llm_ocr.imgEditSettings": "Image Edit LLM Settings",
+  "llm_ocr.imgEditSettingsDescription": "Configure AI for image quality enhancement: detail improvement, deblurring, resolution upscaling",
+  "llm_ocr.imgEditSameAsVL": "Using the same provider as VL LLM",
+  "llm_ocr.imgEditSameAsChat": "Using the same provider as Chat LLM",
+  "llm_providers.usageImageEdit": "Image Edit",
+  "llm_providers.usageShortImgEdit": "ImgEdit",
   "llm_ocr.settingsSaved": "Settings saved",
   "llm_ocr.settingsSaveFailed": "Failed to save settings",
   "llm_ocr.notEnabled": "LLM recognition not enabled",
@@ -820,6 +828,8 @@ export const translationsEn = {
   "chat.suggest_text_msg": "What text is in this image?",
   "chat.suggest_similar_msg": "Find similar images by tags using semantic search",
   "chat.suggest_date_msg": "When was this photo taken?",
+  "chat.suggest_enhance": "Enhance image quality",
+  "chat.suggest_enhance_msg": "Analyze this image and suggest quality improvements: enhance details, reduce blur, improve resolution",
   "chat.tool_running": "Running...",
   "chat.thinking": "Thinking...",
   "chat.tool_describe_image": "Image description",
@@ -897,4 +907,11 @@ export const translationsEn = {
   "gallery.folders.imagesCount": "{count} images",
   "gallery.folders.loadMore": "Load more images",
   "gallery.folders.rootFolders": "Gallery Folders",
+
+  // Image Enhancement comparison
+  "enhance.labelBefore": "Before",
+  "enhance.labelAfter": "After",
+  "enhance.accept": "Accept",
+  "enhance.reject": "Reject",
+  "enhance.applying": "Applying...",
  } as const

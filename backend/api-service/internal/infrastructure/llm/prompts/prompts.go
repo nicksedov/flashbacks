@@ -21,6 +21,8 @@ func init() {
 		"prompts/action_tags.txt",
 		"prompts/action_recognize_text.txt",
 		"prompts/action_ask_question.txt",
+		"prompts/action_enhance_quality.txt",
+		"prompts/action_enhance_pre_analysis.txt",
 		"prompts/action_default.txt",
 	}
 
@@ -94,6 +96,12 @@ type ActionPromptData struct {
 	ResponseLanguage string
 }
 
+// EnhanceQualityPromptData holds template data for the enhance quality action.
+type EnhanceQualityPromptData struct {
+	ResponseLanguage           string
+	EnhancementRecommendations string
+}
+
 // RecognizeTextPromptData holds template data for OCR prompts.
 type RecognizeTextPromptData struct {
 	NoTextMessage string
@@ -126,6 +134,11 @@ func BuildActionPrompt(action, question, language string) string {
 			Question:         question,
 			QuestionLanguage: questionLang,
 		})
+	case "enhanceQuality":
+		return RenderPrompt("prompts/action_enhance_quality.txt", EnhanceQualityPromptData{
+			ResponseLanguage:           responseLang,
+			EnhancementRecommendations: question,
+		})
 	default:
 		return LoadPrompt("prompts/action_default.txt")
 	}
@@ -142,9 +155,17 @@ func BuildActionUserMessage(action string) string {
 		return "Recognize and extract all text from this image."
 	case "askQuestion":
 		return "Answer the question about this image."
+	case "enhanceQuality":
+		return "Enhance and improve the quality of this image."
 	default:
 		return "Analyze this image."
 	}
+}
+
+// BuildEnhancePreAnalysisPrompt creates the system prompt for pre-analysis of image quality.
+func BuildEnhancePreAnalysisPrompt(language string) string {
+	responseLang := LanguageCodeToName(language)
+	return RenderPrompt("prompts/action_enhance_pre_analysis.txt", ActionPromptData{ResponseLanguage: responseLang})
 }
 
 // ParseTags parses a comma-separated or newline-separated list of tags.

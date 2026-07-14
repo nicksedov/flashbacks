@@ -5,11 +5,15 @@ import (
 	"errors"
 	"fmt"
 	"image"
+	"image/gif"
 	"image/jpeg"
+	"image/png"
 	"math"
 	"os"
+	"path/filepath"
 	"strings"
 
+	"github.com/deepteams/webp"
 	"github.com/disintegration/imaging"
 )
 
@@ -118,4 +122,100 @@ func resizeImageForLLM(imagePath string, maxMegapixels float64) ([]byte, string,
 	}
 
 	return buf.Bytes(), mediaType, nil
+}
+
+// prepareImageForEditing reads an image from the given path, downsizes it if its
+// pixel count exceeds maxMegapixels (snapping dimensions to multiples of 32),
+// and returns the resized JPEG bytes along with the original width, height, and
+// file extension (including the leading dot, e.g. ".jpg").
+func prepareImageForEditing(imagePath string, maxMegapixels float64) (resizedData []byte, origWidth, origHeight int, origExt string, err error) {
+	file, err := os.Open(imagePath)
+	if err != nil {
+		return nil, 0, 0, "", fmt.Errorf("failed to open image: %w", err)
+	}
+	defer file.Close()
+
+	img, _, err := image.Decode(file)
+	if err != nil {
+		return nil, 0, 0, "", &DecodeError{Path: imagePath, Err: err}
+	}
+
+	bounds := img.Bounds()
+	origWidth = bounds.Dx()
+	origHeight = bounds.Dy()
+	origExt = strings.ToLower(filepath.Ext(imagePath))
+
+	if origWidth > 0 && origHeight > 0 && maxMegapixels > 0 {
+		megapixels := float64(origWidth*origHeight) / 1_000_000.0
+		if megapixels > maxMegapixels {
+			scale := math.Sqrt(maxMegapixels * 1_000_000.0 / float64(origWidth*origHeight))
+			newWidth := int(math.Round(float64(origWidth) * scale))
+			if newWidth > 0 {
+				newWidth = roundToMultipleOf32(newWidth)
+				scale = float64(newWidth) / float64(origWidth)
+				newHeight := int(math.Round(float64(origHeight) * scale))
+				if newHeight > 0 {
+					newHeight = roundToMultipleOf32(newHeight)
+					img = imaging.Resize(img, newWidth, newHeight, imaging.Lanczos)
+				}
+			}
+		}
+	}
+
+	var buf bytes.Buffer
+	if err := jpeg.Encode(&buf, img, &jpeg.Options{Quality: 85}); err != nil {
+		return nil, 0, 0, "", fmt.Errorf("failed to encode image: %w", err)
+	}
+
+	return buf.Bytes(), origWidth, origHeight, origExt, nil
+}
+
+// postProcessEditedImage resizes the result image (which is always PNG from the
+// API) to the target dimensions and converts it to the format indicated by
+// targetExt (e.g. ".jpg", ".png", ".webp", ".gif").
+func postProcessEditedImage(data []byte, targetWidth, targetHeight int, targetExt string) ([]byte, error) {
+	img, _, err := image.Decode(bytes.NewReader(data))
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode result image: %w", err)
+	}
+
+	bounds := img.Bounds()
+	if bounds.Dx() != targetWidth || bounds.Dy() != targetHeight {
+		img = imaging.Resize(img, targetWidth, targetHeight, imaging.Lanczos)
+	}
+
+	var buf bytes.Buffer
+	switch strings.ToLower(targetExt) {
+	case ".jpg", ".jpeg":
+		err = jpeg.Encode(&buf, img, &jpeg.Options{Quality: 92})
+	case ".png":
+		err = png.Encode(&buf, img)
+	case ".gif":
+		err = gif.Encode(&buf, img, nil)
+	case ".webp":
+		err = webp.Encode(&buf, img, &webp.Options{Quality: 92})
+	default:
+		err = png.Encode(&buf, img)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to encode result image as %s: %w", targetExt, err)
+	}
+
+	return buf.Bytes(), nil
+}
+
+// mediaTypeByExt returns the MIME type for a file extension.
+func mediaTypeByExt(ext string) string {
+	switch strings.ToLower(ext) {
+	case ".jpg", ".jpeg":
+		return "image/jpeg"
+	case ".png":
+		return "image/png"
+	case ".gif":
+		return "image/gif"
+	case ".webp":
+		return "image/webp"
+	default:
+		return "image/png"
+	}
 }

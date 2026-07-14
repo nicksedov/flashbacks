@@ -79,17 +79,28 @@ func (c *AlibabaClient) isAsyncEditModel() bool {
 
 // ─── Client interface: Recognize (image-to-image) ──────────────────
 
+// alibabaMinMegapixels must be above pixel count required by the Alibaba
+// DashScope multimodal generation API (≥ 0.6 MP).
+const alibabaMinMegapixels = 1.0
+
+// alibabaMaxMegapixels is the maximum pixel count accepted by the Alibaba
+// DashScope multimodal generation API. Images above 4 MP are downsized before
+// submission. This is independent of LLM_MAX_IMAGE_MEGAPIXELS.
+const alibabaMaxMegapixels = 4.0
+
 // Recognize performs image-to-image editing via the Alibaba DashScope API.
 //
-// The image is automatically resized to 4 MP before submission. The result
-// (always PNG from the API) is scaled back to the original image dimensions
-// and converted to the original file format.
+// Images are automatically resized to fit within [0.6 MP, 4.0 MP] before
+// submission. Upscaled images keep their improved resolution — the result is
+// NOT shrunk back to the original (low) dimensions. The result (always PNG
+// from the API) is converted to the original file format.
 //
 // Returns the result as a data URL string (data:image/...;base64,...) that
 // callers can extract and save.
 func (c *AlibabaClient) Recognize(ctx context.Context, imagePath string, systemPrompt string, userMessage string) (string, error) {
-	// Step 1: Prepare the image — resize to max 4 MP, capture original dimensions/format.
-	resizedData, origWidth, origHeight, origExt, err := prepareImageForEditing(imagePath, c.MaxImageMegapixels)
+	// Step 1: Prepare the image — downsize to ≤ 4 MP, upscale to ≥ 0.6 MP.
+	// orig* = dimensions before any resize, effective* = dimensions after.
+	resizedData, origWidth, origHeight, effectiveWidth, effectiveHeight, origExt, err := prepareImageForEditing(imagePath, alibabaMaxMegapixels, alibabaMinMegapixels)
 	if err != nil {
 		return "", fmt.Errorf("Alibaba recognize: failed to prepare image: %w", err)
 	}
@@ -113,8 +124,14 @@ func (c *AlibabaClient) Recognize(ctx context.Context, imagePath string, systemP
 		return "", err
 	}
 
-	// Step 3: Post-process — resize back to original dimensions and convert format.
-	finalData, err := postProcessEditedImage(resultData, origWidth, origHeight, origExt)
+	// Step 3: Post-process — choose target dimensions:
+	// - Upscaled: keep effective dimensions (preserve improved resolution)
+	// - Downsized or unchanged: restore original dimensions
+	targetWidth, targetHeight := origWidth, origHeight
+	if effectiveWidth > origWidth || effectiveHeight > origHeight {
+		targetWidth, targetHeight = effectiveWidth, effectiveHeight
+	}
+	finalData, err := postProcessEditedImage(resultData, targetWidth, targetHeight, origExt)
 	if err != nil {
 		return "", fmt.Errorf("Alibaba recognize: failed to post-process result: %w", err)
 	}

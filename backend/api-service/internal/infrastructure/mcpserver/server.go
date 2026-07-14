@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/flashbacks/api-service/internal/application/agent"
 	"github.com/flashbacks/api-service/internal/application/imaging"
@@ -68,6 +69,7 @@ func (s *FlashbacksMCPServer) ToolDefinitions() []llm.ToolDefinition {
 		generateTagsToolDef(),
 		askAboutImageToolDef(),
 		enhanceImageQualityToolDef(),
+		resizeImageToolDef(),
 		searchByDateToolDef(),
 		searchByLocationToolDef(),
 		searchByPathToolDef(),
@@ -102,6 +104,8 @@ func (s *FlashbacksMCPServer) ExecuteTool(ctx context.Context, name string, argu
 		return s.executeAskAboutImage(ctx, arguments)
 	case "enhance_image_quality":
 		return s.executeEnhanceImageQuality(ctx, arguments)
+	case "resize_image":
+		return s.executeResizeImage(ctx, arguments)
 	case "search_by_date":
 		return s.executeSearchByDate(ctx, arguments)
 	case "search_by_location":
@@ -192,4 +196,25 @@ func (s *FlashbacksMCPServer) createImgEditClient() (llm.Client, string, string,
 	}
 
 	return client, provider.Name, provider.Model, nil
+}
+
+// isPathInGalleryFolder checks whether the given file path resides under any
+// configured gallery folder. It queries the gallery_folders table directly
+// to avoid importing the handler helpers package.
+func (s *FlashbacksMCPServer) isPathInGalleryFolder(path string) (bool, error) {
+	var folders []struct {
+		Path string `json:"path"`
+	}
+	if err := s.db.Table("gallery_folders").Select("path").Find(&folders).Error; err != nil {
+		return false, fmt.Errorf("failed to query gallery folders: %w", err)
+	}
+
+	for _, f := range folders {
+		if path == f.Path ||
+			strings.HasPrefix(path, f.Path+"/") ||
+			strings.HasPrefix(path, f.Path+"\\") {
+			return true, nil
+		}
+	}
+	return false, nil
 }

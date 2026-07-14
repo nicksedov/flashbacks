@@ -82,7 +82,7 @@ type ollamaResponseMessage struct {
 // Recognize performs OCR using Ollama
 func (c *OllamaClient) Recognize(ctx context.Context, imagePath string, systemPrompt string, userMessage string) (string, error) {
 	// Read and optionally resize image
-	imgData, _, err := resizeImageForLLM(imagePath, c.MaxImageMegapixels)
+	imgData, _, err := DownsizeImageForLLM(imagePath)
 	if err != nil {
 		return "", fmt.Errorf("failed to prepare image: %w", err)
 	}

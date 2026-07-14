@@ -130,7 +130,7 @@ type deepSeekChoiceMessage struct {
 // compatibility with providers that reject a leading system role or
 // require all content fields to be lists (multimodal format).
 func (c *DeepSeekClient) Recognize(ctx context.Context, imagePath string, systemPrompt string, userMessage string) (string, error) {
-	imgData, mediaType, err := resizeImageForLLM(imagePath, 4.0)
+	imgData, mediaType, err := DownsizeImageForLLM(imagePath)
 	if err != nil {
 		return "", fmt.Errorf("failed to prepare image: %w", err)
 	}

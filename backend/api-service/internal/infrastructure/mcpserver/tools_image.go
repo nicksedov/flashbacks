@@ -68,6 +68,13 @@ type EnhanceImageQualityInput struct {
 	Instruction string `json:"instruction,omitempty" jsonschema:"Optional specific enhancement instruction (e.g. 'increase resolution', 'reduce blur', 'improve detail')"`
 }
 
+type ResizeImageInput struct {
+	ImagePath  string `json:"image_path" jsonschema:"Path to the source image file"`
+	OutputPath string `json:"output_path,omitempty" jsonschema:"Where to save the resized image (defaults to image_path + '.resized')"`
+	MaxWidth   int    `json:"max_width,omitempty" jsonschema:"Maximum width in pixels (aspect ratio preserved)"`
+	MaxHeight  int    `json:"max_height,omitempty" jsonschema:"Maximum height in pixels (aspect ratio preserved)"`
+}
+
 type ImageAnalysisOutput struct {
 	Content          string   `json:"content,omitempty"`
 	Tags             []string `json:"tags,omitempty"`
@@ -137,6 +144,23 @@ func enhanceImageQualityToolDef() llm.ToolDefinition {
 	}
 }
 
+func resizeImageToolDef() llm.ToolDefinition {
+	return llm.ToolDefinition{
+		Name:        "resize_image",
+		Description: "Resize an image to fit within maximum width and/or height while preserving aspect ratio. At least one of max_width or max_height must be specified. The resized image is saved as JPEG.",
+		Parameters: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"image_path":  map[string]any{"type": "string", "description": "Path to the source image file"},
+				"output_path": map[string]any{"type": "string", "description": "Where to save the resized image (defaults to image_path + '.resized')"},
+				"max_width":   map[string]any{"type": "integer", "description": "Maximum width in pixels (aspect ratio preserved)"},
+				"max_height":  map[string]any{"type": "integer", "description": "Maximum height in pixels (aspect ratio preserved)"},
+			},
+			"required": []string{"image_path"},
+		},
+	}
+}
+
 // --- Registration ---
 
 func (s *FlashbacksMCPServer) registerImageTools() {
@@ -159,6 +183,11 @@ func (s *FlashbacksMCPServer) registerImageTools() {
 		Name:        "enhance_image_quality",
 		Description: "Analyze and improve image quality: enhance details, reduce blur, upscale resolution. Creates a backup of the original image before modification.",
 	}, s.handleEnhanceImageQuality)
+
+	mcp.AddTool(s.server, &mcp.Tool{
+		Name:        "resize_image",
+		Description: "Resize an image to fit within a target megapixel limit. Dimensions are proportionally scaled and snapped to multiples of 32. The resized image is saved as JPEG next to the original.",
+	}, s.handleResizeImage)
 }
 
 // --- MCP SDK handlers ---
@@ -235,6 +264,26 @@ func (s *FlashbacksMCPServer) handleAskAboutImage(ctx context.Context, req *mcp.
 	}, output, nil
 }
 
+func (s *FlashbacksMCPServer) handleResizeImage(ctx context.Context, req *mcp.CallToolRequest, input ResizeImageInput) (*mcp.CallToolResult, ImageAnalysisOutput, error) {
+	outputPath := input.OutputPath
+	if outputPath == "" {
+		outputPath = input.ImagePath + ".resized"
+	}
+	if outputPath == input.ImagePath {
+		return nil, ImageAnalysisOutput{}, fmt.Errorf("output_path must differ from image_path to avoid overwriting the source file")
+	}
+
+	if err := llm.ResizeImage(input.ImagePath, outputPath, input.MaxWidth, input.MaxHeight); err != nil {
+		return nil, ImageAnalysisOutput{}, fmt.Errorf("failed to resize image: %w", err)
+	}
+
+	result := fmt.Sprintf("Image resized: %s → %s (max %dx%d px, aspect ratio preserved)",
+		input.ImagePath, outputPath, input.MaxWidth, input.MaxHeight)
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{&mcp.TextContent{Text: result}},
+	}, ImageAnalysisOutput{}, nil
+}
+
 // --- Direct execution methods (for agent) ---
 
 func (s *FlashbacksMCPServer) executeRecognizeText(ctx context.Context, args json.RawMessage) (string, error) {
@@ -275,6 +324,27 @@ func (s *FlashbacksMCPServer) executeAskAboutImage(ctx context.Context, args jso
 		return "", err
 	}
 	return result.Result, nil
+}
+
+func (s *FlashbacksMCPServer) executeResizeImage(ctx context.Context, args json.RawMessage) (string, error) {
+	var input ResizeImageInput
+	if err := json.Unmarshal(args, &input); err != nil {
+		return "", fmt.Errorf("invalid arguments: %w", err)
+	}
+
+	outputPath := input.OutputPath
+	if outputPath == "" {
+		outputPath = input.ImagePath + ".resized"
+	}
+	if outputPath == input.ImagePath {
+		return "", fmt.Errorf("output_path must differ from image_path to avoid overwriting the source file")
+	}
+
+	if err := llm.ResizeImage(input.ImagePath, outputPath, input.MaxWidth, input.MaxHeight); err != nil {
+		return "", fmt.Errorf("failed to resize image: %w", err)
+	}
+
+	return fmt.Sprintf("Image resized: %s → %s (max %dx%d px, aspect ratio preserved)", input.ImagePath, outputPath, input.MaxWidth, input.MaxHeight), nil
 }
 
 func (s *FlashbacksMCPServer) executeEnhanceImageQuality(ctx context.Context, args json.RawMessage) (string, error) {
@@ -358,9 +428,17 @@ func (s *FlashbacksMCPServer) runImageEnhancement(imagePath, instruction, langua
 		language = "en"
 	}
 
-	// Resolve image file from DB
-	var imageFile domain.ImageFile
-	if err := s.db.Where("path = ?", imagePath).First(&imageFile).Error; err != nil {
+	// Validate that the image exists on disk and is within a gallery folder.
+	// We accept both DB-tracked and temporary files (e.g. .resized outputs from
+	// the resize_image tool) as long as they reside under a gallery folder.
+	if _, statErr := os.Stat(imagePath); statErr != nil {
+		return nil, fmt.Errorf("image not found: %s", imagePath)
+	}
+	inGallery, galleryErr := s.isPathInGalleryFolder(imagePath)
+	if galleryErr != nil {
+		return nil, fmt.Errorf("failed to verify gallery access: %w", galleryErr)
+	}
+	if !inGallery {
 		return nil, fmt.Errorf("image not found: %s", imagePath)
 	}
 
@@ -373,7 +451,7 @@ func (s *FlashbacksMCPServer) runImageEnhancement(imagePath, instruction, langua
 	}
 	preAnalysisPrompt := prompts.BuildEnhancePreAnalysisPrompt(language)
 	preAnalysisResult, analyzeErr := vlClient.Recognize(
-		context.Background(), imageFile.Path,
+		context.Background(), imagePath,
 		preAnalysisPrompt,
 		"Analyze this image for quality issues and provide enhancement recommendations.",
 	)
@@ -400,7 +478,7 @@ func (s *FlashbacksMCPServer) runImageEnhancement(imagePath, instruction, langua
 
 	// Call LLM
 	startTime := time.Now()
-	response, err := client.Recognize(context.Background(), imageFile.Path, systemPrompt, userMessage)
+	response, err := client.Recognize(context.Background(), imagePath, systemPrompt, userMessage)
 	processingTime := int(time.Since(startTime).Milliseconds())
 
 	if err != nil {
@@ -409,7 +487,7 @@ func (s *FlashbacksMCPServer) runImageEnhancement(imagePath, instruction, langua
 
 	// Save enhanced image to a temporary file (originalPath + ".enhanced")
 	// instead of overwriting the original. The user will decide to accept or reject.
-	enhancedPath := imageFile.Path + ".enhanced"
+	enhancedPath := imagePath + ".enhanced"
 	saved, saveErr := extractAndSaveDataURL(response, enhancedPath)
 	if saveErr != nil {
 		log.Printf("runImageEnhancement: failed to save enhanced image: %v", saveErr)
@@ -436,7 +514,7 @@ func (s *FlashbacksMCPServer) runImageEnhancement(imagePath, instruction, langua
 		Status:  "no_change",
 		Prompt:  fullPrompt,
 	})
-	log.Printf("runImageEnhancement: LLM returned text-only response (no image data) for %s", imageFile.Path)
+	log.Printf("runImageEnhancement: LLM returned text-only response (no image data) for %s", imagePath)
 	return &imageActionResult{
 		Result:           string(resultJSON),
 		Provider:         providerName,

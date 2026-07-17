@@ -444,7 +444,9 @@ func (s *FlashbacksMCPServer) runImageEnhancement(imagePath, instruction, langua
 
 	// Step 1: Pre-analyze image with VL LLM to generate enhancement recommendations.
 	// This step is mandatory — it provides image-specific guidance to the editing LLM.
-	recommendations := instruction
+	// The instruction parameter is intentionally ignored here: the general enhancement
+	// guidelines are already in the system prompt, and the pre-analysis below provides
+	// image-specific, actionable recommendations in English.
 	vlClient, _, _, vlErr := s.createVLClient()
 	if vlErr != nil {
 		return nil, fmt.Errorf("pre-analysis VL client unavailable: %w", vlErr)
@@ -455,12 +457,9 @@ func (s *FlashbacksMCPServer) runImageEnhancement(imagePath, instruction, langua
 		preAnalysisPrompt,
 		"Analyze this image for quality issues and provide enhancement recommendations.",
 	)
+	var recommendations string
 	if analyzeErr == nil && preAnalysisResult != "" {
-		if recommendations != "" {
-			recommendations = recommendations + "\n\nAuto-detected issues:\n" + preAnalysisResult
-		} else {
-			recommendations = preAnalysisResult
-		}
+		recommendations = preAnalysisResult
 	}
 
 	// Step 2: Call image editing LLM with dynamic, image-specific recommendations

@@ -98,8 +98,8 @@ function ToolCallItem({ toolCall, isStreaming }: { toolCall: ChatToolCallInfo; i
       {expanded && toolCall.result && (
         <div className="border-t border-border/50 px-2 py-1.5 max-h-40 overflow-y-auto bg-muted/30">
           <pre className="whitespace-pre-wrap text-xs font-mono text-muted-foreground">
-            {toolCall.result.length > 2000
-              ? toolCall.result.slice(0, 2000) + "..."
+            {toolCall.result.length > 4000
+              ? toolCall.result.slice(0, 4000) + "..."
               : toolCall.result}
           </pre>
         </div>

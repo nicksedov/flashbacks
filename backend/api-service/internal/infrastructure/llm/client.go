@@ -12,6 +12,17 @@ type Client interface {
 	ListModels(ctx context.Context) ([]ModelInfo, error)
 }
 
+// ImageEditor is an optional interface for clients that support native
+// image-to-image editing (quality enhancement, style transfer, etc.).
+// Clients that implement this interface use a dedicated image editing API
+// (e.g. DashScope multimodal generation) instead of the general-purpose
+// chat completions endpoint.
+type ImageEditor interface {
+	// EditImage performs image-to-image editing and returns the result
+	// as a data URL string (data:image/...;base64,...).
+	EditImage(ctx context.Context, imagePath string, systemPrompt string, userMessage string) (string, error)
+}
+
 // ModelInfo represents information about an available LLM model
 type ModelInfo struct {
 	ID            string   `json:"id"`

@@ -476,9 +476,15 @@ func (s *FlashbacksMCPServer) runImageEnhancement(imagePath, instruction, langua
 	}
 	fullPrompt := "System: " + systemPrompt + "\n\nUser: " + userMessage
 
-	// Call LLM
+	// Call LLM — use native image editing API when available (e.g. Alibaba DashScope),
+	// otherwise fall back to general-purpose VL recognition.
 	startTime := time.Now()
-	response, err := client.Recognize(context.Background(), imagePath, systemPrompt, userMessage)
+	var response string
+	if editor, ok := client.(llm.ImageEditor); ok {
+		response, err = editor.EditImage(context.Background(), imagePath, systemPrompt, userMessage)
+	} else {
+		response, err = client.Recognize(context.Background(), imagePath, systemPrompt, userMessage)
+	}
 	processingTime := int(time.Since(startTime).Milliseconds())
 
 	if err != nil {

@@ -88,7 +88,80 @@ const alibabaMinMegapixels = 1.0
 // submission. This is independent of LLM_MAX_IMAGE_MEGAPIXELS.
 const alibabaMaxMegapixels = 4.0
 
-// Recognize performs image-to-image editing via the Alibaba DashScope API.
+// Recognize performs vision-language (VL) recognition using the Alibaba
+// DashScope OpenAI-compatible chat completions API. It reads the image from
+// imagePath, downsizes it if needed, and sends it alongside systemPrompt and
+// userMessage to the /chat/completions endpoint via the compatible client.
+//
+// Returns the model's text response. If the model returns embedded images in
+// its response, they are prepended as data URLs so callers can extract and
+// save them (used by image enhancement workflows).
+func (c *AlibabaClient) Recognize(ctx context.Context, imagePath string, systemPrompt string, userMessage string) (string, error) {
+	// Read and optionally resize image.
+	imgData, mediaType, err := DownsizeImageForLLM(imagePath)
+	if err != nil {
+		return "", fmt.Errorf("Alibaba recognize: failed to prepare image: %w", err)
+	}
+
+	// Encode image to base64 data URL.
+	base64Img := base64.StdEncoding.EncodeToString(imgData)
+	dataURL := fmt.Sprintf("data:%s;base64,%s", mediaType, base64Img)
+
+	// Build user content list, prepending system prompt for compatibility
+	// with providers that require all messages to use the multimodal
+	// content-list format.
+	userContent := []alibabaContentPart{
+		{Type: "text", Text: systemPrompt + "\n\n" + userMessage},
+		{Type: "image_url", ImageURL: &alibabaImageURL{URL: dataURL}},
+	}
+
+	req := alibabaRequest{
+		Model: c.Model,
+		Messages: []alibabaChatMessage{
+			{
+				Role:    "user",
+				Content: userContent,
+			},
+		},
+		MaxTokens: 4000,
+	}
+
+	var resp alibabaResponse
+	if err := c.compatibleClient.doJSON(ctx, http.MethodPost, "/chat/completions", req, &resp, nil); err != nil {
+		return "", fmt.Errorf("Alibaba recognize: %w", err)
+	}
+
+	if len(resp.Choices) == 0 {
+		return "", fmt.Errorf("no choices in Alibaba recognition response")
+	}
+
+	content := resp.Choices[0].Message.Content
+	text := alibabaExtractContentText(content)
+
+	// If the response has multimodal content with embedded images,
+	// prepend them as data URLs so callers can extract and save them.
+	images := extractContentImages(content)
+	for _, img := range images {
+		imgDataURL := fmt.Sprintf("data:%s;base64,%s", img.MIMEType, base64.StdEncoding.EncodeToString(img.Data))
+		text = imgDataURL + "\n" + text
+	}
+
+	// Debug: log content type to diagnose missing images.
+	switch content.(type) {
+	case string:
+		// plain text — expected for VL models that don't output images
+	case []interface{}:
+		logContentDebug(content)
+	default:
+		log.Printf("Alibaba recognize: unexpected content type %T", content)
+	}
+
+	return text, nil
+}
+
+// EditImage performs image-to-image editing via the Alibaba DashScope
+// multimodal generation API. This is the native DashScope endpoint for
+// quality enhancement, style transfer, and other image manipulation.
 //
 // Images are automatically resized to fit within [0.6 MP, 4.0 MP] before
 // submission. Upscaled images keep their improved resolution — the result is
@@ -97,12 +170,11 @@ const alibabaMaxMegapixels = 4.0
 //
 // Returns the result as a data URL string (data:image/...;base64,...) that
 // callers can extract and save.
-func (c *AlibabaClient) Recognize(ctx context.Context, imagePath string, systemPrompt string, userMessage string) (string, error) {
+func (c *AlibabaClient) EditImage(ctx context.Context, imagePath string, systemPrompt string, userMessage string) (string, error) {
 	// Step 1: Prepare the image — downsize to ≤ 4 MP, upscale to ≥ 0.6 MP.
-	// orig* = dimensions before any resize, effective* = dimensions after.
 	resizedData, origWidth, origHeight, effectiveWidth, effectiveHeight, origExt, err := prepareImageForEditing(imagePath, alibabaMaxMegapixels, alibabaMinMegapixels)
 	if err != nil {
-		return "", fmt.Errorf("Alibaba recognize: failed to prepare image: %w", err)
+		return "", fmt.Errorf("Alibaba edit image: failed to prepare image: %w", err)
 	}
 
 	dataURL := "data:image/jpeg;base64," + base64.StdEncoding.EncodeToString(resizedData)
@@ -133,7 +205,7 @@ func (c *AlibabaClient) Recognize(ctx context.Context, imagePath string, systemP
 	}
 	finalData, err := postProcessEditedImage(resultData, targetWidth, targetHeight, origExt)
 	if err != nil {
-		return "", fmt.Errorf("Alibaba recognize: failed to post-process result: %w", err)
+		return "", fmt.Errorf("Alibaba edit image: failed to post-process result: %w", err)
 	}
 
 	// Return as data URL so callers can extract and save the image.
@@ -530,8 +602,9 @@ func guessMIMEType(url string) string {
 
 // alibabaRequest is the request body for the DashScope OpenAI-compatible chat API.
 type alibabaRequest struct {
-	Model    string               `json:"model"`
-	Messages []alibabaChatMessage `json:"messages"`
+	Model     string               `json:"model"`
+	Messages  []alibabaChatMessage `json:"messages"`
+	MaxTokens int                  `json:"max_tokens,omitempty"`
 }
 
 type alibabaChatMessage struct {
@@ -686,6 +759,7 @@ func (c *AlibabaClient) ListModels(ctx context.Context) ([]ModelInfo, error) {
 	return models, nil
 }
 
-// Ensure AlibabaClient implements both Client and ChatClient.
+// Ensure AlibabaClient implements Client, ChatClient, and ImageEditor.
 var _ Client = (*AlibabaClient)(nil)
 var _ ChatClient = (*AlibabaClient)(nil)
+var _ ImageEditor = (*AlibabaClient)(nil)

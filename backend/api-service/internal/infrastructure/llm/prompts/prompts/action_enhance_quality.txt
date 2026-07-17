@@ -8,13 +8,6 @@ Apply the following enhancements to the image:
 - Upscale resolution where it would improve quality
 - Fix color casts and exposure issues
 
-{{if .EnhancementRecommendations}}
-Specific enhancement recommendations identified for this image:
-{{.EnhancementRecommendations}}
-
-Apply these specific improvements in addition to the general enhancements above.
-{{end}}
-
 CRITICAL OUTPUT FORMAT: You MUST return the enhanced image as a base64-encoded data URL. Start your response with:
 data:image/jpeg;base64,<base64_encoded_jpeg_data>
 

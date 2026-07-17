@@ -96,12 +96,6 @@ type ActionPromptData struct {
 	ResponseLanguage string
 }
 
-// EnhanceQualityPromptData holds template data for the enhance quality action.
-type EnhanceQualityPromptData struct {
-	ResponseLanguage           string
-	EnhancementRecommendations string
-}
-
 // RecognizeTextPromptData holds template data for OCR prompts.
 type RecognizeTextPromptData struct {
 	NoTextMessage string
@@ -135,10 +129,7 @@ func BuildActionPrompt(action, question, language string) string {
 			QuestionLanguage: questionLang,
 		})
 	case "enhanceQuality":
-		return RenderPrompt("prompts/action_enhance_quality.txt", EnhanceQualityPromptData{
-			ResponseLanguage:           responseLang,
-			EnhancementRecommendations: question,
-		})
+		return RenderPrompt("prompts/action_enhance_quality.txt", ActionPromptData{ResponseLanguage: responseLang})
 	default:
 		return LoadPrompt("prompts/action_default.txt")
 	}

@@ -123,18 +123,7 @@ func DownsizeImageForLLM(imagePath string) ([]byte, string, error) {
 		return nil, "", fmt.Errorf("failed to encode image: %w", err)
 	}
 
-	mediaType := "image/jpeg"
-	ext := strings.ToLower(imagePath)
-	switch {
-	case strings.HasSuffix(ext, ".png"):
-		mediaType = "image/png"
-	case strings.HasSuffix(ext, ".gif"):
-		mediaType = "image/gif"
-	case strings.HasSuffix(ext, ".webp"):
-		mediaType = "image/webp"
-	case strings.HasSuffix(ext, ".tiff") || strings.HasSuffix(ext, ".tif"):
-		mediaType = "image/tiff"
-	}
+	mediaType := mediaTypeByExt(filepath.Ext(imagePath))
 
 	return buf.Bytes(), mediaType, nil
 }

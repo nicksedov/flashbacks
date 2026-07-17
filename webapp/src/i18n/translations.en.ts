@@ -829,7 +829,7 @@ export const translationsEn = {
   "chat.suggest_similar_msg": "Find similar images by tags using semantic search",
   "chat.suggest_date_msg": "When was this photo taken?",
   "chat.suggest_enhance": "Enhance image quality",
-  "chat.suggest_enhance_msg": "Analyze this image and suggest quality improvements: enhance details, reduce blur, improve resolution",
+  "chat.suggest_enhance_msg": "Improve the quality of this image: enhance details, reduce blur, improve resolution",
   "chat.tool_running": "Running...",
   "chat.thinking": "Thinking...",
   "chat.tool_describe_image": "Image description",

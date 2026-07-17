@@ -132,7 +132,7 @@ func askAboutImageToolDef() llm.ToolDefinition {
 func enhanceImageQualityToolDef() llm.ToolDefinition {
 	return llm.ToolDefinition{
 		Name:        "enhance_image_quality",
-		Description: "Analyze and improve image quality: enhance details, reduce blur, upscale resolution. Creates a backup of the original image before modification.",
+		Description: "Improve image quality (automatically analyzes the image first): enhance details, reduce blur, upscale resolution. Creates a backup of the original image before modification. Call directly — no pre-analysis needed.",
 		Parameters: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -181,7 +181,7 @@ func (s *FlashbacksMCPServer) registerImageTools() {
 
 	mcp.AddTool(s.server, &mcp.Tool{
 		Name:        "enhance_image_quality",
-		Description: "Analyze and improve image quality: enhance details, reduce blur, upscale resolution. Creates a backup of the original image before modification.",
+		Description: "Improve image quality (automatically analyzes the image first): enhance details, reduce blur, upscale resolution. Creates a backup of the original image before modification. Call directly — no pre-analysis needed.",
 	}, s.handleEnhanceImageQuality)
 
 	mcp.AddTool(s.server, &mcp.Tool{

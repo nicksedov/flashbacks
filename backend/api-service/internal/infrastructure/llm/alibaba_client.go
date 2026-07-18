@@ -16,6 +16,8 @@ import (
 	"time"
 
 	_ "github.com/deepteams/webp"
+
+	"github.com/flashbacks/api-service/internal/infrastructure/imaging"
 )
 
 // AlibabaClient implements Client for Alibaba Cloud DashScope (MaaS) API.
@@ -98,7 +100,7 @@ const alibabaMaxMegapixels = 4.0
 // save them (used by image enhancement workflows).
 func (c *AlibabaClient) Recognize(ctx context.Context, imagePath string, systemPrompt string, userMessage string) (string, error) {
 	// Read and optionally resize image.
-	imgData, mediaType, err := DownsizeImageForLLM(imagePath)
+	imgData, mediaType, err := imaging.DownsizeImageForLLM(imagePath)
 	if err != nil {
 		return "", fmt.Errorf("Alibaba recognize: failed to prepare image: %w", err)
 	}
@@ -172,7 +174,7 @@ func (c *AlibabaClient) Recognize(ctx context.Context, imagePath string, systemP
 // callers can extract and save.
 func (c *AlibabaClient) EditImage(ctx context.Context, imagePath string, systemPrompt string, userMessage string) (string, error) {
 	// Step 1: Prepare the image — downsize to ≤ 4 MP, upscale to ≥ 0.6 MP.
-	resizedData, origWidth, origHeight, effectiveWidth, effectiveHeight, origExt, err := prepareImageForEditing(imagePath, alibabaMaxMegapixels, alibabaMinMegapixels)
+	resizedData, origWidth, origHeight, effectiveWidth, effectiveHeight, origExt, err := imaging.PrepareImageForEditing(imagePath, alibabaMaxMegapixels, alibabaMinMegapixels)
 	if err != nil {
 		return "", fmt.Errorf("Alibaba edit image: failed to prepare image: %w", err)
 	}
@@ -203,14 +205,14 @@ func (c *AlibabaClient) EditImage(ctx context.Context, imagePath string, systemP
 	if effectiveWidth > origWidth || effectiveHeight > origHeight {
 		targetWidth, targetHeight = effectiveWidth, effectiveHeight
 	}
-	finalData, err := postProcessEditedImage(resultData, targetWidth, targetHeight, origExt)
+	finalData, err := imaging.PostProcessEditedImage(resultData, targetWidth, targetHeight, origExt)
 	if err != nil {
 		return "", fmt.Errorf("Alibaba edit image: failed to post-process result: %w", err)
 	}
 
 	// Return as data URL so callers can extract and save the image.
 	resultDataURL := fmt.Sprintf("data:%s;base64,%s",
-		mediaTypeByExt(origExt),
+		imaging.MediaTypeByExt(origExt),
 		base64.StdEncoding.EncodeToString(finalData))
 
 	return resultDataURL, nil

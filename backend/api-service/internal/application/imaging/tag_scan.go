@@ -8,6 +8,7 @@ import (
 
 	"github.com/flashbacks/api-service/internal/application/background"
 	"github.com/flashbacks/api-service/internal/domain"
+	imgutil "github.com/flashbacks/api-service/internal/infrastructure/imaging"
 	"github.com/flashbacks/api-service/internal/infrastructure/llm"
 
 	"gorm.io/gorm"
@@ -506,7 +507,7 @@ func (tsm *TagScanManager) processImage(imageFile domain.ImageFile) {
 
 		// If the error is permanent (e.g. corrupt image file), save a processing
 		// error record so the file won't be retried on subsequent scan passes.
-		if llm.IsPermanentError(err) {
+		if imgutil.IsPermanentError(err) {
 			log.Printf("Tag scan: marking %s as permanently failed (corrupt file)", imageFile.Path)
 			tsm.mu.Lock()
 			tsm.progress.Skipped++

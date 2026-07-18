@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/flashbacks/api-service/internal/domain"
-	"github.com/flashbacks/api-service/internal/infrastructure/llm"
+	imgutil "github.com/flashbacks/api-service/internal/infrastructure/imaging"
 	"github.com/flashbacks/api-service/internal/testutil"
 
 	"github.com/stretchr/testify/assert"
@@ -27,12 +27,12 @@ func TestIsPermanentError_DetectsDecodeErrors(t *testing.T) {
 		},
 		{
 			name:     "DecodeError sentinel with JPEG SOS marker",
-			err:      &llm.DecodeError{Path: "/photo.jpg", Err: fmt.Errorf("image: invalid JPEG format: missing SOS marker")},
+			err:      &imgutil.DecodeError{Path: "/photo.jpg", Err: fmt.Errorf("image: invalid JPEG format: missing SOS marker")},
 			expected: true,
 		},
 		{
 			name:     "DecodeError sentinel wrapped in fmt.Errorf",
-			err:      fmt.Errorf("failed to prepare image: %w", &llm.DecodeError{Path: "/photo.jpg", Err: fmt.Errorf("image: invalid JPEG format: missing SOS marker")}),
+			err:      fmt.Errorf("failed to prepare image: %w", &imgutil.DecodeError{Path: "/photo.jpg", Err: fmt.Errorf("image: invalid JPEG format: missing SOS marker")}),
 			expected: true,
 		},
 		{
@@ -79,7 +79,7 @@ func TestIsPermanentError_DetectsDecodeErrors(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := llm.IsPermanentError(tt.err)
+			result := imgutil.IsPermanentError(tt.err)
 			assert.Equal(t, tt.expected, result)
 		})
 	}

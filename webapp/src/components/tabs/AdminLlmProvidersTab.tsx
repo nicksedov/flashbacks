@@ -350,8 +350,7 @@ export function AdminLlmProvidersTab() {
         if (editingModel !== provider.model) {
           update.model = editingModel
         }
-        const isMasked = /^.{4}\.\.\..{4}$/.test(provider.apiKey) && provider.apiKey.length === 11
-        if (!isMasked && editingApiKey !== provider.apiKey) {
+        if (editingApiKey !== provider.apiKey) {
           update.apiKey = editingApiKey
         }
 

@@ -1,4 +1,4 @@
-package llm
+package imaging
 
 import (
 	"bytes"
@@ -15,7 +15,7 @@ import (
 	"strings"
 
 	"github.com/deepteams/webp"
-	"github.com/disintegration/imaging"
+	imgproc "github.com/disintegration/imaging"
 )
 
 // llmMaxMegapixels reads the LLM_MAX_IMAGE_MEGAPIXELS env var (default 2.4 MP)
@@ -112,7 +112,7 @@ func DownsizeImageForLLM(imagePath string) ([]byte, string, error) {
 				if newHeight > 0 {
 					// Snap y-dimension to nearest multiple of 32
 					newHeight = roundToMultipleOf32(newHeight)
-					img = imaging.Resize(img, newWidth, newHeight, imaging.Lanczos)
+					img = imgproc.Resize(img, newWidth, newHeight, imgproc.Lanczos)
 				}
 			}
 		}
@@ -123,7 +123,7 @@ func DownsizeImageForLLM(imagePath string) ([]byte, string, error) {
 		return nil, "", fmt.Errorf("failed to encode image: %w", err)
 	}
 
-	mediaType := mediaTypeByExt(filepath.Ext(imagePath))
+	mediaType := MediaTypeByExt(filepath.Ext(imagePath))
 
 	return buf.Bytes(), mediaType, nil
 }
@@ -163,7 +163,7 @@ func ResizeImage(srcPath, dstPath string, maxWidth, maxHeight int) error {
 			h = origH
 		}
 		// Fit scales the image to fit within w x h preserving aspect ratio
-		fitted := imaging.Fit(img, w, h, imaging.Lanczos)
+		fitted := imgproc.Fit(img, w, h, imgproc.Lanczos)
 		newW = fitted.Bounds().Dx()
 		newH = fitted.Bounds().Dy()
 		img = fitted
@@ -192,7 +192,7 @@ func ResizeImage(srcPath, dstPath string, maxWidth, maxHeight int) error {
 	return nil
 }
 
-// prepareImageForEditing reads an image from the given path, downsizes it if its
+// PrepareImageForEditing reads an image from the given path, downsizes it if its
 // pixel count exceeds maxMegapixels (snapping dimensions to multiples of 32),
 // and upscales it if the pixel count is below minMegapixels.
 //
@@ -203,7 +203,7 @@ func ResizeImage(srcPath, dstPath string, maxWidth, maxHeight int) error {
 // Post-processing rule: use the original dimensions as the target, UNLESS the
 // image was upscaled (effective > original) — in that case use the effective
 // dimensions so the enhanced image keeps its improved resolution.
-func prepareImageForEditing(imagePath string, maxMegapixels, minMegapixels float64) (resizedData []byte, origWidth, origHeight, effectiveWidth, effectiveHeight int, origExt string, err error) {
+func PrepareImageForEditing(imagePath string, maxMegapixels, minMegapixels float64) (resizedData []byte, origWidth, origHeight, effectiveWidth, effectiveHeight int, origExt string, err error) {
 	file, err := os.Open(imagePath)
 	if err != nil {
 		return nil, 0, 0, 0, 0, "", fmt.Errorf("failed to open image: %w", err)
@@ -235,7 +235,7 @@ func prepareImageForEditing(imagePath string, maxMegapixels, minMegapixels float
 				newHeight := int(math.Round(float64(origHeight) * scale))
 				if newHeight > 0 {
 					newHeight = roundToMultipleOf32(newHeight)
-					img = imaging.Resize(img, newWidth, newHeight, imaging.Lanczos)
+					img = imgproc.Resize(img, newWidth, newHeight, imgproc.Lanczos)
 				}
 			}
 		}
@@ -253,7 +253,7 @@ func prepareImageForEditing(imagePath string, maxMegapixels, minMegapixels float
 				newHeight := int(math.Round(float64(origHeight) * scale))
 				if newHeight > 0 {
 					newHeight = roundToMultipleOf32(newHeight)
-					img = imaging.Resize(img, newWidth, newHeight, imaging.Lanczos)
+					img = imgproc.Resize(img, newWidth, newHeight, imgproc.Lanczos)
 				}
 			}
 		}
@@ -272,10 +272,10 @@ func prepareImageForEditing(imagePath string, maxMegapixels, minMegapixels float
 	return buf.Bytes(), origWidth, origHeight, effectiveWidth, effectiveHeight, origExt, nil
 }
 
-// postProcessEditedImage resizes the result image (which is always PNG from the
+// PostProcessEditedImage resizes the result image (which is always PNG from the
 // API) to the target dimensions and converts it to the format indicated by
 // targetExt (e.g. ".jpg", ".png", ".webp", ".gif").
-func postProcessEditedImage(data []byte, targetWidth, targetHeight int, targetExt string) ([]byte, error) {
+func PostProcessEditedImage(data []byte, targetWidth, targetHeight int, targetExt string) ([]byte, error) {
 	img, _, err := image.Decode(bytes.NewReader(data))
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode result image: %w", err)
@@ -283,7 +283,7 @@ func postProcessEditedImage(data []byte, targetWidth, targetHeight int, targetEx
 
 	bounds := img.Bounds()
 	if bounds.Dx() != targetWidth || bounds.Dy() != targetHeight {
-		img = imaging.Resize(img, targetWidth, targetHeight, imaging.Lanczos)
+		img = imgproc.Resize(img, targetWidth, targetHeight, imgproc.Lanczos)
 	}
 
 	var buf bytes.Buffer
@@ -306,8 +306,8 @@ func postProcessEditedImage(data []byte, targetWidth, targetHeight int, targetEx
 	return buf.Bytes(), nil
 }
 
-// mediaTypeByExt returns the MIME type for a file extension.
-func mediaTypeByExt(ext string) string {
+// MediaTypeByExt returns the MIME type for a file extension.
+func MediaTypeByExt(ext string) string {
 	switch strings.ToLower(ext) {
 	case ".jpg", ".jpeg":
 		return "image/jpeg"

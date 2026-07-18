@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"sync"
 	"time"
+
+	"github.com/flashbacks/api-service/internal/infrastructure/imaging"
 )
 
 // OllamaClient implements Client for Ollama API
@@ -82,7 +84,7 @@ type ollamaResponseMessage struct {
 // Recognize performs OCR using Ollama
 func (c *OllamaClient) Recognize(ctx context.Context, imagePath string, systemPrompt string, userMessage string) (string, error) {
 	// Read and optionally resize image
-	imgData, _, err := DownsizeImageForLLM(imagePath)
+	imgData, _, err := imaging.DownsizeImageForLLM(imagePath)
 	if err != nil {
 		return "", fmt.Errorf("failed to prepare image: %w", err)
 	}

@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/flashbacks/api-service/internal/infrastructure/imaging"
 )
 
 // OpenAIClient implements Client for OpenAI-compatible API
@@ -196,7 +198,7 @@ func extractContentImages(content any) []struct {
 // require all content fields to be lists (multimodal format).
 func (c *OpenAIClient) Recognize(ctx context.Context, imagePath string, systemPrompt string, userMessage string) (string, error) {
 	// Read and optionally resize image
-	imgData, mediaType, err := DownsizeImageForLLM(imagePath)
+	imgData, mediaType, err := imaging.DownsizeImageForLLM(imagePath)
 	if err != nil {
 		return "", fmt.Errorf("failed to prepare image: %w", err)
 	}

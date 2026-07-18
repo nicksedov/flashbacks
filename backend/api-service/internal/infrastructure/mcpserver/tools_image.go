@@ -15,6 +15,7 @@ import (
 
 	"github.com/flashbacks/api-service/internal/application/imaging"
 	"github.com/flashbacks/api-service/internal/domain"
+	imgutil "github.com/flashbacks/api-service/internal/infrastructure/imaging"
 	"github.com/flashbacks/api-service/internal/infrastructure/llm"
 	"github.com/flashbacks/api-service/internal/infrastructure/llm/prompts"
 
@@ -273,7 +274,7 @@ func (s *FlashbacksMCPServer) handleResizeImage(ctx context.Context, req *mcp.Ca
 		return nil, ImageAnalysisOutput{}, fmt.Errorf("output_path must differ from image_path to avoid overwriting the source file")
 	}
 
-	if err := llm.ResizeImage(input.ImagePath, outputPath, input.MaxWidth, input.MaxHeight); err != nil {
+	if err := imgutil.ResizeImage(input.ImagePath, outputPath, input.MaxWidth, input.MaxHeight); err != nil {
 		return nil, ImageAnalysisOutput{}, fmt.Errorf("failed to resize image: %w", err)
 	}
 
@@ -340,7 +341,7 @@ func (s *FlashbacksMCPServer) executeResizeImage(ctx context.Context, args json.
 		return "", fmt.Errorf("output_path must differ from image_path to avoid overwriting the source file")
 	}
 
-	if err := llm.ResizeImage(input.ImagePath, outputPath, input.MaxWidth, input.MaxHeight); err != nil {
+	if err := imgutil.ResizeImage(input.ImagePath, outputPath, input.MaxWidth, input.MaxHeight); err != nil {
 		return "", fmt.Errorf("failed to resize image: %w", err)
 	}
 

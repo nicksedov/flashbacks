@@ -783,3 +783,37 @@ func (c *HTTPExifClient) ExtractPreview(ctx context.Context, filePath string) ([
 
 	return io.ReadAll(resp.Body)
 }
+
+// CopyExif copies all EXIF metadata (including GPS coordinates) from source file
+// to target file via the EXIF microservice. Only JPEG/TIFF formats are supported.
+func (c *HTTPExifClient) CopyExif(ctx context.Context, sourcePath, targetPath string) error {
+	u := fmt.Sprintf("%s/exif/copy-exif", c.baseURL)
+
+	reqBody := struct {
+		SourcePath string `json:"sourcePath"`
+		TargetPath string `json:"targetPath"`
+	}{
+		SourcePath: sourcePath,
+		TargetPath: targetPath,
+	}
+
+	bodyBytes, _ := json.Marshal(reqBody)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u, strings.NewReader(string(bodyBytes)))
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("EXIF service request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("EXIF service returned %d: %s", resp.StatusCode, string(body))
+	}
+
+	return nil
+}

@@ -506,7 +506,7 @@ export interface OcrClassificationStatusResponse {
 
 // --- LLM OCR Types ---
 
-export type LlmProviderType = "ollama" | "ollama_cloud" | "openai" | "deepseek"
+export type LlmProviderType = "ollama" | "ollama_cloud" | "openai" | "deepseek" | "alibaba"
 
 export interface LlmProviderDTO {
   id: number
@@ -522,6 +522,7 @@ export interface LlmSettingsResponse {
   id: number
   activeProvider: string // Chat/text LLM provider alias
   vlProvider: string // VL (vision-language) provider alias for image analysis
+  imgEditProvider: string // Image edit provider alias for quality enhancement
   tagScanEnabled?: boolean
   tagScanStartHour?: number
   tagScanStartMinute?: number
@@ -538,6 +539,7 @@ export interface LlmSettingsResponse {
 export interface UpdateLlmSettingsRequest {
   activeProvider?: string // Chat/text LLM provider alias
   vlProvider?: string // VL provider alias for image analysis
+  imgEditProvider?: string // Image edit provider alias for quality enhancement
   providerAlias?: string // Which provider to update/delete (by alias)
   providerName?: LlmProviderType // For new providers
   providerApiUrl?: string
@@ -858,4 +860,15 @@ export interface SubdirEntry {
 export interface SubdirsResponse {
 	subdirs: SubdirEntry[]
 	path: string
+}
+
+// --- Enhancement Types ---
+
+export interface EnhancementActionRequest {
+	imagePath: string
+}
+
+export interface EnhancementActionResponse {
+	success: boolean
+	message: string
 }

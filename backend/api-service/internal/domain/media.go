@@ -204,8 +204,9 @@ type LlmProviderModelCache struct {
 // LlmSettings stores global LLM settings (singleton, ID=1)
 type LlmSettings struct {
 	ID                     uint      `gorm:"primaryKey" json:"id"`
-	ActiveProvider         string    `gorm:"default:ollama_1;not null" json:"activeProvider"` // Text/chat LLM provider alias
-	VlProvider             string    `gorm:"default:ollama_1;not null" json:"vlProvider"`     // VL (vision-language) provider alias for image analysis
+	ActiveProvider         string    `gorm:"default:ollama_1;not null" json:"activeProvider"`  // Text/chat LLM provider alias
+	VlProvider             string    `gorm:"default:ollama_1;not null" json:"vlProvider"`      // VL (vision-language) provider alias for image analysis
+	ImgEditProvider        string    `gorm:"default:ollama_1;not null" json:"imgEditProvider"` // Image edit provider alias for quality enhancement
 	TagScanEnabled         bool      `gorm:"default:true" json:"tagScanEnabled"`
 	TagScanStartHour       int       `gorm:"default:22" json:"tagScanStartHour"`
 	TagScanStartMinute     int       `gorm:"default:0" json:"tagScanStartMinute"`

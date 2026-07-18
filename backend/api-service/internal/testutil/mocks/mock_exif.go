@@ -212,6 +212,12 @@ func (m *MockExifClient) ResolveGeolocation(ctx context.Context, lat, lng float6
 	}, nil
 }
 
+// CopyExif implements the ExifClient interface.
+func (m *MockExifClient) CopyExif(ctx context.Context, sourcePath, targetPath string) error {
+	m.ExtractCalls++
+	return m.ExtractErr
+}
+
 // ExtractPreview implements the ExifClient interface.
 func (m *MockExifClient) ExtractPreview(ctx context.Context, filePath string) ([]byte, error) {
 	m.ExtractCalls++

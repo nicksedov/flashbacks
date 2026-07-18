@@ -517,8 +517,9 @@ type LlmProviderDTO struct {
 // LlmSettingsResponse for GET /api/llm/settings
 type LlmSettingsResponse struct {
 	ID                     uint             `json:"id"`
-	ActiveProvider         string           `json:"activeProvider"` // Chat/text LLM provider alias
-	VlProvider             string           `json:"vlProvider"`     // VL (vision-language) provider alias for image analysis
+	ActiveProvider         string           `json:"activeProvider"`  // Chat/text LLM provider alias
+	VlProvider             string           `json:"vlProvider"`      // VL (vision-language) provider alias for image analysis
+	ImgEditProvider        string           `json:"imgEditProvider"` // Image edit provider alias for quality enhancement
 	TagScanEnabled         bool             `json:"tagScanEnabled"`
 	TagScanStartHour       int              `json:"tagScanStartHour"`
 	TagScanStartMinute     int              `json:"tagScanStartMinute"`
@@ -532,10 +533,11 @@ type LlmSettingsResponse struct {
 	Providers              []LlmProviderDTO `json:"providers"`
 }
 
-// UpdateLlmSettingsRequest for PUT /api/llm/settings (chat provider, VL provider + tag scan)
+// UpdateLlmSettingsRequest for PUT /api/llm/settings (chat provider, VL provider, image edit + tag scan)
 type UpdateLlmSettingsRequest struct {
-	ActiveProvider         *string `json:"activeProvider"` // Chat/text LLM provider alias
-	VlProvider             *string `json:"vlProvider"`     // VL provider alias for image analysis
+	ActiveProvider         *string `json:"activeProvider"`  // Chat/text LLM provider alias
+	VlProvider             *string `json:"vlProvider"`      // VL provider alias for image analysis
+	ImgEditProvider        *string `json:"imgEditProvider"` // Image edit provider alias for quality enhancement
 	TagScanEnabled         *bool   `json:"tagScanEnabled,omitempty"`
 	TagScanStartHour       *int    `json:"tagScanStartHour,omitempty"`
 	TagScanStartMinute     *int    `json:"tagScanStartMinute,omitempty"`
@@ -771,4 +773,15 @@ type BatchUpdateGpsResponse struct {
 	NameEng     string   `json:"nameEng"`
 	Lat         float64  `json:"lat"`
 	Lng         float64  `json:"lng"`
+}
+
+// EnhancementActionRequest is used for accept/reject enhancement endpoints.
+type EnhancementActionRequest struct {
+	ImagePath string `json:"imagePath" binding:"required"`
+}
+
+// EnhancementActionResponse is returned by accept/reject enhancement endpoints.
+type EnhancementActionResponse struct {
+	Success bool   `json:"success"`
+	Message string `json:"message"`
 }

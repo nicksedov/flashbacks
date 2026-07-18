@@ -169,3 +169,15 @@ type MissingImagesResponse struct {
 	Page     int                `json:"page"`
 	PageSize int                `json:"pageSize"`
 }
+
+// CopyExifRequest is the JSON request for POST /exif/copy-exif
+type CopyExifRequest struct {
+	SourcePath string `json:"sourcePath" binding:"required"`
+	TargetPath string `json:"targetPath" binding:"required"`
+}
+
+// CopyExifResponse is the JSON response for POST /exif/copy-exif
+type CopyExifResponse struct {
+	Success bool   `json:"success"`
+	Message string `json:"message,omitempty"`
+}

@@ -5,9 +5,12 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/flashbacks/api-service/internal/infrastructure/imaging"
 )
 
 // DeepSeekModelInfo holds known context window sizes for DeepSeek models.
@@ -19,11 +22,11 @@ type DeepSeekModelInfo struct {
 // DeepSeek publishes these values; the map serves as a fallback when the
 // model cache does not contain a contextLength.
 var knownDeepSeekModels = map[string]DeepSeekModelInfo{
-	"deepseek-chat":         {ContextWindow: 128000},
-	"deepseek-reasoner":     {ContextWindow: 128000},
-	"deepseek-v4-pro":       {ContextWindow: 1000000},
-	"deepseek-v4-flash":     {ContextWindow: 1000000},
-	"deepseek-v4-pro-0324":  {ContextWindow: 1000000},
+	"deepseek-chat":          {ContextWindow: 128000},
+	"deepseek-reasoner":      {ContextWindow: 128000},
+	"deepseek-v4-pro":        {ContextWindow: 1000000},
+	"deepseek-v4-flash":      {ContextWindow: 1000000},
+	"deepseek-v4-pro-0324":   {ContextWindow: 1000000},
 	"deepseek-v4-flash-0324": {ContextWindow: 1000000},
 }
 
@@ -55,7 +58,7 @@ type DeepSeekClient struct {
 // The baseURL is normalized by stripping any trailing /v1 or /v1/ suffix.
 func NewDeepSeekClient(baseURL, apiKey, model string) *DeepSeekClient {
 	baseURL = strings.TrimRight(baseURL, "/")
-	if before, ok :=strings.CutSuffix(baseURL, "/v1"); ok  {
+	if before, ok := strings.CutSuffix(baseURL, "/v1"); ok {
 		baseURL = before
 	}
 	timeout := 5 * time.Minute
@@ -89,11 +92,11 @@ func (c *DeepSeekClient) ContextWindow() int {
 // --- Request / Response types ---
 
 type deepSeekRequest struct {
-	Model       string               `json:"model"`
-	Messages    []deepSeekChatMessage `json:"messages"`
-	MaxTokens   int                  `json:"max_tokens,omitempty"`
-	Tools       []openAIToolParam    `json:"tools,omitempty"`
-	Stream      bool                 `json:"stream,omitempty"`
+	Model     string                `json:"model"`
+	Messages  []deepSeekChatMessage `json:"messages"`
+	MaxTokens int                   `json:"max_tokens,omitempty"`
+	Tools     []openAIToolParam     `json:"tools,omitempty"`
+	Stream    bool                  `json:"stream,omitempty"`
 }
 
 type deepSeekChatMessage struct {
@@ -109,40 +112,47 @@ type deepSeekResponse struct {
 	Created int64  `json:"created"`
 	Model   string `json:"model"`
 	Choices []struct {
-		Index        int                  `json:"index"`
+		Index        int                   `json:"index"`
 		Message      deepSeekChoiceMessage `json:"message"`
-		FinishReason string               `json:"finish_reason"`
+		FinishReason string                `json:"finish_reason"`
 	} `json:"choices"`
 	Usage *DeepSeekUsage `json:"usage,omitempty"`
 }
 
 type deepSeekChoiceMessage struct {
 	Role      string               `json:"role"`
-	Content   string               `json:"content"`
+	Content   any                  `json:"content"` // string or []openAIContent for multimodal
 	ToolCalls []openAIToolCallResp `json:"tool_calls,omitempty"`
 }
 
 // --- Client interface ---
 
 // Recognize performs image recognition using DeepSeek's VL capabilities.
+// Merges systemPrompt into the user message content list to maximize
+// compatibility with providers that reject a leading system role or
+// require all content fields to be lists (multimodal format).
 func (c *DeepSeekClient) Recognize(ctx context.Context, imagePath string, systemPrompt string, userMessage string) (string, error) {
-	imgData, mediaType, err := resizeImageForLLM(imagePath, 4.0)
+	imgData, mediaType, err := imaging.DownsizeImageForLLM(imagePath)
 	if err != nil {
 		return "", fmt.Errorf("failed to prepare image: %w", err)
 	}
 
 	base64Img := fmt.Sprintf("data:%s;base64,%s", mediaType, encodeBase64(imgData))
 
+	// Build user content list, prepending system prompt for compatibility
+	// with providers that require all messages to use the multimodal
+	// content-list format and/or reject a leading system role.
+	userContent := []openAIContent{
+		{Type: "text", Text: systemPrompt + "\n\n" + userMessage},
+		{Type: "image_url", ImageURL: &openAIImageURL{URL: base64Img}},
+	}
+
 	req := deepSeekRequest{
 		Model: c.Model,
 		Messages: []deepSeekChatMessage{
-			{Role: "system", Content: systemPrompt},
 			{
-				Role: "user",
-				Content: []openAIContent{
-					{Type: "text", Text: userMessage},
-					{Type: "image_url", ImageURL: &openAIImageURL{URL: base64Img}},
-				},
+				Role:    "user",
+				Content: userContent,
 			},
 		},
 		MaxTokens: 4000,
@@ -157,7 +167,28 @@ func (c *DeepSeekClient) Recognize(ctx context.Context, imagePath string, system
 		return "", fmt.Errorf("no choices in response")
 	}
 
-	return resp.Choices[0].Message.Content, nil
+	content := resp.Choices[0].Message.Content
+	text := extractContentText(content)
+
+	// If the response has multimodal content with embedded images,
+	// prepend them as data URLs so callers can extract and save them.
+	images := extractContentImages(content)
+	for _, img := range images {
+		dataURL := fmt.Sprintf("data:%s;base64,%s", img.MIMEType, base64.StdEncoding.EncodeToString(img.Data))
+		text = dataURL + "\n" + text
+	}
+
+	// Debug: log content type to diagnose missing images.
+	switch content.(type) {
+	case string:
+		// plain text
+	case []interface{}:
+		logContentDebug(content)
+	default:
+		log.Printf("DeepSeek recognize: unexpected content type %T", content)
+	}
+
+	return text, nil
 }
 
 // Chat performs a conversational LLM call with optional tool definitions.
@@ -220,7 +251,7 @@ func (c *DeepSeekClient) Chat(ctx context.Context, req ChatRequest) (*ChatRespon
 	chatResp := &ChatResponse{
 		Message: ChatMessage{
 			Role:    "assistant",
-			Content: choice.Message.Content,
+			Content: extractContentText(choice.Message.Content),
 		},
 	}
 

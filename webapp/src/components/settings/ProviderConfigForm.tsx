@@ -13,6 +13,7 @@ const PROVIDER_LABELS: Record<LlmProviderType, string> = {
   ollama_cloud: "Ollama Cloud",
   openai: "OpenAI API compatible",
   deepseek: "DeepSeek",
+  alibaba: "Alibaba Cloud",
 }
 
 interface ProviderConfigFormProps {
@@ -145,15 +146,21 @@ export function ProviderConfigForm({
           <Label htmlFor={`${namePrefix}-apiurl`}>API URL</Label>
           <Input
             id={`${namePrefix}-apiurl`}
-            placeholder={provider.name === "ollama" ? "http://localhost:11434" : "https://api.openai.com"}
+            placeholder={
+              provider.name === "ollama"
+                ? "http://localhost:11434"
+                : provider.name === "alibaba"
+                  ? "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
+                  : "https://api.openai.com"
+            }
             value={provider.apiUrl}
             onChange={(e) => onFieldChange(provider.alias, "apiUrl", e.target.value)}
           />
         </div>
       )}
 
-      {/* API Key (only for OpenAI and Ollama Cloud) */}
-      {(provider.name === "openai" || provider.name === "ollama_cloud") && (
+      {/* API Key (only for providers that require key auth) */}
+      {(provider.name === "openai" || provider.name === "ollama_cloud" || provider.name === "alibaba") && (
         <div className="space-y-2">
           <Label htmlFor={`${namePrefix}-apikey`}>API Key</Label>
           <Input
@@ -222,7 +229,9 @@ export function ProviderConfigForm({
               placeholder={
                 provider.name === "ollama" || provider.name === "ollama_cloud"
                   ? "minicpm-v"
-                  : "gpt-4-vision-preview"
+                  : provider.name === "alibaba"
+                    ? "qwen-image-edit-plus"
+                    : "gpt-4-vision-preview"
               }
               value={provider.model}
               onChange={(e) => onFieldChange(provider.alias, "model", e.target.value)}

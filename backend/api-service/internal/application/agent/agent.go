@@ -306,7 +306,8 @@ You have access to the following tools:
 Guidelines:
 - Use tools when you need information. Don't guess.
 - Be helpful, specific, and accurate.
-- When presenting search results, list images with their paths and key metadata.`
+- When presenting search results, list images with their paths and key metadata.
+- The enhance_image_quality tool performs its own internal image analysis. Call it directly — no pre-analysis with other tools is needed.`
 
 	// Add language instruction based on conversation language
 	switch conv.Language {

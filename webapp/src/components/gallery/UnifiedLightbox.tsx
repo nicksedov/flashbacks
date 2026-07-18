@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { Sparkles, Info, ScanText, Tags } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 import { useTranslation } from "@/i18n"
@@ -8,12 +8,14 @@ import { OcrImagePanel } from "./lightbox/OcrImagePanel"
 import { OcrResultPanel } from "./lightbox/OcrResultPanel"
 import { TagsPanel } from "./lightbox/TagsPanel"
 import { ChatPanel } from "./lightbox/ChatPanel"
+import { ImageCompareSlider } from "./lightbox/ImageCompareSlider"
 import { useOcrState } from "@/hooks/useOcrState"
 import { useTagsState } from "@/hooks/useTagsState"
 import { useImageDimensions } from "@/hooks/useImageDimensions"
 import { useFileExport } from "@/hooks/useFileExport"
 import { useChatAgent } from "@/hooks/useChatAgent"
 import { useImageMetadata } from "@/hooks/useImageMetadata"
+import { replaceEnhancement, saveCopyEnhancement, rejectEnhancement } from "@/api/endpoints"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
 import { Camera, MapPin, MapPinPlus, Image as ImageIcon, Pencil, FileText } from "lucide-react"
@@ -59,6 +61,14 @@ export function UnifiedLightbox({
     }
   }, [onShowGeoFormChange])
 
+  // Image version counter for cache-busting after enhancement
+  const [standardImageVersion, setStandardImageVersion] = useState(0)
+  const processedEnhanceRef = useRef<Set<string>>(new Set())
+  const [enhancedPath, setEnhancedPath] = useState<string | null>(null)
+  const [isReplacing, setIsReplacing] = useState(false)
+  const [isSavingCopy, setIsSavingCopy] = useState(false)
+  const [isRejecting, setIsRejecting] = useState(false)
+
   // Reset per-image state when imagePath changes (during render, not in effect)
   const [prevImagePath, setPrevImagePath] = useState(imagePath)
   const [prevInitialMode, setPrevInitialMode] = useState(initialMode)
@@ -68,6 +78,8 @@ export function UnifiedLightbox({
     setActiveMode(initialMode)
     setInternalShowGeoForm(false)
     setStandardImageLoaded(false)
+    setEnhancedPath(null)
+    processedEnhanceRef.current = new Set()
   }
 
   // OCR state
@@ -157,8 +169,81 @@ export function UnifiedLightbox({
     handleShowGeoForm(false)
   }, [reloadMetadata, handleShowGeoForm])
 
+  // Watch for completed enhance_image_quality tool calls
+  useEffect(() => {
+    for (const msg of messages) {
+      if (msg.role !== "assistant" || !msg.toolCalls) continue
+      for (let i = 0; i < msg.toolCalls.length; i++) {
+        const tc = msg.toolCalls[i]
+        if (tc.name === "enhance_image_quality" && tc.result) {
+          const key = `${msg.id}-${i}`
+          if (!processedEnhanceRef.current.has(key)) {
+            processedEnhanceRef.current.add(key)
+            setStandardImageVersion(v => v + 1)
+            // Parse the JSON result to extract enhanced path
+            try {
+              const parsed = JSON.parse(tc.result)
+              if (parsed.enhancedPath && parsed.status === "pending_approval") {
+                setEnhancedPath(parsed.enhancedPath)
+              }
+            } catch {
+              // Result is not JSON (legacy format or no_change status)
+            }
+          }
+        }
+      }
+    }
+  }, [messages])
+
+  // Enhanced image URL for comparison
+  const enhancedImageUrl = enhancedPath && imagePath
+    ? buildImageUrl(imagePath, "/api/image-enhanced")
+    : ""
+
   // URLs
-  const standardImageUrl = imagePath ? buildImageUrl(imagePath, "/api/image") : ""
+  const cacheParam = standardImageVersion > 0 ? { _t: standardImageVersion } : undefined
+  const standardImageUrl = imagePath ? buildImageUrl(imagePath, "/api/image", cacheParam) : ""
+
+  const handleReplaceEnhancement = useCallback(async () => {
+    if (!imagePath) return
+    setIsReplacing(true)
+    try {
+      await replaceEnhancement({ imagePath })
+      setEnhancedPath(null)
+      setStandardImageVersion(v => v + 1)
+    } catch {
+      // Error is handled silently - image stays in comparison mode
+    } finally {
+      setIsReplacing(false)
+    }
+  }, [imagePath])
+
+  const handleSaveCopyEnhancement = useCallback(async () => {
+    if (!imagePath) return
+    setIsSavingCopy(true)
+    try {
+      await saveCopyEnhancement({ imagePath })
+      setEnhancedPath(null)
+      // No need to bump image version — original is unchanged
+    } catch {
+      // Error is handled silently
+    } finally {
+      setIsSavingCopy(false)
+    }
+  }, [imagePath])
+
+  const handleRejectEnhancement = useCallback(async () => {
+    if (!imagePath) return
+    setIsRejecting(true)
+    try {
+      await rejectEnhancement({ imagePath })
+      setEnhancedPath(null)
+    } catch {
+      // Error is handled silently
+    } finally {
+      setIsRejecting(false)
+    }
+  }, [imagePath])
 
   const handleClose = useCallback(() => {
     abortStream()
@@ -198,6 +283,19 @@ export function UnifiedLightbox({
             handleImageLoad={handleImageLoad}
             className="flex-1 flex items-center justify-center p-8 relative h-full"
           />
+        ) : enhancedPath ? (
+          <div className="flex-1 flex items-center justify-center bg-black min-h-[300px] min-w-0 h-full relative p-4">
+            <ImageCompareSlider
+              originalUrl={standardImageUrl}
+              enhancedUrl={enhancedImageUrl}
+              onReplace={handleReplaceEnhancement}
+              onSaveCopy={handleSaveCopyEnhancement}
+              onReject={handleRejectEnhancement}
+              isReplacing={isReplacing}
+              isSavingCopy={isSavingCopy}
+              isRejecting={isRejecting}
+            />
+          </div>
         ) : (
           <div className="flex-1 flex items-center justify-center bg-black min-h-[300px] min-w-0 h-full relative">
             {!standardImageLoaded && (

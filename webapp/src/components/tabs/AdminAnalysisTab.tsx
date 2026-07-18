@@ -39,12 +39,14 @@ const PROVIDER_LABELS: Record<LlmProviderType, string> = {
   ollama_cloud: "Ollama Cloud",
   openai: "OpenAI API compatible",
   deepseek: "DeepSeek",
+  alibaba: "Alibaba Cloud",
 }
 
 const EMPTY_SETTINGS: LlmSettingsResponse = {
   id: 0,
   activeProvider: "",
   vlProvider: "",
+  imgEditProvider: "",
   tagScanEnabled: false,
   tagScanStartHour: 23,
   tagScanStartMinute: 0,
@@ -247,6 +249,25 @@ export function AdminAnalysisTab() {
       updateLlmSettings({
         activeProvider: updated.activeProvider,
         vlProvider: value,
+      }).then(() => {
+        toast.success(t("llm_ocr.settingsSaved"))
+      }).catch(() => {
+        toast.error(t("llm_ocr.settingsSaveFailed"))
+      })
+      return updated
+    })
+  }, [t])
+
+  // Auto-save Image Edit LLM provider on change
+  const handleImgEditProviderChange = useCallback((value: string) => {
+    if (isInitialLoad.current) {
+      setLlmSettings((prev) => ({ ...prev, imgEditProvider: value }))
+      return
+    }
+    setLlmSettings((prev) => {
+      const updated = { ...prev, imgEditProvider: value }
+      updateLlmSettings({
+        imgEditProvider: value,
       }).then(() => {
         toast.success(t("llm_ocr.settingsSaved"))
       }).catch(() => {
@@ -484,6 +505,11 @@ export function AdminAnalysisTab() {
   const currentVLProvider = useMemo(
     () => llmSettings.providers.find((p) => p.alias === llmSettings.vlProvider),
     [llmSettings.providers, llmSettings.vlProvider],
+  )
+
+  const currentImgEditProvider = useMemo(
+    () => llmSettings.providers.find((p) => p.alias === llmSettings.imgEditProvider),
+    [llmSettings.providers, llmSettings.imgEditProvider],
   )
 
   const currentEmbeddingProvider = useMemo(
@@ -771,6 +797,75 @@ export function AdminAnalysisTab() {
               {currentVLProvider && currentVLProvider.alias === currentProvider?.alias && (
                 <p className="text-sm text-muted-foreground py-2">
                   {t("llm_ocr.vlSameAsChat")}
+                </p>
+              )}
+
+              {llmSettings.providers.length === 0 && (
+                <p className="text-sm text-muted-foreground text-center py-4">
+                  {t("llm_providers.noProviders")}
+                </p>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Image Edit LLM Settings — provider selection only */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Wand2 className="h-5 w-5" />
+            {t("llm_ocr.imgEditSettings")}
+          </CardTitle>
+          <CardDescription>{t("llm_ocr.imgEditSettingsDescription")}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {isLlmLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {/* Image Edit Provider Selection */}
+              <div className="space-y-2">
+                <Label htmlFor="img-edit-llm-provider">{t("llm_ocr.provider")}</Label>
+                <Select
+                  value={llmSettings.imgEditProvider}
+                  onValueChange={handleImgEditProviderChange}
+                >
+                  <SelectTrigger id="img-edit-llm-provider">
+                    <SelectValue placeholder={t("llm_providers.selectProvider")} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {llmSettings.providers.map((p) => (
+                      <SelectItem key={p.alias} value={p.alias}>
+                        {p.alias} ({getProviderLabel(p.name)})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Image Edit Provider info */}
+              {currentImgEditProvider && currentImgEditProvider.alias !== currentVLProvider?.alias && currentImgEditProvider.alias !== currentProvider?.alias && (
+                <div className="rounded-lg border p-3 text-sm text-muted-foreground">
+                  <span className="font-medium text-foreground">
+                    {currentImgEditProvider.alias}
+                  </span>{" "}
+                  ({getProviderLabel(currentImgEditProvider.name)}) — {t("llm_ocr.model")}:{" "}
+                  <span className="font-mono text-xs">{currentImgEditProvider.model}</span>
+                </div>
+              )}
+
+              {currentImgEditProvider && currentImgEditProvider.alias === currentVLProvider?.alias && (
+                <p className="text-sm text-muted-foreground py-2">
+                  {t("llm_ocr.imgEditSameAsVL")}
+                </p>
+              )}
+
+              {(!currentImgEditProvider || (currentImgEditProvider.alias !== currentVLProvider?.alias && currentImgEditProvider.alias === currentProvider?.alias)) && currentImgEditProvider?.alias === currentProvider?.alias && (
+                <p className="text-sm text-muted-foreground py-2">
+                  {t("llm_ocr.imgEditSameAsChat")}
                 </p>
               )}
 

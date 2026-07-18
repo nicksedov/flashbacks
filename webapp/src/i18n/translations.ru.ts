@@ -136,8 +136,8 @@ export const translationsRu = {
   "trash.saveFailed": "Не удалось сохранить директорию корзины",
 
   // EXIF Backup settings
-  "exifBackup.title": "Резервные копии EXIF",
-  "exifBackup.description": "Настройте директорию для резервных копий оригинальных файлов перед изменением EXIF.",
+  "exifBackup.title": "Резервные копии изменяемых файлов",
+  "exifBackup.description": "Настройте директорию для резервных копий оригинальных файлов перед изменениями: редактирование EXIF, улучшение качества изображений и другие визуальные улучшения.",
   "exifBackup.dirLabel": "Директория резервных копий",
   "exifBackup.dirPlaceholder": "Введите путь, напр. C:\\Backups или /home/user/exif-backup",
   "exifBackup.save": "Сохранить",
@@ -587,6 +587,14 @@ export const translationsRu = {
   "llm_ocr.embeddingDimensionUnknown": "Неизвестно — выберите модель для определения",
     "llm_ocr.embeddingBatchSize": "Размер батча эмбеддингов",
     "llm_ocr.embeddingBatchSizeDescription": "Количество изображений за один вызов API эмбеддингов. Большие значения ускоряют обработку, но потребляют больше памяти.",
+
+  // Image Edit LLM Settings
+  "llm_ocr.imgEditSettings": "Настройки LLM для редактирования изображений",
+  "llm_ocr.imgEditSettingsDescription": "Настройте ИИ для улучшения качества изображений: повышение детализации, устранение размытия, увеличение разрешения",
+  "llm_ocr.imgEditSameAsVL": "Используется тот же провайдер, что и для анализа изображений",
+  "llm_ocr.imgEditSameAsChat": "Используется тот же провайдер, что и для чата",
+  "llm_providers.usageImageEdit": "Редактирование изображений",
+  "llm_providers.usageShortImgEdit": "ImgEdit",
   "llm_ocr.settingsSaved": "Настройки сохранены",
   "llm_ocr.settingsSaveFailed": "Ошибка сохранения настроек",
   "llm_ocr.notEnabled": "LLM распознавание не включено",
@@ -818,6 +826,8 @@ export const translationsRu = {
   "chat.suggest_text_msg": "Какой текст на этом изображении?",
   "chat.suggest_similar_msg": "Найди похожие изображения по тегам с использованием семантического поиска",
   "chat.suggest_date_msg": "Когда было сделано это фото?",
+  "chat.suggest_enhance": "Улучшить качество",
+  "chat.suggest_enhance_msg": "Улучши качество этого изображения: повышение детализации, устранение размытия, улучшение разрешения",
   "chat.tool_running": "Выполняется...",
   "chat.thinking": "Думаю...",
   "chat.tool_describe_image": "Описание изображения",
@@ -895,4 +905,13 @@ export const translationsRu = {
   "gallery.folders.imagesCount": "{count} изображений",
   "gallery.folders.loadMore": "Загрузить ещё",
   "gallery.folders.rootFolders": "Папки галереи",
+
+  // Image Enhancement comparison
+  "enhance.labelBefore": "До",
+  "enhance.labelAfter": "После",
+  "enhance.replace": "Заменить оригинал",
+  "enhance.replacing": "Замена...",
+  "enhance.saveCopy": "Сохранить копией",
+  "enhance.savingCopy": "Сохранение...",
+  "enhance.reject": "Отклонить",
  } as const

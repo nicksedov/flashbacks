@@ -92,7 +92,7 @@ func LoadConfig() *AppConfig {
 		ThumbnailCacheQuality:       getEnvInt("THUMBNAIL_CACHE_QUALITY", 80),
 		ThumbnailCachePreloadOnScan: getEnv("THUMBNAIL_CACHE_PRELOAD_ON_SCAN", "true") == "true",
 		BackgroundSyncEnabled:       getEnv("BACKGROUND_SYNC_ENABLED", "true") == "true",
-		LlmMaxImageMegapixels:       getEnvFloat("LLM_MAX_IMAGE_MEGAPIXELS", 2.0),
+		LlmMaxImageMegapixels:       getEnvFloat("LLM_MAX_IMAGE_MEGAPIXELS", 2.4),
 		AgentMaxConversationTokens:  getEnvInt("AGENT_MAX_CONVERSATION_TOKENS", 128000),
 		ExifServiceURL:              getEnv("EXIF_SERVICE_URL", "http://localhost:5172"),
 	}

@@ -691,3 +691,15 @@ export function startEmbeddingBackfill(): Promise<{ message: string }> {
 export function stopEmbeddingBackfill(): Promise<{ message: string }> {
   return apiPost<{ message: string }>("/api/embedding/stop")
 }
+
+export function replaceEnhancement(req: import("@/types").EnhancementActionRequest): Promise<import("@/types").EnhancementActionResponse> {
+  return apiPost<import("@/types").EnhancementActionResponse>("/api/image/enhance/replace", req)
+}
+
+export function saveCopyEnhancement(req: import("@/types").EnhancementActionRequest): Promise<import("@/types").EnhancementActionResponse> {
+  return apiPost<import("@/types").EnhancementActionResponse>("/api/image/enhance/save-copy", req)
+}
+
+export function rejectEnhancement(req: import("@/types").EnhancementActionRequest): Promise<import("@/types").EnhancementActionResponse> {
+  return apiPost<import("@/types").EnhancementActionResponse>("/api/image/enhance/reject", req)
+}

@@ -15,8 +15,8 @@ import (
 	"gorm.io/gorm"
 )
 
-// calculateFileHash calculates MD5 hash of a file
-func calculateFileHash(path string) (string, error) {
+// CalculateFileHash calculates MD5 hash of a file.
+func CalculateFileHash(path string) (string, error) {
 	file, err := os.Open(path)
 	if err != nil {
 		return "", err
@@ -29,6 +29,12 @@ func calculateFileHash(path string) (string, error) {
 	}
 
 	return hex.EncodeToString(hash.Sum(nil)), nil
+}
+
+// calculateFileHash is a deprecated alias for CalculateFileHash kept for
+// backward compatibility within the imaging package.
+func calculateFileHash(path string) (string, error) {
+	return CalculateFileHash(path)
 }
 
 // fileInfo holds file information collected during directory walk

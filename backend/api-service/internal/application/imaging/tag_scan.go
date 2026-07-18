@@ -457,36 +457,25 @@ func isWithinWindow(startH, startM, endH, endM, tzOffset int) bool {
 func (tsm *TagScanManager) processImage(imageFile domain.ImageFile) {
 	log.Printf("Tag scan: processImage started for ID=%d, path=%s", imageFile.ID, imageFile.Path)
 
-	// Check if LLM is enabled
-	var settings domain.LlmSettings
-	if err := tsm.db.First(&settings).Error; err != nil {
-		log.Printf("Tag scan: failed to load LLM settings: %v", err)
+	// Get VL instrument settings for the model and provider
+	var vlInstrument domain.LlmInstrumentSettings
+	if err := tsm.db.Where("type = ?", domain.InstrumentVL).Preload("Provider").First(&vlInstrument).Error; err != nil {
+		log.Printf("Tag scan: failed to load VL instrument settings: %v", err)
 		tsm.mu.Lock()
-		tsm.progress.LastError = "Failed to load LLM settings"
+		tsm.progress.LastError = "Failed to load LLM instrument settings"
 		tsm.mu.Unlock()
 		return
 	}
+	provider := vlInstrument.Provider
+	model := vlInstrument.Model
 
-	// Get VL provider (fall back to active/chat provider if not set)
-	alias := settings.VlProvider
-	if alias == "" {
-		alias = settings.ActiveProvider
-	}
-	var provider domain.LlmProvider
-	if err := tsm.db.Where("alias = ?", alias).First(&provider).Error; err != nil {
-		log.Printf("Tag scan: failed to load provider settings: %v", err)
-		tsm.mu.Lock()
-		tsm.progress.LastError = "Failed to load LLM provider settings"
-		tsm.mu.Unlock()
-		return
-	}
 	log.Printf("Tag scan: provider=%s, model=%s, url=%s",
-		provider.Name, provider.Model, provider.ApiUrl)
+		provider.Name, model, provider.ApiUrl)
 
-	// Create LLM client
+	// Create LLM client using model from instrument settings
 	log.Printf("Tag scan: creating LLM client for provider=%s, url=%s, model=%s",
-		provider.Name, provider.ApiUrl, provider.Model)
-	client, err := llm.NewClient(provider.Name, provider.ApiUrl, provider.ApiKey, provider.Model, tsm.maxImageMegapixels)
+		provider.Name, provider.ApiUrl, model)
+	client, err := llm.NewClient(provider.Name, provider.ApiUrl, provider.ApiKey, model, tsm.maxImageMegapixels)
 	if err != nil {
 		log.Printf("Tag scan: failed to create LLM client: %v", err)
 		tsm.mu.Lock()
@@ -498,7 +487,7 @@ func (tsm *TagScanManager) processImage(imageFile domain.ImageFile) {
 
 	// Execute AI action "tags"
 	log.Printf("Tag scan: calling ExecuteAiAction for ID=%d, action=tags", imageFile.ID)
-	result, err := tsm.llmOcrService.ExecuteAiAction(imageFile.ID, "tags", "", "en", client, provider)
+	result, err := tsm.llmOcrService.ExecuteAiAction(imageFile.ID, "tags", "", "en", client, provider, model)
 	if err != nil {
 		log.Printf("Tag scan: failed to generate tags for %s: %v", imageFile.Path, err)
 		tsm.mu.Lock()

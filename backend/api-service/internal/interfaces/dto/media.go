@@ -504,50 +504,67 @@ type OcrDataResponse struct {
 // --- LLM Settings API ---
 
 // LlmProviderDTO for per-provider LLM settings responses
+// NOTE: Model is no longer stored on the provider. Use LlmInstrumentDTO.Model instead.
 type LlmProviderDTO struct {
 	ID           uint          `json:"id"`
 	Alias        string        `json:"alias"`
 	Name         string        `json:"name"` // "ollama", "ollama_cloud", "openai"
 	ApiUrl       string        `json:"apiUrl"`
 	ApiKey       string        `json:"apiKey"` // Masked in responses
-	Model        string        `json:"model"`
 	CachedModels []LlmModelDTO `json:"cachedModels"`
+}
+
+// LlmInstrumentDTO represents an LLM instrument setting in API responses.
+type LlmInstrumentDTO struct {
+	Type          string `json:"type"`          // "chat", "vl", "embedding", "image_edit"
+	ProviderID    uint   `json:"providerId"`    // FK → llm_providers.id
+	Model         string `json:"model"`         // Model name for this instrument
+	ProviderAlias string `json:"providerAlias"` // Denormalized for frontend convenience
+	ProviderName  string `json:"providerName"`  // Denormalized for frontend convenience
+}
+
+// TagScanSettingsDTO represents tag scan settings in API responses.
+type TagScanSettingsDTO struct {
+	Enabled        bool `json:"enabled"`
+	StartHour      int  `json:"startHour"`
+	StartMinute    int  `json:"startMinute"`
+	EndHour        int  `json:"endHour"`
+	EndMinute      int  `json:"endMinute"`
+	TimezoneOffset int  `json:"timezoneOffset"`
+}
+
+// EmbeddingSettingsDTO represents embedding settings in API responses.
+type EmbeddingSettingsDTO struct {
+	Dimension int `json:"dimension"`
+	BatchSize int `json:"batchSize"`
 }
 
 // LlmSettingsResponse for GET /api/llm/settings
 type LlmSettingsResponse struct {
-	ID                     uint             `json:"id"`
-	ActiveProvider         string           `json:"activeProvider"`  // Chat/text LLM provider alias
-	VlProvider             string           `json:"vlProvider"`      // VL (vision-language) provider alias for image analysis
-	ImgEditProvider        string           `json:"imgEditProvider"` // Image edit provider alias for quality enhancement
-	TagScanEnabled         bool             `json:"tagScanEnabled"`
-	TagScanStartHour       int              `json:"tagScanStartHour"`
-	TagScanStartMinute     int              `json:"tagScanStartMinute"`
-	TagScanEndHour         int              `json:"tagScanEndHour"`
-	TagScanEndMinute       int              `json:"tagScanEndMinute"`
-	TagScanTimezoneOffset  int              `json:"tagScanTimezoneOffset"`
-	EmbeddingProviderAlias string           `json:"embeddingProviderAlias"`
-	EmbeddingModel         string           `json:"embeddingModel"`
-	EmbeddingDimension     int              `json:"embeddingDimension"`
-	EmbeddingBatchSize     int              `json:"embeddingBatchSize"`
-	Providers              []LlmProviderDTO `json:"providers"`
+	Instruments []LlmInstrumentDTO `json:"instruments"`
+	TagScan     TagScanSettingsDTO `json:"tagScan"`
+	Embedding   EmbeddingSettingsDTO `json:"embedding"`
+	Providers   []LlmProviderDTO   `json:"providers"`
 }
 
-// UpdateLlmSettingsRequest for PUT /api/llm/settings (chat provider, VL provider, image edit + tag scan)
+// UpdateLlmSettingsRequest for PUT /api/llm/settings
 type UpdateLlmSettingsRequest struct {
-	ActiveProvider         *string `json:"activeProvider"`  // Chat/text LLM provider alias
-	VlProvider             *string `json:"vlProvider"`      // VL provider alias for image analysis
-	ImgEditProvider        *string `json:"imgEditProvider"` // Image edit provider alias for quality enhancement
-	TagScanEnabled         *bool   `json:"tagScanEnabled,omitempty"`
-	TagScanStartHour       *int    `json:"tagScanStartHour,omitempty"`
-	TagScanStartMinute     *int    `json:"tagScanStartMinute,omitempty"`
-	TagScanEndHour         *int    `json:"tagScanEndHour,omitempty"`
-	TagScanEndMinute       *int    `json:"tagScanEndMinute,omitempty"`
-	TagScanTimezoneOffset  *int    `json:"tagScanTimezoneOffset,omitempty"`
-	EmbeddingProviderAlias *string `json:"embeddingProviderAlias,omitempty"`
-	EmbeddingModel         *string `json:"embeddingModel,omitempty"`
-	EmbeddingDimension     *int    `json:"embeddingDimension,omitempty"`
-	EmbeddingBatchSize     *int    `json:"embeddingBatchSize,omitempty"`
+	// Instrument settings
+	InstrumentType  *string `json:"instrumentType"`  // Which instrument to update ("chat", "vl", "embedding", "image_edit")
+	InstrumentModel *string `json:"instrumentModel"` // New model for this instrument
+	ProviderID      *uint   `json:"providerId"`      // New provider ID for the instrument
+
+	// Tag scan settings
+	TagScanEnabled        *bool `json:"tagScanEnabled,omitempty"`
+	TagScanStartHour      *int  `json:"tagScanStartHour,omitempty"`
+	TagScanStartMinute    *int  `json:"tagScanStartMinute,omitempty"`
+	TagScanEndHour        *int  `json:"tagScanEndHour,omitempty"`
+	TagScanEndMinute      *int  `json:"tagScanEndMinute,omitempty"`
+	TagScanTimezoneOffset *int  `json:"tagScanTimezoneOffset,omitempty"`
+
+	// Embedding settings
+	EmbeddingDimension *int `json:"embeddingDimension,omitempty"`
+	EmbeddingBatchSize *int `json:"embeddingBatchSize,omitempty"`
 }
 
 // ProbeEmbeddingDimensionRequest for POST /api/llm/embedding/probe
@@ -567,14 +584,12 @@ type CreateLlmProviderRequest struct {
 	Name   string `json:"name" binding:"required"` // "ollama", "ollama_cloud", "openai"
 	ApiUrl string `json:"apiUrl"`
 	ApiKey string `json:"apiKey"`
-	Model  string `json:"model"`
 }
 
 // UpdateLlmProviderRequest for PUT /api/llm/providers/:alias
 type UpdateLlmProviderRequest struct {
 	ApiUrl *string `json:"apiUrl"`
 	ApiKey *string `json:"apiKey"`
-	Model  *string `json:"model"`
 	Alias  *string `json:"alias"` // New alias value (rename)
 }
 

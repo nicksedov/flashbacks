@@ -508,53 +508,65 @@ export interface OcrClassificationStatusResponse {
 
 export type LlmProviderType = "ollama" | "ollama_cloud" | "openai" | "deepseek" | "alibaba"
 
+// Instrument type for LLM instrument settings
+export type LlmInstrumentType = "chat" | "vl" | "embedding" | "image_edit"
+
 export interface LlmProviderDTO {
   id: number
   alias: string
   name: LlmProviderType
   apiUrl: string
   apiKey: string
-  model: string
   cachedModels: LlmModelDTO[] | null
 }
 
+// LlmInstrumentDTO represents an LLM instrument setting (one per type).
+export interface LlmInstrumentDTO {
+  type: LlmInstrumentType
+  providerId: number
+  model: string
+  providerAlias: string
+  providerName: string
+}
+
+// TagScanSettingsDTO represents tag scan schedule settings.
+export interface TagScanSettingsDTO {
+  enabled: boolean
+  startHour: number
+  startMinute: number
+  endHour: number
+  endMinute: number
+  timezoneOffset: number
+}
+
+// EmbeddingSettingsDTO represents embedding engine parameters.
+export interface EmbeddingSettingsDTO {
+  dimension: number
+  batchSize: number
+}
+
 export interface LlmSettingsResponse {
-  id: number
-  activeProvider: string // Chat/text LLM provider alias
-  vlProvider: string // VL (vision-language) provider alias for image analysis
-  imgEditProvider: string // Image edit provider alias for quality enhancement
-  tagScanEnabled?: boolean
-  tagScanStartHour?: number
-  tagScanStartMinute?: number
-  tagScanEndHour?: number
-  tagScanEndMinute?: number
-  tagScanTimezoneOffset?: number // User's timezone offset in minutes (JS getTimezoneOffset: UTC+3 = -180)
-  embeddingProviderAlias?: string
-  embeddingModel?: string
-  embeddingDimension?: number
-  embeddingBatchSize?: number
+  instruments: LlmInstrumentDTO[]
+  tagScan: TagScanSettingsDTO
+  embedding: EmbeddingSettingsDTO
   providers: LlmProviderDTO[]
 }
 
 export interface UpdateLlmSettingsRequest {
-  activeProvider?: string // Chat/text LLM provider alias
-  vlProvider?: string // VL provider alias for image analysis
-  imgEditProvider?: string // Image edit provider alias for quality enhancement
-  providerAlias?: string // Which provider to update/delete (by alias)
-  providerName?: LlmProviderType // For new providers
-  providerApiUrl?: string
-  providerApiKey?: string
-  providerModel?: string
-  providerAliasUpdate?: string // New alias value for the provider
-  providerDelete?: boolean // Delete the provider identified by providerAlias
+  // Instrument settings
+  instrumentType?: LlmInstrumentType  // Which instrument to update
+  instrumentModel?: string            // New model for the instrument
+  providerId?: number                 // New provider ID for the instrument
+
+  // Tag scan settings
   tagScanEnabled?: boolean
   tagScanStartHour?: number
   tagScanStartMinute?: number
   tagScanEndHour?: number
   tagScanEndMinute?: number
-  tagScanTimezoneOffset?: number // User's timezone offset in minutes (JS getTimezoneOffset: UTC+3 = -180)
-  embeddingProviderAlias?: string
-  embeddingModel?: string
+  tagScanTimezoneOffset?: number
+
+  // Embedding settings
   embeddingDimension?: number
   embeddingBatchSize?: number
 }

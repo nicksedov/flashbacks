@@ -2,7 +2,6 @@ import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Loader2, RefreshCw, Trash2, Pencil, X } from "lucide-react"
 import { useTranslation } from "@/i18n"
 import type { LlmProviderDTO, LlmModelDTO, LlmProviderType } from "@/types"
@@ -21,12 +20,10 @@ interface ProviderConfigFormProps {
   providers: LlmProviderDTO[]
   availableModels: LlmModelDTO[]
   isModelsLoading: boolean
-  showModelInput: boolean
   onFieldChange: (alias: string, field: keyof LlmProviderDTO, value: string | boolean) => void
   onAliasUpdate: (oldAlias: string, newAlias: string) => Promise<void>
   onDelete: (alias: string) => Promise<void>
   onLoadModels: () => void
-  onToggleModelInput: (show: boolean) => void
   isSaving: boolean
   namePrefix: string
 }
@@ -36,12 +33,10 @@ export function ProviderConfigForm({
   providers,
   availableModels,
   isModelsLoading,
-  showModelInput,
   onFieldChange,
   onAliasUpdate,
   onDelete,
   onLoadModels,
-  onToggleModelInput,
   isSaving,
   namePrefix,
 }: ProviderConfigFormProps) {
@@ -174,10 +169,11 @@ export function ProviderConfigForm({
         </div>
       )}
 
-      {/* Model */}
+      {/* Model - removed from provider. Model is now set per instrument (chat, vl, embedding, image_edit)
+          on the Analysis tab. The list of available models can still be loaded for reference. */}
       <div className="space-y-2">
         <div className="flex items-center justify-between">
-          <Label htmlFor={`${namePrefix}-model`}>{t("llm_ocr.model")}</Label>
+          <Label>{t("llm_ocr.model")}</Label>
           <Button
             variant="ghost"
             size="sm"
@@ -193,61 +189,21 @@ export function ProviderConfigForm({
             {t("llm_providers.loadModels")}
           </Button>
         </div>
-
-        {/* Model dropdown or input */}
-        {availableModels.length > 0 && !showModelInput ? (
-          <div className="space-y-2">
-            <Select
-              value={provider.model}
-              onValueChange={(value) => onFieldChange(provider.alias, "model", value)}
-            >
-              <SelectTrigger id={`${namePrefix}-model`}>
-                <SelectValue placeholder={t("llm_providers.selectModel")} />
-              </SelectTrigger>
-              <SelectContent>
-                {availableModels.map((model) => (
-                  <SelectItem key={model.id} value={model.id}>
-                    {model.name}
-                    {model.size ? ` (${(model.size / 1073741824).toFixed(1)} GB)` : ""}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Button
-              variant="link"
-              size="sm"
-              className="px-0 h-auto text-xs"
-              onClick={() => onToggleModelInput(true)}
-            >
-              {t("llm_providers.enterModelManually")}
-            </Button>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            <Input
-              id={`${namePrefix}-model`}
-              placeholder={
-                provider.name === "ollama" || provider.name === "ollama_cloud"
-                  ? "minicpm-v"
-                  : provider.name === "alibaba"
-                    ? "qwen-image-edit-plus"
-                    : "gpt-4-vision-preview"
-              }
-              value={provider.model}
-              onChange={(e) => onFieldChange(provider.alias, "model", e.target.value)}
-            />
-            {availableModels.length > 0 && showModelInput && (
-              <Button
-                variant="link"
-                size="sm"
-                className="px-0 h-auto text-xs"
-                onClick={() => onToggleModelInput(false)}
-              >
-                {t("llm_providers.selectFromModels")}
-              </Button>
-            )}
+        {availableModels.length > 0 && (
+          <div className="max-h-40 overflow-y-auto border rounded-md p-2 text-xs text-muted-foreground space-y-1">
+            {availableModels.map((model) => (
+              <div key={model.id} className="font-mono">{model.name}</div>
+            ))}
           </div>
         )}
+        {availableModels.length === 0 && !isModelsLoading && (
+          <p className="text-xs text-muted-foreground">
+            {t("llm_providers.noModelsLoaded")}
+          </p>
+        )}
+        <p className="text-xs text-muted-foreground">
+          {t("llm_providers.manageInProvidersTab")}
+        </p>
       </div>
     </div>
   )

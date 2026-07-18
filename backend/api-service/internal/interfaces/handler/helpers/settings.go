@@ -39,25 +39,6 @@ func (sl *SettingsLoader) AppSettingsIfExists() (domain.AppSettings, bool) {
 	return settings, result.Error == nil
 }
 
-// LlmSettings loads LLM settings, returning zero-value defaults if not found.
-func (sl *SettingsLoader) LlmSettings() domain.LlmSettings {
-	var settings domain.LlmSettings
-	if err := sl.db.First(&settings).Error; err != nil {
-		return domain.LlmSettings{
-			ActiveProvider: "ollama_1",
-			VlProvider:     "ollama_1",
-		}
-	}
-	return settings
-}
-
-// LlmSettingsIfExists loads LLM settings, returning false if not found.
-func (sl *SettingsLoader) LlmSettingsIfExists() (domain.LlmSettings, bool) {
-	var settings domain.LlmSettings
-	err := sl.db.First(&settings).Error
-	return settings, err == nil
-}
-
 // LlmProvider loads settings for a specific provider by alias.
 func (sl *SettingsLoader) LlmProvider(alias string) (domain.LlmProvider, bool) {
 	var provider domain.LlmProvider
@@ -77,4 +58,45 @@ func (sl *SettingsLoader) AllLlmProviders() []domain.LlmProvider {
 	var providers []domain.LlmProvider
 	sl.db.Order("alias").Find(&providers)
 	return providers
+}
+
+// LlmInstrumentByType loads an LLM instrument setting by type, including the provider relation.
+func (sl *SettingsLoader) LlmInstrumentByType(instrumentType domain.InstrumentType) (domain.LlmInstrumentSettings, bool) {
+	var settings domain.LlmInstrumentSettings
+	err := sl.db.Where("type = ?", instrumentType).Preload("Provider").First(&settings).Error
+	return settings, err == nil
+}
+
+// AllLlmInstruments loads all LLM instrument settings with provider relations.
+func (sl *SettingsLoader) AllLlmInstruments() []domain.LlmInstrumentSettings {
+	var rows []domain.LlmInstrumentSettings
+	sl.db.Preload("Provider").Find(&rows)
+	return rows
+}
+
+// TagScanSettings loads tag scan settings, returning defaults if not found.
+func (sl *SettingsLoader) TagScanSettings() domain.TagScanSettings {
+	var settings domain.TagScanSettings
+	if err := sl.db.First(&settings).Error; err != nil {
+		return domain.TagScanSettings{
+			ID:        1,
+			Enabled:   true,
+			StartHour: 22,
+			EndHour:   7,
+		}
+	}
+	return settings
+}
+
+// EmbeddingSettings loads embedding settings, returning defaults if not found.
+func (sl *SettingsLoader) EmbeddingSettings() domain.EmbeddingSettings {
+	var settings domain.EmbeddingSettings
+	if err := sl.db.First(&settings).Error; err != nil {
+		return domain.EmbeddingSettings{
+			ID:        1,
+			Dimension: 1024,
+			BatchSize: 50,
+		}
+	}
+	return settings
 }

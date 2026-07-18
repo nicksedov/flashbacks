@@ -121,81 +121,71 @@ func (s *FlashbacksMCPServer) ExecuteTool(ctx context.Context, name string, argu
 	}
 }
 
-// createVLClient creates a VL (vision-language) LLM client from the VlProvider setting.
-// Does NOT fall back to ActiveProvider — requires an explicit VL provider configuration.
+// createVLClient creates a VL (vision-language) LLM client from the VL instrument settings.
+// Does NOT fall back to chat instrument — requires an explicit VL instrument configuration.
 func (s *FlashbacksMCPServer) createVLClient() (llm.Client, string, string, error) {
-	var settings struct {
-		VlProvider string `json:"vlProvider"`
+	var instrument struct {
+		Model      string `json:"model"`
+		ProviderID uint   `json:"providerId"`
 	}
-	if err := s.db.Table("llm_settings").Select("vl_provider").First(&settings).Error; err != nil {
-		return nil, "", "", fmt.Errorf("LLM settings not found")
-	}
-
-	alias := settings.VlProvider
-	if alias == "" {
-		return nil, "", "", fmt.Errorf("VL provider is not configured — please set a VL LLM provider in Admin Settings > Analysis Tools")
+	if err := s.db.Table("llm_instrument_settings").
+		Select("model, provider_id").
+		Where("type = ?", "vl").
+		First(&instrument).Error; err != nil {
+		return nil, "", "", fmt.Errorf("VL instrument not configured — please set a VL LLM provider in Admin Settings > Analysis Tools")
 	}
 
 	var provider struct {
 		Name   string `json:"name"`
 		ApiUrl string `json:"apiUrl"`
 		ApiKey string `json:"apiKey"`
-		Model  string `json:"model"`
 	}
 	if err := s.db.Table("llm_providers").
-		Select("name, api_url, api_key, model").
-		Where("alias = ?", alias).
+		Select("name, api_url, api_key").
+		Where("id = ?", instrument.ProviderID).
 		First(&provider).Error; err != nil {
-		return nil, "", "", fmt.Errorf("LLM provider '%s' not found", alias)
+		return nil, "", "", fmt.Errorf("LLM provider not found")
 	}
 
-	client, err := llm.NewClient(provider.Name, provider.ApiUrl, provider.ApiKey, provider.Model, s.maxMegapixels)
+	client, err := llm.NewClient(provider.Name, provider.ApiUrl, provider.ApiKey, instrument.Model, s.maxMegapixels)
 	if err != nil {
 		return nil, "", "", fmt.Errorf("failed to create LLM client: %w", err)
 	}
 
-	return client, provider.Name, provider.Model, nil
+	return client, provider.Name, instrument.Model, nil
 }
 
-// createImgEditClient creates an LLM client from the ImgEditProvider setting.
-// Falls back to VlProvider, then ActiveProvider if ImgEditProvider is not configured.
+// createImgEditClient creates an LLM client from the image_edit instrument settings.
 func (s *FlashbacksMCPServer) createImgEditClient() (llm.Client, string, string, error) {
-	var settings struct {
-		ActiveProvider  string `json:"activeProvider"`
-		VlProvider      string `json:"vlProvider"`
-		ImgEditProvider string `json:"imgEditProvider"`
+	var instrument struct {
+		Model      string `json:"model"`
+		ProviderID uint   `json:"providerId"`
 	}
-	if err := s.db.Table("llm_settings").Select("active_provider, vl_provider, img_edit_provider").First(&settings).Error; err != nil {
-		return nil, "", "", fmt.Errorf("LLM settings not found")
-	}
-
-	alias := settings.ImgEditProvider
-	if alias == "" {
-		alias = settings.VlProvider
-	}
-	if alias == "" {
-		alias = settings.ActiveProvider
+	if err := s.db.Table("llm_instrument_settings").
+		Select("model, provider_id").
+		Where("type = ?", "image_edit").
+		First(&instrument).Error; err != nil {
+		return nil, "", "", fmt.Errorf("image_edit instrument not configured")
 	}
 
 	var provider struct {
 		Name   string `json:"name"`
 		ApiUrl string `json:"apiUrl"`
 		ApiKey string `json:"apiKey"`
-		Model  string `json:"model"`
 	}
 	if err := s.db.Table("llm_providers").
-		Select("name, api_url, api_key, model").
-		Where("alias = ?", alias).
+		Select("name, api_url, api_key").
+		Where("id = ?", instrument.ProviderID).
 		First(&provider).Error; err != nil {
-		return nil, "", "", fmt.Errorf("LLM provider '%s' not found", alias)
+		return nil, "", "", fmt.Errorf("LLM provider not found")
 	}
 
-	client, err := llm.NewClient(provider.Name, provider.ApiUrl, provider.ApiKey, provider.Model, s.maxMegapixels)
+	client, err := llm.NewClient(provider.Name, provider.ApiUrl, provider.ApiKey, instrument.Model, s.maxMegapixels)
 	if err != nil {
 		return nil, "", "", fmt.Errorf("failed to create LLM client: %w", err)
 	}
 
-	return client, provider.Name, provider.Model, nil
+	return client, provider.Name, instrument.Model, nil
 }
 
 // isPathInGalleryFolder checks whether the given file path resides under any

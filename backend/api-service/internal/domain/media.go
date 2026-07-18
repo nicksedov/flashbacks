@@ -177,6 +177,7 @@ type OcrBoundingBox struct {
 
 // LlmProvider stores per-provider LLM connection settings
 // Name is the provider type ("ollama", "ollama_cloud", "openai", "deepseek"), Alias is a unique user-defined identifier
+// NOTE: Model is no longer stored on LlmProvider. Use LlmInstrumentSettings.Model instead.
 type LlmProvider struct {
 	ID   uint   `gorm:"primaryKey" json:"id"`
 	Name string `gorm:"index;not null" json:"name"` // "ollama", "ollama_cloud", "openai", "deepseek"
@@ -187,7 +188,6 @@ type LlmProvider struct {
 	Alias     string    `gorm:"not null" json:"alias"`
 	ApiUrl    string    `gorm:"not null" json:"apiUrl"`
 	ApiKey    string    `gorm:"default:''" json:"apiKey"`
-	Model     string    `gorm:"not null" json:"model"`
 	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt"`
 }
@@ -201,24 +201,65 @@ type LlmProviderModelCache struct {
 	FetchedAt     time.Time `json:"fetchedAt"`
 }
 
-// LlmSettings stores global LLM settings (singleton, ID=1)
-type LlmSettings struct {
-	ID                     uint      `gorm:"primaryKey" json:"id"`
-	ActiveProvider         string    `gorm:"default:ollama_1;not null" json:"activeProvider"`  // Text/chat LLM provider alias
-	VlProvider             string    `gorm:"default:ollama_1;not null" json:"vlProvider"`      // VL (vision-language) provider alias for image analysis
-	ImgEditProvider        string    `gorm:"default:ollama_1;not null" json:"imgEditProvider"` // Image edit provider alias for quality enhancement
-	TagScanEnabled         bool      `gorm:"default:true" json:"tagScanEnabled"`
-	TagScanStartHour       int       `gorm:"default:22" json:"tagScanStartHour"`
-	TagScanStartMinute     int       `gorm:"default:0" json:"tagScanStartMinute"`
-	TagScanEndHour         int       `gorm:"default:7" json:"tagScanEndHour"`
-	TagScanEndMinute       int       `gorm:"default:0" json:"tagScanEndMinute"`
-	TagScanTimezoneOffset  int       `gorm:"default:0" json:"tagScanTimezoneOffset"`   // User's timezone offset in minutes (JS getTimezoneOffset: UTC+3 = -180)
-	EmbeddingProviderAlias string    `gorm:"default:''" json:"embeddingProviderAlias"` // empty = use active VL provider
-	EmbeddingModel         string    `gorm:"default:'qwen3-embedding:4b'" json:"embeddingModel"`
-	EmbeddingDimension     int       `gorm:"default:1024" json:"embeddingDimension"`
-	EmbeddingBatchSize     int       `gorm:"default:50" json:"embeddingBatchSize"`
-	CreatedAt              time.Time `json:"createdAt"`
-	UpdatedAt              time.Time `json:"updatedAt"`
+// InstrumentType defines the type of an LLM instrument.
+type InstrumentType string
+
+const (
+	InstrumentChat      InstrumentType = "chat"
+	InstrumentVL        InstrumentType = "vl"
+	InstrumentEmbedding InstrumentType = "embedding"
+	InstrumentImageEdit InstrumentType = "image_edit"
+)
+
+// LlmInstrumentSettings stores the provider + model assignment per instrument type.
+// One row per type (chat, vl, embedding, image_edit).
+type LlmInstrumentSettings struct {
+	ID         uint           `gorm:"primaryKey" json:"id"`
+	Type       InstrumentType `gorm:"uniqueIndex;not null;size:50" json:"type"`
+	ProviderID uint           `gorm:"not null" json:"providerId"`
+	Model      string         `gorm:"not null;default:''" json:"model"`
+	CreatedAt  time.Time      `json:"createdAt"`
+	UpdatedAt  time.Time      `json:"updatedAt"`
+
+	// GORM belongs-to relation
+	Provider LlmProvider `gorm:"foreignKey:ProviderID;constraint:OnDelete:CASCADE" json:"-"`
+}
+
+// TableName overrides the default GORM table name for LlmInstrumentSettings.
+func (LlmInstrumentSettings) TableName() string {
+	return "llm_instrument_settings"
+}
+
+// TagScanSettings stores tag scan scheduling configuration (singleton, ID=1).
+type TagScanSettings struct {
+	ID             uint      `gorm:"primaryKey" json:"id"`
+	Enabled        bool      `gorm:"default:true" json:"enabled"`
+	StartHour      int       `gorm:"default:22" json:"startHour"`
+	StartMinute    int       `gorm:"default:0" json:"startMinute"`
+	EndHour        int       `gorm:"default:7" json:"endHour"`
+	EndMinute      int       `gorm:"default:0" json:"endMinute"`
+	TimezoneOffset int       `gorm:"default:0" json:"timezoneOffset"`
+	CreatedAt      time.Time `json:"createdAt"`
+	UpdatedAt      time.Time `json:"updatedAt"`
+}
+
+// TableName overrides the default GORM table name for TagScanSettings.
+func (TagScanSettings) TableName() string {
+	return "tag_scan_settings"
+}
+
+// EmbeddingSettings stores embedding engine parameters (singleton, ID=1).
+type EmbeddingSettings struct {
+	ID        uint      `gorm:"primaryKey" json:"id"`
+	Dimension int       `gorm:"default:1024" json:"dimension"`
+	BatchSize int       `gorm:"default:50" json:"batchSize"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
+}
+
+// TableName overrides the default GORM table name for EmbeddingSettings.
+func (EmbeddingSettings) TableName() string {
+	return "embedding_settings"
 }
 
 // ImageTag stores AI-generated tags for an image

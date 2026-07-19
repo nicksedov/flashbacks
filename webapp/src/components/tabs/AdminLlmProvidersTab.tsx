@@ -26,7 +26,7 @@ import {
   Wand2,
 } from "lucide-react"
 import { useTranslation } from "@/i18n"
-import type { LlmSettingsResponse, LlmProviderDTO, LlmModelDTO, LlmProviderType } from "@/types"
+import type { LlmSettingsResponse, LlmProviderDTO, LlmModelDTO, LlmProviderType, LlmInstrumentType } from "@/types"
 
 // Provider type display labels
 const PROVIDER_LABELS: Record<LlmProviderType, string> = {
@@ -47,6 +47,14 @@ const CAPABILITY_LABELS: Record<ModelCapability, string> = {
   tool_calling: "Tools",
   vision: "Vision",
   embedding: "Embedding",
+}
+
+// Instrument labels for usage badges
+const INSTRUMENT_ICONS: Record<LlmInstrumentType, { icon: typeof MessageSquare; label: string }> = {
+  chat: { icon: MessageSquare, label: "llm_providers.usageShortChat" },
+  vl: { icon: Eye, label: "llm_providers.usageShortVL" },
+  embedding: { icon: Brain, label: "llm_providers.usageShortEmb" },
+  image_edit: { icon: Wand2, label: "llm_providers.usageShortImgEdit" },
 }
 
 // Infer capabilities based on provider type and model name heuristics.
@@ -77,9 +85,8 @@ function inferCapabilities(
   if (providerType === "deepseek" || providerType === "openai") {
     caps.push("tool_calling")
   } else if (providerType === "ollama" || providerType === "ollama_cloud") {
-    caps.push("tool_calling") // Ollama supports tool calling with compatible models
+    caps.push("tool_calling")
   } else if (providerType === "alibaba") {
-    // Alibaba DashScope supports tool calling with Qwen models
     caps.push("tool_calling")
   }
 
@@ -94,7 +101,6 @@ function inferCapabilities(
   if (visionModels.some((vm) => modelLower.includes(vm))) {
     caps.push("vision")
   } else if (providerType === "deepseek") {
-    // DeepSeek V3+ models have vision but limited; V4 Pro is the vision-capable one
     if (modelLower.includes("v4-pro")) {
       caps.push("vision")
     }
@@ -103,7 +109,6 @@ function inferCapabilities(
       caps.push("vision")
     }
   } else if (providerType === "alibaba") {
-    // Alibaba Qwen VL and image edit models are vision-capable
     if (modelLower.includes("qwen-vl") || modelLower.includes("qwen-image-edit")) {
       caps.push("vision")
     }
@@ -131,22 +136,18 @@ export function AdminLlmProvidersTab() {
   const [expandedProviderAlias, setExpandedProviderAlias] = useState<string | null>(null)
   const [loadingModelsAlias, setLoadingModelsAlias] = useState<string | null>(null)
 
-  // New provider form
+  // New provider form — model is now set per instrument, not on the provider
   const [showNewProvider, setShowNewProvider] = useState(false)
   const [newProviderType, setNewProviderType] = useState<LlmProviderType>("ollama")
   const [newProviderAlias, setNewProviderAlias] = useState("")
   const [newProviderApiUrl, setNewProviderApiUrl] = useState("")
   const [newProviderApiKey, setNewProviderApiKey] = useState("")
-  const [newProviderModel, setNewProviderModel] = useState("minicpm-v")
 
-  // Editing state
+  // Editing state — model is now set per instrument, not on the provider
   const [editingProviderAlias, setEditingProviderAlias] = useState<string | null>(null)
   const [editingAliasValue, setEditingAliasValue] = useState("")
   const [editingApiUrl, setEditingApiUrl] = useState("")
   const [editingApiKey, setEditingApiKey] = useState("")
-  const [editingModel, setEditingModel] = useState("")
-  const [editingManualModel, setEditingManualModel] = useState(false)
-  const [editingModelsLoaded, setEditingModelsLoaded] = useState(false)
 
   const loadSettings = useCallback(async () => {
     setIsLoading(true)
@@ -208,10 +209,9 @@ export function AdminLlmProvidersTab() {
           toast.info(t("llm_providers.modelsLoaded", { count: 0 }))
           return null
         }
-        // Show error from backend
         toast.error(response.error || t("llm_providers.modelsLoadFailed"))
         return null
-      } catch (err) {
+      } catch {
         toast.error(t("llm_providers.modelsLoadFailed"))
         return null
       } finally {
@@ -233,7 +233,7 @@ export function AdminLlmProvidersTab() {
     [expandedProviderAlias, loadModelsForProvider],
   )
 
-  // Add provider
+  // Add provider — model is no longer set here (moved to instrument settings)
   const handleAddProvider = useCallback(async () => {
     if (!newProviderAlias.trim()) {
       toast.error("Alias is required")
@@ -274,14 +274,12 @@ export function AdminLlmProvidersTab() {
           newProviderType === "alibaba"
             ? newProviderApiKey
             : undefined,
-        model: newProviderModel || "minicpm-v",
       })
       toast.success(t("llm_ocr.settingsSaved"))
       setShowNewProvider(false)
       setNewProviderAlias("")
       setNewProviderApiUrl("")
       setNewProviderApiKey("")
-      setNewProviderModel("minicpm-v")
       await loadSettings()
     } catch {
       toast.error(t("llm_ocr.settingsSaveFailed"))
@@ -293,39 +291,27 @@ export function AdminLlmProvidersTab() {
     newProviderType,
     newProviderApiUrl,
     newProviderApiKey,
-    newProviderModel,
     llmSettings?.providers,
     loadSettings,
     t,
   ])
 
-  // Start editing a provider — auto-load models if not cached
+  // Start editing a provider — no model to load
   const startEditing = useCallback(
-    async (provider: LlmProviderDTO) => {
+    (provider: LlmProviderDTO) => {
       setEditingProviderAlias(provider.alias)
       setEditingAliasValue(provider.alias)
       setEditingApiUrl(provider.apiUrl)
       setEditingApiKey(provider.apiKey)
-      setEditingModel(provider.model)
-      setEditingManualModel(false)
-      setEditingModelsLoaded(false)
-
-      // Auto-load models if not already cached
-      if (!modelCache[provider.alias]) {
-        await loadModelsForProvider(provider.alias)
-      }
-      setEditingModelsLoaded(true)
     },
-    [loadModelsForProvider, modelCache],
+    [],
   )
 
   const cancelEditing = useCallback(() => {
     setEditingProviderAlias(null)
-    setEditingManualModel(false)
-    setEditingModelsLoaded(false)
   }, [])
 
-  // Save provider edits
+  // Save provider edits — no model field
   const handleSaveEdit = useCallback(
     async (oldAlias: string) => {
       if (!editingAliasValue.trim()) return
@@ -346,9 +332,6 @@ export function AdminLlmProvidersTab() {
         }
         if (editingApiUrl !== provider.apiUrl) {
           update.apiUrl = editingApiUrl
-        }
-        if (editingModel !== provider.model) {
-          update.model = editingModel
         }
         if (editingApiKey !== provider.apiKey) {
           update.apiKey = editingApiKey
@@ -377,7 +360,7 @@ export function AdminLlmProvidersTab() {
         setIsSaving(false)
       }
     },
-    [editingAliasValue, editingApiUrl, editingApiKey, editingModel, llmSettings?.providers, loadSettings, t, modelCache],
+    [editingAliasValue, editingApiUrl, editingApiKey, llmSettings?.providers, loadSettings, t, modelCache],
   )
 
   // Delete provider
@@ -385,13 +368,17 @@ export function AdminLlmProvidersTab() {
     async (alias: string) => {
       if (!confirm(t("llm_providers.deleteConfirm", { alias }))) return
 
-      // Check if provider is in use
+      // Check if provider is in use by any instrument
       if (llmSettings) {
         const usages: string[] = []
-        if (llmSettings.activeProvider === alias) usages.push(t("llm_providers.usageChatAssistant"))
-        if (llmSettings.vlProvider === alias) usages.push(t("llm_providers.usageImageAnalysis"))
-        if (llmSettings.imgEditProvider === alias) usages.push(t("llm_providers.usageImageEdit"))
-        if (llmSettings.embeddingProviderAlias === alias) usages.push(t("llm_providers.usageEmbeddings"))
+        for (const instr of llmSettings.instruments) {
+          if (instr.providerAlias === alias) {
+            const iconInfo = INSTRUMENT_ICONS[instr.type]
+            if (iconInfo) {
+              usages.push(t(iconInfo.label as never))
+            }
+          }
+        }
         if (usages.length > 0) {
           toast.error(t("llm_providers.cannotDeleteInUse", { usages: usages.join(", ") }))
           return
@@ -420,13 +407,18 @@ export function AdminLlmProvidersTab() {
 
   const getProviderLabel = (name: LlmProviderType): string => PROVIDER_LABELS[name] ?? name
 
+  // Check if provider is in use by any instrument (new model via instruments[])
   const isProviderInUse = (alias: string): string[] => {
     if (!llmSettings) return []
     const usages: string[] = []
-    if (llmSettings.activeProvider === alias) usages.push(t("llm_providers.usageChatAssistant"))
-    if (llmSettings.vlProvider === alias) usages.push(t("llm_providers.usageImageAnalysis"))
-    if (llmSettings.imgEditProvider === alias) usages.push(t("llm_providers.usageImageEdit"))
-    if (llmSettings.embeddingProviderAlias === alias) usages.push(t("llm_providers.usageEmbeddings"))
+    for (const instr of llmSettings.instruments) {
+      if (instr.providerAlias === alias) {
+        const iconInfo = INSTRUMENT_ICONS[instr.type]
+        if (iconInfo) {
+          usages.push(t(iconInfo.label as never))
+        }
+      }
+    }
     return usages
   }
 
@@ -468,30 +460,19 @@ export function AdminLlmProvidersTab() {
                           </Badge>
                           {usages.length > 0 && (
                             <div className="flex gap-1">
-                              {usages.includes(t("llm_providers.usageChatAssistant")) && (
-                                <Badge variant="outline" className="text-xs gap-1">
-                                  <MessageSquare className="h-3 w-3" />
-                                  {t("llm_providers.usageShortChat")}
-                                </Badge>
-                              )}
-                              {usages.includes(t("llm_providers.usageImageAnalysis")) && (
-                                <Badge variant="outline" className="text-xs gap-1">
-                                  <Eye className="h-3 w-3" />
-                                  {t("llm_providers.usageShortVL")}
-                                </Badge>
-                              )}
-                              {usages.includes(t("llm_providers.usageEmbeddings")) && (
-                                <Badge variant="outline" className="text-xs gap-1">
-                                  <Brain className="h-3 w-3" />
-                                  {t("llm_providers.usageShortEmb")}
-                                </Badge>
-                              )}
-                              {usages.includes(t("llm_providers.usageImageEdit")) && (
-                                <Badge variant="outline" className="text-xs gap-1">
-                                  <Wand2 className="h-3 w-3" />
-                                  {t("llm_providers.usageShortImgEdit")}
-                                </Badge>
-                              )}
+                              {llmSettings?.instruments
+                                .filter((instr) => instr.providerAlias === provider.alias)
+                                .map((instr) => {
+                                  const iconInfo = INSTRUMENT_ICONS[instr.type]
+                                  if (!iconInfo) return null
+                                  const Icon = iconInfo.icon
+                                  return (
+                                    <Badge key={instr.type} variant="outline" className="text-xs gap-1">
+                                      <Icon className="h-3 w-3" />
+                                      {t(iconInfo.label as never)}
+                                    </Badge>
+                                  )
+                                })}
                             </div>
                           )}
                         </div>
@@ -524,13 +505,18 @@ export function AdminLlmProvidersTab() {
                             ? "https://ollama.com"
                             : provider.apiUrl}
                         </span>
-                        <span className="text-xs">
-                          {t("llm_ocr.model")}: {provider.model}
-                        </span>
+                        {llmSettings?.instruments
+                          .filter((instr) => instr.providerAlias === provider.alias)
+                          .map((instr) => (
+                            <span key={instr.type} className="text-xs text-muted-foreground">
+                              {t("llm_ocr.model")} ({instr.type}):{" "}
+                              <span className="font-mono">{instr.model}</span>
+                            </span>
+                          ))}
                       </CardDescription>
                     </CardHeader>
 
-                    {/* Edit form inline */}
+                    {/* Edit form inline — no model field (moved to instrument settings) */}
                     {isEditingThis && (
                       <CardContent className="border-t pt-4 space-y-3">
                         <div className="space-y-2">
@@ -577,68 +563,9 @@ export function AdminLlmProvidersTab() {
                           </div>
                         )}
 
-                        {/* Model field — dropdown from llm_provider_model_caches, with manual input fallback */}
-                        <div className="space-y-2">
-                          <Label>{t("llm_ocr.model")}</Label>
-                          {!editingModelsLoaded || isLoadingModels ? (
-                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                              <span>{t("llm_providers.loadModels")}...</span>
-                            </div>
-                          ) : models.length > 0 && !editingManualModel ? (
-                            <div className="space-y-2">
-                              <Select
-                                value={editingModel}
-                                onValueChange={(value) => setEditingModel(value)}
-                              >
-                                <SelectTrigger>
-                                  <SelectValue placeholder={t("llm_providers.selectModel")} />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {models.map((model) => (
-                                    <SelectItem key={model.id} value={model.id}>
-                                      {model.name}
-                                      {model.size ? ` (${(model.size / 1073741824).toFixed(1)} GB)` : ""}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                              <Button
-                                variant="link"
-                                size="sm"
-                                className="px-0 h-auto text-xs"
-                                onClick={() => setEditingManualModel(true)}
-                              >
-                                {t("llm_providers.enterModelManually")}
-                              </Button>
-                            </div>
-                          ) : (
-                            <div className="space-y-2">
-                              <Input
-                                value={editingModel}
-                                onChange={(e) => setEditingModel(e.target.value)}
-                                disabled={isSaving}
-                                placeholder={
-                                  provider.name === "ollama" || provider.name === "ollama_cloud"
-                                    ? "minicpm-v"
-                                    : provider.name === "alibaba"
-                                      ? "qwen-image-edit-plus"
-                                      : "gpt-4-vision-preview"
-                                }
-                              />
-                              {models.length > 0 && editingManualModel && (
-                                <Button
-                                  variant="link"
-                                  size="sm"
-                                  className="px-0 h-auto text-xs"
-                                  onClick={() => setEditingManualModel(false)}
-                                >
-                                  {t("llm_providers.selectFromModels")}
-                                </Button>
-                              )}
-                            </div>
-                          )}
-                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          {t("llm_providers.manageInProvidersTab")}
+                        </p>
 
                         <div className="flex gap-2 justify-end pt-1">
                           <Button variant="outline" size="sm" onClick={cancelEditing} disabled={isSaving}>
@@ -656,7 +583,7 @@ export function AdminLlmProvidersTab() {
                       </CardContent>
                     )}
 
-                    {/* Models section */}
+                    {/* Models section — still shows available models for the provider */}
                     <CardContent className="pt-0">
                       <Button
                         variant="ghost"
@@ -725,7 +652,7 @@ export function AdminLlmProvidersTab() {
             </div>
           )}
 
-          {/* Add New Provider */}
+          {/* Add New Provider — no model field */}
           <Card>
             <CardHeader>
               <CardTitle className="text-base">{t("llm_providers.addProvider")}</CardTitle>
@@ -805,22 +732,9 @@ export function AdminLlmProvidersTab() {
                     </div>
                   )}
 
-                  {/* Model - text input only for new providers (no cached models yet) */}
-                  <div className="space-y-2">
-                    <Label htmlFor="new-model">{t("llm_ocr.model")}</Label>
-                    <Input
-                      id="new-model"
-                      placeholder={
-                        newProviderType === "ollama" || newProviderType === "ollama_cloud"
-                          ? "minicpm-v"
-                          : newProviderType === "alibaba"
-                            ? "qwen-image-edit-plus"
-                            : "gpt-4-vision-preview"
-                      }
-                      value={newProviderModel}
-                      onChange={(e) => setNewProviderModel(e.target.value)}
-                    />
-                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {t("llm_providers.manageInProvidersTab")}
+                  </p>
 
                   <div className="flex gap-2 justify-end">
                     <Button

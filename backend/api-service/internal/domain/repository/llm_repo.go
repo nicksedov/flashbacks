@@ -7,22 +7,33 @@ import (
 
 // LlmRepository provides data access for LLM settings, providers, and model caches.
 type LlmRepository interface {
-	GetSettings() (*domain.LlmSettings, error)
-	CreateSettings(settings *domain.LlmSettings) error
-	UpdateSettings(updates map[string]interface{}) error
-	ReloadSettings() (*domain.LlmSettings, error)
-
+	// --- Providers ---
 	GetProviderByAlias(alias string) (*domain.LlmProvider, error)
 	GetFirstProviderExcept(id uint) (*domain.LlmProvider, error)
 	CreateProvider(provider *domain.LlmProvider) error
 	UpdateProviderByAlias(alias string, updates map[string]interface{}) error
 	DeleteProvider(provider *domain.LlmProvider) error
 
+	// --- Model Caches ---
 	GetAllModelCaches() ([]domain.LlmProviderModelCache, error)
 	GetModelCacheByAlias(alias string) (*domain.LlmProviderModelCache, error)
 	UpsertModelCache(cache *domain.LlmProviderModelCache) error
 	DeleteModelCacheByAlias(alias string) error
 	UpdateModelCacheAlias(oldAlias, newAlias string) error
+
+	// --- Tag Scan Settings ---
+	GetTagScanSettings() (*domain.TagScanSettings, error)
+	UpsertTagScanSettings(settings *domain.TagScanSettings) error
+
+	// --- LLM Instrument Settings ---
+	GetInstrumentByType(instrumentType domain.InstrumentType) (*domain.LlmInstrumentSettings, error)
+	GetAllInstruments() ([]domain.LlmInstrumentSettings, error)
+	UpsertInstrument(settings *domain.LlmInstrumentSettings) error
+	DeleteInstrumentByType(instrumentType domain.InstrumentType) error
+
+	// --- Embedding Settings ---
+	GetEmbeddingSettings() (*domain.EmbeddingSettings, error)
+	UpsertEmbeddingSettings(settings *domain.EmbeddingSettings) error
 }
 
 type gormLlmRepo struct {
@@ -34,33 +45,7 @@ func NewLlmRepository(db *gorm.DB) LlmRepository {
 	return &gormLlmRepo{db: db}
 }
 
-func (r *gormLlmRepo) GetSettings() (*domain.LlmSettings, error) {
-	var s domain.LlmSettings
-	if err := r.db.First(&s).Error; err != nil {
-		return nil, err
-	}
-	return &s, nil
-}
-
-func (r *gormLlmRepo) CreateSettings(settings *domain.LlmSettings) error {
-	return r.db.Create(settings).Error
-}
-
-func (r *gormLlmRepo) UpdateSettings(updates map[string]interface{}) error {
-	var s domain.LlmSettings
-	if err := r.db.First(&s).Error; err != nil {
-		return err
-	}
-	return r.db.Model(&s).Updates(updates).Error
-}
-
-func (r *gormLlmRepo) ReloadSettings() (*domain.LlmSettings, error) {
-	var s domain.LlmSettings
-	if err := r.db.First(&s).Error; err != nil {
-		return nil, err
-	}
-	return &s, nil
-}
+// --- Providers ---
 
 func (r *gormLlmRepo) GetProviderByAlias(alias string) (*domain.LlmProvider, error) {
 	var p domain.LlmProvider
@@ -93,6 +78,8 @@ func (r *gormLlmRepo) UpdateProviderByAlias(alias string, updates map[string]int
 func (r *gormLlmRepo) DeleteProvider(provider *domain.LlmProvider) error {
 	return r.db.Delete(provider).Error
 }
+
+// --- Model Caches ---
 
 func (r *gormLlmRepo) GetAllModelCaches() ([]domain.LlmProviderModelCache, error) {
 	var rows []domain.LlmProviderModelCache
@@ -127,4 +114,81 @@ func (r *gormLlmRepo) UpdateModelCacheAlias(oldAlias, newAlias string) error {
 	return r.db.Model(&domain.LlmProviderModelCache{}).
 		Where("provider_alias = ?", oldAlias).
 		Update("provider_alias", newAlias).Error
+}
+
+// --- Tag Scan Settings ---
+
+func (r *gormLlmRepo) GetTagScanSettings() (*domain.TagScanSettings, error) {
+	var s domain.TagScanSettings
+	if err := r.db.First(&s).Error; err != nil {
+		return nil, err
+	}
+	return &s, nil
+}
+
+func (r *gormLlmRepo) UpsertTagScanSettings(settings *domain.TagScanSettings) error {
+	var existing domain.TagScanSettings
+	if err := r.db.First(&existing).Error; err == nil {
+		return r.db.Model(&existing).Updates(map[string]interface{}{
+			"enabled":         settings.Enabled,
+			"start_hour":      settings.StartHour,
+			"start_minute":    settings.StartMinute,
+			"end_hour":        settings.EndHour,
+			"end_minute":      settings.EndMinute,
+			"timezone_offset": settings.TimezoneOffset,
+		}).Error
+	}
+	return r.db.Create(settings).Error
+}
+
+// --- LLM Instrument Settings ---
+
+func (r *gormLlmRepo) GetInstrumentByType(instrumentType domain.InstrumentType) (*domain.LlmInstrumentSettings, error) {
+	var s domain.LlmInstrumentSettings
+	if err := r.db.Where("type = ?", instrumentType).Preload("Provider").First(&s).Error; err != nil {
+		return nil, err
+	}
+	return &s, nil
+}
+
+func (r *gormLlmRepo) GetAllInstruments() ([]domain.LlmInstrumentSettings, error) {
+	var rows []domain.LlmInstrumentSettings
+	err := r.db.Preload("Provider").Find(&rows).Error
+	return rows, err
+}
+
+func (r *gormLlmRepo) UpsertInstrument(settings *domain.LlmInstrumentSettings) error {
+	var existing domain.LlmInstrumentSettings
+	if err := r.db.Where("type = ?", settings.Type).First(&existing).Error; err == nil {
+		return r.db.Model(&existing).Updates(map[string]interface{}{
+			"provider_id": settings.ProviderID,
+			"model":       settings.Model,
+		}).Error
+	}
+	return r.db.Create(settings).Error
+}
+
+func (r *gormLlmRepo) DeleteInstrumentByType(instrumentType domain.InstrumentType) error {
+	return r.db.Where("type = ?", instrumentType).Delete(&domain.LlmInstrumentSettings{}).Error
+}
+
+// --- Embedding Settings ---
+
+func (r *gormLlmRepo) GetEmbeddingSettings() (*domain.EmbeddingSettings, error) {
+	var s domain.EmbeddingSettings
+	if err := r.db.First(&s).Error; err != nil {
+		return nil, err
+	}
+	return &s, nil
+}
+
+func (r *gormLlmRepo) UpsertEmbeddingSettings(settings *domain.EmbeddingSettings) error {
+	var existing domain.EmbeddingSettings
+	if err := r.db.First(&existing).Error; err == nil {
+		return r.db.Model(&existing).Updates(map[string]interface{}{
+			"dimension":  settings.Dimension,
+			"batch_size": settings.BatchSize,
+		}).Error
+	}
+	return r.db.Create(settings).Error
 }

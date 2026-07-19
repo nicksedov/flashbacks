@@ -174,7 +174,7 @@ func (s *Server) handleSendMessage(c *gin.Context) {
 	}
 
 	// Create LLM chat client from chat provider
-	chatClient, _, ok := s.llmFactory.CreateChatClient(c)
+	chatClient, _, _, ok := s.llmFactory.CreateChatClient(c)
 	if !ok {
 		return // Error already written by CreateChatClient
 	}
@@ -232,14 +232,15 @@ func (s *Server) handleSendMessage(c *gin.Context) {
 // resolveMaxTokens resolves max tokens from active provider/model cache, falling back to config default.
 // For DeepSeek providers, also checks the known model registry as a fallback.
 func (s *Server) resolveMaxTokens(c *gin.Context) int {
-	llmSettings := s.settingsLoader.LlmSettings()
-	provider, ok := s.settingsLoader.LlmProvider(llmSettings.ActiveProvider)
+	// Get model from chat instrument settings
+	instrument, ok := s.settingsLoader.LlmInstrumentByType(domain.InstrumentChat)
 	if !ok {
 		return s.agentConfig.MaxConversationTokens
 	}
+	provider := instrument.Provider
 
 	// Try database cache first
-	modelMax := s.conversationService.ResolveModelMaxTokens(provider.Alias, provider.Model)
+	modelMax := s.conversationService.ResolveModelMaxTokens(provider.Alias, instrument.Model)
 	if modelMax > 0 {
 		return modelMax
 	}
@@ -247,7 +248,7 @@ func (s *Server) resolveMaxTokens(c *gin.Context) int {
 	// For DeepSeek, fall back to the known model registry
 	if provider.Name == "deepseek" {
 		// Create a temporary client just to resolve the context window
-		dsClient := llm.NewDeepSeekClient(provider.ApiUrl, provider.ApiKey, provider.Model)
+		dsClient := llm.NewDeepSeekClient(provider.ApiUrl, provider.ApiKey, instrument.Model)
 		return dsClient.ContextWindow()
 	}
 

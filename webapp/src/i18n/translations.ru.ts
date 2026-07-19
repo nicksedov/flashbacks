@@ -469,6 +469,8 @@ export const translationsRu = {
   "adminPanel.exif.statusHealthy": "Работает",
   "adminPanel.exif.statusUnhealthy": "Сервис недоступен",
   "adminPanel.exif.statusDisabled": "Отключен",
+  "adminPanel.exif.serviceURL": "URL сервиса",
+  "adminPanel.exif.lastCheck": "Последняя проверка",
   "adminPanel.exif.refresh": "Обновить",
   "adminPanel.exif.refreshFailed": "Не удалось проверить статус сервиса EXIF",
 
@@ -552,6 +554,10 @@ export const translationsRu = {
   "llm_ocr.filePath": "Путь к файлу",
   "llm_ocr.sectionResult": "Результат",
   "llm_ocr.sectionDetected": "Обнаружено",
+  "llm_ocr.errorHintNetwork": "Сервер недоступен. Убедитесь, что API-сервис запущен и сетевое соединение работает. Проверьте статус сервера или повторите попытку позже.",
+  "llm_ocr.errorHintConfig": "VL (Vision-Language) LLM провайдер не настроен. Перейдите в Настройки администратора → Инструменты анализа, чтобы настроить VL LLM провайдера для распознавания текста.",
+  "llm_ocr.errorHintAuth": "LLM провайдер отклонил запрос. Проверьте, что ваш API-ключ действителен и имеет достаточные права в Настройках администратора → LLM Провайдеры.",
+  "llm_ocr.errorHintGeneral": "Произошла непредвиденная ошибка при распознавании текста. Проверьте логи сервера или повторите попытку.",
 
   // Tags panel
   "tags.title": "Теги изображения",

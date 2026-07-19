@@ -110,21 +110,21 @@ func (app *App) Init() {
 		}
 	}
 
-	// Read tag scan schedule from LlmSettings
+	// Read tag scan schedule from new TagScanSettings table
 	tagScanEnabled := true
 	tagScanStartHour := 22
 	tagScanStartMinute := 0
 	tagScanEndHour := 7
 	tagScanEndMinute := 0
 	tagScanTimezoneOffset := 0
-	var llmSettings domain.LlmSettings
-	if result := app.DB.First(&llmSettings); result.Error == nil {
-		tagScanEnabled = llmSettings.TagScanEnabled
-		tagScanStartHour = llmSettings.TagScanStartHour
-		tagScanStartMinute = llmSettings.TagScanStartMinute
-		tagScanEndHour = llmSettings.TagScanEndHour
-		tagScanEndMinute = llmSettings.TagScanEndMinute
-		tagScanTimezoneOffset = llmSettings.TagScanTimezoneOffset
+	var tagScan domain.TagScanSettings
+	if result := app.DB.First(&tagScan); result.Error == nil {
+		tagScanEnabled = tagScan.Enabled
+		tagScanStartHour = tagScan.StartHour
+		tagScanStartMinute = tagScan.StartMinute
+		tagScanEndHour = tagScan.EndHour
+		tagScanEndMinute = tagScan.EndMinute
+		tagScanTimezoneOffset = tagScan.TimezoneOffset
 	}
 	app.TagScanManager.Start(tagScanEnabled, tagScanStartHour, tagScanStartMinute, tagScanEndHour, tagScanEndMinute, tagScanTimezoneOffset)
 	fmt.Printf("Tag scan: window %02d:%02d - %02d:%02d, tzOffset=%d, enabled=%v\n", tagScanStartHour, tagScanStartMinute, tagScanEndHour, tagScanEndMinute, tagScanTimezoneOffset, tagScanEnabled)

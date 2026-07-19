@@ -46,7 +46,9 @@ func InitDatabase(cfg *config.AppConfig) (*gorm.DB, error) {
 		&domain.OcrClassification{},
 		&domain.OcrBoundingBox{},
 		&domain.LlmProvider{},
-		&domain.LlmSettings{},
+		&domain.LlmInstrumentSettings{},
+		&domain.TagScanSettings{},
+		&domain.EmbeddingSettings{},
 		&domain.OcrLlmRecognition{},
 		&domain.ImageTag{},
 		&domain.LlmProviderModelCache{},
@@ -70,26 +72,41 @@ func InitDatabase(cfg *config.AppConfig) (*gorm.DB, error) {
 		db.Create(&domain.AppSettings{ID: 1})
 	}
 
-	// Seed default LLM settings row if not exists
-	var llmCount int64
-	db.Model(&domain.LlmSettings{}).Count(&llmCount)
-	if llmCount == 0 {
-		db.Create(&domain.LlmSettings{
-			ID:             1,
-			ActiveProvider: "ollama_1",
-			VlProvider:     "ollama_1",
-		})
-	}
-
 	// Seed default LLM providers if not exist
 	var providerCount int64
 	db.Model(&domain.LlmProvider{}).Count(&providerCount)
 	if providerCount == 0 {
 		db.Create([]domain.LlmProvider{
-			{Name: "ollama", Alias: "ollama_1", ApiUrl: "http://localhost:11434", Model: "minicpm-v"},
-			{Name: "ollama_cloud", Alias: "ollama_cloud_1", ApiUrl: "https://ollama.com", Model: "minicpm-v"},
-			{Name: "openai", Alias: "openai_1", ApiUrl: "https://api.openai.com", Model: "gpt-4-vision-preview"},
+			{Name: "ollama", Alias: "ollama_1", ApiUrl: "http://localhost:11434"},
+			{Name: "ollama_cloud", Alias: "ollama_cloud_1", ApiUrl: "https://ollama.com"},
+			{Name: "openai", Alias: "openai_1", ApiUrl: "https://api.openai.com"},
 		})
+
+		// Seed default instrument settings for the default providers
+		var chatProvider, vlProvider domain.LlmProvider
+		db.Where("alias = ?", "ollama_1").First(&chatProvider)
+		db.Where("alias = ?", "ollama_1").First(&vlProvider)
+
+		db.Create([]domain.LlmInstrumentSettings{
+			{Type: domain.InstrumentChat, ProviderID: chatProvider.ID, Model: "minicpm-v"},
+			{Type: domain.InstrumentVL, ProviderID: vlProvider.ID, Model: "minicpm-v"},
+			{Type: domain.InstrumentEmbedding, ProviderID: chatProvider.ID, Model: "qwen3-embedding:4b"},
+			{Type: domain.InstrumentImageEdit, ProviderID: chatProvider.ID, Model: "minicpm-v"},
+		})
+
+		// Seed default tag scan settings
+		var tagScanCount int64
+		db.Model(&domain.TagScanSettings{}).Count(&tagScanCount)
+		if tagScanCount == 0 {
+			db.Create(&domain.TagScanSettings{ID: 1, Enabled: true, StartHour: 22, StartMinute: 0, EndHour: 7, EndMinute: 0})
+		}
+
+		// Seed default embedding settings
+		var embCount int64
+		db.Model(&domain.EmbeddingSettings{}).Count(&embCount)
+		if embCount == 0 {
+			db.Create(&domain.EmbeddingSettings{ID: 1, Dimension: 1024, BatchSize: 50})
+		}
 	}
 
 	return db, nil

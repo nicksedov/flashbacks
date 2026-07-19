@@ -117,11 +117,11 @@ func (m *EmbeddingBackfillManager) run() {
 	m.progress.Remaining = int(total)
 	m.mu.Unlock()
 
-	// Read batch size from LLM settings (default 50)
+	// Read batch size from embedding settings (default 50)
 	batchSize := 50
-	var settings domain.LlmSettings
-	if err := m.db.First(&settings).Error; err == nil && settings.EmbeddingBatchSize > 0 {
-		batchSize = settings.EmbeddingBatchSize
+	var embSettings domain.EmbeddingSettings
+	if err := m.db.First(&embSettings).Error; err == nil && embSettings.BatchSize > 0 {
+		batchSize = embSettings.BatchSize
 	}
 
 	cursor := uint(0)
@@ -241,29 +241,20 @@ func upsertEmbedding(db *gorm.DB, imageFileID uint, childTable string, dimension
 // resolveEmbeddingClient loads LLM settings and creates an EmbeddingClient.
 // Returns the client, model name, embedding dimension, and any error.
 func resolveEmbeddingClient(db *gorm.DB) (llm.EmbeddingClient, string, int, error) {
-	var settings domain.LlmSettings
-	if err := db.First(&settings).Error; err != nil {
-		return nil, "", 0, fmt.Errorf("LLM settings not found")
+	var embInstrument domain.LlmInstrumentSettings
+	if err := db.Where("type = ?", domain.InstrumentEmbedding).Preload("Provider").First(&embInstrument).Error; err != nil {
+		return nil, "", 0, fmt.Errorf("embedding instrument not configured")
 	}
-
-	providerAlias := settings.EmbeddingProviderAlias
-	if providerAlias == "" {
-		providerAlias = settings.ActiveProvider
-	}
-
-	var provider domain.LlmProvider
-	if err := db.Where("alias = ?", providerAlias).First(&provider).Error; err != nil {
-		return nil, "", 0, fmt.Errorf("embedding provider '%s' not found", providerAlias)
-	}
-
-	modelName := settings.EmbeddingModel
+	provider := embInstrument.Provider
+	modelName := embInstrument.Model
 	if modelName == "" {
 		modelName = "qwen3-embedding:4b"
 	}
 
-	dimension := settings.EmbeddingDimension
-	if dimension == 0 {
-		dimension = 1024
+	var embSettings domain.EmbeddingSettings
+	dimension := 1024
+	if err := db.First(&embSettings).Error; err == nil && embSettings.Dimension > 0 {
+		dimension = embSettings.Dimension
 	}
 
 	client, err := llm.NewEmbeddingClient(provider.Name, provider.ApiUrl, provider.ApiKey, modelName)

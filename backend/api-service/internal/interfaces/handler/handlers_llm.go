@@ -13,13 +13,61 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"gorm.io/gorm"
 )
 
-// handleGetLlmSettings returns LLM settings with all providers
+// instrumentTypeFromString converts a string to domain.InstrumentType.
+func instrumentTypeFromString(s string) domain.InstrumentType {
+	switch s {
+	case "chat":
+		return domain.InstrumentChat
+	case "vl":
+		return domain.InstrumentVL
+	case "embedding":
+		return domain.InstrumentEmbedding
+	case "image_edit":
+		return domain.InstrumentImageEdit
+	default:
+		return ""
+	}
+}
+
+// buildInstrumentDTO builds a LlmInstrumentDTO from a domain LlmInstrumentSettings.
+func buildInstrumentDTO(instr domain.LlmInstrumentSettings) dto.LlmInstrumentDTO {
+	return dto.LlmInstrumentDTO{
+		Type:          string(instr.Type),
+		ProviderID:    instr.ProviderID,
+		Model:         instr.Model,
+		ProviderAlias: instr.Provider.Alias,
+		ProviderName:  instr.Provider.Name,
+	}
+}
+
+// buildTagScanDTO builds a TagScanSettingsDTO from a domain TagScanSettings.
+func buildTagScanDTO(ts domain.TagScanSettings) dto.TagScanSettingsDTO {
+	return dto.TagScanSettingsDTO{
+		Enabled:        ts.Enabled,
+		StartHour:      ts.StartHour,
+		StartMinute:    ts.StartMinute,
+		EndHour:        ts.EndHour,
+		EndMinute:      ts.EndMinute,
+		TimezoneOffset: ts.TimezoneOffset,
+	}
+}
+
+// buildEmbeddingDTO builds an EmbeddingSettingsDTO from a domain EmbeddingSettings.
+func buildEmbeddingDTO(es domain.EmbeddingSettings) dto.EmbeddingSettingsDTO {
+	return dto.EmbeddingSettingsDTO{
+		Dimension: es.Dimension,
+		BatchSize: es.BatchSize,
+	}
+}
+
+// handleGetLlmSettings returns LLM settings with instruments, tag scan, embedding, and providers.
 func (s *Server) handleGetLlmSettings(c *gin.Context) {
-	settings := s.settingsLoader.LlmSettings()
 	providers := s.settingsLoader.AllLlmProviders()
+	instruments := s.settingsLoader.AllLlmInstruments()
+	tagScan := s.settingsLoader.TagScanSettings()
+	embedding := s.settingsLoader.EmbeddingSettings()
 
 	cacheRows, err := s.llmRepo.GetAllModelCaches()
 	if err != nil {
@@ -45,145 +93,118 @@ func (s *Server) handleGetLlmSettings(c *gin.Context) {
 			Name:         p.Name,
 			ApiUrl:       p.ApiUrl,
 			ApiKey:       apiKey,
-			Model:        p.Model,
 			CachedModels: cacheMap[p.Alias],
 		}
 	}
 
+	instrumentDTOs := make([]dto.LlmInstrumentDTO, 0, len(instruments))
+	for _, instr := range instruments {
+		instrumentDTOs = append(instrumentDTOs, buildInstrumentDTO(instr))
+	}
+
 	c.JSON(http.StatusOK, dto.LlmSettingsResponse{
-		ID:                     settings.ID,
-		ActiveProvider:         settings.ActiveProvider,
-		VlProvider:             settings.VlProvider,
-		ImgEditProvider:        settings.ImgEditProvider,
-		TagScanEnabled:         settings.TagScanEnabled,
-		TagScanStartHour:       settings.TagScanStartHour,
-		TagScanStartMinute:     settings.TagScanStartMinute,
-		TagScanEndHour:         settings.TagScanEndHour,
-		TagScanEndMinute:       settings.TagScanEndMinute,
-		TagScanTimezoneOffset:  settings.TagScanTimezoneOffset,
-		EmbeddingProviderAlias: settings.EmbeddingProviderAlias,
-		EmbeddingModel:         settings.EmbeddingModel,
-		EmbeddingDimension:     settings.EmbeddingDimension,
-		EmbeddingBatchSize:     settings.EmbeddingBatchSize,
-		Providers:              providerDTOs,
+		Instruments: instrumentDTOs,
+		TagScan:     buildTagScanDTO(tagScan),
+		Embedding:   buildEmbeddingDTO(embedding),
+		Providers:   providerDTOs,
 	})
 }
 
-// handleUpdateLlmSettings updates LLM global settings (chat provider, VL provider, tag scan schedule)
+// handleUpdateLlmSettings updates LLM settings (instruments, tag scan, embedding).
 func (s *Server) handleUpdateLlmSettings(c *gin.Context) {
 	var req dto.UpdateLlmSettingsRequest
 	if !helpers.BindJSON(c, &req) {
 		return
 	}
 
-	settings, err := s.llmRepo.GetSettings()
-	globalUpdates := make(map[string]interface{})
-	if req.ActiveProvider != nil {
-		globalUpdates["active_provider"] = *req.ActiveProvider
-	}
-	if req.VlProvider != nil {
-		globalUpdates["vl_provider"] = *req.VlProvider
-	}
-	if req.ImgEditProvider != nil {
-		globalUpdates["img_edit_provider"] = *req.ImgEditProvider
-	}
-	if req.TagScanEnabled != nil {
-		globalUpdates["tag_scan_enabled"] = *req.TagScanEnabled
-	}
-	if req.TagScanStartHour != nil {
-		globalUpdates["tag_scan_start_hour"] = *req.TagScanStartHour
-	}
-	if req.TagScanStartMinute != nil {
-		globalUpdates["tag_scan_start_minute"] = *req.TagScanStartMinute
-	}
-	if req.TagScanEndHour != nil {
-		globalUpdates["tag_scan_end_hour"] = *req.TagScanEndHour
-	}
-	if req.TagScanEndMinute != nil {
-		globalUpdates["tag_scan_end_minute"] = *req.TagScanEndMinute
-	}
-	if req.TagScanTimezoneOffset != nil {
-		globalUpdates["tag_scan_timezone_offset"] = *req.TagScanTimezoneOffset
-	}
-	if req.EmbeddingProviderAlias != nil {
-		globalUpdates["embedding_provider_alias"] = *req.EmbeddingProviderAlias
-	}
-	if req.EmbeddingModel != nil {
-		globalUpdates["embedding_model"] = *req.EmbeddingModel
-	}
-	if req.EmbeddingDimension != nil {
-		globalUpdates["embedding_dimension"] = *req.EmbeddingDimension
-	}
-	if req.EmbeddingBatchSize != nil {
-		globalUpdates["embedding_batch_size"] = *req.EmbeddingBatchSize
-	}
+	// --- Handle instrument update (type + model + providerId) ---
+	if req.InstrumentType != nil && *req.InstrumentType != "" {
+		instType := instrumentTypeFromString(*req.InstrumentType)
+		if instType == "" {
+			c.JSON(http.StatusBadRequest, i18n.CreateValidationError(i18n.ValidationError))
+			return
+		}
 
-	if err == gorm.ErrRecordNotFound {
-		settings = &domain.LlmSettings{
-			ActiveProvider:     "ollama_1",
-			VlProvider:         "ollama_1",
-			ImgEditProvider:    "ollama_1",
-			TagScanEnabled:     true,
-			TagScanStartHour:   22,
-			TagScanStartMinute: 0,
-			TagScanEndHour:     7,
-			TagScanEndMinute:   0,
+		var instrument domain.LlmInstrumentSettings
+		if err := s.db.Where("type = ?", instType).First(&instrument).Error; err != nil {
+			// Create new instrument record
+			instrument = domain.LlmInstrumentSettings{
+				Type: instType,
+			}
 		}
-		if req.ActiveProvider != nil {
-			settings.ActiveProvider = *req.ActiveProvider
+
+		if req.ProviderID != nil {
+			instrument.ProviderID = *req.ProviderID
 		}
-		if req.VlProvider != nil {
-			settings.VlProvider = *req.VlProvider
+		if req.InstrumentModel != nil {
+			instrument.Model = *req.InstrumentModel
 		}
-		if req.ImgEditProvider != nil {
-			settings.ImgEditProvider = *req.ImgEditProvider
-		}
-		if req.TagScanEnabled != nil {
-			settings.TagScanEnabled = *req.TagScanEnabled
-		}
-		if req.TagScanStartHour != nil {
-			settings.TagScanStartHour = *req.TagScanStartHour
-		}
-		if req.TagScanStartMinute != nil {
-			settings.TagScanStartMinute = *req.TagScanStartMinute
-		}
-		if req.TagScanEndHour != nil {
-			settings.TagScanEndHour = *req.TagScanEndHour
-		}
-		if req.TagScanEndMinute != nil {
-			settings.TagScanEndMinute = *req.TagScanEndMinute
-		}
-		if req.TagScanTimezoneOffset != nil {
-			settings.TagScanTimezoneOffset = *req.TagScanTimezoneOffset
-		}
-		if req.EmbeddingProviderAlias != nil {
-			settings.EmbeddingProviderAlias = *req.EmbeddingProviderAlias
-		}
-		if req.EmbeddingModel != nil {
-			settings.EmbeddingModel = *req.EmbeddingModel
-		}
-		if req.EmbeddingDimension != nil {
-			settings.EmbeddingDimension = *req.EmbeddingDimension
-		}
-		if req.EmbeddingBatchSize != nil {
-			settings.EmbeddingBatchSize = *req.EmbeddingBatchSize
-		}
-		if err := s.llmRepo.CreateSettings(settings); err != nil {
+
+		if err := s.db.Save(&instrument).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, i18n.ErrorResponse(i18n.MsgLlmOcrSettingsSaveFailed))
 			return
 		}
-	} else if err != nil {
-		c.JSON(http.StatusInternalServerError, i18n.ErrorResponse(i18n.MsgLlmOcrSettingsSaveFailed))
-		return
-	} else {
-		if len(globalUpdates) > 0 {
-			s.llmRepo.UpdateSettings(globalUpdates)
+	}
+
+	// --- Handle tag scan settings update ---
+	tagScanDirty := req.TagScanEnabled != nil ||
+		req.TagScanStartHour != nil ||
+		req.TagScanStartMinute != nil ||
+		req.TagScanEndHour != nil ||
+		req.TagScanEndMinute != nil ||
+		req.TagScanTimezoneOffset != nil
+
+	if tagScanDirty {
+		var ts domain.TagScanSettings
+		if err := s.db.First(&ts).Error; err != nil {
+			ts = domain.TagScanSettings{ID: 1}
+		}
+		if req.TagScanEnabled != nil {
+			ts.Enabled = *req.TagScanEnabled
+		}
+		if req.TagScanStartHour != nil {
+			ts.StartHour = *req.TagScanStartHour
+		}
+		if req.TagScanStartMinute != nil {
+			ts.StartMinute = *req.TagScanStartMinute
+		}
+		if req.TagScanEndHour != nil {
+			ts.EndHour = *req.TagScanEndHour
+		}
+		if req.TagScanEndMinute != nil {
+			ts.EndMinute = *req.TagScanEndMinute
+		}
+		if req.TagScanTimezoneOffset != nil {
+			ts.TimezoneOffset = *req.TagScanTimezoneOffset
+		}
+		if err := s.db.Save(&ts).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, i18n.ErrorResponse(i18n.MsgLlmOcrSettingsSaveFailed))
+			return
+		}
+
+		// Update tag scan manager schedule
+		if s.tagScanManager != nil && s.tagScanManager.IsRunning() {
+			s.tagScanManager.UpdateSchedule(ts.Enabled, ts.StartHour, ts.StartMinute, ts.EndHour, ts.EndMinute, ts.TimezoneOffset)
 		}
 	}
 
-	settings, _ = s.llmRepo.ReloadSettings()
-	if settings != nil && s.tagScanManager != nil && s.tagScanManager.IsRunning() {
-		s.tagScanManager.UpdateSchedule(settings.TagScanEnabled, settings.TagScanStartHour, settings.TagScanStartMinute, settings.TagScanEndHour, settings.TagScanEndMinute, settings.TagScanTimezoneOffset)
+	// --- Handle embedding settings update ---
+	embDirty := req.EmbeddingDimension != nil || req.EmbeddingBatchSize != nil
+	if embDirty {
+		var es domain.EmbeddingSettings
+		if err := s.db.First(&es).Error; err != nil {
+			es = domain.EmbeddingSettings{ID: 1}
+		}
+		if req.EmbeddingDimension != nil {
+			es.Dimension = *req.EmbeddingDimension
+		}
+		if req.EmbeddingBatchSize != nil {
+			es.BatchSize = *req.EmbeddingBatchSize
+		}
+		if err := s.db.Save(&es).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, i18n.ErrorResponse(i18n.MsgLlmOcrSettingsSaveFailed))
+			return
+		}
 	}
 
 	c.JSON(http.StatusOK, map[string]string{"message": string(i18n.MsgLlmOcrSettingsSaved)})
@@ -220,11 +241,27 @@ func (s *Server) handleProbeEmbeddingDimension(c *gin.Context) {
 
 	dimension := len(probe[0])
 
-	s.llmRepo.UpdateSettings(map[string]interface{}{
-		"embedding_dimension":      dimension,
-		"embedding_model":          req.Model,
-		"embedding_provider_alias": req.ProviderAlias,
-	})
+	// Store detected dimension in embedding_settings and update the embedding instrument
+	var es domain.EmbeddingSettings
+	if err := s.db.First(&es).Error; err != nil {
+		es = domain.EmbeddingSettings{ID: 1}
+	}
+	es.Dimension = dimension
+	s.db.Save(&es)
+
+	// Also update the embedding instrument's model and provider
+	var instr domain.LlmInstrumentSettings
+	if err := s.db.Where("type = ?", domain.InstrumentEmbedding).First(&instr).Error; err == nil {
+		instr.Model = req.Model
+		instr.ProviderID = provider.ID
+		s.db.Save(&instr)
+	} else {
+		s.db.Create(&domain.LlmInstrumentSettings{
+			Type:       domain.InstrumentEmbedding,
+			ProviderID: provider.ID,
+			Model:      req.Model,
+		})
+	}
 
 	c.JSON(http.StatusOK, dto.ProbeEmbeddingDimensionResponse{Dimension: dimension})
 }
@@ -246,7 +283,6 @@ func (s *Server) handleCreateLlmProvider(c *gin.Context) {
 		Alias:  req.Alias,
 		ApiUrl: req.ApiUrl,
 		ApiKey: req.ApiKey,
-		Model:  req.Model,
 	}
 	if provider.ApiUrl == "" {
 		switch provider.Name {
@@ -257,9 +293,6 @@ func (s *Server) handleCreateLlmProvider(c *gin.Context) {
 		case "openai":
 			provider.ApiUrl = "https://api.openai.com"
 		}
-	}
-	if provider.Model == "" {
-		provider.Model = "minicpm-v"
 	}
 
 	if err := s.llmRepo.CreateProvider(&provider); err != nil {
@@ -272,7 +305,6 @@ func (s *Server) handleCreateLlmProvider(c *gin.Context) {
 		Alias:  provider.Alias,
 		Name:   provider.Name,
 		ApiUrl: provider.ApiUrl,
-		Model:  provider.Model,
 	})
 }
 
@@ -296,19 +328,12 @@ func (s *Server) handleUpdateLlmProvider(c *gin.Context) {
 	if req.ApiKey != nil {
 		updates["api_key"] = *req.ApiKey
 	}
-	if req.Model != nil {
-		updates["model"] = *req.Model
-	}
 	if req.Alias != nil && *req.Alias != alias {
 		if _, err := s.llmRepo.GetProviderByAlias(*req.Alias); err == nil {
 			c.JSON(http.StatusConflict, i18n.CreateValidationError(i18n.ValidationError))
 			return
 		}
 		updates["alias"] = *req.Alias
-		settings, err := s.llmRepo.GetSettings()
-		if err == nil && settings.ActiveProvider == alias {
-			s.llmRepo.UpdateSettings(map[string]interface{}{"active_provider": *req.Alias})
-		}
 	}
 
 	if len(updates) > 0 {
@@ -339,11 +364,12 @@ func (s *Server) handleDeleteLlmProvider(c *gin.Context) {
 		return
 	}
 
-	settings, err := s.llmRepo.GetSettings()
-	if err == nil && settings.ActiveProvider == alias {
-		if firstProvider, err := s.llmRepo.GetFirstProviderExcept(provider.ID); err == nil {
-			s.llmRepo.UpdateSettings(map[string]interface{}{"active_provider": firstProvider.Alias})
-		}
+	// Remove any instrument settings referencing this provider (reassign to another provider)
+	var otherProvider domain.LlmProvider
+	if err := s.db.Where("id != ?", provider.ID).First(&otherProvider).Error; err == nil {
+		s.db.Model(&domain.LlmInstrumentSettings{}).
+			Where("provider_id = ?", provider.ID).
+			Updates(map[string]interface{}{"provider_id": otherProvider.ID})
 	}
 
 	if err := s.llmRepo.DeleteProvider(provider); err != nil {
@@ -363,7 +389,7 @@ func (s *Server) handleLlmRecognize(c *gin.Context) {
 		return
 	}
 
-	llmClient, provider, ok := s.llmFactory.CreateVLClient(c)
+	llmClient, provider, vlInstrument, ok := s.llmFactory.CreateVLClient(c)
 	if !ok {
 		return
 	}
@@ -394,7 +420,7 @@ func (s *Server) handleLlmRecognize(c *gin.Context) {
 		return
 	}
 
-	_ = s.llmOcrService.StartRecognizeAsync(imageFile.ID, llmClient, provider)
+	_ = s.llmOcrService.StartRecognizeAsync(imageFile.ID, llmClient, provider, vlInstrument.Model)
 	c.JSON(http.StatusAccepted, dto.LlmRecognizeStatusResponse{
 		Status: "processing",
 	})
@@ -516,8 +542,9 @@ func (s *Server) handleGetLlmModels(c *gin.Context) {
 	if providerName != "" {
 		provider, found = s.settingsLoader.LlmProvider(providerName)
 	} else {
-		settings, settingsFound := s.settingsLoader.LlmSettingsIfExists()
-		if !settingsFound {
+		// Default to chat instrument's provider
+		instrument, instrFound := s.settingsLoader.LlmInstrumentByType(domain.InstrumentChat)
+		if !instrFound {
 			c.JSON(http.StatusNotFound, dto.LlmModelsResponse{
 				Success:  false,
 				Error:    "LLM settings not configured",
@@ -525,7 +552,8 @@ func (s *Server) handleGetLlmModels(c *gin.Context) {
 			})
 			return
 		}
-		provider, found = s.settingsLoader.LlmProvider(settings.ActiveProvider)
+		provider = instrument.Provider
+		found = true
 	}
 
 	if !found {
@@ -552,7 +580,14 @@ func (s *Server) handleGetLlmModels(c *gin.Context) {
 		}
 	}
 
-	llmClient, err := llm.NewClient(provider.Name, provider.ApiUrl, provider.ApiKey, provider.Model, s.config.LlmMaxImageMegapixels)
+	// Use the chat instrument's model for listing models (the provider itself no longer has a model)
+	instrument, instrFound := s.settingsLoader.LlmInstrumentByType(domain.InstrumentChat)
+	modelToUse := "minicpm-v"
+	if instrFound {
+		modelToUse = instrument.Model
+	}
+
+	llmClient, err := llm.NewClient(provider.Name, provider.ApiUrl, provider.ApiKey, modelToUse, s.config.LlmMaxImageMegapixels)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, dto.LlmModelsResponse{
 			Success:  false,
@@ -630,7 +665,7 @@ func (s *Server) handleAiAction(c *gin.Context) {
 		return
 	}
 
-	llmClient, provider, ok := s.llmFactory.CreateVLClient(c)
+	llmClient, provider, vlInstrument, ok := s.llmFactory.CreateVLClient(c)
 	if !ok {
 		return
 	}
@@ -683,7 +718,7 @@ func (s *Server) handleAiAction(c *gin.Context) {
 		}
 	}
 
-	s.llmOcrService.StartAiActionAsync(taskID, imageFile.ID, string(req.Action), req.Question, req.Language, llmClient, provider)
+	s.llmOcrService.StartAiActionAsync(taskID, imageFile.ID, string(req.Action), req.Question, req.Language, llmClient, provider, vlInstrument.Model)
 
 	c.JSON(http.StatusAccepted, dto.AiActionStartResponse{
 		TaskID: taskID,

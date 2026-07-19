@@ -13,6 +13,29 @@ export function translateApiMessage(message: string | undefined): string {
   return message
 }
 
+/**
+ * Translates raw fetch/network errors into user-friendly messages.
+ * Browser fetch throws TypeError with messages like "Failed to fetch",
+ * "NetworkError", "Network request failed" when the server is unreachable.
+ * These raw messages are meaningless to end users.
+ */
+export function translateNetworkError(err: unknown): string {
+  if (!(err instanceof TypeError)) {
+    return err instanceof Error ? err.message : String(err)
+  }
+  const msg = err.message.toLowerCase()
+  if (msg.includes("failed to fetch") || msg.includes("networkerror") || msg.includes("network request failed")) {
+    return "Server is unreachable. Please check that the backend service is running and your network connection is stable."
+  }
+  if (msg.includes("timeout") || msg.includes("abort")) {
+    return "Request timed out. The server may be overloaded or the operation is taking too long."
+  }
+  if (msg.includes("load failed")) {
+    return "Connection failed. The server may be down or the address is incorrect."
+  }
+  return err.message
+}
+
 interface ParsedResponse {
   error?: string
   message?: string
@@ -50,62 +73,86 @@ export async function apiGet<T>(path: string, params?: Record<string, string>, s
     })
   }
 
-  const response = await fetch(url.toString(), {
-    credentials: "include",
-    signal,
-  })
+  try {
+    const response = await fetch(url.toString(), {
+      credentials: "include",
+      signal,
+    })
 
-  return handleResponse<T>(response)
+    return handleResponse<T>(response)
+  } catch (err) {
+    throw new Error(translateNetworkError(err))
+  }
 }
 
 export async function apiPost<T>(path: string, body?: unknown): Promise<T> {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    credentials: "include",
-    body: body ? JSON.stringify(body) : undefined,
-  })
+  try {
+    const response = await fetch(`${API_BASE_URL}${path}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: body ? JSON.stringify(body) : undefined,
+    })
 
-  return handleResponse<T>(response)
+    return handleResponse<T>(response)
+  } catch (err) {
+    throw new Error(translateNetworkError(err))
+  }
 }
 
 export async function apiDelete<T>(path: string): Promise<T> {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    method: "DELETE",
-    credentials: "include",
-  })
+  try {
+    const response = await fetch(`${API_BASE_URL}${path}`, {
+      method: "DELETE",
+      credentials: "include",
+    })
 
-  return handleResponse<T>(response)
+    return handleResponse<T>(response)
+  } catch (err) {
+    throw new Error(translateNetworkError(err))
+  }
 }
 
 export async function apiPut<T>(path: string, body?: unknown): Promise<T> {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    credentials: "include",
-    body: body ? JSON.stringify(body) : undefined,
-  })
+  try {
+    const response = await fetch(`${API_BASE_URL}${path}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: body ? JSON.stringify(body) : undefined,
+    })
 
-  return handleResponse<T>(response)
+    return handleResponse<T>(response)
+  } catch (err) {
+    throw new Error(translateNetworkError(err))
+  }
 }
 
 export async function apiPatch<T>(path: string, body?: unknown): Promise<T> {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    credentials: "include",
-    body: body ? JSON.stringify(body) : undefined,
-  })
+  try {
+    const response = await fetch(`${API_BASE_URL}${path}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: body ? JSON.stringify(body) : undefined,
+    })
 
-  return handleResponse<T>(response)
+    return handleResponse<T>(response)
+  } catch (err) {
+    throw new Error(translateNetworkError(err))
+  }
 }
 
 export async function apiUpload<T>(path: string, formData: FormData): Promise<T> {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    method: "POST",
-    credentials: "include",
-    body: formData,
-  })
+  try {
+    const response = await fetch(`${API_BASE_URL}${path}`, {
+      method: "POST",
+      credentials: "include",
+      body: formData,
+    })
 
-  return handleResponse<T>(response)
+    return handleResponse<T>(response)
+  } catch (err) {
+    throw new Error(translateNetworkError(err))
+  }
 }

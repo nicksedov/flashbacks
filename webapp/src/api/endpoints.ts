@@ -468,7 +468,6 @@ export function createLlmProvider(req: {
 export function updateLlmProvider(alias: string, req: {
   apiUrl?: string
   apiKey?: string
-  model?: string
   alias?: string
 }): Promise<{ message: string }> {
   return apiPut<{ message: string }>(`/api/llm/providers/${encodeURIComponent(alias)}`, req)

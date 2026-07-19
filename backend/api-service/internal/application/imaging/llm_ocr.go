@@ -122,7 +122,8 @@ type RecognizeResult struct {
 }
 
 // RecognizeWithLlm performs OCR using VL LLM
-func (s *LlmOcrService) RecognizeWithLlm(imageFileID uint, client llm.Client, provider domain.LlmProvider) (*RecognizeResult, error) {
+// model is the model name to use (from LlmInstrumentSettings, not from provider)
+func (s *LlmOcrService) RecognizeWithLlm(imageFileID uint, client llm.Client, provider domain.LlmProvider, model string) (*RecognizeResult, error) {
 	// Step 1: Try to get OCR classification for language detection (optional)
 	var classificationID uint
 	language := "en" // Default to English when no classification exists
@@ -157,7 +158,7 @@ func (s *LlmOcrService) RecognizeWithLlm(imageFileID uint, client llm.Client, pr
 			Language:            language,
 			MarkdownContent:     "",
 			Provider:            provider.Name,
-			Model:               provider.Model,
+			Model:               model,
 			ProcessingTimeMs:    processingTime,
 			Error:               err.Error(),
 			Success:             false,
@@ -176,7 +177,7 @@ func (s *LlmOcrService) RecognizeWithLlm(imageFileID uint, client llm.Client, pr
 		Language:            language,
 		MarkdownContent:     markdownContent,
 		Provider:            provider.Name,
-		Model:               provider.Model,
+		Model:               model,
 		ProcessingTimeMs:    processingTime,
 		Error:               "",
 		Success:             true,
@@ -193,7 +194,7 @@ func (s *LlmOcrService) RecognizeWithLlm(imageFileID uint, client llm.Client, pr
 		MarkdownContent:  markdownContent,
 		Language:         language,
 		Provider:         provider.Name,
-		Model:            provider.Model,
+		Model:            model,
 		ProcessingTimeMs: processingTime,
 		Error:            "",
 	}, nil
@@ -201,7 +202,8 @@ func (s *LlmOcrService) RecognizeWithLlm(imageFileID uint, client llm.Client, pr
 
 // StartRecognizeAsync starts LLM recognition in a background goroutine.
 // Returns true if a new task was started, false if already processing.
-func (s *LlmOcrService) StartRecognizeAsync(imageFileID uint, client llm.Client, provider domain.LlmProvider) bool {
+// model is the model name to use for the recognition (from LlmInstrumentSettings).
+func (s *LlmOcrService) StartRecognizeAsync(imageFileID uint, client llm.Client, provider domain.LlmProvider, model string) bool {
 	s.taskMu.Lock()
 	defer s.taskMu.Unlock()
 
@@ -216,7 +218,7 @@ func (s *LlmOcrService) StartRecognizeAsync(imageFileID uint, client llm.Client,
 			s.coordinator.RequestPause()
 			defer s.coordinator.Resume()
 		}
-		result, err := s.RecognizeWithLlm(imageFileID, client, provider)
+		result, err := s.RecognizeWithLlm(imageFileID, client, provider, model)
 
 		s.taskMu.Lock()
 		defer s.taskMu.Unlock()
@@ -316,7 +318,8 @@ type AiActionResult struct {
 }
 
 // ExecuteAiAction performs an AI action (describe, tags, recognizeText, askQuestion)
-func (s *LlmOcrService) ExecuteAiAction(imageFileID uint, action string, question string, language string, client llm.Client, provider domain.LlmProvider) (*AiActionResult, error) {
+// model is the model name to use (from LlmInstrumentSettings, not from provider).
+func (s *LlmOcrService) ExecuteAiAction(imageFileID uint, action string, question string, language string, client llm.Client, provider domain.LlmProvider, model string) (*AiActionResult, error) {
 	// Get image file
 	var imageFile domain.ImageFile
 	if err := s.db.First(&imageFile, imageFileID).Error; err != nil {
@@ -339,7 +342,7 @@ func (s *LlmOcrService) ExecuteAiAction(imageFileID uint, action string, questio
 	result := &AiActionResult{
 		Success:          true,
 		Provider:         provider.Name,
-		Model:            provider.Model,
+		Model:            model,
 		ProcessingTimeMs: processingTime,
 	}
 
@@ -480,7 +483,8 @@ func (s *LlmOcrService) SaveImageTags(imageFileID uint, tags []string) error {
 
 // StartAiActionAsync starts an AI action in a background goroutine.
 // Returns a unique task ID that can be used to poll for status.
-func (s *LlmOcrService) StartAiActionAsync(taskID string, imageFileID uint, action string, question string, language string, client llm.Client, provider domain.LlmProvider) {
+// model is the model name to use (from LlmInstrumentSettings, not from provider).
+func (s *LlmOcrService) StartAiActionAsync(taskID string, imageFileID uint, action string, question string, language string, client llm.Client, provider domain.LlmProvider, model string) {
 	s.aiTaskMu.Lock()
 	s.aiActionTasks[taskID] = &AiTaskStatus{
 		Status:    "processing",
@@ -494,7 +498,7 @@ func (s *LlmOcrService) StartAiActionAsync(taskID string, imageFileID uint, acti
 			s.coordinator.RequestPause()
 			defer s.coordinator.Resume()
 		}
-		result, err := s.ExecuteAiAction(imageFileID, action, question, language, client, provider)
+		result, err := s.ExecuteAiAction(imageFileID, action, question, language, client, provider, model)
 
 		// Persist tags to DB so future requests can skip the LLM call
 		if err == nil && action == "tags" && len(result.Tags) > 0 {

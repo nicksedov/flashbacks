@@ -129,7 +129,6 @@ func TestAuthService_Login_BootstrapMode(t *testing.T) {
 
 	// Remove seeded LlmProviders to make it truly empty for bootstrap check
 	db.Exec("DELETE FROM llm_providers")
-	db.Exec("DELETE FROM llm_settings")
 	db.Exec("DELETE FROM app_settings")
 
 	sessionConfig := &SessionConfig{
@@ -161,7 +160,6 @@ func TestAuthService_Login_BootstrapWrongCreds(t *testing.T) {
 
 	// Remove seeded data to trigger bootstrap mode
 	db.Exec("DELETE FROM llm_providers")
-	db.Exec("DELETE FROM llm_settings")
 	db.Exec("DELETE FROM app_settings")
 
 	sessionConfig := &SessionConfig{

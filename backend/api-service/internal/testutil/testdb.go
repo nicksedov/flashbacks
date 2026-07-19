@@ -37,7 +37,9 @@ func NewTestDB(t *testing.T) (*gorm.DB, func()) {
 		&domain.OcrClassification{},
 		&domain.OcrBoundingBox{},
 		&domain.LlmProvider{},
-		&domain.LlmSettings{},
+		&domain.LlmInstrumentSettings{},
+		&domain.TagScanSettings{},
+		&domain.EmbeddingSettings{},
 		&domain.OcrLlmRecognition{},
 		&domain.ImageTag{},
 		&domain.Conversation{},
@@ -52,11 +54,23 @@ func NewTestDB(t *testing.T) (*gorm.DB, func()) {
 
 	// Seed default settings
 	db.Create(&domain.AppSettings{ID: 1})
-	db.Create(&domain.LlmSettings{ID: 1, ActiveProvider: "ollama_test"})
-	db.Create([]domain.LlmProvider{
-		{Name: "ollama", Alias: "ollama_test", ApiUrl: "http://localhost:11434", Model: "minicpm-v"},
-		{Name: "openai", Alias: "openai_test", ApiUrl: "https://api.openai.com", Model: "gpt-4-vision"},
+
+	ollamaProvider := domain.LlmProvider{Name: "ollama", Alias: "ollama_test", ApiUrl: "http://localhost:11434"}
+	openaiProvider := domain.LlmProvider{Name: "openai", Alias: "openai_test", ApiUrl: "https://api.openai.com"}
+	db.Create([]domain.LlmProvider{ollamaProvider, openaiProvider})
+
+	// Seed instrument settings for the default providers
+	var p1, p2 domain.LlmProvider
+	db.Where("alias = ?", "ollama_test").First(&p1)
+	db.Where("alias = ?", "openai_test").First(&p2)
+	db.Create([]domain.LlmInstrumentSettings{
+		{Type: domain.InstrumentChat, ProviderID: p1.ID, Model: "minicpm-v"},
+		{Type: domain.InstrumentVL, ProviderID: p1.ID, Model: "minicpm-v"},
+		{Type: domain.InstrumentEmbedding, ProviderID: p1.ID, Model: "qwen3-embedding:4b"},
+		{Type: domain.InstrumentImageEdit, ProviderID: p2.ID, Model: "gpt-4-vision"},
 	})
+	db.Create(&domain.TagScanSettings{ID: 1, Enabled: true, StartHour: 22, EndHour: 7})
+	db.Create(&domain.EmbeddingSettings{ID: 1, Dimension: 1024, BatchSize: 50})
 
 	cleanup := func() {
 		sqlDB, _ := db.DB()

@@ -130,11 +130,16 @@ export function useOcrState(imagePath: string | null): UseOcrStateReturn {
                 recognizingRef.current = false
               }
             })
-            .catch(() => {
+            .catch((pollErr) => {
               if (pollingRef.current) {
                 clearInterval(pollingRef.current)
                 pollingRef.current = null
               }
+              setLlmData({
+                found: false,
+                error: pollErr instanceof Error ? pollErr.message : String(pollErr),
+                success: false,
+              })
               setRecognizing(false)
               recognizingRef.current = false
             })
@@ -142,9 +147,10 @@ export function useOcrState(imagePath: string | null): UseOcrStateReturn {
       })
       .catch((err) => {
         console.error("LLM recognition failed:", err)
+        const errorMessage = err instanceof Error ? err.message : String(err)
         setLlmData({
           found: false,
-          error: err.message,
+          error: errorMessage,
           success: false,
         })
         setRecognizing(false)

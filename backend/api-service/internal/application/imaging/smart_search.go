@@ -47,23 +47,13 @@ func SearchByEmbedding(db *gorm.DB, query string, limit int) (SmartSearchRespons
 		return SmartSearchResponse{}, fmt.Errorf("query is required")
 	}
 
-	// Load embedding settings
-	var settings domain.LlmSettings
-	if err := db.First(&settings).Error; err != nil {
-		return SmartSearchResponse{}, fmt.Errorf("LLM settings not found")
+	// Load embedding provider from instrument settings
+	var embInstrument domain.LlmInstrumentSettings
+	if err := db.Where("type = ?", domain.InstrumentEmbedding).Preload("Provider").First(&embInstrument).Error; err != nil {
+		return SmartSearchResponse{}, fmt.Errorf("embedding instrument not configured")
 	}
-
-	providerAlias := settings.EmbeddingProviderAlias
-	if providerAlias == "" {
-		providerAlias = settings.ActiveProvider
-	}
-
-	var provider domain.LlmProvider
-	if err := db.Where("alias = ?", providerAlias).First(&provider).Error; err != nil {
-		return SmartSearchResponse{}, fmt.Errorf("embedding provider '%s' not found", providerAlias)
-	}
-
-	modelName := settings.EmbeddingModel
+	provider := embInstrument.Provider
+	modelName := embInstrument.Model
 	if modelName == "" {
 		modelName = "qwen3-embedding:4b"
 	}

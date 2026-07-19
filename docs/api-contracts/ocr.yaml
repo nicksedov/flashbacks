@@ -1,12 +1,15 @@
-openapi: 3.0.3
+openapi: "3.1.0"
 info:
   title: OCR Classifier API
+  version: "1.1.0"
   description: |
     HTTP-сервис для определения наличия текста на изображениях с использованием Tesseract OCR.
     Возвращает детальную информацию о найденном тексте, включая показатели уверенности (confidence),
     координаты текстовых блоков и количество найденных токенов. Ответ содержит вердикт, является ли
     данное изображение документом (true/false), который выносится на основе правил.
-  version: 1.0.0
+
+    Response schemas are defined in the shared domain package (backend/shared/domain/ocr.go)
+    and reused by both the OCR service and the API service.
   contact:
     name: OCR Classifier Support
   license:
@@ -39,8 +42,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HealthResponse'
-              example:
-                status: ok
 
   /ocr/api/v1/classify:
     post:
@@ -130,46 +131,24 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ClassifyResponse'
-              example:
-                mean_confidence: 0.85
-                weighted_confidence: 0.88
-                token_count: 25
-                boxes:
-                  - x: 10
-                    y: 20
-                    width: 100
-                    height: 50
-                    word: "Example"
-                    confidence: 0.95
-                angle: 0
-                scale_factor: 1.0
-                is_text_document: true
-                bounding_box_width: 800
-                bounding_box_height: 600
         '400':
           description: Неверный Content-Type, пустое изображение или ошибка чтения данных
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
-              example:
-                error: "content-type must be image/jpeg or image/png"
         '405':
           description: Неверный HTTP метод (только POST)
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
-              example:
-                error: "method not allowed, use POST"
         '500':
           description: Ошибка обработки изображения или Tesseract OCR
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
-              example:
-                error: "failed to process image"
 
 components:
   schemas:

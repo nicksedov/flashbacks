@@ -151,6 +151,11 @@ type SyncHistory struct {
 	ThumbnailsGenerated int       `gorm:"default:0" json:"thumbnailsGenerated"`
 }
 
+// TableName overrides the default GORM table name (sync_histories) to match the migration.
+func (SyncHistory) TableName() string {
+	return "sync_history"
+}
+
 // OcrClassification stores OCR classification results for an image
 type OcrClassification struct {
 	ID                 uint      `gorm:"primaryKey" json:"id"`

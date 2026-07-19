@@ -89,14 +89,14 @@ func (bsm *BackgroundSyncManager) Start(syncDays []time.Weekday, hour int, minut
 	bsm.stopCh = make(chan struct{})
 	bsm.scheduleCh = make(chan struct{})
 
-	// Load persisted last sync stats from DB so they survive restarts
-	var settings domain.AppSettings
-	if result := bsm.db.First(&settings, 1); result.Error == nil {
-		bsm.lastSyncAt = settings.LastSyncAt
-		bsm.lastSyncNew = settings.LastSyncNew
-		bsm.lastSyncUpdated = settings.LastSyncUpdated
-		bsm.lastSyncDeleted = settings.LastSyncDeleted
-		bsm.lastSyncThumbnails = settings.LastSyncThumbnails
+	// Load latest sync stats from sync_history so they survive restarts
+	var lastSync domain.SyncHistory
+	if result := bsm.db.Order("created_at DESC").First(&lastSync); result.Error == nil {
+		bsm.lastSyncAt = &lastSync.CreatedAt
+		bsm.lastSyncNew = lastSync.NewFiles
+		bsm.lastSyncUpdated = lastSync.UpdatedFiles
+		bsm.lastSyncDeleted = lastSync.DeletedFiles
+		bsm.lastSyncThumbnails = lastSync.ThumbnailsGenerated
 	}
 	bsm.mu.Unlock()
 
@@ -314,13 +314,13 @@ func (bsm *BackgroundSyncManager) syncOnce() {
 	bsm.lastSyncThumbnails = thumbnailGenerated
 	bsm.mu.Unlock()
 
-	// Persist last sync stats to AppSettings
-	bsm.db.Model(&domain.AppSettings{}).Where("id = ?", 1).Updates(map[string]interface{}{
-		"last_sync_at":         now,
-		"last_sync_new":        newFiles,
-		"last_sync_updated":    updatedFiles,
-		"last_sync_deleted":    deletedFiles,
-		"last_sync_thumbnails": thumbnailGenerated,
+	// Persist last sync stats to sync_history
+	bsm.db.Create(&domain.SyncHistory{
+		CreatedAt:           now,
+		NewFiles:            newFiles,
+		UpdatedFiles:        updatedFiles,
+		DeletedFiles:        deletedFiles,
+		ThumbnailsGenerated: thumbnailGenerated,
 	})
 }
 

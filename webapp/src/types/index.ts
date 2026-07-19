@@ -159,11 +159,6 @@ export interface AppSettingsDTO {
   dailySyncHour?: number
   dailySyncMinute?: number
   syncTimezoneOffset?: number
-  lastSyncAt?: string | null
-  lastSyncNew?: number
-  lastSyncUpdated?: number
-  lastSyncDeleted?: number
-  lastSyncThumbnails?: number
 }
 
 export interface UserSettingsDTO {
@@ -202,6 +197,20 @@ export interface SyncStatusResponse {
   lastSyncThumbnails: number
   processedFiles: number
   totalFiles: number
+}
+
+export interface SyncHistoryEntry {
+  id: number
+  createdAt: string
+  newFiles: number
+  updatedFiles: number
+  deletedFiles: number
+  thumbnailsGenerated: number
+}
+
+export interface SyncHistoryResponse {
+  entries: SyncHistoryEntry[]
+  total: number
 }
 
 export interface UpdateUserSettingsRequest {

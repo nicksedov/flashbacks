@@ -12,8 +12,9 @@ import { ScanProgressBanner } from "@/components/ScanProgressBanner"
 import { useGalleryFolders } from "@/hooks/useGalleryFolders"
 import { useScanStatus } from "@/hooks/useScanStatus"
 import { fetchTrashInfo, cleanTrash, fetchSettings, updateSettings, fetchThumbnailCacheStats, enableThumbnailCache, disableThumbnailCache, invalidateAllThumbnails, triggerScan, triggerFastScan, fetchSyncStatus } from "@/api/endpoints"
+import { SyncHistoryDialog } from "@/components/settings/SyncHistoryDialog"
 import { useSettings } from "@/providers/useSettings"
-import { RefreshCw, Trash2, Loader2, Zap, DatabaseZap, DatabaseBackup, Database, Clock } from "lucide-react"
+import { RefreshCw, Trash2, Loader2, Zap, DatabaseZap, DatabaseBackup, Database, Clock, History } from "lucide-react"
 import { useTranslation, type TranslationKey } from "@/i18n"
 import type { SyncStatusResponse } from "@/types"
 
@@ -88,6 +89,7 @@ export function AdminGeneralTab() {
   const [syncTimezoneOffset, setSyncTimezoneOffset] = useState(new Date().getTimezoneOffset())
   const [isSavingSchedule, setIsSavingSchedule] = useState(false)
   const [syncStatus, setSyncStatus] = useState<SyncStatusResponse | null>(null)
+  const [syncHistoryOpen, setSyncHistoryOpen] = useState(false)
 
   const loadTrashInfo = useCallback(() => {
     fetchTrashInfo()
@@ -553,9 +555,22 @@ export function AdminGeneralTab() {
                 </div>
               )}
             </div>
+
+            {/* View History button */}
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full mt-2"
+              onClick={() => setSyncHistoryOpen(true)}
+            >
+              <History className="h-4 w-4 mr-1.5" />
+              {t("settings.dailySync.viewHistory")}
+            </Button>
           </div>
         </CardContent>
       </Card>
+
+      <SyncHistoryDialog open={syncHistoryOpen} onOpenChange={setSyncHistoryOpen} />
 
       {/* Trash Settings */}
       <Card>

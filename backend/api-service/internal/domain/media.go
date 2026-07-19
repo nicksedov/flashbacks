@@ -137,14 +137,23 @@ type AppSettings struct {
 	DailySyncHour   int    `gorm:"default:3" json:"dailySyncHour"`
 	DailySyncMinute int    `gorm:"default:30" json:"dailySyncMinute"`
 	// SyncTimezoneOffset: user's timezone offset in minutes from UTC (same sign as JS getTimezoneOffset: UTC+3 = -180)
-	SyncTimezoneOffset int `gorm:"default:0" json:"syncTimezoneOffset"`
-	// Last sync status fields
-	LastSyncAt         *time.Time `json:"lastSyncAt"`
-	LastSyncNew        int        `gorm:"default:0" json:"lastSyncNew"`
-	LastSyncUpdated    int        `gorm:"default:0" json:"lastSyncUpdated"`
-	LastSyncDeleted    int        `gorm:"default:0" json:"lastSyncDeleted"`
-	LastSyncThumbnails int        `gorm:"default:0" json:"lastSyncThumbnails"`
-	UpdatedAt          time.Time  `json:"updatedAt"`
+	SyncTimezoneOffset int       `gorm:"default:0" json:"syncTimezoneOffset"`
+	UpdatedAt          time.Time `json:"updatedAt"`
+}
+
+// SyncHistory stores a record of a completed background sync operation.
+type SyncHistory struct {
+	ID                  uint      `gorm:"primaryKey" json:"id"`
+	CreatedAt           time.Time `gorm:"autoCreateTime" json:"createdAt"`
+	NewFiles            int       `gorm:"default:0" json:"newFiles"`
+	UpdatedFiles        int       `gorm:"default:0" json:"updatedFiles"`
+	DeletedFiles        int       `gorm:"default:0" json:"deletedFiles"`
+	ThumbnailsGenerated int       `gorm:"default:0" json:"thumbnailsGenerated"`
+}
+
+// TableName overrides the default GORM table name (sync_histories) to match the migration.
+func (SyncHistory) TableName() string {
+	return "sync_history"
 }
 
 // OcrClassification stores OCR classification results for an image

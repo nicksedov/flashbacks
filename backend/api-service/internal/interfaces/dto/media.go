@@ -1,7 +1,5 @@
 package dto
 
-import "time"
-
 // --- Duplicates API ---
 
 // DuplicatesResponse is the JSON response for GET /api/duplicates
@@ -232,20 +230,15 @@ type GalleryImagesResponse struct {
 
 // AppSettingsDTO is the JSON response for GET /api/settings
 type AppSettingsDTO struct {
-	TrashDir              string     `json:"trashDir"`
-	ExifBackupDir         string     `json:"exifBackupDir"`
-	ThumbnailCachePath    string     `json:"thumbnailCachePath,omitempty"`
-	ThumbnailCacheSize    int        `json:"thumbnailCacheSize,omitempty"`
-	OcrConcurrentRequests int        `json:"ocrConcurrentRequests,omitempty"`
-	SyncDays              string     `json:"syncDays"`
-	DailySyncHour         int        `json:"dailySyncHour"`
-	DailySyncMinute       int        `json:"dailySyncMinute"`
-	SyncTimezoneOffset    int        `json:"syncTimezoneOffset"`
-	LastSyncAt            *time.Time `json:"lastSyncAt,omitempty"`
-	LastSyncNew           int        `json:"lastSyncNew"`
-	LastSyncUpdated       int        `json:"lastSyncUpdated"`
-	LastSyncDeleted       int        `json:"lastSyncDeleted"`
-	LastSyncThumbnails    int        `json:"lastSyncThumbnails"`
+	TrashDir              string `json:"trashDir"`
+	ExifBackupDir         string `json:"exifBackupDir"`
+	ThumbnailCachePath    string `json:"thumbnailCachePath,omitempty"`
+	ThumbnailCacheSize    int    `json:"thumbnailCacheSize,omitempty"`
+	OcrConcurrentRequests int    `json:"ocrConcurrentRequests,omitempty"`
+	SyncDays              string `json:"syncDays"`
+	DailySyncHour         int    `json:"dailySyncHour"`
+	DailySyncMinute       int    `json:"dailySyncMinute"`
+	SyncTimezoneOffset    int    `json:"syncTimezoneOffset"`
 }
 
 // SyncStatusResponse is the JSON response for GET /api/sync-status.
@@ -262,6 +255,22 @@ type SyncStatusResponse struct {
 	LastSyncThumbnails int    `json:"lastSyncThumbnails"`
 	ProcessedFiles     int    `json:"processedFiles"`
 	TotalFiles         int    `json:"totalFiles"`
+}
+
+// SyncHistoryEntry is a single sync history record returned by GET /api/sync-history.
+type SyncHistoryEntry struct {
+	ID                  uint   `json:"id"`
+	CreatedAt           string `json:"createdAt"`
+	NewFiles            int    `json:"newFiles"`
+	UpdatedFiles        int    `json:"updatedFiles"`
+	DeletedFiles        int    `json:"deletedFiles"`
+	ThumbnailsGenerated int    `json:"thumbnailsGenerated"`
+}
+
+// SyncHistoryResponse is the JSON response for GET /api/sync-history.
+type SyncHistoryResponse struct {
+	Entries []SyncHistoryEntry `json:"entries"`
+	Total   int                `json:"total"`
 }
 
 // UserSettingsDTO is the JSON response for user settings
@@ -541,10 +550,10 @@ type EmbeddingSettingsDTO struct {
 
 // LlmSettingsResponse for GET /api/llm/settings
 type LlmSettingsResponse struct {
-	Instruments []LlmInstrumentDTO `json:"instruments"`
-	TagScan     TagScanSettingsDTO `json:"tagScan"`
+	Instruments []LlmInstrumentDTO   `json:"instruments"`
+	TagScan     TagScanSettingsDTO   `json:"tagScan"`
 	Embedding   EmbeddingSettingsDTO `json:"embedding"`
-	Providers   []LlmProviderDTO   `json:"providers"`
+	Providers   []LlmProviderDTO     `json:"providers"`
 }
 
 // UpdateLlmSettingsRequest for PUT /api/llm/settings

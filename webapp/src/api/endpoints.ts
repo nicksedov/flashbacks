@@ -70,6 +70,7 @@ import type {
   SmartSearchResponse,
   EmbeddingBackfillStatus,
   SyncStatusResponse,
+  SyncHistoryResponse,
   ExifServiceStatus,
   CreateFolderRequest,
   CreateFolderResponse,
@@ -281,6 +282,13 @@ export function updateSettings(req: UpdateSettingsRequest): Promise<AppSettingsD
 
 export function fetchSyncStatus(): Promise<SyncStatusResponse> {
   return apiGet<SyncStatusResponse>("/api/sync-status")
+}
+
+export function fetchSyncHistory(from?: string, to?: string): Promise<SyncHistoryResponse> {
+  const params: Record<string, string> = {}
+  if (from) params.from = from
+  if (to) params.to = to
+  return apiGet<SyncHistoryResponse>("/api/sync-history", params)
 }
 
 // --- User Settings ---

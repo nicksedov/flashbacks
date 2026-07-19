@@ -45,6 +45,9 @@ export const translationsRu = {
   "common.actions": "Действия",
   "common.delete": "Удалить",
   "common.edit": "Редактировать",
+  "common.period": "Период",
+  "common.refresh": "Обновить",
+  "common.total": "Всего",
 
   // Settings tab
   "settings.title": "Галерея",
@@ -115,6 +118,20 @@ export const translationsRu = {
   "settings.dailySync.lastStats": "{newFiles} новых, {updatedFiles} обновлено, {deletedFiles} удалено, {thumbnails} миниатюр",
   "settings.dailySync.syncProgress": "Обработано {processed} из {total} файлов",
   "settings.dailySync.enabled": "Включить ежедневную синхронизацию",
+  "settings.dailySync.viewHistory": "История синхронизаций",
+  "settings.dailySync.historyTitle": "История синхронизаций",
+  "settings.dailySync.historyPeriod1d": "1 день",
+  "settings.dailySync.historyPeriod7d": "7 дней",
+  "settings.dailySync.historyPeriod1m": "1 месяц",
+  "settings.dailySync.historyPeriodCustom": "Произвольный",
+  "settings.dailySync.historyDate": "Дата",
+  "settings.dailySync.historyNew": "Новых",
+  "settings.dailySync.historyUpdated": "Обновлено",
+  "settings.dailySync.historyDeleted": "Удалено",
+  "settings.dailySync.historyThumbnails": "Миниатюр",
+  "settings.dailySync.historyEmpty": "История синхронизаций за выбранный период не найдена",
+  "settings.dailySync.historyFrom": "От",
+  "settings.dailySync.historyTo": "До",
 
   // Trash settings
   "trash.title": "Корзина",

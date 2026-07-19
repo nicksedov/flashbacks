@@ -7,7 +7,7 @@ import { SmartSearchTile } from "@/components/gallery/SmartSearchTile"
 import { DeleteConfirmDialog } from "@/components/gallery/DeleteConfirmDialog"
 import { BulkDeleteDialog } from "@/components/gallery/BulkDeleteDialog"
 import { BulkMoveDialog } from "@/components/gallery/BulkMoveDialog"
-import { useSmartSearch } from "@/hooks/useSmartSearch"
+import { useSmartSearch, MIN_QUERY_LENGTH } from "@/hooks/useSmartSearch"
 import { fetchEmbeddingStatus, startEmbeddingBackfill, stopEmbeddingBackfill, deleteFiles, moveFiles } from "@/api/endpoints"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -89,7 +89,8 @@ export function SmartSearchTab() {
       clearTimeout(debounceRef.current)
     }
 
-    if (!inputValue.trim()) {
+    const trimmed = inputValue.trim()
+    if (trimmed.length < MIN_QUERY_LENGTH) {
       reset()
       return
     }

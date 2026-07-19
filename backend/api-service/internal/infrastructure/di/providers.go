@@ -52,6 +52,7 @@ var CoreSet = wire.NewSet(
 	ProvideImageTagRepo,
 	ProvideAppSettingsRepo,
 	ProvideUserSettingsRepo,
+	ProvideSyncHistoryRepo,
 )
 
 // ProvideConfig loads application configuration from environment variables.
@@ -173,6 +174,11 @@ func ProvideAppSettingsRepo(db *gorm.DB) repository.AppSettingsRepository {
 // ProvideUserSettingsRepo creates the user settings repository.
 func ProvideUserSettingsRepo(db *gorm.DB) repository.UserSettingsRepository {
 	return repository.NewUserSettingsRepository(db)
+}
+
+// ProvideSyncHistoryRepo creates the sync history repository.
+func ProvideSyncHistoryRepo(db *gorm.DB) repository.SyncHistoryRepository {
+	return repository.NewSyncHistoryRepository(db)
 }
 
 // ──────────────────────────────────────────────────────────────────────────────

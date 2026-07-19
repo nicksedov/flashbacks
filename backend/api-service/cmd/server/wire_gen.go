@@ -60,6 +60,7 @@ func InitializeApp() (*App, error) {
 	imageTagRepo := di.ProvideImageTagRepo(db)
 	appSettingsRepo := di.ProvideAppSettingsRepo(db)
 	userSettingsRepo := di.ProvideUserSettingsRepo(db)
+	syncHistoryRepo := di.ProvideSyncHistoryRepo(db)
 
 	serverDeps := handler.ServerDeps{
 		DB:                  db,
@@ -94,6 +95,7 @@ func InitializeApp() (*App, error) {
 		ImageTagRepo:        imageTagRepo,
 		AppSettingsRepo:     appSettingsRepo,
 		UserSettingsRepo:    userSettingsRepo,
+		SyncHistoryRepo:     syncHistoryRepo,
 	}
 	server := di.ProvideServer(serverDeps)
 	loginRateLimiter := di.ProvideLoginRateLimiter()

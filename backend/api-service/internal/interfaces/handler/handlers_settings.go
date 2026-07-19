@@ -28,11 +28,6 @@ func (s *Server) handleGetSettings(c *gin.Context) {
 		DailySyncHour:         settings.DailySyncHour,
 		DailySyncMinute:       settings.DailySyncMinute,
 		SyncTimezoneOffset:    settings.SyncTimezoneOffset,
-		LastSyncAt:            settings.LastSyncAt,
-		LastSyncNew:           settings.LastSyncNew,
-		LastSyncUpdated:       settings.LastSyncUpdated,
-		LastSyncDeleted:       settings.LastSyncDeleted,
-		LastSyncThumbnails:    settings.LastSyncThumbnails,
 	})
 }
 
@@ -174,11 +169,6 @@ func (s *Server) handleUpdateSettings(c *gin.Context) {
 		DailySyncHour:         settings.DailySyncHour,
 		DailySyncMinute:       settings.DailySyncMinute,
 		SyncTimezoneOffset:    settings.SyncTimezoneOffset,
-		LastSyncAt:            settings.LastSyncAt,
-		LastSyncNew:           settings.LastSyncNew,
-		LastSyncUpdated:       settings.LastSyncUpdated,
-		LastSyncDeleted:       settings.LastSyncDeleted,
-		LastSyncThumbnails:    settings.LastSyncThumbnails,
 	})
 }
 

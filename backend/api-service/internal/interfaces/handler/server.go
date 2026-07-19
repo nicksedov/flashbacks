@@ -61,6 +61,7 @@ type ServerDeps struct {
 	ImageTagRepo      repository.ImageTagRepository
 	AppSettingsRepo   repository.AppSettingsRepository
 	UserSettingsRepo  repository.UserSettingsRepository
+	SyncHistoryRepo   repository.SyncHistoryRepository
 }
 
 // Server holds the application state
@@ -99,6 +100,7 @@ type Server struct {
 	imageTagRepo      repository.ImageTagRepository
 	appSettingsRepo   repository.AppSettingsRepository
 	userSettingsRepo  repository.UserSettingsRepository
+	syncHistoryRepo   repository.SyncHistoryRepository
 }
 
 // NewServer creates a new server instance from a dependency struct.
@@ -137,6 +139,7 @@ func NewServer(deps ServerDeps) *Server {
 		imageTagRepo:        deps.ImageTagRepo,
 		appSettingsRepo:     deps.AppSettingsRepo,
 		userSettingsRepo:    deps.UserSettingsRepo,
+		syncHistoryRepo:     deps.SyncHistoryRepo,
 	}
 }
 

@@ -45,6 +45,9 @@ export const translationsEn = {
   "common.actions": "Actions",
   "common.delete": "Delete",
   "common.edit": "Edit",
+  "common.period": "Period",
+  "common.refresh": "Refresh",
+  "common.total": "Total",
 
   // Settings tab
   "settings.title": "Gallery",
@@ -115,6 +118,20 @@ export const translationsEn = {
   "settings.dailySync.lastStats": "{newFiles} new, {updatedFiles} updated, {deletedFiles} deleted, {thumbnails} thumbnails",
   "settings.dailySync.syncProgress": "{processed} of {total} files processed",
   "settings.dailySync.enabled": "Enable daily sync",
+  "settings.dailySync.viewHistory": "View History",
+  "settings.dailySync.historyTitle": "Sync History",
+  "settings.dailySync.historyPeriod1d": "1 day",
+  "settings.dailySync.historyPeriod7d": "7 days",
+  "settings.dailySync.historyPeriod1m": "1 month",
+  "settings.dailySync.historyPeriodCustom": "Custom",
+  "settings.dailySync.historyDate": "Date",
+  "settings.dailySync.historyNew": "New",
+  "settings.dailySync.historyUpdated": "Updated",
+  "settings.dailySync.historyDeleted": "Deleted",
+  "settings.dailySync.historyThumbnails": "Thumbnails",
+  "settings.dailySync.historyEmpty": "No sync history found for the selected period",
+  "settings.dailySync.historyFrom": "From",
+  "settings.dailySync.historyTo": "To",
 
   // Trash settings
   "trash.title": "Trash",

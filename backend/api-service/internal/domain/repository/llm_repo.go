@@ -14,12 +14,18 @@ type LlmRepository interface {
 	UpdateProviderByAlias(alias string, updates map[string]interface{}) error
 	DeleteProvider(provider *domain.LlmProvider) error
 
-	// --- Model Caches ---
+	// --- Model Caches (deprecated JSON blob) ---
 	GetAllModelCaches() ([]domain.LlmProviderModelCache, error)
 	GetModelCacheByAlias(alias string) (*domain.LlmProviderModelCache, error)
 	UpsertModelCache(cache *domain.LlmProviderModelCache) error
 	DeleteModelCacheByAlias(alias string) error
 	UpdateModelCacheAlias(oldAlias, newAlias string) error
+
+	// --- Provider Models (normalized) ---
+	GetModelsByProviderID(providerID uint) ([]domain.LlmProviderModel, error)
+	GetModelsByProviderAlias(alias string) ([]domain.LlmProviderModel, error)
+	ReplaceProviderModels(providerID uint, models []domain.LlmProviderModel) error
+	DeleteModelsByProviderID(providerID uint) error
 
 	// --- Tag Scan Settings ---
 	GetTagScanSettings() (*domain.TagScanSettings, error)
@@ -79,7 +85,7 @@ func (r *gormLlmRepo) DeleteProvider(provider *domain.LlmProvider) error {
 	return r.db.Delete(provider).Error
 }
 
-// --- Model Caches ---
+// --- Model Caches (deprecated) ---
 
 func (r *gormLlmRepo) GetAllModelCaches() ([]domain.LlmProviderModelCache, error) {
 	var rows []domain.LlmProviderModelCache
@@ -114,6 +120,51 @@ func (r *gormLlmRepo) UpdateModelCacheAlias(oldAlias, newAlias string) error {
 	return r.db.Model(&domain.LlmProviderModelCache{}).
 		Where("provider_alias = ?", oldAlias).
 		Update("provider_alias", newAlias).Error
+}
+
+// --- Provider Models (normalized) ---
+
+func (r *gormLlmRepo) GetModelsByProviderID(providerID uint) ([]domain.LlmProviderModel, error) {
+	var models []domain.LlmProviderModel
+	err := r.db.Where("llm_provider_id = ?", providerID).
+		Preload("Capabilities").
+		Order("model_name ASC").
+		Find(&models).Error
+	return models, err
+}
+
+func (r *gormLlmRepo) GetModelsByProviderAlias(alias string) ([]domain.LlmProviderModel, error) {
+	var provider domain.LlmProvider
+	if err := r.db.Where("alias = ?", alias).First(&provider).Error; err != nil {
+		return nil, err
+	}
+	return r.GetModelsByProviderID(provider.ID)
+}
+
+// ReplaceProviderModels atomically replaces all models for a provider.
+// Deletes existing models (capabilities cascade) and inserts new ones.
+func (r *gormLlmRepo) ReplaceProviderModels(providerID uint, models []domain.LlmProviderModel) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		// Delete existing models for this provider (capabilities cascade via FK)
+		if err := tx.Where("llm_provider_id = ?", providerID).Delete(&domain.LlmProviderModel{}).Error; err != nil {
+			return err
+		}
+
+		// Insert new models one by one (GORM's Create doesn't handle nested creates well in bulk)
+		for i := range models {
+			models[i].LlmProviderID = providerID
+			models[i].ID = 0
+			if err := tx.Create(&models[i]).Error; err != nil {
+				return err
+			}
+		}
+
+		return nil
+	})
+}
+
+func (r *gormLlmRepo) DeleteModelsByProviderID(providerID uint) error {
+	return r.db.Where("llm_provider_id = ?", providerID).Delete(&domain.LlmProviderModel{}).Error
 }
 
 // --- Tag Scan Settings ---

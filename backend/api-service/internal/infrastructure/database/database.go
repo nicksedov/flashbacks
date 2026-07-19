@@ -52,6 +52,8 @@ func InitDatabase(cfg *config.AppConfig) (*gorm.DB, error) {
 		&domain.OcrLlmRecognition{},
 		&domain.ImageTag{},
 		&domain.LlmProviderModelCache{},
+		&domain.LlmProviderModel{},
+		&domain.LlmModelCapability{},
 		&domain.Conversation{},
 		&domain.ConversationMessage{},
 		&domain.TagEmbedding{},

@@ -1,10 +1,11 @@
 openapi: "3.1.0"
 info:
   title: Flashbacks API Service
-  version: "1.0.0"
+  version: "1.1.0"
   description: |
     Core API for the Flashbacks application. Handles authentication, image scanning,
-    duplicate detection, gallery management, OCR coordination, and AI-powered features.
+    duplicate detection, gallery management, OCR coordination, AI-powered features,
+    tag/embedding management, and LLM-based image recognition.
 
 servers:
   - url: http://localhost:5170
@@ -15,6 +16,10 @@ security:
   - csrfToken: []
 
 paths:
+  # ──────────────────────────────────────────────
+  #  Public endpoints
+  # ──────────────────────────────────────────────
+
   /api/health:
     get:
       summary: Service health check
@@ -66,6 +71,27 @@ paths:
         "401":
           description: Invalid credentials
 
+  /api/auth/bootstrap/setup:
+    post:
+      summary: Bootstrap initial admin setup
+      operationId: bootstrapSetup
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BootstrapSetupRequest"
+      responses:
+        "200":
+          description: Bootstrap completed
+        "400":
+          description: Already bootstrapped or invalid
+
+  # ──────────────────────────────────────────────
+  #  Authenticated endpoints
+  # ──────────────────────────────────────────────
+
   /api/auth/logout:
     post:
       summary: Logout current session
@@ -86,6 +112,81 @@ paths:
               schema:
                 $ref: "#/components/schemas/User"
 
+  /api/auth/change-password:
+    post:
+      summary: Change current user password
+      operationId: changePassword
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChangePasswordRequest"
+      responses:
+        "200":
+          description: Password changed
+
+  /api/users/me:
+    patch:
+      summary: Update current user profile
+      operationId: updateProfile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateProfileRequest"
+      responses:
+        "200":
+          description: Profile updated
+
+  /api/users/me/avatar:
+    post:
+      summary: Upload avatar
+      operationId: uploadAvatar
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                avatar:
+                  type: string
+                  format: binary
+      responses:
+        "200":
+          description: Avatar uploaded
+    delete:
+      summary: Delete avatar
+      operationId: deleteAvatar
+      responses:
+        "200":
+          description: Avatar deleted
+
+  /api/users/{id}/avatar:
+    get:
+      summary: Get user avatar
+      operationId: getUserAvatar
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Avatar image
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+
+  # ──────────────────────────────────────────────
+  #  Scan & Duplicates
+  # ──────────────────────────────────────────────
+
   /api/scan:
     post:
       summary: Start full scan for duplicates
@@ -100,7 +201,7 @@ paths:
 
   /api/fast-scan:
     post:
-      summary: Start fast scan (new files only)
+      summary: Start fast scan (new/modified files only)
       operationId: startFastScan
       responses:
         "202":
@@ -141,31 +242,75 @@ paths:
               schema:
                 $ref: "#/components/schemas/DuplicatesResponse"
 
-  /api/gallery:
-    get:
-      summary: Get gallery images
-      operationId: getGallery
-      parameters:
-        - name: page
-          in: query
-          schema:
-            type: integer
-        - name: limit
-          in: query
-          schema:
-            type: integer
-        - name: sort
-          in: query
-          schema:
-            type: string
-            enum: [date, name, size]
+  /api/delete-files:
+    post:
+      summary: Delete files directly
+      operationId: deleteFiles
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DeleteFilesRequest"
       responses:
         "200":
-          description: Gallery images
+          description: Files deleted
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/GalleryResponse"
+                $ref: "#/components/schemas/DeleteFilesResponse"
+
+  /api/move-files:
+    post:
+      summary: Move files to a target directory
+      operationId: moveFiles
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MoveFilesRequest"
+      responses:
+        "200":
+          description: Files moved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MoveFilesResponse"
+
+  /api/folder-patterns:
+    get:
+      summary: Get folder patterns with duplicate counts
+      operationId: getFolderPatterns
+      responses:
+        "200":
+          description: Folder patterns
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FolderPatternsResponse"
+
+  /api/batch-delete:
+    post:
+      summary: Batch delete duplicates by folder pattern rules
+      operationId: batchDelete
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BatchDeleteRequest"
+      responses:
+        "200":
+          description: Batch delete completed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BatchDeleteResponse"
+
+  # ──────────────────────────────────────────────
+  #  Gallery & Folders
+  # ──────────────────────────────────────────────
 
   /api/thumbnail:
     get:
@@ -191,49 +336,174 @@ paths:
                 type: string
                 format: binary
 
-  /api/settings:
+  /api/gallery:
     get:
-      summary: Get application settings
-      operationId: getSettings
+      summary: Get gallery images
+      operationId: getGallery
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          schema:
+            type: integer
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [date, name, size]
       responses:
         "200":
-          description: Application settings
+          description: Gallery images
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Settings"
-    put:
-      summary: Update application settings
-      operationId: updateSettings
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/Settings"
-      responses:
-        "200":
-          description: Settings updated
+                $ref: "#/components/schemas/GalleryImagesResponse"
 
-  /api/ocr/classify:
-    post:
-      summary: Start OCR classification
-      operationId: startOcrClassification
-      responses:
-        "202":
-          description: OCR classification started
-
-  /api/ocr/classify-status:
+  /api/gallery/calendar:
     get:
-      summary: Get OCR classification status
-      operationId: getOcrClassificationStatus
+      summary: Get calendar gallery with date-based grouping
+      operationId: getGalleryCalendar
+      parameters:
+        - name: cursor
+          in: query
+          schema:
+            type: string
+          description: Pagination cursor from previous response
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            default: 30
       responses:
         "200":
-          description: OCR status
+          description: Calendar groups
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/OcrStatus"
+                $ref: "#/components/schemas/GalleryCalendarResponse"
+  /api/gallery/calendar/month:
+    get:
+      summary: Get calendar month info (days with images)
+      operationId: getCalendarMonthInfo
+      parameters:
+        - name: year
+          in: query
+          required: true
+          schema:
+            type: integer
+        - name: month
+          in: query
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Month info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarMonthInfo"
+
+  /api/gallery/calendar/dates:
+    get:
+      summary: Get all calendar date markers
+      operationId: getCalendarAllDates
+      responses:
+        "200":
+          description: All dates
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarAllDatesResponse"
+
+  /api/gallery/calendar/seek:
+    get:
+      summary: Seek to a specific date in the calendar
+      operationId: getCalendarSeek
+      parameters:
+        - name: date
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: Seek cursor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarSeekResponse"
+
+  /api/gallery/clusters:
+    get:
+      summary: Get geo clusters for map view
+      operationId: getGalleryClusters
+      parameters:
+        - name: minLat
+          in: query
+          schema:
+            type: number
+        - name: maxLat
+          in: query
+          schema:
+            type: number
+        - name: minLng
+          in: query
+          schema:
+            type: number
+        - name: maxLng
+          in: query
+          schema:
+            type: number
+        - name: zoom
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Geo clusters
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GeoClustersResponse"
+
+  /api/gallery/geo-images:
+    get:
+      summary: Get images within a geo bounding box
+      operationId: getGeoImages
+      parameters:
+        - name: minLat
+          in: query
+          schema:
+            type: number
+        - name: maxLat
+          in: query
+          schema:
+            type: number
+        - name: minLng
+          in: query
+          schema:
+            type: number
+        - name: maxLng
+          in: query
+          schema:
+            type: number
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 200
+      responses:
+        "200":
+          description: Geo images
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GeoImagesResponse"
 
   /api/gallery/smart-search:
     get:
@@ -259,6 +529,898 @@ paths:
               schema:
                 $ref: "#/components/schemas/SmartSearchResponse"
 
+  /api/image:
+    get:
+      summary: Serve full-size image
+      operationId: serveImage
+      parameters:
+        - name: path
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Image file
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+
+  /api/ocr-image:
+    get:
+      summary: Serve OCR-annotated image
+      operationId: serveOcrImage
+      parameters:
+        - name: path
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OCR-annotated image
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+
+  # ──────────────────────────────────────────────
+  #  Settings
+  # ──────────────────────────────────────────────
+
+  /api/settings:
+    get:
+      summary: Get application settings
+      operationId: getSettings
+      responses:
+        "200":
+          description: Application settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AppSettingsDTO"
+    put:
+      summary: Update application settings
+      operationId: updateSettings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateSettingsRequest"
+      responses:
+        "200":
+          description: Settings updated
+
+  /api/user-settings:
+    get:
+      summary: Get user settings (theme, language)
+      operationId: getUserSettings
+      responses:
+        "200":
+          description: User settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserSettingsDTO"
+    put:
+      summary: Update user settings
+      operationId: updateUserSettings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateUserSettingsRequest"
+      responses:
+        "200":
+          description: User settings updated
+
+  /api/sync-status:
+    get:
+      summary: Get background sync status
+      operationId: getSyncStatus
+      responses:
+        "200":
+          description: Sync status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SyncStatusResponse"
+
+  /api/exif-status:
+    get:
+      summary: Get EXIF service connection status
+      operationId: getExifStatus
+      responses:
+        "200":
+          description: EXIF status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExifStatusResponse"
+
+  # ──────────────────────────────────────────────
+  #  Folders
+  # ──────────────────────────────────────────────
+
+  /api/folders:
+    get:
+      summary: List gallery folders
+      operationId: getFolders
+      responses:
+        "200":
+          description: Folders list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GalleryFoldersResponse"
+    post:
+      summary: Add gallery folder
+      operationId: addFolder
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddFolderRequest"
+      responses:
+        "200":
+          description: Folder added
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AddFolderResponse"
+
+  /api/folders/mkdir:
+    post:
+      summary: Create subfolder inside a gallery folder
+      operationId: createSubfolder
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateFolderRequest"
+      responses:
+        "200":
+          description: Subfolder created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateFolderResponse"
+
+  /api/folders/subdirs:
+    get:
+      summary: List subdirectories of a gallery folder
+      operationId: listSubdirs
+      parameters:
+        - name: path
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Subdirectories
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubdirsResponse"
+
+  /api/folders/{id}:
+    delete:
+      summary: Remove gallery folder
+      operationId: removeFolder
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Folder removed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RemoveFolderResponse"
+
+  # ──────────────────────────────────────────────
+  #  Trash
+  # ──────────────────────────────────────────────
+
+  /api/trash-info:
+    get:
+      summary: Get trash directory info
+      operationId: getTrashInfo
+      responses:
+        "200":
+          description: Trash info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrashInfoResponse"
+
+  /api/trash-clean:
+    post:
+      summary: Clean trash directory
+      operationId: cleanTrash
+      responses:
+        "200":
+          description: Trash cleaned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CleanTrashResponse"
+
+  /api/trash-list:
+    get:
+      summary: List files in trash
+      operationId: listTrashFiles
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        "200":
+          description: Trash files list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  files:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        name:
+                          type: string
+                        path:
+                          type: string
+                        deletedAt:
+                          type: string
+                          format: date-time
+                        size:
+                          type: integer
+                  total:
+                    type: integer
+
+  /api/trash-restore:
+    post:
+      summary: Restore file from trash
+      operationId: restoreTrashFile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [path]
+              properties:
+                path:
+                  type: string
+      responses:
+        "200":
+          description: File restored
+
+  /api/trash-delete:
+    post:
+      summary: Permanently delete file from trash
+      operationId: deleteTrashFile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [path]
+              properties:
+                path:
+                  type: string
+      responses:
+        "200":
+          description: File permanently deleted
+
+  # ──────────────────────────────────────────────
+  #  Image Metadata & GPS
+  # ──────────────────────────────────────────────
+
+  /api/image-metadata:
+    get:
+      summary: Get EXIF metadata and geolocation for an image
+      operationId: getImageMetadata
+      parameters:
+        - name: id
+          in: query
+          required: true
+          schema:
+            type: integer
+          description: Image file ID
+      responses:
+        "200":
+          description: Image metadata
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImageMetadataResponse"
+
+  /api/gallery/exif-images:
+    get:
+      summary: Get images missing EXIF data (date_taken or geolocation)
+      operationId: getImagesMissingExif
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: Missing EXIF images
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MissingImagesResponse"
+
+  /api/geocode/search:
+    get:
+      summary: Forward geocode search via Nominatim
+      operationId: geocodeSearch
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Search query
+      responses:
+        "200":
+          description: Geocode results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GeocodeSearchResponse"
+
+  /api/image-metadata/gps:
+    put:
+      summary: Write GPS coordinates to an image file
+      operationId: updateGps
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateGpsRequest"
+      responses:
+        "200":
+          description: GPS updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UpdateGpsResponse"
+
+  /api/image-metadata/gps/batch:
+    put:
+      summary: Batch write GPS coordinates to multiple images
+      operationId: batchUpdateGps
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BatchUpdateGpsRequest"
+      responses:
+        "200":
+          description: Batch GPS update result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BatchUpdateGpsResponse"
+
+  /api/image-metadata/location-candidates:
+    get:
+      summary: Get location candidates from same-day photos with GPS
+      operationId: getLocationCandidates
+      parameters:
+        - name: date
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: Location candidates
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LocationCandidatesResponse"
+
+  # ──────────────────────────────────────────────
+  #  OCR
+  # ──────────────────────────────────────────────
+
+  /api/ocr-status:
+    get:
+      summary: Get OCR classifier service status
+      operationId: getOcrStatus
+      responses:
+        "200":
+          description: OCR status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OCRStatusResponse"
+
+  /api/ocr/classify:
+    post:
+      summary: Start OCR classification for all images
+      operationId: startOcrClassification
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                force:
+                  type: boolean
+                  description: Re-classify already classified images
+      responses:
+        "202":
+          description: OCR classification started
+
+  /api/ocr/classify-changes:
+    post:
+      summary: Start incremental OCR classification (changed images only)
+      operationId: startOcrClassificationIncremental
+      responses:
+        "202":
+          description: Incremental OCR started
+
+  /api/ocr/stop:
+    post:
+      summary: Stop OCR classification
+      operationId: stopOcrClassification
+      responses:
+        "200":
+          description: OCR stopped
+
+  /api/ocr/classify-status:
+    get:
+      summary: Get OCR classification status
+      operationId: getOcrClassificationStatus
+      responses:
+        "200":
+          description: OCR status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OcrClassificationStatusResponse"
+
+  /api/ocr/documents:
+    get:
+      summary: Get images classified as text documents
+      operationId: getOcrDocuments
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        "200":
+          description: OCR documents
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OcrDocumentsResponse"
+
+  /api/ocr/data:
+    get:
+      summary: Get OCR data for an image
+      operationId: getOcrData
+      parameters:
+        - name: imageFileId
+          in: query
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OCR data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OcrDataResponse"
+
+  # ──────────────────────────────────────────────
+  #  LLM OCR
+  # ──────────────────────────────────────────────
+
+  /api/llm/settings:
+    get:
+      summary: Get LLM settings
+      operationId: getLlmSettings
+      responses:
+        "200":
+          description: LLM settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LlmSettingsResponse"
+    put:
+      summary: Update LLM settings
+      operationId: updateLlmSettings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateLlmSettingsRequest"
+      responses:
+        "200":
+          description: LLM settings updated
+
+  /api/llm/providers:
+    post:
+      summary: Create LLM provider
+      operationId: createLlmProvider
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateLlmProviderRequest"
+      responses:
+        "201":
+          description: Provider created
+
+  /api/llm/providers/{alias}:
+    put:
+      summary: Update LLM provider
+      operationId: updateLlmProvider
+      parameters:
+        - name: alias
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateLlmProviderRequest"
+      responses:
+        "200":
+          description: Provider updated
+    delete:
+      summary: Delete LLM provider
+      operationId: deleteLlmProvider
+      parameters:
+        - name: alias
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Provider deleted
+
+  /api/llm/recognize:
+    post:
+      summary: Start LLM-based OCR recognition for an image
+      operationId: llmRecognize
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LlmOcrRequest"
+      responses:
+        "200":
+          description: Recognition started
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LlmOcrResponse"
+
+  /api/llm/recognize-status:
+    get:
+      summary: Get LLM OCR recognition status
+      operationId: llmRecognizeStatus
+      parameters:
+        - name: imageFileId
+          in: query
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Recognition status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LlmRecognizeStatusResponse"
+
+  /api/llm/recognition:
+    get:
+      summary: Get LLM OCR recognition data
+      operationId: getLlmRecognition
+      parameters:
+        - name: imageFileId
+          in: query
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Recognition data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LlmOcrDataResponse"
+
+  /api/llm/models:
+    get:
+      summary: Get available LLM models
+      operationId: getLlmModels
+      parameters:
+        - name: providerAlias
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Available models
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LlmModelsResponse"
+
+  /api/llm/embedding/probe:
+    post:
+      summary: Probe embedding dimension for a provider
+      operationId: probeEmbeddingDimension
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProbeEmbeddingDimensionRequest"
+      responses:
+        "200":
+          description: Embedding dimension
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProbeEmbeddingDimensionResponse"
+
+  # ──────────────────────────────────────────────
+  #  Image Tags
+  # ──────────────────────────────────────────────
+
+  /api/image-tags:
+    get:
+      summary: Get tags for an image
+      operationId: getImageTags
+      parameters:
+        - name: imageFileId
+          in: query
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Image tags
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImageTagsResponse"
+
+  # ──────────────────────────────────────────────
+  #  Image Enhancement
+  # ──────────────────────────────────────────────
+
+  /api/image/enhance/replace:
+    post:
+      summary: Accept and replace image with enhanced version
+      operationId: replaceEnhancement
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EnhancementActionRequest"
+      responses:
+        "200":
+          description: Image replaced
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnhancementActionResponse"
+
+  /api/image/enhance/save-copy:
+    post:
+      summary: Accept enhancement and save as copy
+      operationId: saveCopyEnhancement
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EnhancementActionRequest"
+      responses:
+        "200":
+          description: Copy saved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnhancementActionResponse"
+
+  /api/image/enhance/reject:
+    post:
+      summary: Reject enhancement
+      operationId: rejectEnhancement
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EnhancementActionRequest"
+      responses:
+        "200":
+          description: Enhancement rejected
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnhancementActionResponse"
+
+  /api/image-enhanced:
+    get:
+      summary: Serve enhanced image
+      operationId: serveEnhancedImage
+      parameters:
+        - name: path
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Enhanced image
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+
+  # ──────────────────────────────────────────────
+  #  AI Assistant
+  # ──────────────────────────────────────────────
+
+  /api/ai/action:
+    post:
+      summary: Start an AI agent action on an image
+      operationId: startAiAction
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AiActionRequest"
+      responses:
+        "200":
+          description: AI action started
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiActionStartResponse"
+
+  /api/ai/status/{taskId}:
+    get:
+      summary: Get AI action status
+      operationId: getAiActionStatus
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: AI action status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiActionStatusResponse"
+
+  # ──────────────────────────────────────────────
+  #  Tag Scan & Embedding
+  # ──────────────────────────────────────────────
+
+  /api/tag-scan/status:
+    get:
+      summary: Get tag scan status
+      operationId: getTagScanStatus
+      responses:
+        "200":
+          description: Tag scan status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TagScanStatusResponse"
+
+  /api/tag-scan/pause:
+    post:
+      summary: Pause tag scan
+      operationId: pauseTagScan
+      responses:
+        "200":
+          description: Tag scan paused
+
+  /api/tag-scan/resume:
+    post:
+      summary: Resume tag scan
+      operationId: resumeTagScan
+      responses:
+        "200":
+          description: Tag scan resumed
+
+  /api/embedding/status:
+    get:
+      summary: Get embedding backfill status
+      operationId: getEmbeddingStatus
+      responses:
+        "200":
+          description: Embedding status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmbeddingStatusResponse"
+
+  /api/embedding/start:
+    post:
+      summary: Start embedding backfill
+      operationId: startEmbeddingBackfill
+      responses:
+        "200":
+          description: Backfill started
+
+  /api/embedding/stop:
+    post:
+      summary: Stop embedding backfill
+      operationId: stopEmbeddingBackfill
+      responses:
+        "200":
+          description: Backfill stopped
+
+  # ──────────────────────────────────────────────
+  #  Chat / AI Conversations
+  # ──────────────────────────────────────────────
+
   /api/chat/conversations:
     get:
       summary: List AI conversations
@@ -271,17 +1433,36 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/Conversation"
+                  $ref: "#/components/schemas/ConversationDTO"
     post:
       summary: Create new AI conversation
       operationId: createConversation
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateConversationRequest"
       responses:
         "201":
           description: Conversation created
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Conversation"
+                $ref: "#/components/schemas/ConversationDTO"
+
+  /api/chat/conversations/{id}:
+    delete:
+      summary: Delete AI conversation
+      operationId: deleteConversation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Conversation deleted
 
   /api/chat/conversations/{id}/messages:
     get:
@@ -292,8 +1473,7 @@ paths:
           in: path
           required: true
           schema:
-            type: string
-            format: uuid
+            type: integer
       responses:
         "200":
           description: List of messages
@@ -302,7 +1482,7 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/Message"
+                  $ref: "#/components/schemas/ChatMessageDTO"
     post:
       summary: Send message to AI assistant
       operationId: sendMessage
@@ -311,8 +1491,7 @@ paths:
           in: path
           required: true
           schema:
-            type: string
-            format: uuid
+            type: integer
       requestBody:
         required: true
         content:
@@ -321,11 +1500,214 @@ paths:
               $ref: "#/components/schemas/SendMessageRequest"
       responses:
         "200":
-          description: AI response
+          description: AI response (SSE stream or JSON)
+          content:
+            text/event-stream:
+              schema:
+                type: string
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChatMessageDTO"
+
+  # ──────────────────────────────────────────────
+  #  MCP
+  # ──────────────────────────────────────────────
+
+  /api/mcp:
+    post:
+      summary: MCP tool execution endpoint
+      operationId: mcpExecute
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: MCP response
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Message"
+                type: object
+
+  # ──────────────────────────────────────────────
+  #  Thumbnail Cache
+  # ──────────────────────────────────────────────
+
+  /api/thumbnail/cache/stats:
+    get:
+      summary: Get thumbnail cache statistics
+      operationId: getThumbnailCacheStats
+      responses:
+        "200":
+          description: Cache stats
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  size:
+                    type: integer
+                  maxSize:
+                    type: integer
+                  count:
+                    type: integer
+
+  /api/thumbnail/cache/invalidate:
+    delete:
+      summary: Invalidate thumbnail for a file
+      operationId: invalidateThumbnailCache
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InvalidateThumbnailRequest"
+      responses:
+        "200":
+          description: Cache invalidated
+
+  /api/thumbnail/cache/invalidate-all:
+    delete:
+      summary: Invalidate all thumbnail caches
+      operationId: invalidateAllThumbnailCaches
+      responses:
+        "200":
+          description: All caches invalidated
+
+  /api/thumbnail/cache/warmup:
+    post:
+      summary: Warm up thumbnails for paths
+      operationId: warmupThumbnailCache
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WarmupThumbnailsRequest"
+      responses:
+        "200":
+          description: Warmup started
+
+  /api/thumbnail/cache/enable:
+    post:
+      summary: Enable thumbnail cache
+      operationId: enableThumbnailCache
+      responses:
+        "200":
+          description: Cache enabled
+
+  /api/thumbnail/cache/disable:
+    post:
+      summary: Disable thumbnail cache
+      operationId: disableThumbnailCache
+      responses:
+        "200":
+          description: Cache disabled
+
+  # ──────────────────────────────────────────────
+  #  Admin
+  # ──────────────────────────────────────────────
+
+  /api/admin/users:
+    get:
+      summary: List all users (admin)
+      operationId: adminListUsers
+      responses:
+        "200":
+          description: Users list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UsersListResponse"
+    post:
+      summary: Create user (admin)
+      operationId: adminCreateUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateUserRequest"
+      responses:
+        "201":
+          description: User created
+
+  /api/admin/users/{id}:
+    patch:
+      summary: Update user (admin)
+      operationId: adminUpdateUser
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateUserRequest"
+      responses:
+        "200":
+          description: User updated
+    delete:
+      summary: Delete user (admin)
+      operationId: adminDeleteUser
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: User deleted
+
+  /api/admin/users/{id}/reset-password:
+    post:
+      summary: Reset user password (admin)
+      operationId: adminResetPassword
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResetPasswordRequest"
+      responses:
+        "200":
+          description: Password reset
+
+  /api/admin/audit:
+    get:
+      summary: Get audit logs (admin)
+      operationId: adminGetAuditLogs
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        "200":
+          description: Audit logs
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditLogsResponse"
 
 components:
   securitySchemes:
@@ -356,7 +1738,7 @@ components:
     AuthStatusResponse:
       type: object
       properties:
-        authenticated:
+        isAuthenticated:
           type: boolean
         bootstrapRequired:
           type: boolean
@@ -383,6 +1765,38 @@ components:
         user:
           $ref: "#/components/schemas/User"
 
+    BootstrapSetupRequest:
+      type: object
+      required:
+        - newPassword
+      properties:
+        newPassword:
+          type: string
+          format: password
+        displayName:
+          type: string
+
+    ChangePasswordRequest:
+      type: object
+      required:
+        - oldPassword
+        - newPassword
+      properties:
+        oldPassword:
+          type: string
+          format: password
+        newPassword:
+          type: string
+          format: password
+
+    UpdateProfileRequest:
+      type: object
+      required:
+        - displayName
+      properties:
+        displayName:
+          type: string
+
     User:
       type: object
       properties:
@@ -404,9 +1818,7 @@ components:
     ScanResponse:
       type: object
       properties:
-        taskId:
-          type: string
-        status:
+        message:
           type: string
 
     ScanStatus:
@@ -429,25 +1841,27 @@ components:
         groups:
           type: array
           items:
-            $ref: "#/components/schemas/DuplicateGroup"
+            $ref: "#/components/schemas/DuplicateGroupDTO"
         total:
           type: integer
         page:
           type: integer
 
-    DuplicateGroup:
+    DuplicateGroupDTO:
       type: object
       properties:
-        id:
-          type: string
+        index:
+          type: integer
         hash:
           type: string
+        size:
+          type: integer
         files:
           type: array
           items:
-            $ref: "#/components/schemas/MediaFile"
+            $ref: "#/components/schemas/FileDTO"
 
-    MediaFile:
+    FileDTO:
       type: object
       properties:
         id:
@@ -458,52 +1872,236 @@ components:
           type: string
         size:
           type: integer
-        mimeType:
-          type: string
-        createdAt:
-          type: string
-          format: date-time
-        modifiedAt:
+        modTime:
           type: string
           format: date-time
 
-    GalleryResponse:
+    DeleteFilesRequest:
+      type: object
+      required:
+        - filePaths
+      properties:
+        filePaths:
+          type: array
+          items:
+            type: string
+
+    DeleteFilesResponse:
+      type: object
+      properties:
+        success:
+          type: integer
+        failed:
+          type: integer
+        failedFiles:
+          type: array
+          items:
+            type: string
+
+    MoveFilesRequest:
+      type: object
+      required:
+        - filePaths
+        - targetDir
+      properties:
+        filePaths:
+          type: array
+          items:
+            type: string
+        targetDir:
+          type: string
+
+    MoveFilesResponse:
+      type: object
+      properties:
+        success:
+          type: integer
+        failed:
+          type: integer
+        failedFiles:
+          type: array
+          items:
+            type: string
+
+    FolderPatternsResponse:
+      type: object
+      properties:
+        patterns:
+          type: array
+          items:
+            $ref: "#/components/schemas/FolderPattern"
+        totalDuplicates:
+          type: integer
+
+    FolderPattern:
+      type: object
+      properties:
+        id:
+          type: string
+        folders:
+          type: array
+          items:
+            type: string
+        duplicateCount:
+          type: integer
+
+    BatchDeleteRequest:
+      type: object
+      required:
+        - rules
+      properties:
+        rules:
+          type: array
+          items:
+            $ref: "#/components/schemas/BatchDeleteRule"
+
+    BatchDeleteRule:
+      type: object
+      properties:
+        patternId:
+          type: string
+        keepFolder:
+          type: string
+
+    BatchDeleteResponse:
+      type: object
+      properties:
+        rulesApplied:
+          type: integer
+        totalDeleted:
+          type: integer
+        errors:
+          type: array
+          items:
+            type: string
+
+    GalleryImagesResponse:
       type: object
       properties:
         images:
           type: array
           items:
-            $ref: "#/components/schemas/MediaFile"
+            $ref: "#/components/schemas/GalleryImageDTO"
         total:
           type: integer
         page:
           type: integer
 
-    Settings:
+    GalleryImageDTO:
       type: object
       properties:
-        scanFolders:
-          type: array
-          items:
-            type: string
-        excludePatterns:
-          type: array
-          items:
-            type: string
-        thumbnailSize:
+        id:
           type: integer
-        language:
+        path:
           type: string
-          enum: [en, ru]
+        filename:
+          type: string
+        size:
+          type: integer
+        modTime:
+          type: string
+          format: date-time
+        hasThumbnail:
+          type: boolean
+        width:
+          type: integer
+        height:
+          type: integer
 
-    OcrStatus:
+    GalleryCalendarResponse:
       type: object
       properties:
-        running:
-          type: boolean
-        processedImages:
+        groups:
+          type: array
+          items:
+            $ref: "#/components/schemas/CalendarDateGroup"
+        nextCursor:
+          type: string
+
+    CalendarDateGroup:
+      type: object
+      properties:
+        date:
+          type: string
+          description: YYYY-MM-DD
+        count:
           type: integer
-        documentsFound:
+        images:
+          type: array
+          items:
+            $ref: "#/components/schemas/GalleryImageDTO"
+
+    CalendarMonthInfo:
+      type: object
+      properties:
+        year:
+          type: integer
+        month:
+          type: integer
+        days:
+          type: array
+          items:
+            type: integer
+          description: Days of month that have images
+
+    CalendarAllDatesResponse:
+      type: object
+      properties:
+        minDate:
+          type: string
+        maxDate:
+          type: string
+        dates:
+          type: array
+          items:
+            $ref: "#/components/schemas/TimelineDateMarker"
+
+    TimelineDateMarker:
+      type: object
+      properties:
+        date:
+          type: string
+        count:
+          type: integer
+
+    CalendarSeekResponse:
+      type: object
+      properties:
+        cursor:
+          type: string
+        page:
+          type: integer
+
+    GeoClustersResponse:
+      type: object
+      properties:
+        clusters:
+          type: array
+          items:
+            $ref: "#/components/schemas/GeoCluster"
+
+    GeoCluster:
+      type: object
+      properties:
+        id:
+          type: string
+        lat:
+          type: number
+        lng:
+          type: number
+        count:
+          type: integer
+        zoom:
+          type: integer
+
+    GeoImagesResponse:
+      type: object
+      properties:
+        images:
+          type: array
+          items:
+            $ref: "#/components/schemas/GalleryImageDTO"
+        total:
           type: integer
 
     SmartSearchResponse:
@@ -540,13 +2138,757 @@ components:
           enum: [exact, embedding, both]
           description: How the result was matched — exact tag, embedding similarity, or both
 
-    Conversation:
+    AppSettingsDTO:
+      type: object
+      properties:
+        trashDir:
+          type: string
+        exifBackupDir:
+          type: string
+        thumbnailCachePath:
+          type: string
+        thumbnailCacheSize:
+          type: integer
+        ocrConcurrentRequests:
+          type: integer
+        syncDays:
+          type: string
+        dailySyncHour:
+          type: integer
+        dailySyncMinute:
+          type: integer
+        syncTimezoneOffset:
+          type: integer
+        lastSyncAt:
+          type: string
+          format: date-time
+          nullable: true
+        lastSyncNew:
+          type: integer
+        lastSyncUpdated:
+          type: integer
+        lastSyncDeleted:
+          type: integer
+        lastSyncThumbnails:
+          type: integer
+
+    UpdateSettingsRequest:
+      type: object
+      properties:
+        trashDir:
+          type: string
+          nullable: true
+        exifBackupDir:
+          type: string
+          nullable: true
+        thumbnailCachePath:
+          type: string
+          nullable: true
+        thumbnailCacheSize:
+          type: integer
+          nullable: true
+        ocrConcurrentRequests:
+          type: integer
+          nullable: true
+        syncDays:
+          type: string
+          nullable: true
+        dailySyncHour:
+          type: integer
+          nullable: true
+        dailySyncMinute:
+          type: integer
+          nullable: true
+        syncTimezoneOffset:
+          type: integer
+          nullable: true
+
+    UserSettingsDTO:
+      type: object
+      properties:
+        theme:
+          type: string
+          enum: [light, dark, system]
+        language:
+          type: string
+          enum: [en, ru]
+
+    UpdateUserSettingsRequest:
+      type: object
+      required:
+        - theme
+        - language
+      properties:
+        theme:
+          type: string
+          enum: [light, dark, system]
+        language:
+          type: string
+          enum: [en, ru]
+
+    SyncStatusResponse:
+      type: object
+      properties:
+        running:
+          type: boolean
+        lastSyncAt:
+          type: string
+          format: date-time
+          nullable: true
+        lastSyncNew:
+          type: integer
+        lastSyncUpdated:
+          type: integer
+        lastSyncDeleted:
+          type: integer
+
+    ExifStatusResponse:
+      type: object
+      properties:
+        status:
+          type: string
+        exiftoolAvailable:
+          type: boolean
+        databaseConnected:
+          type: boolean
+
+    GalleryFoldersResponse:
+      type: object
+      properties:
+        folders:
+          type: array
+          items:
+            $ref: "#/components/schemas/GalleryFolderDTO"
+
+    GalleryFolderDTO:
+      type: object
+      properties:
+        id:
+          type: integer
+        path:
+          type: string
+
+    AddFolderRequest:
+      type: object
+      required:
+        - path
+      properties:
+        path:
+          type: string
+
+    AddFolderResponse:
+      type: object
+      properties:
+        message:
+          type: string
+        folder:
+          $ref: "#/components/schemas/GalleryFolderDTO"
+
+    RemoveFolderResponse:
+      type: object
+      properties:
+        message:
+          type: string
+
+    CreateFolderRequest:
+      type: object
+      required:
+        - parentPath
+        - name
+      properties:
+        parentPath:
+          type: string
+        name:
+          type: string
+
+    CreateFolderResponse:
+      type: object
+      properties:
+        message:
+          type: string
+        path:
+          type: string
+
+    SubdirsResponse:
+      type: object
+      properties:
+        subdirs:
+          type: array
+          items:
+            $ref: "#/components/schemas/SubdirEntry"
+
+    SubdirEntry:
+      type: object
+      properties:
+        name:
+          type: string
+        path:
+          type: string
+
+    TrashInfoResponse:
+      type: object
+      properties:
+        fileCount:
+          type: integer
+        totalSize:
+          type: integer
+        trashDir:
+          type: string
+
+    CleanTrashResponse:
+      type: object
+      properties:
+        deleted:
+          type: integer
+
+    ImageMetadataResponse:
+      type: object
+      properties:
+        found:
+          type: boolean
+        metadata:
+          type: object
+          nullable: true
+          properties:
+            width:
+              type: integer
+            height:
+              type: integer
+            cameraModel:
+              type: string
+            lensModel:
+              type: string
+            iso:
+              type: integer
+            aperture:
+              type: string
+            shutterSpeed:
+              type: string
+            focalLength:
+              type: string
+            dateTaken:
+              type: string
+              format: date-time
+              nullable: true
+            orientation:
+              type: integer
+            colorSpace:
+              type: string
+            software:
+              type: string
+            gpsLatitude:
+              type: number
+              nullable: true
+            gpsLongitude:
+              type: number
+              nullable: true
+            nameLocal:
+              type: string
+            nameEng:
+              type: string
+
+    MissingImagesResponse:
+      type: object
+      properties:
+        images:
+          type: array
+          items:
+            $ref: "#/components/schemas/MissingImageItem"
+        total:
+          type: integer
+        page:
+          type: integer
+        pageSize:
+          type: integer
+
+    MissingImageItem:
+      type: object
+      properties:
+        imageFileId:
+          type: integer
+        path:
+          type: string
+        missingDate:
+          type: boolean
+        missingGps:
+          type: boolean
+
+    GeocodeSearchResponse:
+      type: object
+      properties:
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/GeocodeSearchResult"
+
+    GeocodeSearchResult:
+      type: object
+      properties:
+        lat:
+          type: number
+        lng:
+          type: number
+        displayName:
+          type: string
+        osmType:
+          type: string
+        osmId:
+          type: integer
+
+    UpdateGpsRequest:
+      type: object
+      required:
+        - path
+        - latitude
+        - longitude
+      properties:
+        path:
+          type: string
+        latitude:
+          type: number
+        longitude:
+          type: number
+
+    UpdateGpsResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        latitude:
+          type: number
+        longitude:
+          type: number
+
+    BatchUpdateGpsRequest:
+      type: object
+      required:
+        - paths
+        - latitude
+        - longitude
+      properties:
+        paths:
+          type: array
+          items:
+            type: string
+        latitude:
+          type: number
+        longitude:
+          type: number
+
+    BatchUpdateGpsResponse:
+      type: object
+      properties:
+        success:
+          type: integer
+        failed:
+          type: integer
+        failedFiles:
+          type: array
+          items:
+            type: string
+
+    LocationCandidatesResponse:
+      type: object
+      properties:
+        candidates:
+          type: array
+          items:
+            $ref: "#/components/schemas/LocationCandidate"
+
+    LocationCandidate:
+      type: object
+      properties:
+        lat:
+          type: number
+        lng:
+          type: number
+        nameLocal:
+          type: string
+        nameEng:
+          type: string
+        photoCount:
+          type: integer
+
+    OCRStatusResponse:
+      type: object
+      properties:
+        status:
+          $ref: "#/components/schemas/OCRStatus"
+
+    OCRStatus:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+        connected:
+          type: boolean
+        url:
+          type: string
+
+    OcrClassificationStatusResponse:
+      type: object
+      properties:
+        processing:
+          type: boolean
+        queueSize:
+          type: integer
+        processed:
+          type: integer
+        total:
+          type: integer
+
+    OcrDocumentsResponse:
+      type: object
+      properties:
+        documents:
+          type: array
+          items:
+            $ref: "#/components/schemas/OcrDocumentDTO"
+        total:
+          type: integer
+        page:
+          type: integer
+
+    OcrDocumentDTO:
+      type: object
+      properties:
+        id:
+          type: integer
+        imageFileId:
+          type: integer
+        path:
+          type: string
+        isTextDocument:
+          type: boolean
+        meanConfidence:
+          type: number
+        weightedConfidence:
+          type: number
+        tokenCount:
+          type: integer
+        angle:
+          type: integer
+        scaleFactor:
+          type: number
+
+    OcrDataResponse:
+      type: object
+      properties:
+        imagePath:
+          type: string
+        isTextDocument:
+          type: boolean
+        meanConfidence:
+          type: number
+        weightedConfidence:
+          type: number
+        tokenCount:
+          type: integer
+        boxes:
+          type: array
+          items:
+            $ref: "#/components/schemas/BoundingBoxDTO"
+        angle:
+          type: integer
+        scaleFactor:
+          type: number
+
+    BoundingBoxDTO:
+      type: object
+      properties:
+        x:
+          type: integer
+        y:
+          type: integer
+        width:
+          type: integer
+        height:
+          type: integer
+        word:
+          type: string
+        confidence:
+          type: number
+
+    LlmSettingsResponse:
+      type: object
+      properties:
+        instruments:
+          type: array
+          items:
+            $ref: "#/components/schemas/LlmInstrumentDTO"
+        providers:
+          type: array
+          items:
+            $ref: "#/components/schemas/LlmProviderDTO"
+        tagScan:
+          $ref: "#/components/schemas/TagScanSettingsDTO"
+        embedding:
+          $ref: "#/components/schemas/EmbeddingSettingsDTO"
+
+    LlmInstrumentDTO:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [chat, vl, embedding, image_edit]
+        providerId:
+          type: integer
+        model:
+          type: string
+
+    LlmProviderDTO:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        alias:
+          type: string
+        apiUrl:
+          type: string
+
+    TagScanSettingsDTO:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+        startHour:
+          type: integer
+        startMinute:
+          type: integer
+        endHour:
+          type: integer
+        endMinute:
+          type: integer
+        timezoneOffset:
+          type: integer
+
+    EmbeddingSettingsDTO:
+      type: object
+      properties:
+        dimension:
+          type: integer
+        batchSize:
+          type: integer
+
+    UpdateLlmSettingsRequest:
+      type: object
+      properties:
+        tagScan:
+          type: object
+          properties:
+            enabled:
+              type: boolean
+        embedding:
+          type: object
+          properties:
+            dimension:
+              type: integer
+            batchSize:
+              type: integer
+
+    CreateLlmProviderRequest:
+      type: object
+      required:
+        - alias
+        - name
+        - apiUrl
+      properties:
+        alias:
+          type: string
+        name:
+          type: string
+        apiUrl:
+          type: string
+        apiKey:
+          type: string
+
+    UpdateLlmProviderRequest:
+      type: object
+      properties:
+        apiUrl:
+          type: string
+          nullable: true
+        apiKey:
+          type: string
+          nullable: true
+
+    LlmOcrRequest:
+      type: object
+      required:
+        - imagePath
+      properties:
+        imagePath:
+          type: string
+
+    LlmOcrResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        taskId:
+          type: string
+
+    LlmRecognizeStatusResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [processing, completed, failed, not_found]
+        progress:
+          type: string
+        error:
+          type: string
+          nullable: true
+
+    LlmOcrDataResponse:
+      type: object
+      properties:
+        found:
+          type: boolean
+        language:
+          type: string
+        markdownContent:
+          type: string
+        provider:
+          type: string
+        model:
+          type: string
+        processingTimeMs:
+          type: integer
+        error:
+          type: string
+          nullable: true
+
+    LlmModelsResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        models:
+          type: array
+          items:
+            $ref: "#/components/schemas/LlmModelDTO"
+
+    LlmModelDTO:
       type: object
       properties:
         id:
           type: string
-          format: uuid
+        name:
+          type: string
+        size:
+          type: string
+
+    ProbeEmbeddingDimensionRequest:
+      type: object
+      required:
+        - providerAlias
+      properties:
+        providerAlias:
+          type: string
+
+    ProbeEmbeddingDimensionResponse:
+      type: object
+      properties:
+        dimension:
+          type: integer
+
+    ImageTagsResponse:
+      type: object
+      properties:
+        tags:
+          type: array
+          items:
+            type: string
+
+    EnhancementActionRequest:
+      type: object
+      required:
+        - imagePath
+      properties:
+        imagePath:
+          type: string
+
+    EnhancementActionResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+
+    AiActionRequest:
+      type: object
+      required:
+        - imagePath
+        - action
+      properties:
+        imagePath:
+          type: string
+        action:
+          type: string
+
+    AiActionStartResponse:
+      type: object
+      properties:
+        taskId:
+          type: string
+
+    AiActionStatusResponse:
+      type: object
+      properties:
+        taskId:
+          type: string
+        status:
+          type: string
+          enum: [pending, processing, completed, failed]
+        result:
+          type: object
+          nullable: true
+        error:
+          type: string
+          nullable: true
+
+    TagScanStatusResponse:
+      type: object
+      properties:
+        running:
+          type: boolean
+        paused:
+          type: boolean
+        processedCount:
+          type: integer
+        totalCount:
+          type: integer
+        currentFile:
+          type: string
+        eta:
+          type: string
+
+    EmbeddingStatusResponse:
+      type: object
+      properties:
+        running:
+          type: boolean
+        processedCount:
+          type: integer
+        totalCount:
+          type: integer
+        currentFile:
+          type: string
+        modelName:
+          type: string
+
+    ConversationDTO:
+      type: object
+      properties:
+        id:
+          type: integer
         title:
+          type: string
+        imagePath:
           type: string
         createdAt:
           type: string
@@ -555,20 +2897,37 @@ components:
           type: string
           format: date-time
 
-    Message:
+    CreateConversationRequest:
+      type: object
+      properties:
+        imagePath:
+          type: string
+
+    ChatMessageDTO:
       type: object
       properties:
         id:
-          type: string
-          format: uuid
+          type: integer
         role:
           type: string
           enum: [user, assistant, system]
         content:
           type: string
+        toolCalls:
+          type: array
+          items:
+            $ref: "#/components/schemas/ToolCallInfo"
         createdAt:
           type: string
           format: date-time
+
+    ToolCallInfo:
+      type: object
+      properties:
+        name:
+          type: string
+        arguments:
+          type: object
 
     SendMessageRequest:
       type: object
@@ -577,3 +2936,94 @@ components:
       properties:
         content:
           type: string
+
+    InvalidateThumbnailRequest:
+      type: object
+      required:
+        - filePath
+      properties:
+        filePath:
+          type: string
+
+    WarmupThumbnailsRequest:
+      type: object
+      required:
+        - filePaths
+      properties:
+        filePaths:
+          type: array
+          items:
+            type: string
+
+    UsersListResponse:
+      type: object
+      properties:
+        users:
+          type: array
+          items:
+            $ref: "#/components/schemas/User"
+
+    CreateUserRequest:
+      type: object
+      required:
+        - login
+        - password
+        - role
+      properties:
+        login:
+          type: string
+        password:
+          type: string
+          format: password
+        displayName:
+          type: string
+        role:
+          type: string
+          enum: [admin, user]
+
+    UpdateUserRequest:
+      type: object
+      properties:
+        displayName:
+          type: string
+          nullable: true
+        role:
+          type: string
+          enum: [admin, user]
+          nullable: true
+
+    ResetPasswordRequest:
+      type: object
+      required:
+        - newPassword
+      properties:
+        newPassword:
+          type: string
+          format: password
+
+    AuditLogsResponse:
+      type: object
+      properties:
+        logs:
+          type: array
+          items:
+            $ref: "#/components/schemas/AuditLogDTO"
+        total:
+          type: integer
+
+    AuditLogDTO:
+      type: object
+      properties:
+        id:
+          type: integer
+        userId:
+          type: integer
+        action:
+          type: string
+        details:
+          type: string
+        ipAddress:
+          type: string
+        createdAt:
+          type: string
+          format: date-time

@@ -1,9 +1,7 @@
 package handler
 
 import (
-	"encoding/json"
 	"net/http"
-	"time"
 
 	"github.com/flashbacks/api-service/internal/domain"
 	"github.com/flashbacks/api-service/internal/infrastructure/llm"
@@ -62,6 +60,25 @@ func buildEmbeddingDTO(es domain.EmbeddingSettings) dto.EmbeddingSettingsDTO {
 	}
 }
 
+// domainModelsToDTOs converts domain.LlmProviderModel slices to dto.LlmModelDTO slices.
+func domainModelsToDTOs(models []domain.LlmProviderModel) []dto.LlmModelDTO {
+	dtos := make([]dto.LlmModelDTO, len(models))
+	for i, m := range models {
+		caps := make([]string, len(m.Capabilities))
+		for j, c := range m.Capabilities {
+			caps[j] = c.Capability
+		}
+		dtos[i] = dto.LlmModelDTO{
+			ID:            m.ModelID,
+			Name:          m.ModelName,
+			Size:          m.Size,
+			ContextLength: m.ContextLength,
+			Capabilities:  caps,
+		}
+	}
+	return dtos
+}
+
 // handleGetLlmSettings returns LLM settings with instruments, tag scan, embedding, and providers.
 func (s *Server) handleGetLlmSettings(c *gin.Context) {
 	providers := s.settingsLoader.AllLlmProviders()
@@ -69,15 +86,11 @@ func (s *Server) handleGetLlmSettings(c *gin.Context) {
 	tagScan := s.settingsLoader.TagScanSettings()
 	embedding := s.settingsLoader.EmbeddingSettings()
 
-	cacheRows, err := s.llmRepo.GetAllModelCaches()
-	if err != nil {
-		cacheRows = nil
-	}
-	cacheMap := make(map[string][]dto.LlmModelDTO, len(cacheRows))
-	for _, row := range cacheRows {
-		var models []dto.LlmModelDTO
-		if err := json.Unmarshal([]byte(row.ModelsJSON), &models); err == nil {
-			cacheMap[row.ProviderAlias] = models
+	cacheMap := make(map[string][]dto.LlmModelDTO)
+	for _, p := range providers {
+		models, err := s.llmRepo.GetModelsByProviderID(p.ID)
+		if err == nil && len(models) > 0 {
+			cacheMap[p.Alias] = domainModelsToDTOs(models)
 		}
 	}
 
@@ -343,11 +356,9 @@ func (s *Server) handleUpdateLlmProvider(c *gin.Context) {
 		}
 
 		if req.ApiUrl != nil || req.ApiKey != nil {
-			s.llmRepo.DeleteModelCacheByAlias(alias)
-		}
-
-		if req.Alias != nil && *req.Alias != alias {
-			s.llmRepo.UpdateModelCacheAlias(alias, *req.Alias)
+			if provider, err := s.llmRepo.GetProviderByAlias(alias); err == nil {
+				s.llmRepo.DeleteModelsByProviderID(provider.ID)
+			}
 		}
 	}
 
@@ -377,7 +388,7 @@ func (s *Server) handleDeleteLlmProvider(c *gin.Context) {
 		return
 	}
 
-	s.llmRepo.DeleteModelCacheByAlias(alias)
+	s.llmRepo.DeleteModelsByProviderID(provider.ID)
 
 	c.JSON(http.StatusOK, map[string]string{"message": string(i18n.MsgLlmOcrSettingsSaved)})
 }
@@ -566,17 +577,15 @@ func (s *Server) handleGetLlmModels(c *gin.Context) {
 	}
 
 	if !forceRefresh {
-		cacheRow, err := s.llmRepo.GetModelCacheByAlias(provider.Alias)
-		if err == nil {
-			var models []dto.LlmModelDTO
-			if err := json.Unmarshal([]byte(cacheRow.ModelsJSON), &models); err == nil && len(models) > 0 {
-				c.JSON(http.StatusOK, dto.LlmModelsResponse{
-					Success:  true,
-					Models:   models,
-					Provider: provider.Name,
-				})
-				return
-			}
+		dbModels, err := s.llmRepo.GetModelsByProviderID(provider.ID)
+		if err == nil && len(dbModels) > 0 {
+			modelDTOs := domainModelsToDTOs(dbModels)
+			c.JSON(http.StatusOK, dto.LlmModelsResponse{
+				Success:  true,
+				Models:   modelDTOs,
+				Provider: provider.Name,
+			})
+			return
 		}
 	}
 
@@ -608,6 +617,7 @@ func (s *Server) handleGetLlmModels(c *gin.Context) {
 	}
 
 	modelDTOs := make([]dto.LlmModelDTO, len(models))
+	domainModels := make([]domain.LlmProviderModel, len(models))
 	for i, m := range models {
 		modelDTOs[i] = dto.LlmModelDTO{
 			ID:            m.ID,
@@ -616,15 +626,22 @@ func (s *Server) handleGetLlmModels(c *gin.Context) {
 			ContextLength: m.ContextLength,
 			Capabilities:  m.Capabilities,
 		}
+		domainModels[i] = domain.LlmProviderModel{
+			ModelID:       m.ID,
+			ModelName:     m.Name,
+			Size:          m.Size,
+			ContextLength: m.ContextLength,
+		}
+		if len(m.Capabilities) > 0 {
+			domainModels[i].Capabilities = make([]domain.LlmModelCapability, len(m.Capabilities))
+			for j, cap := range m.Capabilities {
+				domainModels[i].Capabilities[j] = domain.LlmModelCapability{Capability: cap}
+			}
+		}
 	}
 
-	if len(modelDTOs) > 0 {
-		modelsJSON, _ := json.Marshal(modelDTOs)
-		s.llmRepo.UpsertModelCache(&domain.LlmProviderModelCache{
-			ProviderAlias: provider.Alias,
-			ModelsJSON:    string(modelsJSON),
-			FetchedAt:     time.Now(),
-		})
+	if len(domainModels) > 0 {
+		s.llmRepo.ReplaceProviderModels(provider.ID, domainModels)
 	}
 
 	c.JSON(http.StatusOK, dto.LlmModelsResponse{

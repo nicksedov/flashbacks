@@ -81,6 +81,10 @@ export async function apiGet<T>(path: string, params?: Record<string, string>, s
 
     return handleResponse<T>(response)
   } catch (err) {
+    // Re-throw AbortError directly so callers can detect it via DOMException check
+    if (err instanceof DOMException && err.name === "AbortError") {
+      throw err
+    }
     throw new Error(translateNetworkError(err))
   }
 }

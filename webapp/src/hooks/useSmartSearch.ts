@@ -2,6 +2,8 @@ import { useState, useCallback, useRef } from "react"
 import { smartSearch } from "@/api/endpoints"
 import type { SmartSearchResult } from "@/types"
 
+export const MIN_QUERY_LENGTH = 3
+
 export function useSmartSearch() {
   const [results, setResults] = useState<SmartSearchResult[]>([])
   const [total, setTotal] = useState(0)
@@ -12,7 +14,7 @@ export function useSmartSearch() {
   const abortRef = useRef<AbortController | null>(null)
 
   const search = useCallback(async (q: string, limit = 100) => {
-    if (!q.trim()) {
+    if (q.trim().length < MIN_QUERY_LENGTH) {
       setResults([])
       setTotal(0)
       setQuery("")

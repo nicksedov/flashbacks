@@ -127,7 +127,7 @@ func TestPostProcessTags_RemovesDuplicates_CaseInsensitive(t *testing.T) {
 func TestPostProcessTags_FiltersHallucinationPrefixes(t *testing.T) {
 	raw := generateValidTags(25)
 	raw = append(raw,
-		"\u0420\u0443\u0441\u0441\u043a\u0438\u0439 \u0442\u0435\u0433: \u043a\u043e\u0442",   // "Русский тег: кот"
+		"\u0420\u0443\u0441\u0441\u043a\u0438\u0439 \u0442\u0435\u0433: \u043a\u043e\u0442", // "Русский тег: кот"
 		"English tag: cat",
 		"Russian tag: dog",
 	)
@@ -194,8 +194,8 @@ func TestPostProcessTags_CombinedFilters(t *testing.T) {
 	// 22 valid + 3 Chinese + 3 duplicates + 3 hallucination = 22 kept
 	raw := generateValidTags(22)
 	raw = append(raw,
-		"\u5c71", "\u6c34", "\u82b1",                         // Chinese — filtered
-		"Sunset", "Ocean", "FOREST",                          // duplicates — filtered
+		"\u5c71", "\u6c34", "\u82b1", // Chinese — filtered
+		"Sunset", "Ocean", "FOREST", // duplicates — filtered
 		"\u0420\u0443\u0441\u0441\u043a\u0438\u0439 \u0442\u0435\u0433 abc", "English tag xyz", "Russian tag qrs", // hallucination — filtered
 	)
 
@@ -233,9 +233,9 @@ func TestLlmOcrService_Recognize_Success(t *testing.T) {
 	mockClient := &mocks.MockLlmClient{
 		RecognizeFunc: mocks.TextResponse("# Document Title\n\nContent goes here."),
 	}
-	provider := domain.LlmProvider{Name: "ollama", Model: "minicpm-v"}
+	provider := domain.LlmProvider{Name: "ollama", Alias: "ollama-provider", ApiUrl: "http://localhost:11434"}
 
-	result, err := service.RecognizeWithLlm(imgFile.ID, mockClient, provider)
+	result, err := service.RecognizeWithLlm(imgFile.ID, mockClient, provider, "minicpm-v")
 
 	require.NoError(t, err)
 	require.NotNil(t, result)
@@ -279,9 +279,9 @@ func TestLlmOcrService_Recognize_LLMError(t *testing.T) {
 	mockClient := &mocks.MockLlmClient{
 		RecognizeFunc: mocks.LlmErrorResponse(assert.AnError),
 	}
-	provider := domain.LlmProvider{Name: "ollama", Model: "minicpm-v"}
+	provider := domain.LlmProvider{Name: "ollama", Alias: "ollama-provider", ApiUrl: "http://localhost:11434"}
 
-	_, err := service.RecognizeWithLlm(imgFile.ID, mockClient, provider)
+	_, err := service.RecognizeWithLlm(imgFile.ID, mockClient, provider, "minicpm-v")
 
 	require.Error(t, err)
 
@@ -306,9 +306,9 @@ func TestLlmOcrService_Recognize_MissingClassification(t *testing.T) {
 	mockClient := &mocks.MockLlmClient{
 		RecognizeFunc: mocks.TextResponse("# Recognized without classification"),
 	}
-	provider := domain.LlmProvider{Name: "ollama", Model: "minicpm-v"}
+	provider := domain.LlmProvider{Name: "ollama", Alias: "ollama-provider", ApiUrl: "http://localhost:11434"}
 
-	result, err := service.RecognizeWithLlm(imgFile.ID, mockClient, provider)
+	result, err := service.RecognizeWithLlm(imgFile.ID, mockClient, provider, "minicpm-v")
 
 	require.NoError(t, err, "should succeed even without OCR classification")
 	require.NotNil(t, result)
@@ -347,8 +347,13 @@ func TestLlmOcrService_StartRecognizeAsync_NewTask(t *testing.T) {
 	service, cleanup := setupLlmOcrService(t)
 	defer cleanup()
 
+	// Mock LLM client (function will fail since no image file, but task should still launch)
+	mockClient := &mocks.MockLlmClient{
+		RecognizeFunc: mocks.TextResponse("recognized content"),
+	}
 	// Start recognition (will fail since no image file, but should launch task)
-	result := service.StartRecognizeAsync(1, nil, domain.LlmProvider{})
+	provider := domain.LlmProvider{Name: "ollama", Alias: "ollama-provider", ApiUrl: "http://localhost:11434"}
+	result := service.StartRecognizeAsync(1, mockClient, provider, "minicpm-v")
 
 	assert.True(t, result, "should return true for new task")
 }
@@ -362,8 +367,13 @@ func TestLlmOcrService_StartRecognizeAsync_Duplicate(t *testing.T) {
 	service.processingTasks[1] = &LlmRecognitionStatus{Status: "processing"}
 	service.taskMu.Unlock()
 
+	// Mock LLM client (function will fail since no image file, but task launch attempt should be prevented)
+	mockClient := &mocks.MockLlmClient{
+		RecognizeFunc: mocks.TextResponse("recognized content"),
+	}
 	// Try to start duplicate
-	result := service.StartRecognizeAsync(1, nil, domain.LlmProvider{})
+	provider := domain.LlmProvider{Name: "ollama", Alias: "ollama-provider", ApiUrl: "http://localhost:11434"}
+	result := service.StartRecognizeAsync(1, mockClient, provider, "minicpm-v")
 
 	assert.False(t, result, "should return false for duplicate task")
 }
@@ -395,9 +405,8 @@ func TestLlmOcrService_ExecuteAiAction_Describe(t *testing.T) {
 	mockClient := &mocks.MockLlmClient{
 		RecognizeFunc: mocks.TextResponse("A beautiful landscape image with mountains and a lake."),
 	}
-	provider := domain.LlmProvider{Name: "ollama", Model: "minicpm-v"}
-
-	result, err := service.ExecuteAiAction(imgFile.ID, "describe", "", "en", mockClient, provider)
+	provider := domain.LlmProvider{Name: "ollama", Alias: "ollama-provider", ApiUrl: "http://localhost:11434"}
+	result, err := service.ExecuteAiAction(imgFile.ID, "describe", "", "en", mockClient, provider, "minicpm-v")
 
 	require.NoError(t, err)
 	assert.True(t, result.Success)
@@ -419,9 +428,9 @@ func TestLlmOcrService_ExecuteAiAction_Tags(t *testing.T) {
 	mockClient := &mocks.MockLlmClient{
 		RecognizeFunc: mocks.TextResponse(validTags),
 	}
-	provider := domain.LlmProvider{Name: "ollama", Model: "minicpm-v"}
+	provider := domain.LlmProvider{Name: "ollama", Alias: "ollama-provider", ApiUrl: "http://localhost:11434"}
 
-	result, err := service.ExecuteAiAction(imgFile.ID, "tags", "", "en", mockClient, provider)
+	result, err := service.ExecuteAiAction(imgFile.ID, "tags", "", "en", mockClient, provider, "minicpm-v")
 
 	require.NoError(t, err)
 	assert.True(t, result.Success)
@@ -507,9 +516,9 @@ func TestLlmOcrService_StartAiActionAsync_SavesTagsToDB(t *testing.T) {
 	mockClient := &mocks.MockLlmClient{
 		RecognizeFunc: mocks.TextResponse(validTags),
 	}
-	provider := domain.LlmProvider{Name: "ollama", Model: "minicpm-v"}
-
-	service.StartAiActionAsync("task-1", imgFile.ID, "tags", "", "en", mockClient, provider)
+	model := "minicpm-v"
+	provider := domain.LlmProvider{Name: "ollama", Alias: "ollama-provider", ApiUrl: "http://localhost:11434"}
+	service.StartAiActionAsync("task-1", imgFile.ID, "tags", "", "en", mockClient, provider, model)
 
 	// Wait for async completion
 	require.Eventually(t, func() bool {

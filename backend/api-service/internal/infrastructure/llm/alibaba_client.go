@@ -13,6 +13,7 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	_ "github.com/deepteams/webp"
@@ -734,6 +735,7 @@ type alibabaModel struct {
 }
 
 // ListModels returns available models from the Alibaba Cloud OpenAI-compatible API.
+// It fetches detailed info (context length, capabilities) for each model concurrently.
 func (c *AlibabaClient) ListModels(ctx context.Context) ([]ModelInfo, error) {
 	shortClient := newAPIClient(c.compatibleClient.baseURL, 30*time.Second, c.compatibleClient.headers)
 
@@ -758,7 +760,136 @@ func (c *AlibabaClient) ListModels(ctx context.Context) ([]ModelInfo, error) {
 		}
 	}
 
+	// Fetch detailed info for each model concurrently (context length, capabilities)
+	const maxConcurrency = 8
+	sem := make(chan struct{}, maxConcurrency)
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+
+	for i := range models {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+
+			details, err := c.GetModelDetails(ctx, models[idx].ID)
+			if err == nil {
+				mu.Lock()
+				if details.ContextLength > 0 {
+					models[idx].ContextLength = details.ContextLength
+				}
+				if len(details.Capabilities) > 0 {
+					models[idx].Capabilities = details.Capabilities
+				}
+				mu.Unlock()
+			}
+		}(i)
+	}
+	wg.Wait()
+
 	return models, nil
+}
+
+// GetModelDetails fetches detailed information for a specific model via the OpenAI-compatible API.
+// This endpoint provides context_length and other model metadata.
+// Falls back to default context_length (128000) if not available from API or heuristics.
+func (c *AlibabaClient) GetModelDetails(ctx context.Context, modelID string) (*ModelInfo, error) {
+	shortClient := newAPIClient(c.compatibleClient.baseURL, 30*time.Second, c.compatibleClient.headers)
+
+	var modelResp struct {
+		ID      string `json:"id"`
+		Object  string `json:"object"`
+		Created int64  `json:"created"`
+		OwnedBy string `json:"owned_by"`
+	}
+
+	if err := shortClient.doJSON(ctx, http.MethodGet, "/v1/models/"+modelID, nil, &modelResp, nil); err != nil {
+		// API call failed - return fallback values based on model ID heuristics
+		ctxLen := inferContextLength(modelID)
+		caps := inferAlibabaCapabilities(modelID)
+		return &ModelInfo{
+			ID:            modelID,
+			Name:          modelID,
+			ContextLength: ctxLen,
+			Capabilities:  caps,
+		}, nil
+	}
+
+	// Try to get context_length from the model ID (for known models)
+	ctxLen := inferContextLength(modelID)
+	caps := inferAlibabaCapabilities(modelID)
+
+	return &ModelInfo{
+		ID:            modelID,
+		Name:          modelResp.ID,
+		ContextLength: ctxLen,
+		Capabilities:  caps,
+	}, nil
+}
+
+// inferContextLength returns context length based on model ID heuristics.
+// Falls back to 128000 if no pattern matches.
+func inferContextLength(modelID string) int {
+	lower := strings.ToLower(modelID)
+
+	// 1M+ token models
+	if strings.Contains(lower, "glm-5") ||
+		strings.Contains(lower, "deepseek-v4") ||
+		strings.Contains(lower, "qwen3-max") ||
+		strings.Contains(lower, "qwen-turbo") ||
+		strings.Contains(lower, "qwen-long") {
+		return 1000000
+	}
+
+	// 256K-512K token models
+	if strings.Contains(lower, "qwen-plus") ||
+		strings.Contains(lower, "kimi-k2.5") ||
+		strings.Contains(lower, "kimi-k2.6") ||
+		strings.Contains(lower, "kimi-k2.7") {
+		return 262144
+	}
+
+	// 128K token models
+	if strings.Contains(lower, "glm-4") ||
+		strings.Contains(lower, "glm-5.1") ||
+		strings.Contains(lower, "glm-5.2") {
+		return 128000
+	}
+
+	// 32K token models (qwen standard)
+	if strings.Contains(lower, "qwen") {
+		return 32768
+	}
+
+	// Default fallback
+	return 128000
+}
+
+// inferAlibabaCapabilities infers model capabilities based on model ID naming patterns.
+func inferAlibabaCapabilities(modelID string) []string {
+	lower := strings.ToLower(modelID)
+	caps := []string{"chat", "tool_calling"}
+
+	// Vision capabilities
+	if strings.Contains(lower, "vl") ||
+		strings.Contains(lower, "vision") ||
+		strings.Contains(lower, "image") ||
+		strings.Contains(lower, "qvq") {
+		caps = append(caps, "vision")
+	}
+
+	// Embedding capabilities
+	if strings.Contains(lower, "embedding") {
+		caps = []string{"embedding"}
+	}
+
+	// OCR capabilities
+	if strings.Contains(lower, "ocr") {
+		caps = append(caps, "vision")
+	}
+
+	return caps
 }
 
 // Ensure AlibabaClient implements Client, ChatClient, and ImageEditor.

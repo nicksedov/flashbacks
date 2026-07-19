@@ -644,6 +644,10 @@ export const translationsEn = {
   "llm_ocr.filePath": "File path",
   "llm_ocr.sectionResult": "Result",
   "llm_ocr.sectionDetected": "Detected",
+  "llm_ocr.errorHintNetwork": "The backend server is unreachable. Make sure the API service is running and your network connection is working. Check the server status or try again in a moment.",
+  "llm_ocr.errorHintConfig": "The VL (Vision-Language) LLM provider is not configured. Go to Admin Settings → Analysis Tools to set up a VL LLM provider for text recognition.",
+  "llm_ocr.errorHintAuth": "The LLM provider rejected the request. Check that your API key is valid and has sufficient permissions in Admin Settings → LLM Providers.",
+  "llm_ocr.errorHintGeneral": "An unexpected error occurred during text recognition. Check the server logs for details or try again.",
 
   // Tags panel
   "tags.title": "Image Tags",

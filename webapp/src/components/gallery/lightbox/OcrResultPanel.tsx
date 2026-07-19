@@ -1,4 +1,4 @@
-import { Loader2, Wand2, Download, ScanText, Sparkles } from "lucide-react"
+import { Loader2, Wand2, Download, ScanText, Sparkles, AlertTriangle, WifiOff, Settings } from "lucide-react"
 import { useTranslation } from "@/i18n"
 import type { OcrDataResponse, LlmOcrDataResponse } from "@/types"
 import { OcrMarkdownRenderer } from "./OcrMarkdownRenderer"
@@ -25,6 +25,75 @@ function detectLanguageFromOcr(ocrData: OcrDataResponse): string {
     }
   }
   return ruCount > enCount ? "Русский" : "English"
+}
+
+/**
+ * Categorizes an error message to provide contextual advice to the user.
+ * Returns an object with an icon and a hint key for additional guidance.
+ */
+function categorizeError(error: string): { icon: React.ReactNode; hintKey: string } {
+  const lower = error.toLowerCase()
+  if (
+    lower.includes("unreachable") ||
+    lower.includes("failed to fetch") ||
+    lower.includes("network") ||
+    lower.includes("connection") ||
+    lower.includes("timeout") ||
+    lower.includes("abort")
+  ) {
+    return {
+      icon: <WifiOff className="h-4 w-4 shrink-0" />,
+      hintKey: "llm_ocr.errorHintNetwork",
+    }
+  }
+  if (
+    lower.includes("instrument not configured") ||
+    lower.includes("not configured") ||
+    lower.includes("settings not found") ||
+    lower.includes("provider not found")
+  ) {
+    return {
+      icon: <Settings className="h-4 w-4 shrink-0" />,
+      hintKey: "llm_ocr.errorHintConfig",
+    }
+  }
+  if (
+    lower.includes("api key") ||
+    lower.includes("unauthorized") ||
+    lower.includes("authentication") ||
+    lower.includes("invalid")
+  ) {
+    return {
+      icon: <AlertTriangle className="h-4 w-4 shrink-0" />,
+      hintKey: "llm_ocr.errorHintAuth",
+    }
+  }
+  return {
+    icon: <AlertTriangle className="h-4 w-4 shrink-0" />,
+    hintKey: "llm_ocr.errorHintGeneral",
+  }
+}
+
+function ErrorDisplay({ error }: { error: string }) {
+  const { t } = useTranslation()
+  const { icon, hintKey } = categorizeError(error)
+
+  return (
+    <div className="space-y-3">
+      {/* Error message */}
+      <div className="flex items-start gap-2 p-3 rounded-md bg-destructive/10 border border-destructive/20">
+        {icon}
+        <div className="min-w-0">
+          <p className="text-xs font-medium text-destructive break-words">{error}</p>
+        </div>
+      </div>
+
+      {/* Actionable hint */}
+      <p className="text-xs text-muted-foreground leading-relaxed">
+        {t(hintKey as import("@/i18n").TranslationKey)}
+      </p>
+    </div>
+  )
 }
 
 export function OcrResultPanel({
@@ -117,8 +186,8 @@ export function OcrResultPanel({
       <div className={panelClass}>
         <div className="h-full overflow-y-auto">
           <div className="space-y-4">
-            <h3 className="text-sm font-semibold mb-3">{t("llm_ocr.title")}</h3>
-            <p className="text-xs text-destructive">{llmData.error}</p>
+            <h3 className="text-sm font-semibold">{t("llm_ocr.title")}</h3>
+            <ErrorDisplay error={llmData.error} />
             <Button variant="outline" size="sm" className="w-full text-xs" onClick={onRecognize}>
               <Wand2 className="h-3.5 w-3.5 mr-1.5" />
               {t("llm_ocr.recognizeButton")}

@@ -147,7 +147,7 @@ func BuildActionUserMessage(action string) string {
 	case "askQuestion":
 		return "Answer the question about this image."
 	case "enhanceQuality":
-		return "Enhance and improve the quality of this image."
+		return "Enhance and improve the quality of this image.\n\nApply the following enhancements to the image:\n- Sharpen fine details and textures\n- Reduce blur and improve overall sharpness\n- Improve contrast, color balance, and lighting\n- Reduce visual noise and compression artifacts\n- Upscale resolution where it would improve quality\n- Fix color casts and exposure issues"
 	default:
 		return "Analyze this image."
 	}

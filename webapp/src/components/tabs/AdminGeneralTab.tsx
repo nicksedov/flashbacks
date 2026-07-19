@@ -448,8 +448,8 @@ export function AdminGeneralTab() {
             </div>
           </div>
 
-          {/* Time selectors */}
-          <div className="flex items-end gap-4">
+          {/* Time & Sync Mode selectors — responsive: single row on wide, wraps on mobile */}
+          <div className="flex flex-wrap items-end gap-4">
             <div className="space-y-2">
               <Label htmlFor="daily-sync-hour">{t("settings.dailySync.hour")}</Label>
               <Select

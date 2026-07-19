@@ -173,7 +173,11 @@ func scanDirectory(db *gorm.DB, dirPath string, progressChan chan<- string, numW
 	var filesToHash []fileInfo
 	for _, fi := range allFiles {
 		if existing, ok := existingMap[fi.normalizedPath]; ok {
-			if existing.ModTime.Equal(fi.modTime) && existing.Size == fi.size {
+			// Truncate to second precision to avoid mismatches between PostgreSQL
+			// timestamptz (microsecond) and filesystem/Go (nanosecond) precision.
+			dbModTime := existing.ModTime.Truncate(time.Second)
+			diskModTime := fi.modTime.Truncate(time.Second)
+			if dbModTime.Equal(diskModTime) && existing.Size == fi.size {
 				progressChan <- "Skipping (cached): " + fi.path
 				continue
 			}
@@ -267,8 +271,9 @@ func scanDirectory(db *gorm.DB, dirPath string, progressChan chan<- string, numW
 	return batch, nil
 }
 
-// fastScanGalleryDirectory performs a fast gallery scan that only computes hash
-// when file record doesn't exist in DB or size differs.
+// fastScanGalleryDirectory performs a fast gallery scan using two-step change detection:
+// 1. Compare size + modTime (truncated to seconds). If both match → unchanged.
+// 2. Otherwise compute MD5 hash and compare with stored hash.
 // It also cleans up records for files that no longer exist on disk.
 // Returns statistics about the scan operation.
 // numWorkers controls the number of parallel goroutines used for file hashing.
@@ -337,20 +342,21 @@ func fastScanGalleryDirectory(db *gorm.DB, dirPath string, progressChan chan<- s
 		}
 	}
 
-	// Phase 3: Check files - if record exists with matching size, skip hashing
-	// Otherwise, compute hash and update/create record
+	// Phase 3: Check files - determine which need processing
 	var filesToProcess []fileInfo
 	for _, fi := range allFiles {
 		if existing, ok := existingMap[fi.normalizedPath]; ok {
-			if existing.Size == fi.size {
-				// File exists and size matches - no change needed
+			// Two-step check: size + modTime (truncated to seconds)
+			dbModTime := existing.ModTime.Truncate(time.Second)
+			diskModTime := fi.modTime.Truncate(time.Second)
+			if existing.Size == fi.size && dbModTime.Equal(diskModTime) {
 				stats.Unchanged++
 				progressChan <- "Skipped (unchanged): " + fi.path
 				continue
 			}
-			// Size differs - need to update
+			// Size or modTime differs — hash to verify
 			filesToProcess = append(filesToProcess, fi)
-			stats.TotalChecked++ // Count modified as checked
+			stats.TotalChecked++
 		} else {
 			// New file - need to create
 			filesToProcess = append(filesToProcess, fi)
@@ -440,7 +446,10 @@ func fastScanGalleryDirectory(db *gorm.DB, dirPath string, progressChan chan<- s
 		if result.existing != nil {
 			imageFile.ID = result.existing.ID
 			toUpdate = append(toUpdate, imageFile)
-			stats.Modified++
+			// Only count as Modified if hash actually differs from stored value
+			if result.hash != result.existing.Hash {
+				stats.Modified++
+			}
 		} else {
 			toCreate = append(toCreate, imageFile)
 			stats.Created++

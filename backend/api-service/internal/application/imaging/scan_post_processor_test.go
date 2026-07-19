@@ -271,4 +271,3 @@ func TestPostProcessor_ScanDirectory_NoChangesReturnsEmptyBatch(t *testing.T) {
 	assert.Empty(t, batch.Updated, "no modified files on second scan")
 	assert.Empty(t, batch.Deleted, "no deleted files on second scan")
 }
-

@@ -412,14 +412,19 @@ func (bsm *BackgroundSyncManager) syncFolder(folderPath string, thumbnailEnabled
 				}
 			}
 		} else {
-			// File exists in DB - check if modified
+			// File exists in DB — two-step change detection:
+			// 1. Compare size + modTime (truncated to seconds). If both match → unchanged.
+			// 2. Otherwise compute MD5 hash. If hash matches stored → modTime-only bump.
+			//    If hash differs → real content change.
 			sizeChanged := dbFile.Size != diskInfo.Size()
-			modTimeChanged := !dbFile.ModTime.Equal(diskInfo.ModTime())
+			dbModTime := dbFile.ModTime.Truncate(time.Second)
+			diskModTime := diskInfo.ModTime().Truncate(time.Second)
+			modTimeChanged := !dbModTime.Equal(diskModTime)
 
 			if sizeChanged || modTimeChanged {
 				hash, err := calculateFileHash(diskPath)
 				if err != nil {
-					log.Printf("Background sync: failed to hash modified file %s: %v", diskPath, err)
+					log.Printf("Background sync: failed to hash file %s: %v", diskPath, err)
 					bsm.incrementProcessed()
 					continue
 				}
@@ -436,30 +441,25 @@ func (bsm *BackgroundSyncManager) syncFolder(folderPath string, thumbnailEnabled
 					continue
 				}
 
-				updatedCount++
-				log.Printf("Background sync: updated file %s (size:%v, modtime:%v, hash:%v)", diskPath, sizeChanged, modTimeChanged, hashChanged)
-
-				// Re-extract EXIF/geo metadata only if file content actually changed
 				if contentChanged {
+					updatedCount++
+					log.Printf("Background sync: updated file %s (size:%v, hash:%v)", diskPath, sizeChanged, hashChanged)
+
+					// Re-extract EXIF/geo metadata only if file content actually changed
 					bsm.ExtractAndSaveMetadata(diskPath, dbFile.ID)
-				}
-
-				// Invalidate OCR classification only if file content actually changed
-				if contentChanged {
+					// Invalidate OCR classification only if file content actually changed
 					bsm.InvalidateOCRClassification(dbFile.ID)
-				}
-
-				// Invalidate AI tags and embeddings only if file content actually changed
-				if contentChanged {
+					// Invalidate AI tags and embeddings only if file content actually changed
 					bsm.InvalidateTagsAndEmbeddings(dbFile.ID)
-				}
-
-				// Regenerate thumbnail for modified file (invalidate old one)
-				if thumbnailEnabled && contentChanged {
-					bsm.thumbnailService.Invalidate(diskPath)
-					if bsm.ensureThumbnail(diskPath) {
-						thumbCount++
+					// Regenerate thumbnail for modified file (invalidate old one)
+					if thumbnailEnabled {
+						bsm.thumbnailService.Invalidate(diskPath)
+						if bsm.ensureThumbnail(diskPath) {
+							thumbCount++
+						}
 					}
+				} else {
+					log.Printf("Background sync: modTime only changed, content unchanged: %s", diskPath)
 				}
 			} else {
 				// File unchanged - ensure thumbnail exists

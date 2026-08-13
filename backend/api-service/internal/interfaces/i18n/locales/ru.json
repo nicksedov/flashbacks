@@ -30,7 +30,16 @@
     "password_reset_failed": "Не удалось сбросить пароль",
     "password_reset_success": "Пароль успешно сброшен",
     "profile_update_failed": "Не удалось обновить профиль",
-    "audit_logs_failed": "Не удалось получить журнал аудита"
+    "audit_logs_failed": "Не удалось получить журнал аудита",
+    "registration_disabled": "Самостоятельная регистрация отключена",
+    "account_pending_approval": "Учётная запись ожидает одобрения администратора",
+    "account_rejected": "Учётная запись отклонена администратором",
+    "account_deactivated": "Учётная запись деактивирована",
+    "user_not_pending": "Учётная запись не ожидает одобрения",
+    "registration_success": "Учётная запись создана",
+    "registration_pending": "Учётная запись создана и ожидает одобрения администратора",
+    "user_approved": "Учётная запись одобрена",
+    "user_rejected": "Учётная запись отклонена"
   },
 
   "description_scan": "Сообщения сканирования",

@@ -70,6 +70,40 @@ paths:
                 $ref: "#/components/schemas/LoginResponse"
         "401":
           description: Invalid credentials
+        "403":
+          description: Account pending approval, rejected, or deactivated
+        "429":
+          description: Too many attempts
+
+  /api/auth/register:
+    post:
+      summary: Self-service registration
+      operationId: register
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterRequest"
+      responses:
+        "201":
+          description: |
+            Account created. In self_service mode the response includes the user
+            and a session cookie is set (auto-login). In self_service_with_approval
+            mode the response contains pending=true and no session is issued.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RegisterResponse"
+        "400":
+          description: Invalid request, duplicate login, or short password
+        "403":
+          description: Registration disabled (admin_only mode)
+        "409":
+          description: Bootstrap mode - registration unavailable
+        "429":
+          description: Too many registration attempts
 
   /api/auth/bootstrap/setup:
     post:
@@ -1614,6 +1648,14 @@ paths:
     get:
       summary: List all users (admin)
       operationId: adminListUsers
+      parameters:
+        - name: status
+          in: query
+          required: false
+          description: Filter users by account status (active, pending, rejected)
+          schema:
+            type: string
+            enum: [active, pending, rejected]
       responses:
         "200":
           description: Users list
@@ -1686,6 +1728,54 @@ paths:
         "200":
           description: Password reset
 
+  /api/admin/users/{id}/approve:
+    post:
+      summary: Approve a pending user account (admin)
+      operationId: adminApproveUser
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Account approved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserActionResponse"
+        "409":
+          description: Account is not awaiting approval
+
+  /api/admin/users/{id}/reject:
+    post:
+      summary: Reject a pending user account (admin)
+      operationId: adminRejectUser
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RejectUserRequest"
+      responses:
+        "200":
+          description: Account rejected
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserActionResponse"
+        "400":
+          description: Missing rejection reason
+        "409":
+          description: Account is not awaiting approval
+
   /api/admin/audit:
     get:
       summary: Get audit logs (admin)
@@ -1740,8 +1830,11 @@ components:
       properties:
         isAuthenticated:
           type: boolean
-        bootstrapRequired:
+        isBootstrapMode:
           type: boolean
+        accountCreationMode:
+          type: string
+          enum: [self_service, self_service_with_approval, admin_only]
         user:
           $ref: "#/components/schemas/User"
 
@@ -1764,6 +1857,32 @@ components:
           type: boolean
         user:
           $ref: "#/components/schemas/User"
+
+    RegisterRequest:
+      type: object
+      required:
+        - login
+        - displayName
+        - password
+      properties:
+        login:
+          type: string
+        displayName:
+          type: string
+        password:
+          type: string
+          format: password
+
+    RegisterResponse:
+      type: object
+      properties:
+        user:
+          $ref: "#/components/schemas/User"
+        pending:
+          type: boolean
+          description: true when the account awaits admin approval (no session issued)
+        message:
+          type: string
 
     BootstrapSetupRequest:
       type: object
@@ -1811,6 +1930,16 @@ components:
         role:
           type: string
           enum: [admin, user]
+        accountStatus:
+          type: string
+          enum: [active, pending, rejected]
+        statusChangedAt:
+          type: string
+          format: date-time
+        rejectionReason:
+          type: string
+        isActive:
+          type: boolean
         createdAt:
           type: string
           format: date-time
@@ -3000,6 +3129,22 @@ components:
         newPassword:
           type: string
           format: password
+
+    RejectUserRequest:
+      type: object
+      required:
+        - reason
+      properties:
+        reason:
+          type: string
+
+    UserActionResponse:
+      type: object
+      properties:
+        user:
+          $ref: "#/components/schemas/User"
+        message:
+          type: string
 
     AuditLogsResponse:
       type: object

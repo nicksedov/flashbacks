@@ -2,6 +2,8 @@ package auth
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/flashbacks/api-service/internal/domain"
@@ -11,19 +13,30 @@ import (
 
 // AuthService handles authentication operations
 type AuthService struct {
-	db           *gorm.DB
-	bootstrap    *BootstrapService
-	sessionRepo  *SessionRepository
-	loginLimiter *LoginRateLimiter
+	db                  *gorm.DB
+	bootstrap           *BootstrapService
+	sessionRepo         *SessionRepository
+	loginLimiter        *LoginRateLimiter
+	registerLimiter     *LoginRateLimiter
+	accountCreationMode string
 }
 
 // NewAuthService creates a new auth service
-func NewAuthService(db *gorm.DB, bootstrap *BootstrapService, sessionRepo *SessionRepository, limiter *LoginRateLimiter) *AuthService {
+func NewAuthService(
+	db *gorm.DB,
+	bootstrap *BootstrapService,
+	sessionRepo *SessionRepository,
+	loginLimiter *LoginRateLimiter,
+	registerLimiter *LoginRateLimiter,
+	accountCreationMode string,
+) *AuthService {
 	return &AuthService{
-		db:           db,
-		bootstrap:    bootstrap,
-		sessionRepo:  sessionRepo,
-		loginLimiter: limiter,
+		db:                  db,
+		bootstrap:           bootstrap,
+		sessionRepo:         sessionRepo,
+		loginLimiter:        loginLimiter,
+		registerLimiter:     registerLimiter,
+		accountCreationMode: accountCreationMode,
 	}
 }
 
@@ -63,22 +76,33 @@ func (s *AuthService) Login(ctx context.Context, login, password, ipAddress, use
 		return result, nil
 	}
 
-	// Normal user authentication
-	if err := s.db.Where("login = ?", login).First(&user).Error; err != nil {
+	// Normal user authentication (case-insensitive login lookup)
+	normalizedLogin := strings.ToLower(strings.TrimSpace(login))
+	if err := s.db.Where("lower(login) = ?", normalizedLogin).First(&user).Error; err != nil {
 		s.loginLimiter.RecordFailure(ipAddress)
 		return nil, domain.ErrInvalidCredentials
 	}
 
-	// Check if user is active
-	if !user.IsActive {
-		s.loginLimiter.RecordFailure(ipAddress)
-		return nil, domain.ErrInvalidCredentials
-	}
-
-	// Verify password
+	// Verify password BEFORE revealing account status to avoid login enumeration
 	if !VerifyPassword(password, user.PasswordHash) {
 		s.loginLimiter.RecordFailure(ipAddress)
 		return nil, domain.ErrInvalidCredentials
+	}
+
+	// Check administrative deactivation
+	if !user.IsActive {
+		s.loginLimiter.RecordFailure(ipAddress)
+		return nil, domain.ErrUserDeactivated
+	}
+
+	// Check account approval status
+	switch user.AccountStatus {
+	case domain.AccountStatusPending:
+		s.loginLimiter.RecordFailure(ipAddress)
+		return nil, domain.ErrAccountPending
+	case domain.AccountStatusRejected:
+		s.loginLimiter.RecordFailure(ipAddress)
+		return nil, domain.ErrAccountRejected
 	}
 
 	// Rate limit success - reset counter
@@ -99,6 +123,117 @@ func (s *AuthService) Login(ctx context.Context, login, password, ipAddress, use
 		Token:       token,
 		IsBootstrap: false,
 	}, nil
+}
+
+// AccountCreationMode returns the configured account creation mode
+func (s *AuthService) AccountCreationMode() string {
+	return s.accountCreationMode
+}
+
+// RegisterResult contains the result of a self-service registration
+type RegisterResult struct {
+	User    *domain.User
+	Token   string // session token; empty when the account awaits approval
+	Pending bool   // true when the account was created with pending status
+}
+
+// RegisterUser creates a new user account via self-service registration.
+// The resulting account status depends on the configured account creation mode:
+//   - self_service: account is created as active and a session is issued
+//   - self_service_with_approval: account is created as pending, no session
+//   - admin_only: registration is disabled
+//
+// The role is always "user"; self-registration can never create an admin.
+func (s *AuthService) RegisterUser(ctx context.Context, login, displayName, password, ipAddress, userAgent string) (*RegisterResult, error) {
+	// Separate rate limiter for registration attempts
+	if !s.registerLimiter.Allow(ipAddress) {
+		return nil, domain.ErrRateLimited
+	}
+
+	// Registration is disabled in admin_only mode
+	if s.accountCreationMode == domain.AccountCreationModeAdminOnly {
+		return nil, domain.ErrRegistrationDisabled
+	}
+
+	// Registration is unavailable during bootstrap initialization
+	isBootstrap, err := s.bootstrap.IsBootstrapMode(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if isBootstrap {
+		return nil, domain.ErrBootstrapMode
+	}
+
+	// Normalize login (trim + lowercase) for case-insensitive uniqueness
+	login = strings.ToLower(strings.TrimSpace(login))
+	displayName = strings.TrimSpace(displayName)
+
+	// Validate required fields
+	if login == "" || displayName == "" {
+		return nil, domain.ErrInvalidRequestFormat
+	}
+
+	// Validate password length
+	if len(password) < 8 || len(password) > 128 {
+		return nil, domain.ErrPasswordLength
+	}
+
+	// Check login uniqueness (case-insensitive)
+	var existing domain.User
+	if err := s.db.Where("lower(login) = ?", login).First(&existing).Error; err == nil {
+		s.registerLimiter.RecordFailure(ipAddress)
+		return nil, domain.ErrUserExists
+	}
+
+	// Hash password
+	passwordHash, err := HashPassword(password)
+	if err != nil {
+		return nil, fmt.Errorf("failed to hash password: %w", err)
+	}
+
+	// Determine the initial account status from the creation mode
+	accountStatus := domain.AccountStatusActive
+	if s.accountCreationMode == domain.AccountCreationModeSelfServiceWithApproval {
+		accountStatus = domain.AccountStatusPending
+	}
+
+	now := time.Now()
+	user := domain.User{
+		Login:           login,
+		DisplayName:     displayName,
+		Role:            domain.RoleUser,
+		AccountStatus:   accountStatus,
+		PasswordHash:    passwordHash,
+		IsActive:        true,
+		StatusChangedAt: &now,
+	}
+
+	if err := s.db.Create(&user).Error; err != nil {
+		return nil, fmt.Errorf("failed to create user: %w", err)
+	}
+
+	targetID := user.ID
+	if err := CreateAuditLog(s.db, &user.ID, domain.ActionRegisterUser, "user", &targetID, fmt.Sprintf(`{"ip": "%s"}`, ipAddress)); err != nil {
+		return nil, fmt.Errorf("failed to write audit log: %w", err)
+	}
+
+	result := &RegisterResult{
+		User:    &user,
+		Pending: accountStatus == domain.AccountStatusPending,
+	}
+
+	// For self_service mode, auto-login: create a session for the new user
+	if !result.Pending {
+		token, err := s.sessionRepo.CreateSession(ctx, user.ID, ipAddress, userAgent)
+		if err != nil {
+			return nil, err
+		}
+		result.Token = token
+		s.db.Model(&user).Update("last_login_at", time.Now())
+	}
+
+	s.registerLimiter.RecordSuccess(ipAddress)
+	return result, nil
 }
 
 // Logout revokes a session
@@ -122,8 +257,8 @@ func (s *AuthService) GetCurrentUser(ctx context.Context, token string) (*domain
 		return nil, err
 	}
 
-	if !user.IsActive {
-		// Deactivate session if user is disabled
+	if !user.IsActive || user.AccountStatus != domain.AccountStatusActive {
+		// Revoke session if user is disabled or not yet approved
 		s.sessionRepo.RevokeSession(ctx, token)
 		return nil, domain.ErrUserDeactivated
 	}

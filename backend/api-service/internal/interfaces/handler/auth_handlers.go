@@ -71,16 +71,18 @@ func (h *AuthHandlers) handleAuthStatus(c *gin.Context) {
 		}
 
 		c.JSON(http.StatusOK, gin.H{
-			"isAuthenticated": true,
-			"isBootstrapMode": false,
-			"user":            dto.ToUserDTO(userWithAvatar),
+			"isAuthenticated":     true,
+			"isBootstrapMode":     false,
+			"accountCreationMode": h.authService.AccountCreationMode(),
+			"user":                dto.ToUserDTO(userWithAvatar),
 		})
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"isAuthenticated": false,
-		"isBootstrapMode": isBootstrap,
+		"isAuthenticated":     false,
+		"isBootstrapMode":     isBootstrap,
+		"accountCreationMode": h.authService.AccountCreationMode(),
 	})
 }
 
@@ -98,11 +100,18 @@ func (h *AuthHandlers) handleLogin(c *gin.Context) {
 
 	result, err := h.authService.Login(ctx, req.Login, req.Password, ipAddress, userAgent)
 	if err != nil {
-		if err == domain.ErrRateLimited {
-			c.JSON(http.StatusTooManyRequests, i18n.ErrorResponse(i18n.MsgAuthRateLimited))
-			return
+		switch err {
+		case domain.ErrRateLimited:
+			h.respondError(c, http.StatusTooManyRequests, i18n.MsgAuthRateLimited)
+		case domain.ErrAccountPending:
+			h.respondError(c, http.StatusForbidden, i18n.MsgAuthAccountPendingApproval)
+		case domain.ErrAccountRejected:
+			h.respondError(c, http.StatusForbidden, i18n.MsgAuthAccountRejected)
+		case domain.ErrUserDeactivated:
+			h.respondError(c, http.StatusUnauthorized, i18n.MsgAuthAccountDeactivated)
+		default:
+			h.respondError(c, http.StatusUnauthorized, i18n.MsgAuthInvalidCredentials)
 		}
-		c.JSON(http.StatusUnauthorized, i18n.ErrorResponse(i18n.MsgAuthInvalidCredentials))
 		return
 	}
 
@@ -135,6 +144,75 @@ func (h *AuthHandlers) handleLogin(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"user": dto.ToUserDTO(result.User),
 	})
+}
+
+// handleRegister handles self-service registration (public endpoint)
+func (h *AuthHandlers) handleRegister(c *gin.Context) {
+	var req dto.RegisterRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.respondError(c, http.StatusBadRequest, i18n.MsgAuthInvalidRequestFormat)
+		return
+	}
+
+	// Validate required fields
+	if strings.TrimSpace(req.Login) == "" || strings.TrimSpace(req.DisplayName) == "" {
+		h.respondError(c, http.StatusBadRequest, i18n.MsgAuthInvalidRequestFormat)
+		return
+	}
+
+	// Validate password length
+	if len(req.Password) < 8 || len(req.Password) > 128 {
+		h.respondError(c, http.StatusBadRequest, i18n.MsgAuthPasswordLength)
+		return
+	}
+
+	ctx := c.Request.Context()
+	result, err := h.authService.RegisterUser(ctx, req.Login, req.DisplayName, req.Password, c.ClientIP(), c.GetHeader("User-Agent"))
+	if err != nil {
+		switch err {
+		case domain.ErrRegistrationDisabled:
+			h.respondError(c, http.StatusForbidden, i18n.MsgAuthRegistrationDisabled)
+		case domain.ErrBootstrapMode:
+			h.respondError(c, http.StatusConflict, i18n.MsgAuthBootstrapMode)
+		case domain.ErrRateLimited:
+			h.respondError(c, http.StatusTooManyRequests, i18n.MsgAuthRateLimited)
+		case domain.ErrUserExists:
+			h.respondError(c, http.StatusBadRequest, i18n.MsgUserServiceUserExists)
+		case domain.ErrPasswordLength:
+			h.respondError(c, http.StatusBadRequest, i18n.MsgAuthPasswordLength)
+		case domain.ErrInvalidRequestFormat:
+			h.respondError(c, http.StatusBadRequest, i18n.MsgAuthInvalidRequestFormat)
+		default:
+			h.respondError(c, http.StatusInternalServerError, i18n.MsgAuthInternalError)
+		}
+		return
+	}
+
+	lang := middleware.GetLanguage(c)
+
+	if result.Pending {
+		// Account created but awaiting admin approval - no session is issued
+		resp := i18n.SuccessResponseResolved(h.i18n, i18n.MsgAuthRegistrationPending, lang)
+		resp["pending"] = true
+		c.JSON(http.StatusCreated, resp)
+		return
+	}
+
+	// self_service mode: issue a session cookie (auto-login)
+	config := h.sessionRepo.GetSessionConfig()
+	c.SetCookie(
+		middleware.SessionCookieName,
+		result.Token,
+		config.CookieMaxAge,
+		"/",
+		"",
+		true, // secure - requires HTTPS (set false for dev, true in prod)
+		true, // httpOnly - not accessible via JS
+	)
+
+	resp := i18n.SuccessResponseResolved(h.i18n, i18n.MsgAuthRegistrationSuccess, lang)
+	resp["user"] = dto.ToUserDTO(result.User)
+	c.JSON(http.StatusCreated, resp)
 }
 
 // handleLogout revokes the current session
@@ -260,9 +338,11 @@ func (h *AuthHandlers) handleBootstrapSetup(c *gin.Context) {
 
 // --- Admin Handlers ---
 
-// handleListUsers returns all users (admin only)
+// handleListUsers returns all users (admin only), optionally filtered by
+// account status via the "status" query parameter (e.g. status=pending).
 func (h *AuthHandlers) handleListUsers(c *gin.Context) {
-	users, err := h.userService.ListUsers(c.Request.Context())
+	status := c.Query("status")
+	users, err := h.userService.ListUsers(c.Request.Context(), status)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, i18n.ErrorResponse(i18n.MsgAuthUsersListFailed))
 		return
@@ -437,6 +517,74 @@ func (h *AuthHandlers) handleResetPassword(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": i18n.MsgAuthPasswordResetSuccess})
 }
 
+// handleApproveUser approves a pending user account (admin only)
+func (h *AuthHandlers) handleApproveUser(c *gin.Context) {
+	admin := middleware.GetCurrentUser(c)
+
+	userID, ok := parseUserID(c)
+	if !ok {
+		h.respondError(c, http.StatusBadRequest, i18n.MsgAuthUserNotFound)
+		return
+	}
+
+	user, err := h.userService.ApproveUser(c.Request.Context(), admin.ID, userID)
+	if err != nil {
+		if err == domain.ErrUserNotPending {
+			h.respondError(c, http.StatusConflict, i18n.MsgAuthUserNotPending)
+			return
+		}
+		h.respondError(c, http.StatusInternalServerError, i18n.MsgAuthUserUpdateFailed)
+		return
+	}
+
+	auth.CreateAuditLog(h.db, &admin.ID, domain.ActionApproveUser, "user", &user.ID, "")
+
+	lang := middleware.GetLanguage(c)
+	resp := i18n.SuccessResponseResolved(h.i18n, i18n.MsgAuthUserApproved, lang)
+	resp["user"] = dto.ToUserDTO(user)
+	c.JSON(http.StatusOK, resp)
+}
+
+// handleRejectUser rejects a pending user account (admin only)
+func (h *AuthHandlers) handleRejectUser(c *gin.Context) {
+	admin := middleware.GetCurrentUser(c)
+
+	userID, ok := parseUserID(c)
+	if !ok {
+		h.respondError(c, http.StatusBadRequest, i18n.MsgAuthUserNotFound)
+		return
+	}
+
+	var req dto.RejectUserRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.respondError(c, http.StatusBadRequest, i18n.MsgAuthInvalidRequestFormat)
+		return
+	}
+
+	// Rejection reason is required
+	if strings.TrimSpace(req.Reason) == "" {
+		h.respondError(c, http.StatusBadRequest, i18n.MsgAuthInvalidRequestFormat)
+		return
+	}
+
+	user, err := h.userService.RejectUser(c.Request.Context(), admin.ID, userID, req.Reason)
+	if err != nil {
+		if err == domain.ErrUserNotPending {
+			h.respondError(c, http.StatusConflict, i18n.MsgAuthUserNotPending)
+			return
+		}
+		h.respondError(c, http.StatusInternalServerError, i18n.MsgAuthUserUpdateFailed)
+		return
+	}
+
+	auth.CreateAuditLog(h.db, &admin.ID, domain.ActionRejectUser, "user", &user.ID, "")
+
+	lang := middleware.GetLanguage(c)
+	resp := i18n.SuccessResponseResolved(h.i18n, i18n.MsgAuthUserRejected, lang)
+	resp["user"] = dto.ToUserDTO(user)
+	c.JSON(http.StatusOK, resp)
+}
+
 // handleUpdateProfile updates the current user's profile
 func (h *AuthHandlers) handleUpdateProfile(c *gin.Context) {
 	user := middleware.GetCurrentUser(c)
@@ -594,4 +742,13 @@ func (h *AuthHandlers) handleAuditLogs(c *gin.Context) {
 		"total": total,
 		"page":  page,
 	})
+}
+
+// parseUserID parses the ":id" route parameter into a uint.
+func parseUserID(c *gin.Context) (uint, bool) {
+	var userID uint
+	if _, err := fmt.Sscanf(c.Param("id"), "%d", &userID); err != nil {
+		return 0, false
+	}
+	return userID, true
 }

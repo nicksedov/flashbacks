@@ -37,6 +37,7 @@ func (s *Server) SetupRouter(authMiddleware *middleware.AuthMiddleware, csrfProt
 		{
 			auth.GET("/status", authHandlers.handleAuthStatus)
 			auth.POST("/login", authHandlers.handleLogin)
+			auth.POST("/register", authHandlers.handleRegister)
 			auth.POST("/bootstrap/setup", authHandlers.handleBootstrapSetup)
 		}
 
@@ -170,6 +171,8 @@ func (s *Server) SetupRouter(authMiddleware *middleware.AuthMiddleware, csrfProt
 				admin.PATCH("/users/:id", authHandlers.handleUpdateUser)
 				admin.DELETE("/users/:id", authHandlers.handleDeleteUser)
 				admin.POST("/users/:id/reset-password", authHandlers.handleResetPassword)
+				admin.POST("/users/:id/approve", authHandlers.handleApproveUser)
+				admin.POST("/users/:id/reject", authHandlers.handleRejectUser)
 				admin.GET("/audit", authHandlers.handleAuditLogs)
 			}
 		}

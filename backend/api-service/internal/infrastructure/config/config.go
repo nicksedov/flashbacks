@@ -1,10 +1,13 @@
 package config
 
 import (
+	"log"
 	"os"
 	"runtime"
 	"strconv"
 	"strings"
+
+	"github.com/flashbacks/api-service/internal/domain"
 )
 
 // AppConfig holds all application configuration
@@ -32,6 +35,7 @@ type AppConfig struct {
 	BootstrapPassword   string
 	SessionIdleHours    int
 	SessionAbsoluteDays int
+	AccountCreationMode string // "self_service" | "self_service_with_approval" | "admin_only"
 
 	// Thumbnail cache configuration
 	ThumbnailCacheEnabled       bool
@@ -68,6 +72,17 @@ func LoadConfig() *AppConfig {
 		}
 	}
 
+	accountCreationMode := getEnv("ACCOUNT_CREATION_MODE", domain.AccountCreationModeAdminOnly)
+	switch accountCreationMode {
+	case domain.AccountCreationModeSelfService, domain.AccountCreationModeSelfServiceWithApproval, domain.AccountCreationModeAdminOnly:
+	default:
+		log.Fatalf("invalid ACCOUNT_CREATION_MODE %q: must be one of %q, %q, %q",
+			accountCreationMode,
+			domain.AccountCreationModeSelfService,
+			domain.AccountCreationModeSelfServiceWithApproval,
+			domain.AccountCreationModeAdminOnly)
+	}
+
 	return &AppConfig{
 		DBHost:                      getEnv("DB_HOST", "localhost"),
 		DBPort:                      getEnv("DB_PORT", "5432"),
@@ -86,6 +101,7 @@ func LoadConfig() *AppConfig {
 		BootstrapPassword:           getEnv("BOOTSTRAP_PASSWORD", "admin"),
 		SessionIdleHours:            getEnvInt("SESSION_IDLE_HOURS", 720),   // 30 days
 		SessionAbsoluteDays:         getEnvInt("SESSION_ABSOLUTE_DAYS", 90), // 90 days
+		AccountCreationMode:         accountCreationMode,
 		ThumbnailCacheEnabled:       getEnv("THUMBNAIL_CACHE_ENABLED", "true") == "true",
 		ThumbnailCachePath:          getEnv("THUMBNAIL_CACHE_PATH", ""),
 		ThumbnailCacheMaxSize:       getEnvInt("THUMBNAIL_CACHE_MAX_SIZE", 320),

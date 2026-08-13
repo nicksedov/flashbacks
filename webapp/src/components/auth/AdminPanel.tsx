@@ -1,8 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useAuth } from "@/providers/useAuth"
-import { fetchUsers, createUser, updateUser, deleteUser, resetUserPassword } from "@/api/endpoints"
+import {
+  fetchUsers,
+  createUser,
+  updateUser,
+  deleteUser,
+  resetUserPassword,
+  approveUser,
+  rejectUser,
+} from "@/api/endpoints"
 import { toast } from "sonner"
-import { Loader2, Trash2, KeyRound, Pencil, Save, X, Users, UserPlus } from "lucide-react"
+import { Check, Loader2, Trash2, KeyRound, Pencil, Save, X, Users, UserPlus, UserCheck } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -23,7 +31,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import type { UserDTO, UserRole } from "@/types"
+import type { AccountStatus, UserDTO, UserRole } from "@/types"
 import { useTranslation } from "@/i18n"
 import { translateApiMessage } from "@/api/client"
 
@@ -31,10 +39,13 @@ export function AdminPanel() {
   const { user: currentUser } = useAuth()
   const { t } = useTranslation()
   const [users, setUsers] = useState<UserDTO[]>([])
+  const [pendingUsers, setPendingUsers] = useState<UserDTO[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [isPendingLoading, setIsPendingLoading] = useState(true)
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [editingUser, setEditingUser] = useState<UserDTO | null>(null)
   const [resettingUser, setResettingUser] = useState<UserDTO | null>(null)
+  const [rejectingUser, setRejectingUser] = useState<UserDTO | null>(null)
 
 
   const loadUsers = useCallback(async () => {
@@ -48,15 +59,56 @@ export function AdminPanel() {
     }
   }, [t])
 
+  const loadPendingUsers = useCallback(async () => {
+    try {
+      const response = await fetchUsers("pending")
+      setPendingUsers(response.users)
+    } catch {
+      // Non-critical: the full users list still renders status badges
+    } finally {
+      setIsPendingLoading(false)
+    }
+  }, [])
+
   const loadUsersRef = useRef(loadUsers)
+  const loadPendingUsersRef = useRef(loadPendingUsers)
 
   useEffect(() => {
     loadUsersRef.current = loadUsers
   }, [loadUsers])
 
   useEffect(() => {
+    loadPendingUsersRef.current = loadPendingUsers
+  }, [loadPendingUsers])
+
+  useEffect(() => {
     loadUsersRef.current()
+    loadPendingUsersRef.current()
   }, [])
+
+  const handleApprove = async (user: UserDTO) => {
+    try {
+      await approveUser(user.id)
+      toast.success(t("adminPanel.approveSuccess"))
+      loadUsers()
+      loadPendingUsers()
+    } catch (err) {
+      const errorMessage = err instanceof Error ? translateApiMessage(err.message) : t("adminPanel.updateFailed")
+      toast.error(errorMessage)
+    }
+  }
+
+  const handleReject = async (user: UserDTO, reason: string) => {
+    try {
+      await rejectUser(user.id, { reason })
+      toast.success(t("adminPanel.rejectSuccess"))
+      loadUsers()
+      loadPendingUsers()
+    } catch (err) {
+      const errorMessage = err instanceof Error ? translateApiMessage(err.message) : t("adminPanel.updateFailed")
+      toast.error(errorMessage)
+    }
+  }
 
   if (currentUser?.role !== "admin") {
     return (
@@ -78,6 +130,45 @@ export function AdminPanel() {
           {t("adminPanel.createButton")}
         </Button>
       </div>
+
+      {/* Registration approval queue */}
+      <Card>
+        <CardContent className="p-4">
+          <div className="mb-3 flex items-center gap-2">
+            <UserCheck className="h-5 w-5 text-primary" />
+            <h3 className="text-lg font-semibold">{t("adminPanel.registrationRequests")}</h3>
+          </div>
+          {isPendingLoading ? (
+            <div className="flex items-center justify-center py-6">
+              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+            </div>
+          ) : pendingUsers.length === 0 ? (
+            <p className="text-sm text-muted-foreground">{t("adminPanel.registrationRequestsEmpty")}</p>
+          ) : (
+            <div className="grid gap-3">
+              {pendingUsers.map((u) => (
+                <div key={u.id} className="flex items-center justify-between rounded-lg border p-3">
+                  <div className="min-w-0">
+                    <p className="truncate font-medium">{u.displayName}</p>
+                    <p className="truncate text-sm text-muted-foreground">{u.login}</p>
+                    <p className="text-xs text-muted-foreground">{u.createdAt}</p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <Button variant="default" size="sm" onClick={() => handleApprove(u)}>
+                      <Check className="mr-1 h-4 w-4" />
+                      {t("adminPanel.approve")}
+                    </Button>
+                    <Button variant="destructive" size="sm" onClick={() => setRejectingUser(u)}>
+                      <X className="mr-1 h-4 w-4" />
+                      {t("adminPanel.reject")}
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {isLoading ? (
         <div className="flex items-center justify-center py-20">
@@ -131,6 +222,13 @@ export function AdminPanel() {
       {resettingUser && (
         <ResetPasswordDialog user={resettingUser} onClose={() => setResettingUser(null)} />
       )}
+      {rejectingUser && (
+        <RejectUserDialog
+          user={rejectingUser}
+          onClose={() => setRejectingUser(null)}
+          onReject={handleReject}
+        />
+      )}
     </div>
   )
 }
@@ -170,6 +268,7 @@ function UserCard({
           <Badge variant={user.role === "admin" ? "default" : "secondary"}>
             {user.role === "admin" ? t("adminPanel.roleAdmin") : t("adminPanel.roleUser")}
           </Badge>
+          <AccountStatusBadge status={user.accountStatus} />
           <Badge variant={user.isActive ? "outline" : "destructive"}>
             {user.isActive ? t("adminPanel.statusActive") : t("adminPanel.statusDisabled")}
           </Badge>
@@ -418,6 +517,82 @@ function ResetPasswordDialog({
             <Button type="submit" disabled={isLoading || newPassword.length < 8}>
               {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               {t("adminPanel.resetPassword")}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function AccountStatusBadge({ status }: { status: AccountStatus }) {
+  const { t } = useTranslation()
+  const variant: "default" | "secondary" | "outline" | "destructive" =
+    status === "pending" ? "secondary" : status === "rejected" ? "destructive" : "outline"
+  const label =
+    status === "pending"
+      ? t("adminPanel.statusPending")
+      : status === "rejected"
+        ? t("adminPanel.statusRejected")
+        : t("adminPanel.statusActive")
+  return <Badge variant={variant}>{label}</Badge>
+}
+
+function RejectUserDialog({
+  user,
+  onClose,
+  onReject,
+}: {
+  user: UserDTO
+  onClose: () => void
+  onReject: (user: UserDTO, reason: string) => Promise<void>
+}) {
+  const { t } = useTranslation()
+  const [reason, setReason] = useState("")
+  const [isLoading, setIsLoading] = useState(false)
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!reason.trim()) {
+      toast.error(t("adminPanel.rejectionReasonRequired"))
+      return
+    }
+
+    setIsLoading(true)
+    try {
+      await onReject(user, reason.trim())
+      onClose()
+    } catch {
+      // Error toast is handled by the caller
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  return (
+    <Dialog open={true} onOpenChange={onClose}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{t("adminPanel.rejectTitle")}</DialogTitle>
+          <DialogDescription>{t("adminPanel.rejectDesc", { displayName: user.displayName })}</DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="reject-reason">{t("adminPanel.rejectionReason")}</Label>
+            <Input
+              id="reject-reason"
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder={t("adminPanel.rejectionReasonPlaceholder")}
+            />
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={onClose}>
+              {t("adminPanel.cancel")}
+            </Button>
+            <Button type="submit" variant="destructive" disabled={isLoading}>
+              {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {t("adminPanel.reject")}
             </Button>
           </DialogFooter>
         </form>

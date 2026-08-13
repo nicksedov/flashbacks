@@ -99,6 +99,7 @@ go test ./... -coverprofile=coverage.out
 | `CORS_ORIGINS` | Allowed CORS origins | `*` |
 | `BOOTSTRAP_LOGIN` | Initial admin login | - |
 | `BOOTSTRAP_PASSWORD` | Initial admin password | - |
+| `ACCOUNT_CREATION_MODE` | Account creation mode: `admin_only`, `self_service`, `self_service_with_approval` | `admin_only` |
 | `OCR_SERVICE_URL` | OCR service URL | - |
 | `EXIF_SERVICE_URL` | EXIF service URL | - |
 

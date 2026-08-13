@@ -99,11 +99,12 @@ func InitializeApp() (*App, error) {
 	}
 	server := di.ProvideServer(serverDeps)
 	loginRateLimiter := di.ProvideLoginRateLimiter()
+	registerRateLimiter := di.ProvideRegisterRateLimiter()
 	sessionConfig := di.ProvideSessionConfig(appConfig)
 	sessionRepository := di.ProvideSessionRepository(db, sessionConfig)
 	sessionCleanupJob := di.ProvideSessionCleanupJob(sessionRepository)
 	bootstrapService := di.ProvideBootstrapService(db, appConfig)
-	authService := di.ProvideAuthService(db, bootstrapService, sessionRepository, loginRateLimiter)
+	authService := di.ProvideAuthService(db, bootstrapService, sessionRepository, loginRateLimiter, registerRateLimiter, appConfig)
 	authMiddleware := di.ProvideAuthMiddleware(sessionRepository, authService, i18nService)
 	csrfProtection := di.ProvideCSRFProtection(i18nService)
 	userService := di.ProvideUserService(db, sessionRepository)

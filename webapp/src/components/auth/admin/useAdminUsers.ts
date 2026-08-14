@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 import { approveUser, deleteUser, fetchUsers, rejectUser, updateUser } from "@/api/endpoints"
 import { translateApiMessage } from "@/api/client"
@@ -24,9 +24,6 @@ export function useAdminUsers(): UseAdminUsersResult {
   const [isLoading, setIsLoading] = useState(true)
   const [isPendingLoading, setIsPendingLoading] = useState(true)
 
-  // Event-driven loaders (manual refresh after mutations). Loading flags are
-  // initialized to `true`, so these only clear them and never trigger
-  // synchronous state updates when awaited from the mount effect below.
   const loadUsers = useCallback(async () => {
     try {
       const response = await fetchUsers()
@@ -50,47 +47,29 @@ export function useAdminUsers(): UseAdminUsersResult {
     }
   }, [])
 
-  // Initial load on mount. Fetches directly inside the effect with a
-  // cancellation guard instead of invoking the loaders, so no setState runs
-  // synchronously in the effect body — state updates only happen in async
-  // callbacks after the requests resolve.
+  // Keep mutable references to current callbacks so they can be called from
+  // event handlers without needing to be in dependency arrays, avoiding stale
+  // closure issues with mutate callbacks created per-render.
+  const loadUsersRef = useRef(loadUsers)
+  const loadPendingUsersRef = useRef(loadPendingUsers)
+
   useEffect(() => {
-    let cancelled = false
+    loadUsersRef.current()
+    loadPendingUsersRef.current()
+  }, [])
 
-    void (async () => {
-      try {
-        const response = await fetchUsers()
-        if (!cancelled) setUsers(response.users)
-      } catch {
-        if (!cancelled) toast.error(t("adminPanel.toastUsersLoadFailed"))
-      } finally {
-        if (!cancelled) setIsLoading(false)
-      }
-    })()
+  useEffect(() => {
+    loadUsersRef.current = loadUsers
+  }, [loadUsers])
 
-    void (async () => {
-      try {
-        const response = await fetchUsers("pending")
-        if (!cancelled) setPendingUsers(response.users)
-      } catch (err) {
-        // Non-critical: the full users list still renders status badges
-        if (!cancelled) console.error("Failed to load pending users:", err)
-      } finally {
-        if (!cancelled) setIsPendingLoading(false)
-      }
-    })()
-
-    return () => {
-      cancelled = true
-    }
-  }, [t])
+  useEffect(() => {
+    loadPendingUsersRef.current = loadPendingUsers
+  }, [loadPendingUsers])
 
   const refresh = useCallback(() => {
-    setIsLoading(true)
-    setIsPendingLoading(true)
-    loadUsers()
-    loadPendingUsers()
-  }, [loadUsers, loadPendingUsers])
+    loadUsersRef.current()
+    loadPendingUsersRef.current()
+  }, [])
 
   const approve = useCallback(
     async (user: UserDTO) => {

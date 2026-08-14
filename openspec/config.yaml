@@ -1,0 +1,111 @@
+schema: spec-driven
+
+# Project context (optional)
+# This is shown to AI when creating artifacts.
+context: |
+  # Flashbacks — Tech Stack & Conventions
+
+  ## Purpose
+  Microservice platform for finding/managing duplicate images with AI search
+  (tags, embeddings, OCR, EXIF/GPS, AI chat).
+
+  ## Services & Ports
+  - webapp (5180 dev / 80 container): React 19, TypeScript 6, Vite 8,
+    Tailwind CSS 4, Radix UI, React Leaflet, react-markdown, sonner, Vitest 4,
+    ESLint 9
+  - api-service (5170): Go 1.25, Gin, GORM (Postgres + SQLite), Google Wire,
+    pgvector, MCP go-sdk
+  - exif (5172): Go 1.25, Gin, go-exiftool, golang.org/x/image, GORM, MCP go-sdk
+  - ocr (5174): Go 1.25, gosseract (Tesseract), bild, imaging
+  - shared: Go 1.25 shared domain package (exif, ocr)
+  - embeddings-builder: Go 1.25, GORM, godotenv
+  - postgres (5432): PostgreSQL 17 + pgvector; logical DBs api_db, exif_db
+  - Docker Compose for local dev; nginx serves built webapp
+
+  ## Project Structure
+  webapp/ (React SPA), backend/{api-service,exif,ocr,shared},
+  tools/embeddings-builder, docs/ (architecture, api-contracts, mcp-contracts,
+  specs), openspec/, scripts/, tests/
+
+  ## Architecture Conventions
+  - Microservices over HTTP REST only; no cross-service DB writes
+  - Clean Architecture in Go: domain -> application -> infrastructure -> interfaces
+  - api-service DI via Google Wire (wire.go + wire_gen.go); after changing the
+    graph run `go generate ./...`
+  - 12-factor env config (see backend/api-service/.env.example)
+
+  ## Go Conventions
+  - PascalCase exported / camelCase unexported; no identifier redeclaration
+  - Explicit error handling, no panic; wrap errors with %w
+  - slog structured logging
+  - i18n: use Msg* constants + string(i18n.MsgX); add Msg* constant and en/ru
+    locale entries together
+  - JSON tags (camelCase) must match webapp TypeScript types
+  - Unit tests on in-memory SQLite (never assume Postgres-only behavior)
+  - Test: go test ./internal/application/... -count=1 (api-service);
+    go test ./... -count=1 (exif/ocr)
+
+  ## TypeScript/React Conventions
+  - Strict mode, verbatimModuleSyntax, noUnusedLocals/noUnusedParameters
+  - `import type` for type-only imports; path alias @/* -> src/*
+  - Strict TranslationKey type; no arbitrary strings in t()
+  - Functional components only; use React.SyntheticEvent<HTMLFormElement>
+    (not deprecated React.FormEvent)
+  - Lazy tabs: lazy(() => import("...").then(m => ({ default: m.X })))
+  - Validate: npm run lint && npx tsc -b
+
+  ## i18n
+  - English (en) and Russian (ru) always in sync
+  - webapp: src/i18n/translations.en.ts + translations.ru.ts
+  - api-service: internal/interfaces/i18n/locales/en.json + ru.json
+
+  ## API Contracts
+  - OpenAPI: docs/api-contracts/{api-service,exif,ocr}.yaml
+  - MCP tools: docs/mcp-contracts/*.yaml
+  - On OpenAPI change: make generate-types -> webapp/src/types/api.ts
+
+  ## Security
+  - Session auth (bcrypt), CSRF on mutations, login rate limiting,
+    per-environment CORS, encrypted API keys
+
+  ## Testing
+  - api-service: go test ./internal/application/... -count=1
+  - exif/ocr: go test ./... -count=1
+  - webapp: npm test (Vitest)
+  - ocr integration: pytest in tests/ocr/
+
+# Per-artifact rules (optional)
+# Add custom rules for specific artifacts.
+rules:
+  proposal:
+    - Keep proposals focused on a single capability with a clear goal
+    - Always include a "Non-goals" section to bound scope
+    - When API behavior changes, reference the affected OpenAPI/MCP contract
+  specs:
+    - Write delta specs with `## ADDED Requirements` / `## MODIFIED Requirements`
+    - Express each requirement as a `#### Scenario` block with concrete examples
+    - Keep JSON field names (camelCase) aligned with Go JSON tags and webapp TS types
+    - Any new user-facing text must specify both en and ru localization
+  design:
+    - Follow clean architecture layering (domain -> application -> infrastructure -> interfaces)
+    - Document Wire DI graph changes and note that wire_gen.go must be regenerated
+    - Describe inter-service REST communication explicitly (api-service -> exif/ocr)
+  tasks:
+    - Break tasks into small, independently verifiable chunks
+    - Every Go task must include running the relevant `go test` command
+    - Every webapp task must include `npm run lint && npx tsc -b`
+    - i18n tasks must update en and ru together
+
+# Per-operation guidance (optional)
+# Add advisory guidance for how apply and archive work should be conducted.
+# This is separate from artifact rules above.
+operations:
+  apply:
+    guidance:
+      - Keep changes minimal and scoped to the spec; surface scope expansion instead of absorbing it
+      - Run service tests after every code change and fix all failures before continuing
+      - Do not change API contracts without updating the OpenAPI spec and regenerating TS types
+  archive:
+    guidance:
+      - Verify delta specs are synced to main specs before archiving
+      - Summarize the archive outcome and list which capabilities changed

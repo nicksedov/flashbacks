@@ -9,6 +9,7 @@ import (
 	_ "image/gif"
 	_ "image/jpeg"
 	_ "image/png"
+	"strings"
 	"time"
 
 	"github.com/flashbacks/api-service/internal/domain"
@@ -40,7 +41,8 @@ type CreateUserInput struct {
 	Password    string          `json:"password" binding:"required"`
 }
 
-// CreateUser creates a new user (admin action)
+// CreateUser creates a new user (admin action).
+// Admin-created accounts are always active immediately.
 func (s *UserService) CreateUser(ctx context.Context, adminID uint, input *CreateUserInput) (*domain.User, error) {
 	// Verify admin exists
 	var admin domain.User
@@ -61,9 +63,12 @@ func (s *UserService) CreateUser(ctx context.Context, adminID uint, input *Creat
 		return nil, errors.New("password must be between 8 and 128 characters")
 	}
 
-	// Check if login already exists
+	// Normalize login (trim + lowercase) for case-insensitive uniqueness
+	login := strings.ToLower(strings.TrimSpace(input.Login))
+
+	// Check if login already exists (case-insensitive)
 	var existing domain.User
-	if err := s.db.Where("login = ?", input.Login).First(&existing).Error; err == nil {
+	if err := s.db.Where("lower(login) = ?", login).First(&existing).Error; err == nil {
 		return nil, errors.New("user with this login already exists")
 	}
 
@@ -74,9 +79,10 @@ func (s *UserService) CreateUser(ctx context.Context, adminID uint, input *Creat
 	}
 
 	user := domain.User{
-		Login:              input.Login,
-		DisplayName:        input.DisplayName,
+		Login:              login,
+		DisplayName:        strings.TrimSpace(input.DisplayName),
 		Role:               input.Role,
+		AccountStatus:      domain.AccountStatusActive,
 		PasswordHash:       passwordHash,
 		IsActive:           true,
 		MustChangePassword: true,
@@ -98,13 +104,100 @@ func (s *UserService) GetUser(ctx context.Context, id uint) (*domain.User, error
 	return &user, nil
 }
 
-// ListUsers returns all users (avatar excluded for performance)
-func (s *UserService) ListUsers(ctx context.Context) ([]domain.User, error) {
+// ListUsers returns all users (avatar excluded for performance), optionally
+// filtered by account status (e.g. "pending" for the approval queue).
+func (s *UserService) ListUsers(ctx context.Context, status string) ([]domain.User, error) {
 	var users []domain.User
-	if err := s.db.Omit("avatar").Order("created_at desc").Find(&users).Error; err != nil {
+	q := s.db.Omit("avatar").Order("created_at desc")
+	if status != "" {
+		q = q.Where("account_status = ?", status)
+	}
+	if err := q.Find(&users).Error; err != nil {
 		return nil, err
 	}
 	return users, nil
+}
+
+// ApproveUser approves a pending user account (admin action).
+// The account transitions pending -> active, allowing the user to log in.
+func (s *UserService) ApproveUser(ctx context.Context, adminID, userID uint) (*domain.User, error) {
+	// Verify admin exists
+	var admin domain.User
+	if err := s.db.First(&admin, adminID).Error; err != nil {
+		return nil, err
+	}
+	if admin.Role != domain.RoleAdmin {
+		return nil, domain.ErrForbidden
+	}
+
+	var user domain.User
+	if err := s.db.First(&user, userID).Error; err != nil {
+		return nil, err
+	}
+
+	if user.AccountStatus != domain.AccountStatusPending {
+		return nil, domain.ErrUserNotPending
+	}
+
+	now := time.Now()
+	updates := map[string]interface{}{
+		"account_status":    domain.AccountStatusActive,
+		"status_changed_at": now,
+		"status_changed_by": adminID,
+		"rejection_reason":  "",
+	}
+	if err := s.db.Model(&user).Updates(updates).Error; err != nil {
+		return nil, err
+	}
+
+	user.AccountStatus = domain.AccountStatusActive
+	user.StatusChangedAt = &now
+	statusChangedBy := adminID
+	user.StatusChangedBy = &statusChangedBy
+	user.RejectionReason = ""
+
+	return &user, nil
+}
+
+// RejectUser rejects a pending user account (admin action).
+// The account transitions pending -> rejected, blocking login.
+func (s *UserService) RejectUser(ctx context.Context, adminID, userID uint, reason string) (*domain.User, error) {
+	// Verify admin exists
+	var admin domain.User
+	if err := s.db.First(&admin, adminID).Error; err != nil {
+		return nil, err
+	}
+	if admin.Role != domain.RoleAdmin {
+		return nil, domain.ErrForbidden
+	}
+
+	var user domain.User
+	if err := s.db.First(&user, userID).Error; err != nil {
+		return nil, err
+	}
+
+	if user.AccountStatus != domain.AccountStatusPending {
+		return nil, domain.ErrUserNotPending
+	}
+
+	now := time.Now()
+	updates := map[string]interface{}{
+		"account_status":    domain.AccountStatusRejected,
+		"status_changed_at": now,
+		"status_changed_by": adminID,
+		"rejection_reason":  reason,
+	}
+	if err := s.db.Model(&user).Updates(updates).Error; err != nil {
+		return nil, err
+	}
+
+	user.AccountStatus = domain.AccountStatusRejected
+	user.StatusChangedAt = &now
+	statusChangedBy := adminID
+	user.StatusChangedBy = &statusChangedBy
+	user.RejectionReason = reason
+
+	return &user, nil
 }
 
 // UpdateUserInput contains updatable user fields

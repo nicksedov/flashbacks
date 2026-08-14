@@ -363,14 +363,23 @@ export interface GeoImagesResponse {
 
 export type UserRole = "admin" | "user"
 
+// Approval lifecycle of a user account
+export type AccountStatus = "active" | "pending" | "rejected"
+
+// How user accounts are created (ACCOUNT_CREATION_MODE)
+export type AccountCreationMode = "self_service" | "self_service_with_approval" | "admin_only"
+
 export interface UserDTO {
   id: number
   login: string
   displayName: string
   role: UserRole
+  accountStatus: AccountStatus
   hasAvatar: boolean
   isActive: boolean
   mustChangePassword: boolean
+  statusChangedAt: string | null
+  rejectionReason: string
   createdAt: string
   lastLoginAt: string | null
 }
@@ -378,6 +387,7 @@ export interface UserDTO {
 export interface AuthStatusResponse {
   isAuthenticated: boolean
   isBootstrapMode: boolean
+  accountCreationMode: AccountCreationMode
   user?: UserDTO
 }
 
@@ -389,6 +399,18 @@ export interface LoginRequest {
 export interface LoginResponse {
   user?: UserDTO
   isBootstrap?: boolean
+  message?: string
+}
+
+export interface RegisterRequest {
+  login: string
+  displayName: string
+  password: string
+}
+
+export interface RegisterResponse {
+  user?: UserDTO
+  pending?: boolean
   message?: string
 }
 
@@ -431,6 +453,20 @@ export interface ResetPasswordRequest {
 export interface UsersListResponse {
   users: UserDTO[]
   total: number
+}
+
+export interface RejectUserRequest {
+  reason: string
+}
+
+export interface ApproveUserResponse {
+  user: UserDTO
+  message: string
+}
+
+export interface RejectUserResponse {
+  user: UserDTO
+  message: string
 }
 
 // --- OCR Status Types ---

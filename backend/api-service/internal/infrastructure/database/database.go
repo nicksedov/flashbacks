@@ -2,6 +2,7 @@ package database
 
 import (
 	"fmt"
+	"log"
 
 	"github.com/flashbacks/api-service/internal/domain"
 	"github.com/flashbacks/api-service/internal/infrastructure/config"
@@ -67,6 +68,14 @@ func InitDatabase(cfg *config.AppConfig) (*gorm.DB, error) {
 
 	// Create composite index for calendar pagination: covers ORDER BY date_taken, image_file_id
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_image_metadata_date_taken_file_id ON image_metadata (date_taken, image_file_id)")
+
+	// Case-insensitive unique login index for self-service registration.
+	// Existing case-conflicting logins (e.g. "Admin" vs "admin") must be resolved
+	// manually before this index can be created; a warning is logged instead of
+	// failing startup so the service can still boot.
+	if err := db.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_login_lower ON users (lower(login))").Error; err != nil {
+		log.Printf("warning: failed to create unique index idx_users_login_lower (resolve case-conflicting logins first): %v", err)
+	}
 
 	// Seed default settings row if not exists
 	var count int64

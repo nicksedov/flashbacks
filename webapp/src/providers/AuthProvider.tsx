@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react"
 import { fetchAuthStatus, logout as apiLogout } from "@/api/endpoints"
 import { AuthContext } from "./authContext"
-import type { UserDTO } from "@/types"
+import type { AccountCreationMode, UserDTO } from "@/types"
 
 interface AuthProviderProps {
   children: React.ReactNode
@@ -11,6 +11,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<UserDTO | null>(null)
   const [isBootstrapMode, setIsBootstrapMode] = useState(false)
   const [isBootstrapVerified, setIsBootstrapVerified] = useState(false)
+  const [accountCreationMode, setAccountCreationMode] = useState<AccountCreationMode>("admin_only")
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
@@ -19,6 +20,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       try {
         const status = await fetchAuthStatus()
         if (cancelled) return
+        setAccountCreationMode(status.accountCreationMode ?? "admin_only")
         if (status.isAuthenticated && status.user) {
           setUser(status.user)
           setIsBootstrapMode(false)
@@ -30,6 +32,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         if (cancelled) return
         setUser(null)
         setIsBootstrapMode(false)
+        setAccountCreationMode("admin_only")
       } finally {
         if (!cancelled) setIsLoading(false)
       }
@@ -70,6 +73,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         isAuthenticated: !!user,
         isBootstrapMode,
         isBootstrapVerified,
+        accountCreationMode,
         isLoading,
         login,
         logout,

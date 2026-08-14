@@ -195,7 +195,7 @@ func TestUserService_UpdateProfile_Success(t *testing.T) {
 func TestUserService_ListUsers_Empty(t *testing.T) {
 	svc, _ := setupUserService(t)
 
-	users, err := svc.ListUsers(context.Background(), )
+	users, err := svc.ListUsers(context.Background(), "")
 
 	require.NoError(t, err)
 	assert.Empty(t, users)
@@ -212,7 +212,7 @@ func TestUserService_ListUsers_WithUsers(t *testing.T) {
 	u3 := testutil.SeedUserWithHash(t, svc.db, "user3", "user", domain.RoleUser, true, "hashed3")
 	svc.db.Model(u3).Update("created_at", now)
 
-	users, err := svc.ListUsers(context.Background(), )
+	users, err := svc.ListUsers(context.Background(), "")
 
 	require.NoError(t, err)
 	assert.Len(t, users, 3)

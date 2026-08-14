@@ -26,7 +26,8 @@ func setupAuthService(t *testing.T) (*gorm.DB, *AuthService, *BootstrapService, 
 	sessionRepo := NewSessionRepository(db, sessionConfig)
 	bootstrap := NewBootstrapService(db, "bootstrap_admin", "bootstrap123")
 	loginLimiter := NewLoginRateLimiter(10, 15*time.Minute, 30*time.Minute)
-	authService := NewAuthService(db, bootstrap, sessionRepo, loginLimiter)
+	registerLimiter := NewLoginRateLimiter(10, 15*time.Minute, 30*time.Minute)
+	authService := NewAuthService(db, bootstrap, sessionRepo, loginLimiter, registerLimiter, domain.AccountCreationModeAdminOnly)
 	userService := NewUserService(db, sessionRepo)
 
 	return db, authService, bootstrap, userService, cleanupDB
@@ -117,8 +118,8 @@ func TestAuthService_Login_DeactivatedUser(t *testing.T) {
 	db.Model(&domain.User{}).Where("id = ?", user.ID).Update("is_active", false)
 
 	_, err = authService.Login(context.Background(), "deactivated", "password123", "127.0.0.1", "test-agent")
-	if err != domain.ErrInvalidCredentials {
-		t.Fatalf("expected ErrInvalidCredentials for deactivated user, got: %v", err)
+	if err != domain.ErrUserDeactivated {
+		t.Fatalf("expected ErrUserDeactivated for deactivated user, got: %v", err)
 	}
 }
 
@@ -140,7 +141,7 @@ func TestAuthService_Login_BootstrapMode(t *testing.T) {
 	sessionRepo := NewSessionRepository(db, sessionConfig)
 	bootstrap := NewBootstrapService(db, "bootstrap_admin", "bootstrap123")
 	loginLimiter := NewLoginRateLimiter(10, 15*time.Minute, 30*time.Minute)
-	authService := NewAuthService(db, bootstrap, sessionRepo, loginLimiter)
+	authService := NewAuthService(db, bootstrap, sessionRepo, loginLimiter, NewLoginRateLimiter(10, 15*time.Minute, 30*time.Minute), domain.AccountCreationModeAdminOnly)
 
 	result, err := authService.Login(context.Background(), "bootstrap_admin", "bootstrap123", "127.0.0.1", "test-agent")
 	if err != nil {
@@ -171,7 +172,7 @@ func TestAuthService_Login_BootstrapWrongCreds(t *testing.T) {
 	sessionRepo := NewSessionRepository(db, sessionConfig)
 	bootstrap := NewBootstrapService(db, "bootstrap_admin", "bootstrap123")
 	loginLimiter := NewLoginRateLimiter(10, 15*time.Minute, 30*time.Minute)
-	authService := NewAuthService(db, bootstrap, sessionRepo, loginLimiter)
+	authService := NewAuthService(db, bootstrap, sessionRepo, loginLimiter, NewLoginRateLimiter(10, 15*time.Minute, 30*time.Minute), domain.AccountCreationModeAdminOnly)
 
 	_, err := authService.Login(context.Background(), "bootstrap_admin", "wrongpassword", "127.0.0.1", "test-agent")
 	if err != domain.ErrInvalidCredentials {
@@ -197,7 +198,7 @@ func TestAuthService_Login_RateLimited(t *testing.T) {
 	bootstrap := NewBootstrapService(db, "bootstrap_admin", "bootstrap123")
 	// Use maxAttempts=1 for easier testing
 	loginLimiter := NewLoginRateLimiter(1, 15*time.Minute, 30*time.Minute)
-	authService = NewAuthService(db, bootstrap, sessionRepo, loginLimiter)
+	authService = NewAuthService(db, bootstrap, sessionRepo, loginLimiter, NewLoginRateLimiter(10, 15*time.Minute, 30*time.Minute), domain.AccountCreationModeAdminOnly)
 
 	// Trigger the ban with one failure
 	loginLimiter.RecordFailure("banned_ip")

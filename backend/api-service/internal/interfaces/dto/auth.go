@@ -12,23 +12,34 @@ type LoginRequest struct {
 	Password string `json:"password" binding:"required"`
 }
 
+// RegisterRequest represents the self-service registration request body
+type RegisterRequest struct {
+	Login       string `json:"login" binding:"required"`
+	DisplayName string `json:"displayName" binding:"required"`
+	Password    string `json:"password" binding:"required"`
+}
+
 // AuthStatusResponse represents the auth status response
 type AuthStatusResponse struct {
-	IsAuthenticated bool `json:"isAuthenticated"`
-	IsBootstrapMode bool `json:"isBootstrapMode"`
+	IsAuthenticated     bool   `json:"isAuthenticated"`
+	IsBootstrapMode     bool   `json:"isBootstrapMode"`
+	AccountCreationMode string `json:"accountCreationMode"`
 }
 
 // UserDTO represents user data in API responses (excludes sensitive fields)
 type UserDTO struct {
-	ID                 uint            `json:"id"`
-	Login              string          `json:"login"`
-	DisplayName        string          `json:"displayName"`
-	Role               domain.UserRole `json:"role"`
-	HasAvatar          bool            `json:"hasAvatar"`
-	IsActive           bool            `json:"isActive"`
-	MustChangePassword bool            `json:"mustChangePassword"`
-	CreatedAt          string          `json:"createdAt"`
-	LastLoginAt        *string         `json:"lastLoginAt"`
+	ID                 uint                 `json:"id"`
+	Login              string               `json:"login"`
+	DisplayName        string               `json:"displayName"`
+	Role               domain.UserRole      `json:"role"`
+	AccountStatus      domain.AccountStatus `json:"accountStatus"`
+	HasAvatar          bool                 `json:"hasAvatar"`
+	IsActive           bool                 `json:"isActive"`
+	MustChangePassword bool                 `json:"mustChangePassword"`
+	StatusChangedAt    *string              `json:"statusChangedAt"`
+	RejectionReason    string               `json:"rejectionReason"`
+	CreatedAt          string               `json:"createdAt"`
+	LastLoginAt        *string              `json:"lastLoginAt"`
 }
 
 // ToUserDTO converts a User to UserDTO
@@ -38,14 +49,20 @@ func ToUserDTO(u *domain.User) UserDTO {
 		Login:              u.Login,
 		DisplayName:        u.DisplayName,
 		Role:               u.Role,
+		AccountStatus:      u.AccountStatus,
 		HasAvatar:          len(u.Avatar) > 0,
 		IsActive:           u.IsActive,
 		MustChangePassword: u.MustChangePassword,
+		RejectionReason:    u.RejectionReason,
 		CreatedAt:          u.CreatedAt.Format("2006-01-02 15:04:05"),
 	}
 	if u.LastLoginAt != nil {
 		s := u.LastLoginAt.Format("2006-01-02 15:04:05")
 		dto.LastLoginAt = &s
+	}
+	if u.StatusChangedAt != nil {
+		s := u.StatusChangedAt.Format("2006-01-02 15:04:05")
+		dto.StatusChangedAt = &s
 	}
 	return dto
 }
@@ -77,6 +94,11 @@ type UpdateUserRequest struct {
 	DisplayName *string          `json:"displayName"`
 	Role        *domain.UserRole `json:"role"`
 	IsActive    *bool            `json:"isActive"`
+}
+
+// RejectUserRequest represents the admin user rejection request body
+type RejectUserRequest struct {
+	Reason string `json:"reason" binding:"required"`
 }
 
 // UpdateProfileRequest represents the request to update own profile

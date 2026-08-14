@@ -12,19 +12,39 @@ const (
 	RoleUser  UserRole = "user"
 )
 
+// AccountStatus represents the approval lifecycle of a user account
+type AccountStatus string
+
+const (
+	AccountStatusActive   AccountStatus = "active"   // access is granted
+	AccountStatusPending  AccountStatus = "pending"  // awaiting admin decision
+	AccountStatusRejected AccountStatus = "rejected" // rejected, access denied
+)
+
+// Account creation mode constants (ACCOUNT_CREATION_MODE env variable)
+const (
+	AccountCreationModeSelfService             = "self_service"
+	AccountCreationModeSelfServiceWithApproval = "self_service_with_approval"
+	AccountCreationModeAdminOnly               = "admin_only"
+)
+
 // User represents a user account in the system
 type User struct {
-	ID                 uint       `gorm:"primaryKey" json:"id"`
-	Login              string     `gorm:"uniqueIndex;size:255;not null" json:"login"`
-	DisplayName        string     `gorm:"size:255;not null" json:"displayName"`
-	Role               UserRole   `gorm:"size:50;not null;default:user" json:"role"`
-	PasswordHash       string     `gorm:"not null" json:"-"`
-	Avatar             []byte     `gorm:"type:bytea" json:"-"`
-	IsActive           bool       `gorm:"default:true" json:"isActive"`
-	MustChangePassword bool       `gorm:"default:false" json:"mustChangePassword"`
-	CreatedAt          time.Time  `json:"createdAt"`
-	UpdatedAt          time.Time  `json:"updatedAt"`
-	LastLoginAt        *time.Time `json:"lastLoginAt"`
+	ID                 uint          `gorm:"primaryKey" json:"id"`
+	Login              string        `gorm:"uniqueIndex;size:255;not null" json:"login"`
+	DisplayName        string        `gorm:"size:255;not null" json:"displayName"`
+	Role               UserRole      `gorm:"size:50;not null;default:user" json:"role"`
+	AccountStatus      AccountStatus `gorm:"size:50;not null;default:active" json:"accountStatus"`
+	PasswordHash       string        `gorm:"not null" json:"-"`
+	Avatar             []byte        `gorm:"type:bytea" json:"-"`
+	IsActive           bool          `gorm:"default:true" json:"isActive"`
+	MustChangePassword bool          `gorm:"default:false" json:"mustChangePassword"`
+	StatusChangedAt    *time.Time    `json:"statusChangedAt"`
+	StatusChangedBy    *uint         `json:"statusChangedBy"`
+	RejectionReason    string        `gorm:"size:500" json:"rejectionReason"`
+	CreatedAt          time.Time     `json:"createdAt"`
+	UpdatedAt          time.Time     `json:"updatedAt"`
+	LastLoginAt        *time.Time    `json:"lastLoginAt"`
 }
 
 // UserSettings represents user-specific application settings
@@ -58,6 +78,9 @@ const (
 	ActionLogout            AuditAction = "logout"
 	ActionLoginFailed       AuditAction = "login_failed"
 	ActionCreateUser        AuditAction = "create_user"
+	ActionRegisterUser      AuditAction = "register_user"
+	ActionApproveUser       AuditAction = "approve_user"
+	ActionRejectUser        AuditAction = "reject_user"
 	ActionUpdateUser        AuditAction = "update_user"
 	ActionDeleteUser        AuditAction = "delete_user"
 	ActionResetPassword     AuditAction = "reset_password"
@@ -86,8 +109,16 @@ func (e AuthError) Error() string {
 }
 
 const (
-	ErrInvalidCredentials AuthError = "Неверный логин или пароль"
-	ErrUserDeactivated    AuthError = "Неверный логин или пароль"
-	ErrRateLimited        AuthError = "Слишком много попыток входа. Попробуйте позже"
-	ErrForbidden          AuthError = "Недостаточно прав"
+	ErrInvalidCredentials   AuthError = "Неверный логин или пароль"
+	ErrUserDeactivated      AuthError = "Учётная запись деактивирована"
+	ErrRateLimited          AuthError = "Слишком много попыток входа. Попробуйте позже"
+	ErrForbidden            AuthError = "Недостаточно прав"
+	ErrAccountPending       AuthError = "Учётная запись ожидает одобрения администратора"
+	ErrAccountRejected      AuthError = "Учётная запись отклонена администратором"
+	ErrRegistrationDisabled AuthError = "Самостоятельная регистрация отключена"
+	ErrUserNotPending       AuthError = "Учётная запись не ожидает одобрения"
+	ErrBootstrapMode        AuthError = "Режим первичной настройки"
+	ErrInvalidRequestFormat AuthError = "Неверный формат запроса"
+	ErrPasswordLength       AuthError = "Пароль должен содержать от 8 до 128 символов"
+	ErrUserExists           AuthError = "Пользователь с таким логином уже существует"
 )

@@ -36,6 +36,8 @@ import type {
   AuthStatusResponse,
   LoginRequest,
   LoginResponse,
+  RegisterRequest,
+  RegisterResponse,
   ChangePasswordRequest,
   ChangePasswordResponse,
   BootstrapSetupRequest,
@@ -43,6 +45,9 @@ import type {
   CreateUserRequest,
   UpdateUserRequest,
   ResetPasswordRequest,
+  RejectUserRequest,
+  ApproveUserResponse,
+  RejectUserResponse,
   UsersListResponse,
   OCRStatusResponse,
   OcrDocumentsResponse,
@@ -352,6 +357,10 @@ export function login(req: LoginRequest): Promise<LoginResponse> {
   return apiPost<LoginResponse>("/api/auth/login", req)
 }
 
+export function register(req: RegisterRequest): Promise<RegisterResponse> {
+  return apiPost<RegisterResponse>("/api/auth/register", req)
+}
+
 export function logout(): Promise<{ message: string }> {
   return apiPost<{ message: string }>("/api/auth/logout")
 }
@@ -387,8 +396,8 @@ export function getAvatarUrl(userId: number): string {
 
 // --- Admin ---
 
-export function fetchUsers(): Promise<UsersListResponse> {
-  return apiGet<UsersListResponse>("/api/admin/users")
+export function fetchUsers(status?: string): Promise<UsersListResponse> {
+  return apiGet<UsersListResponse>("/api/admin/users", status ? { status } : undefined)
 }
 
 export function createUser(req: CreateUserRequest): Promise<{ user: import("@/types").UserDTO; message: string }> {
@@ -405,6 +414,14 @@ export function deleteUser(id: number): Promise<{ message: string }> {
 
 export function resetUserPassword(id: number, req: ResetPasswordRequest): Promise<{ message: string }> {
   return apiPost<{ message: string }>(`/api/admin/users/${id}/reset-password`, req)
+}
+
+export function approveUser(id: number): Promise<ApproveUserResponse> {
+  return apiPost<ApproveUserResponse>(`/api/admin/users/${id}/approve`)
+}
+
+export function rejectUser(id: number, req: RejectUserRequest): Promise<RejectUserResponse> {
+  return apiPost<RejectUserResponse>(`/api/admin/users/${id}/reject`, req)
 }
 
 // --- OCR Status ---

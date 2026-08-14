@@ -35,6 +35,15 @@ const (
 	MsgAuthPasswordResetSuccess   MessageKey = "auth.password_reset_success"
 	MsgAuthProfileUpdateFailed    MessageKey = "auth.profile_update_failed"
 	MsgAuthAuditLogsFailed        MessageKey = "auth.audit_logs_failed"
+	MsgAuthRegistrationDisabled   MessageKey = "auth.registration_disabled"
+	MsgAuthAccountPendingApproval MessageKey = "auth.account_pending_approval"
+	MsgAuthAccountRejected        MessageKey = "auth.account_rejected"
+	MsgAuthAccountDeactivated     MessageKey = "auth.account_deactivated"
+	MsgAuthUserNotPending         MessageKey = "auth.user_not_pending"
+	MsgAuthRegistrationSuccess    MessageKey = "auth.registration_success"
+	MsgAuthRegistrationPending    MessageKey = "auth.registration_pending"
+	MsgAuthUserApproved           MessageKey = "auth.user_approved"
+	MsgAuthUserRejected           MessageKey = "auth.user_rejected"
 
 	// Avatar messages
 	MsgAvatarUploadFailed MessageKey = "avatar.upload_failed"

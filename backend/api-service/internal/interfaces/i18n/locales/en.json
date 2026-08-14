@@ -30,7 +30,16 @@
     "password_reset_failed": "Failed to reset password",
     "password_reset_success": "Password reset successfully",
     "profile_update_failed": "Failed to update profile",
-    "audit_logs_failed": "Failed to get audit logs"
+    "audit_logs_failed": "Failed to get audit logs",
+    "registration_disabled": "Self-service registration is disabled",
+    "account_pending_approval": "Your account is pending administrator approval",
+    "account_rejected": "Your account has been rejected by an administrator",
+    "account_deactivated": "Your account has been deactivated",
+    "user_not_pending": "Account is not awaiting approval",
+    "registration_success": "Account created",
+    "registration_pending": "Account created and is awaiting administrator approval",
+    "user_approved": "Account approved",
+    "user_rejected": "Account rejected"
   },
 
   "description_scan": "Scan messages",

@@ -282,6 +282,7 @@ var AuthSet = wire.NewSet(
 	ProvideSessionRepository,
 	ProvideBootstrapService,
 	ProvideLoginRateLimiter,
+	ProvideRegisterRateLimiter,
 	ProvideAuthService,
 	ProvideUserService,
 	ProvideAuthMiddleware,
@@ -315,14 +316,21 @@ func ProvideLoginRateLimiter() *auth.LoginRateLimiter {
 	return auth.NewLoginRateLimiter(10, 15*time.Minute, 30*time.Minute)
 }
 
+// ProvideRegisterRateLimiter creates the registration rate limiter (per IP).
+func ProvideRegisterRateLimiter() *auth.LoginRateLimiter {
+	return auth.NewLoginRateLimiter(10, 15*time.Minute, 30*time.Minute)
+}
+
 // ProvideAuthService creates the authentication service.
 func ProvideAuthService(
 	db *gorm.DB,
 	bootstrap *auth.BootstrapService,
 	sessionRepo *auth.SessionRepository,
 	loginLimiter *auth.LoginRateLimiter,
+	registerLimiter *auth.LoginRateLimiter,
+	cfg *config.AppConfig,
 ) *auth.AuthService {
-	return auth.NewAuthService(db, bootstrap, sessionRepo, loginLimiter)
+	return auth.NewAuthService(db, bootstrap, sessionRepo, loginLimiter, registerLimiter, cfg.AccountCreationMode)
 }
 
 // ProvideUserService creates the user service.

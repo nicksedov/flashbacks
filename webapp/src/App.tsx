@@ -1,6 +1,7 @@
 import { useEffect, useState, lazy, Suspense, useCallback } from "react"
 import { Toaster } from "sonner"
 import { Tabs, TabsContent } from "@/components/ui/tabs"
+import { TabLoading } from "@/components/ui/spinner"
 import { Sidebar } from "@/components/layout/Sidebar"
 import { Header } from "@/components/layout/Header"
 import { fetchFolders } from "@/api/endpoints"
@@ -133,67 +134,67 @@ export default function App() {
           <div className="mx-auto max-w-7xl">
             <Tabs value={activeTab} onValueChange={(v) => handleTabChange(v)}>
               <TabsContent value="settings">
-                <Suspense fallback={<div className="flex items-center justify-center py-20"><div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" /></div>}>
+                <Suspense fallback={<TabLoading />}>
                   <SettingsTab />
                 </Suspense>
               </TabsContent>
 
               <TabsContent value="gallery-all-images">
-                <Suspense fallback={<div className="flex items-center justify-center py-20"><div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" /></div>}>
+                <Suspense fallback={<TabLoading />}>
                   <GalleryTab galleryMode="allImages" />
                 </Suspense>
               </TabsContent>
 
               <TabsContent value="gallery-calendar">
-                <Suspense fallback={<div className="flex items-center justify-center py-20"><div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" /></div>}>
+                <Suspense fallback={<TabLoading />}>
                   <GalleryTab galleryMode="calendar" />
                 </Suspense>
               </TabsContent>
 
               <TabsContent value="gallery-geolocation">
-                <Suspense fallback={<div className="flex items-center justify-center py-20"><div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" /></div>}>
+                <Suspense fallback={<TabLoading />}>
                   <GalleryTab galleryMode="geolocation" />
                 </Suspense>
               </TabsContent>
 
               <TabsContent value="gallery-folders">
-                <Suspense fallback={<div className="flex items-center justify-center py-20"><div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" /></div>}>
+                <Suspense fallback={<TabLoading />}>
                   <GalleryTab galleryMode="folders" />
                 </Suspense>
               </TabsContent>
 
               <TabsContent value="gallery-trash">
-                <Suspense fallback={<div className="flex items-center justify-center py-20"><div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" /></div>}>
+                <Suspense fallback={<TabLoading />}>
                   <TrashTab />
                 </Suspense>
               </TabsContent>
 
               <TabsContent value="deduplication">
-                <Suspense fallback={<div className="flex items-center justify-center py-20"><div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" /></div>}>
+                <Suspense fallback={<TabLoading />}>
                   <DeduplicationTab />
                 </Suspense>
               </TabsContent>
 
               <TabsContent value="ocr">
-                <Suspense fallback={<div className="flex items-center justify-center py-20"><div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" /></div>}>
+                <Suspense fallback={<TabLoading />}>
                   <OcrTab />
                 </Suspense>
               </TabsContent>
 
               <TabsContent value="exif">
-                <Suspense fallback={<div className="flex items-center justify-center py-20"><div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" /></div>}>
+                <Suspense fallback={<TabLoading />}>
                   <ExifTab />
                 </Suspense>
               </TabsContent>
 
               <TabsContent value="smart-search">
-                <Suspense fallback={<div className="flex items-center justify-center py-20"><div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" /></div>}>
+                <Suspense fallback={<TabLoading />}>
                   <SmartSearchTab />
                 </Suspense>
               </TabsContent>
 
               <TabsContent value="admin-users">
-                <Suspense fallback={<div className="flex items-center justify-center py-20"><div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" /></div>}>
+                <Suspense fallback={<TabLoading />}>
                   {user?.role === "admin" ? <AdminPanel /> : (
                     <div className="flex items-center justify-center py-20">
                       <p className="text-muted-foreground">{t("adminPanel.accessDenied")}</p>
@@ -203,7 +204,7 @@ export default function App() {
               </TabsContent>
 
               <TabsContent value="admin-settings">
-                <Suspense fallback={<div className="flex items-center justify-center py-20"><div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" /></div>}>
+                <Suspense fallback={<TabLoading />}>
                   {user?.role === "admin" ? <AdminSettingsTab /> : (
                     <div className="flex items-center justify-center py-20">
                       <p className="text-muted-foreground">{t("adminPanel.accessDenied")}</p>

@@ -79,8 +79,13 @@ export function UnifiedLightbox({
     setInternalShowGeoForm(false)
     setStandardImageLoaded(false)
     setEnhancedPath(null)
-    processedEnhanceRef.current = new Set()
   }
+
+  // Reset the enhancement-processing dedupe cache when the image changes.
+  // Kept in an effect because refs must not be mutated during render.
+  useEffect(() => {
+    processedEnhanceRef.current = new Set()
+  }, [imagePath, initialMode])
 
   // OCR state
   const { ocrData, llmData, loading: ocrLoading, recognizing, resetState: resetOcr, handleRecognize } = useOcrState(
@@ -169,7 +174,9 @@ export function UnifiedLightbox({
     handleShowGeoForm(false)
   }, [reloadMetadata, handleShowGeoForm])
 
-  // Watch for completed enhance_image_quality tool calls
+  // Watch for completed enhance_image_quality tool calls.
+  // The state updates here intentionally mirror the external message stream
+  // (a new completed tool call), so the set-state-in-effect rule is disabled.
   useEffect(() => {
     for (const msg of messages) {
       if (msg.role !== "assistant" || !msg.toolCalls) continue
@@ -179,6 +186,7 @@ export function UnifiedLightbox({
           const key = `${msg.id}-${i}`
           if (!processedEnhanceRef.current.has(key)) {
             processedEnhanceRef.current.add(key)
+            /* eslint-disable react-hooks/set-state-in-effect */
             setStandardImageVersion(v => v + 1)
             // Parse the JSON result to extract enhanced path
             try {
@@ -189,6 +197,7 @@ export function UnifiedLightbox({
             } catch {
               // Result is not JSON (legacy format or no_change status)
             }
+            /* eslint-enable react-hooks/set-state-in-effect */
           }
         }
       }

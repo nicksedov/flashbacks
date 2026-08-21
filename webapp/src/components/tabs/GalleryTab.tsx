@@ -20,7 +20,7 @@ import type { LightboxMode } from "@/components/gallery/UnifiedLightbox"
 import { deleteFiles } from "@/api/endpoints"
 import { useSettings } from "@/providers/useSettings"
 import { useTranslation } from "@/i18n"
-import { downloadImage } from "@/lib/downloadImage"
+import { downloadImage } from "@/lib/download"
 import type { GalleryImageDTO } from "@/types"
 
 interface GalleryTabProps {

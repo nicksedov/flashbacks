@@ -14,6 +14,8 @@ interface EmptyStateProps {
   hint?: string
   /** Size variant controlling icon and vertical padding. */
   size?: "sm" | "md" | "lg"
+  /** When true, renders the dashed-border "boxed" empty state used by gallery views. */
+  bordered?: boolean
   className?: string
 }
 
@@ -29,10 +31,22 @@ export function EmptyState({
   description,
   hint,
   size = "md",
+  bordered = false,
   className,
 }: EmptyStateProps) {
   const { t } = useTranslation()
   const styles = sizeStyles[size]
+
+  if (bordered) {
+    return (
+      <div className={cn("rounded-lg border border-dashed p-12 text-center", className)}>
+        <Icon className="mx-auto h-10 w-10 text-muted-foreground/50" />
+        {title && <p className="mt-2 text-sm font-medium text-muted-foreground">{title}</p>}
+        {description && <p className="text-xs text-muted-foreground/70">{description}</p>}
+        {hint && <p className="text-xs text-muted-foreground/70">{hint}</p>}
+      </div>
+    )
+  }
 
   return (
     <div className={cn("flex flex-col items-center justify-center text-center", styles.padding, className)}>

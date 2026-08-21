@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { fetchCalendarMonthInfo, fetchCalendarAllDates } from "@/api/endpoints"
 import { Skeleton } from "@/components/ui/skeleton"
+import { ErrorBanner } from "@/components/ui/error-banner"
 import { Calendar as CalendarIcon, ArrowDown, ArrowUp, Loader2 } from "lucide-react"
 import { useTranslation } from "@/i18n"
 import type { GalleryImageDTO, CalendarDateGroup, CalendarMonthInfo, TimelineDateMarker } from "@/types"
 import { useCalendarData } from "@/hooks/useCalendarData"
+import { EmptyState } from "@/components/EmptyState"
 import { CalendarImageGrid } from "./CalendarImageGrid"
 import { CalendarWidget } from "./CalendarWidget"
 import { TimelineBar } from "./TimelineBar"
@@ -336,11 +338,7 @@ export function GalleryCalendarView({ onImageClick, onImageDownload, onImageDele
       <div className="flex gap-4" style={{ position: "relative" }}>
         {/* Images area */}
         <div className="flex-1 min-w-0">
-          {calendar.error && (
-            <div className="rounded-lg border border-destructive/20 bg-destructive/10 p-4 text-sm text-destructive">
-              {calendar.error}
-            </div>
-          )}
+          {calendar.error && <ErrorBanner message={calendar.error} />}
 
           {!calendar.initialized ? (
             <div className="space-y-3">
@@ -349,15 +347,12 @@ export function GalleryCalendarView({ onImageClick, onImageDownload, onImageDele
               ))}
             </div>
           ) : calendar.groups.length === 0 && !calendar.isLoading ? (
-            <div className="rounded-lg border border-dashed p-12 text-center">
-              <CalendarIcon className="mx-auto h-10 w-10 text-muted-foreground/50" />
-              <p className="mt-2 text-sm font-medium text-muted-foreground">
-                {calendar.dateRangeFilter.start ? t("gallery.calendar.noImagesForDate") : t("gallery.calendar.noDateInfo")}
-              </p>
-              <p className="text-xs text-muted-foreground/70">
-                {calendar.dateRangeFilter.start ? t("gallery.calendar.clearFilterHint") : t("gallery.calendar.noDateInfoHint")}
-              </p>
-            </div>
+            <EmptyState
+              bordered
+              icon={CalendarIcon}
+              title={calendar.dateRangeFilter.start ? t("gallery.calendar.noImagesForDate") : t("gallery.calendar.noDateInfo")}
+              description={calendar.dateRangeFilter.start ? t("gallery.calendar.clearFilterHint") : t("gallery.calendar.noDateInfoHint")}
+            />
           ) : (
             <>
               <CalendarImageGrid

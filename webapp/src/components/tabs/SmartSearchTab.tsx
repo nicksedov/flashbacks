@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from "react"
+import { toast } from "sonner"
 import { Search, Loader2, X, AlertTriangle, Zap } from "lucide-react"
 import { useTranslation } from "@/i18n"
 import type { SmartSearchResult, EmbeddingBackfillStatus } from "@/types"
@@ -7,6 +8,7 @@ import { SmartSearchTile } from "@/components/gallery/SmartSearchTile"
 import { DeleteConfirmDialog } from "@/components/gallery/DeleteConfirmDialog"
 import { BulkDeleteDialog } from "@/components/gallery/BulkDeleteDialog"
 import { BulkMoveDialog } from "@/components/gallery/BulkMoveDialog"
+import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { useSmartSearch, MIN_QUERY_LENGTH } from "@/hooks/useSmartSearch"
 import { fetchEmbeddingStatus, startEmbeddingBackfill, stopEmbeddingBackfill, deleteFiles, moveFiles } from "@/api/endpoints"
 import { Input } from "@/components/ui/input"
@@ -14,7 +16,7 @@ import { Button } from "@/components/ui/button"
 import { usePolling } from "@/hooks/usePolling"
 import { useSettings } from "@/providers/useSettings"
 import { useGallerySelection } from "@/providers/useGallerySelection"
-import { downloadImage } from "@/lib/downloadImage"
+import { downloadImage } from "@/lib/download"
 
 const DEBOUNCE_MS = 600
 const EMBEDDING_POLL_INTERVAL = 3000
@@ -37,6 +39,7 @@ export function SmartSearchTab() {
   const [isDeleting, setIsDeleting] = useState(false)
   const [bulkDeleteResults, setBulkDeleteResults] = useState<SmartSearchResult[] | null>(null)
   const [bulkUseTrash, setBulkUseTrash] = useState(true)
+  const [permanentConfirmOpen, setPermanentConfirmOpen] = useState(false)
 
   // Embedding status polling
   const {
@@ -160,11 +163,11 @@ export function SmartSearchTab() {
       setSelectedIds(new Set())
       setMoveDialogOpen(false)
       if (result.failed > 0) {
-        alert(t("moveFiles.successWithFailed", { count: result.success, failed: result.failed }))
+        toast.info(t("moveFiles.successWithFailed", { count: result.success, failed: result.failed }))
       }
     } catch (err) {
       console.error("Failed to move files:", err)
-      alert(t("moveFiles.errorFailed"))
+      toast.error(t("moveFiles.errorFailed"))
     } finally {
       setIsMoving(false)
     }
@@ -221,23 +224,17 @@ export function SmartSearchTab() {
       setDeleteConfirm(null)
     } catch (err) {
       console.error("Failed to delete file:", err)
-      alert("Failed to delete file")
+      toast.error(t("deleteFiles.errorFailed"))
     } finally {
       setIsDeleting(false)
     }
-  }, [deleteConfirm, trashDir, removeResults])
+  }, [deleteConfirm, trashDir, removeResults, t])
 
   // --- Bulk delete handler ---
 
-  const handleConfirmBulkDelete = useCallback(async () => {
+  const executeBulkDelete = useCallback(async () => {
     if (!bulkDeleteResults || bulkDeleteResults.length === 0) return
-
-    if (!bulkUseTrash || !trashDir) {
-      if (!window.confirm(t("deleteFiles.confirmPermanent"))) {
-        return
-      }
-    }
-
+    setPermanentConfirmOpen(false)
     setIsDeleting(true)
     try {
       const result = await deleteFiles({
@@ -248,15 +245,26 @@ export function SmartSearchTab() {
       setBulkDeleteResults(null)
       setSelectedIds(new Set())
       if (result.failed > 0) {
-        alert(t("deleteFiles.successWithFailed", { count: result.success, failed: result.failed }))
+        toast.info(t("deleteFiles.successWithFailed", { count: result.success, failed: result.failed }))
       }
     } catch (err) {
       console.error("Failed to delete files:", err)
-      alert(t("deleteFiles.errorFailed"))
+      toast.error(t("deleteFiles.errorFailed"))
     } finally {
       setIsDeleting(false)
     }
   }, [bulkDeleteResults, bulkUseTrash, trashDir, t, removeResults])
+
+  const handleConfirmBulkDelete = useCallback(() => {
+    if (!bulkDeleteResults || bulkDeleteResults.length === 0) return
+
+    if (!bulkUseTrash || !trashDir) {
+      setPermanentConfirmOpen(true)
+      return
+    }
+
+    void executeBulkDelete()
+  }, [bulkDeleteResults, bulkUseTrash, trashDir, executeBulkDelete])
 
   const hasEmbeddings = embeddingStatus && embeddingStatus.progress.total > 0
   const needsBackfill = embeddingStatus && !embeddingStatus.running && embeddingStatus.progress.remaining > 0
@@ -464,6 +472,19 @@ export function SmartSearchTab() {
         trashDir={trashDir}
         loading={isDeleting}
         idSuffix="-smart"
+      />
+
+      {/* Permanent delete confirmation (shown when trash is disabled) */}
+      <ConfirmDialog
+        open={permanentConfirmOpen}
+        onOpenChange={(open) => !open && setPermanentConfirmOpen(false)}
+        title={t("deleteFiles.title")}
+        description={t("deleteFiles.confirmPermanent")}
+        confirmLabel={isDeleting ? t("deleteFiles.deleting") : t("common.delete")}
+        cancelLabel={t("common.cancel")}
+        onConfirm={() => void executeBulkDelete()}
+        loading={isDeleting}
+        destructive
       />
 
       {/* Bulk move dialog — conditionally mounted to avoid Radix Dialog controlled-state issue (React error #185) */}

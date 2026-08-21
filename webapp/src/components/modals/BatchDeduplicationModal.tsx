@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo } from "react"
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog"
+import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
@@ -36,6 +37,7 @@ export function BatchDeduplicationModal({
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isCompleted, setIsCompleted] = useState(false)
   const [lastResult, setLastResult] = useState<{ rulesApplied: number; filesDeleted: number } | null>(null)
+  const [confirmOpen, setConfirmOpen] = useState(false)
   const { trashDir } = useSettings()
   const { t } = useTranslation()
 
@@ -99,15 +101,14 @@ export function BatchDeduplicationModal({
       return
     }
 
-    if (!useTrash || !trashDir) {
-      if (!window.confirm(t("batchDedup.confirmPermanent"))) {
-        return
-      }
-    } else {
-      if (!window.confirm(t("batchDedup.confirmApply", { count: rules.length }))) {
-        return
-      }
-    }
+    setConfirmOpen(true)
+  }
+
+  const executeApply = async () => {
+    setConfirmOpen(false)
+    const rules: BatchDeleteRule[] = Object.entries(selectedFolders)
+      .filter(([, folder]) => folder)
+      .map(([patternId, keepFolder]) => ({ patternId, keepFolder }))
 
     setIsSubmitting(true)
     try {
@@ -147,7 +148,13 @@ export function BatchDeduplicationModal({
     onOpenChange(false)
   }
 
+  const rulesCount = useMemo(
+    () => Object.values(selectedFolders).filter((f) => f).length,
+    [selectedFolders]
+  )
+
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col overflow-hidden">
         <DialogHeader className="flex-shrink-0">
@@ -280,5 +287,22 @@ export function BatchDeduplicationModal({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    <ConfirmDialog
+      open={confirmOpen}
+      onOpenChange={(open) => !isSubmitting && setConfirmOpen(open)}
+      title={t("batchDedup.title")}
+      description={
+        !useTrash || !trashDir
+          ? t("batchDedup.confirmPermanent")
+          : t("batchDedup.confirmApply", { count: rulesCount })
+      }
+      confirmLabel={isSubmitting ? t("batchDedup.applying") : t("batchDedup.applyRules")}
+      cancelLabel={t("common.cancel")}
+      onConfirm={() => void executeApply()}
+      loading={isSubmitting}
+      destructive
+    />
+    </>
   )
 }

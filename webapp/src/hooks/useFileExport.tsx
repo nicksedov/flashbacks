@@ -1,11 +1,24 @@
 import { useCallback } from "react"
-import { marked } from "marked"
+import { renderToStaticMarkup } from "react-dom/server"
+import ReactMarkdown from "react-markdown"
+import remarkGfm from "remark-gfm"
 import { useTranslation } from "@/i18n"
+import { downloadBlob } from "@/lib/download"
+import { markdownComponents } from "@/components/gallery/lightbox/markdownComponents"
 
 interface UseFileExportReturn {
   getFileName: () => string
   handleSaveMd: () => void
   handleSaveHtml: () => void
+}
+
+/** Render markdown to static HTML using the same component overrides as the on-screen renderer. */
+function markdownToHtml(markdown: string): string {
+  return renderToStaticMarkup(
+    <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+      {markdown}
+    </ReactMarkdown>
+  )
 }
 
 export function useFileExport(markdownContent: string | undefined, imagePath: string | null): UseFileExportReturn {
@@ -18,22 +31,13 @@ export function useFileExport(markdownContent: string | undefined, imagePath: st
 
   const handleSaveMd = useCallback(() => {
     if (!markdownContent) return
-    const blob = new Blob([markdownContent], { type: "text/markdown" })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement("a")
-    a.href = url
-    a.download = `${getFileName()}.md`
-    a.click()
-    URL.revokeObjectURL(url)
+    downloadBlob(new Blob([markdownContent], { type: "text/markdown" }), `${getFileName()}.md`)
   }, [markdownContent, getFileName])
 
   const handleSaveHtml = useCallback(() => {
     if (!markdownContent) return
 
-    const html = marked(markdownContent, {
-      gfm: true,
-      breaks: true,
-    })
+    const html = markdownToHtml(markdownContent)
 
     const fullHtml = `<!DOCTYPE html>
 <html lang="${language}">
@@ -61,13 +65,7 @@ ${html}
 </body>
 </html>`
 
-    const blob = new Blob([fullHtml], { type: "text/html" })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement("a")
-    a.href = url
-    a.download = `${getFileName()}.html`
-    a.click()
-    URL.revokeObjectURL(url)
+    downloadBlob(new Blob([fullHtml], { type: "text/html" }), `${getFileName()}.html`)
   }, [markdownContent, getFileName, language])
 
   return { getFileName, handleSaveMd, handleSaveHtml }

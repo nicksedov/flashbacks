@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react"
+import { toast } from "sonner"
 import { GalleryImageGrid } from "@/components/gallery/GalleryImageGrid"
 import { useGalleryImages } from "@/hooks/useGalleryImages"
 import { useGalleryFolders } from "@/hooks/useGalleryFolders"
 import { Skeleton } from "@/components/ui/skeleton"
+import { ErrorBanner } from "@/components/ui/error-banner"
 import { InputWithIcon } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { EmptyState } from "@/components/EmptyState"
@@ -138,11 +140,11 @@ export function GalleryAllImagesView({ onImageClick, onImageDownload, onImageDel
       setSelectedIds(new Set())
       setMoveDialogOpen(false)
       if (result.failed > 0) {
-        alert(t("moveFiles.successWithFailed", { count: result.success, failed: result.failed }))
+        toast.info(t("moveFiles.successWithFailed", { count: result.success, failed: result.failed }))
       }
     } catch (err) {
       console.error("Failed to move files:", err)
-      alert(t("moveFiles.errorFailed"))
+      toast.error(t("moveFiles.errorFailed"))
     } finally {
       setIsMoving(false)
     }
@@ -242,11 +244,7 @@ export function GalleryAllImagesView({ onImageClick, onImageDownload, onImageDel
         </div>
       </div>
 
-      {error && (
-        <div className="rounded-lg border border-destructive/20 bg-destructive/10 p-4 text-sm text-destructive">
-          {error}
-        </div>
-      )}
+      {error && <ErrorBanner message={error} />}
 
       {!initialized ? (
         <div className="space-y-3">

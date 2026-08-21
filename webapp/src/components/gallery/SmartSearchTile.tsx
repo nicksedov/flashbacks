@@ -1,8 +1,7 @@
-import { useState, useEffect, memo } from "react"
-import { ImageIcon } from "lucide-react"
-import { fetchThumbnail } from "@/api/endpoints"
+import { memo } from "react"
 import { Badge } from "@/components/ui/badge"
 import type { SmartSearchResult } from "@/types"
+import { LazyThumbnail } from "./LazyThumbnail"
 import { TileOverlay } from "./TileOverlay"
 import { SelectionCheckbox } from "./SelectionCheckbox"
 
@@ -14,39 +13,6 @@ interface SmartSearchTileProps {
   selected?: boolean
   selectionModeActive?: boolean
   onSelectToggle?: (e: React.MouseEvent | React.KeyboardEvent, result: SmartSearchResult) => void
-}
-
-/** Lazily fetches and renders a thumbnail via the JSON thumbnail API. */
-function LazyThumbnail({ path, fileName }: { path: string; fileName: string }) {
-  const [src, setSrc] = useState<string | null>(null)
-
-  useEffect(() => {
-    let cancelled = false
-    fetchThumbnail(path)
-      .then((res) => {
-        if (!cancelled) setSrc(res.thumbnail)
-      })
-      .catch(() => {
-        // leave blank on error
-      })
-    return () => { cancelled = true }
-  }, [path])
-
-  if (!src) {
-    return (
-      <div className="w-full h-full flex items-center justify-center bg-muted">
-        <ImageIcon className="h-8 w-8 text-muted-foreground" />
-      </div>
-    )
-  }
-
-  return (
-    <img
-      src={src}
-      alt={fileName}
-      className="w-full h-full object-cover"
-    />
-  )
 }
 
 export const SmartSearchTile = memo(function SmartSearchTile({

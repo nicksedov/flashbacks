@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
+import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -363,10 +364,18 @@ export function AdminLlmProvidersTab() {
     [editingAliasValue, editingApiUrl, editingApiKey, llmSettings?.providers, loadSettings, t, modelCache],
   )
 
+  const [deleteAlias, setDeleteAlias] = useState<string | null>(null)
+
   // Delete provider
-  const handleDeleteProvider = useCallback(
-    async (alias: string) => {
-      if (!confirm(t("llm_providers.deleteConfirm", { alias }))) return
+  const handleDeleteProvider = useCallback((alias: string) => {
+    setDeleteAlias(alias)
+  }, [])
+
+  const executeDeleteProvider = useCallback(
+    async () => {
+      const alias = deleteAlias
+      if (!alias) return
+      setDeleteAlias(null)
 
       // Check if provider is in use by any instrument
       if (llmSettings) {
@@ -402,7 +411,7 @@ export function AdminLlmProvidersTab() {
         setIsSaving(false)
       }
     },
-    [llmSettings, expandedProviderAlias, loadSettings, t],
+    [deleteAlias, llmSettings, expandedProviderAlias, loadSettings, t],
   )
 
   const getProviderLabel = (name: LlmProviderType): string => PROVIDER_LABELS[name] ?? name
@@ -775,6 +784,18 @@ export function AdminLlmProvidersTab() {
           </Card>
         </>
       )}
+
+      <ConfirmDialog
+        open={deleteAlias !== null}
+        onOpenChange={(open) => !isSaving && !open && setDeleteAlias(null)}
+        title={t("llm_providers.deleteTitle")}
+        description={deleteAlias ? t("llm_providers.deleteConfirm", { alias: deleteAlias }) : ""}
+        confirmLabel={isSaving ? t("common.saving") : t("common.delete")}
+        cancelLabel={t("common.cancel")}
+        onConfirm={() => void executeDeleteProvider()}
+        loading={isSaving}
+        destructive
+      />
     </div>
   )
 }

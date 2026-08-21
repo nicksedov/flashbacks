@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useState } from "react"
+import { toast } from "sonner"
 import { useTranslation } from "@/i18n"
+import { ErrorBanner } from "@/components/ui/error-banner"
+import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { Trash2, RotateCcw, XCircle, Loader2, FolderOpen } from "lucide-react"
 import { fetchTrashList, restoreTrashFile, deleteTrashFile, cleanTrash } from "@/api/endpoints"
+import { EmptyState } from "@/components/EmptyState"
 import type { TrashFileDTO } from "@/types"
 
 export function TrashTab() {
@@ -9,6 +13,10 @@ export function TrashTab() {
   const [files, setFiles] = useState<TrashFileDTO[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<TrashFileDTO | null>(null)
+  const [cleanAllOpen, setCleanAllOpen] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [isCleaning, setIsCleaning] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -38,30 +46,37 @@ export function TrashTab() {
       setFiles((prev) => prev.filter((f) => f.fileName !== file.fileName))
     } catch (err) {
       console.error("Failed to restore:", err)
-      alert(t("trashTab.restoreFailed"))
+      toast.error(t("trashTab.restoreFailed"))
     }
   }, [t])
 
-  const handleDelete = useCallback(async (file: TrashFileDTO) => {
-    if (!confirm(`Permanently delete "${file.fileName}"?`)) return
+  const handleConfirmDelete = useCallback(async () => {
+    if (!deleteTarget) return
+    setIsDeleting(true)
     try {
-      await deleteTrashFile({ fileName: file.fileName })
-      setFiles((prev) => prev.filter((f) => f.fileName !== file.fileName))
+      await deleteTrashFile({ fileName: deleteTarget.fileName })
+      setFiles((prev) => prev.filter((f) => f.fileName !== deleteTarget.fileName))
+      setDeleteTarget(null)
     } catch (err) {
       console.error("Failed to delete:", err)
-      alert(t("trashTab.deleteFailed"))
+      toast.error(t("trashTab.deleteFailed"))
+    } finally {
+      setIsDeleting(false)
     }
-  }, [t])
+  }, [deleteTarget, t])
 
-  const handleCleanAll = useCallback(async () => {
-    if (!confirm(t("trashTab.cleanAllConfirm"))) return
+  const handleConfirmCleanAll = useCallback(async () => {
+    setIsCleaning(true)
     try {
       await cleanTrash()
       setFiles([])
+      setCleanAllOpen(false)
     } catch (err) {
       console.error("Failed to clean trash:", err)
+    } finally {
+      setIsCleaning(false)
     }
-  }, [t])
+  }, [])
 
   return (
     <div className="space-y-4">
@@ -76,7 +91,7 @@ export function TrashTab() {
         </div>
         {files.length > 0 && (
           <button
-            onClick={handleCleanAll}
+            onClick={() => setCleanAllOpen(true)}
             className="flex items-center gap-2 px-3 py-1.5 text-sm bg-destructive/10 hover:bg-destructive/20 text-destructive rounded transition-colors"
           >
             <XCircle className="h-4 w-4" />
@@ -85,26 +100,19 @@ export function TrashTab() {
         )}
       </div>
 
-      {error && (
-        <div className="rounded-lg border border-destructive/20 bg-destructive/10 p-4 text-sm text-destructive">
-          {error}
-        </div>
-      )}
+      {error && <ErrorBanner message={error} />}
 
       {loading ? (
         <div className="flex justify-center py-12">
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
       ) : files.length === 0 ? (
-        <div className="rounded-lg border border-dashed p-12 text-center">
-          <FolderOpen className="mx-auto h-10 w-10 text-muted-foreground/50" />
-          <p className="mt-2 text-sm font-medium text-muted-foreground">
-            {t("trashTab.empty")}
-          </p>
-          <p className="text-xs text-muted-foreground/70">
-            {t("trashTab.emptyHint")}
-          </p>
-        </div>
+        <EmptyState
+          bordered
+          icon={FolderOpen}
+          title={t("trashTab.empty")}
+          description={t("trashTab.emptyHint")}
+        />
       ) : (
         <div className="rounded-lg border overflow-hidden">
           <table className="w-full">
@@ -140,7 +148,7 @@ export function TrashTab() {
                         <RotateCcw className="h-4 w-4" />
                       </button>
                       <button
-                        onClick={() => handleDelete(file)}
+                        onClick={() => setDeleteTarget(file)}
                         className="p-1.5 rounded-lg hover:bg-destructive/10 text-destructive transition-colors"
                         title={t("trashTab.deletePermanently")}
                       >
@@ -154,6 +162,30 @@ export function TrashTab() {
           </table>
         </div>
       )}
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => !isDeleting && !open && setDeleteTarget(null)}
+        title={t("trashTab.deletePermanently")}
+        description={t("trashTab.deleteConfirm", { fileName: deleteTarget?.fileName ?? "" })}
+        confirmLabel={isDeleting ? t("trashTab.deleting") : t("common.delete")}
+        cancelLabel={t("common.cancel")}
+        onConfirm={() => void handleConfirmDelete()}
+        loading={isDeleting}
+        destructive
+      />
+
+      <ConfirmDialog
+        open={cleanAllOpen}
+        onOpenChange={(open) => !isCleaning && setCleanAllOpen(open)}
+        title={t("trashTab.cleanAll")}
+        description={t("trashTab.cleanAllConfirm")}
+        confirmLabel={isCleaning ? t("trashTab.cleaning") : t("trashTab.cleanAll")}
+        cancelLabel={t("common.cancel")}
+        onConfirm={() => void handleConfirmCleanAll()}
+        loading={isCleaning}
+        destructive
+      />
     </div>
   )
 }

@@ -1,5 +1,6 @@
 import { useState } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
+import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
@@ -26,16 +27,12 @@ export function DeleteFilesModal({
 }: DeleteFilesModalProps) {
   const [useTrash, setUseTrash] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [permanentConfirmOpen, setPermanentConfirmOpen] = useState(false)
   const { trashDir } = useSettings()
   const { t } = useTranslation()
 
-  const handleDelete = async () => {
-    if (!useTrash || !trashDir) {
-      if (!window.confirm(t("deleteFiles.confirmPermanent"))) {
-        return
-      }
-    }
-
+  const executeDelete = async () => {
+    setPermanentConfirmOpen(false)
     setIsSubmitting(true)
     try {
       const result = await deleteFiles({
@@ -56,7 +53,16 @@ export function DeleteFilesModal({
     }
   }
 
+  const handleDelete = () => {
+    if (!useTrash || !trashDir) {
+      setPermanentConfirmOpen(true)
+      return
+    }
+    void executeDelete()
+  }
+
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
@@ -95,5 +101,18 @@ export function DeleteFilesModal({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    <ConfirmDialog
+      open={permanentConfirmOpen}
+      onOpenChange={(open) => !isSubmitting && setPermanentConfirmOpen(open)}
+      title={t("deleteFiles.title")}
+      description={t("deleteFiles.confirmPermanent")}
+      confirmLabel={isSubmitting ? t("deleteFiles.deleting") : t("common.delete")}
+      cancelLabel={t("common.cancel")}
+      onConfirm={() => void executeDelete()}
+      loading={isSubmitting}
+      destructive
+    />
+    </>
   )
 }

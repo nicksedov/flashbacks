@@ -9,6 +9,7 @@ import { ArrowLeft, MapPin, ImageIcon } from "lucide-react"
 import { useIntersectionObserver } from "@/hooks/useIntersectionObserver"
 import { PaginationFooter } from "@/components/ui/pagination-footer"
 import { ViewHeader } from "@/components/ui/view-header"
+import { EmptyState } from "@/components/EmptyState"
 import type { GalleryImageDTO, GeoCluster } from "@/types"
 import "@/lib/leaflet-icon-fix"
 
@@ -232,15 +233,12 @@ export function GalleryGeolocationView({ onImageClick, onImageDownload, onImageD
         />
 
         {images.length === 0 && !imagesLoading ? (
-          <div className="rounded-lg border border-dashed p-12 text-center">
-            <ImageIcon className="mx-auto h-10 w-10 text-muted-foreground/50" />
-            <p className="mt-2 text-sm font-medium text-muted-foreground">
-              {t("geolocation.noGpsData")}
-            </p>
-            <p className="text-xs text-muted-foreground/70">
-              {t("geolocation.noGpsDataHint")}
-            </p>
-          </div>
+          <EmptyState
+            bordered
+            icon={ImageIcon}
+            title={t("geolocation.noGpsData")}
+            description={t("geolocation.noGpsDataHint")}
+          />
         ) : (
           <>
             <GalleryImageGrid
@@ -274,15 +272,12 @@ export function GalleryGeolocationView({ onImageClick, onImageDownload, onImageD
       )}
 
       {totalImages === 0 && !clustersLoading && clustersInitialized && !hasAnyGeoImages ? (
-        <div className="rounded-lg border border-dashed p-12 text-center">
-          <ImageIcon className="mx-auto h-10 w-10 text-muted-foreground/50" />
-          <p className="mt-2 text-sm font-medium text-muted-foreground">
-            {t("geolocation.noGpsData")}
-          </p>
-          <p className="text-xs text-muted-foreground/70">
-            {t("geolocation.noGpsDataHint")}
-          </p>
-        </div>
+        <EmptyState
+          bordered
+          icon={ImageIcon}
+          title={t("geolocation.noGpsData")}
+          description={t("geolocation.noGpsDataHint")}
+        />
       ) : (
         <div ref={mapContainerRef} className="h-[calc(100vh-8rem)] rounded-lg border overflow-hidden">
           <MapContainer

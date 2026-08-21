@@ -377,13 +377,14 @@ export function AdminGeneralTab() {
     <div className="space-y-6">
       {/* Gallery Folder Management */}
       <Card>
-        <CardHeader>
-          <CardTitle>{t("settings.galleryFolders")}</CardTitle>
-          <CardDescription>{t("settings.galleryFoldersDescription")}</CardDescription>
+        <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0">
+          <div>
+            <CardTitle>{t("settings.galleryFolders")}</CardTitle>
+            <CardDescription>{t("settings.galleryFoldersDescription")}</CardDescription>
+          </div>
+          <AddFolderForm onAdd={handleAdd} disabled={status.scanning} />
         </CardHeader>
         <CardContent className="space-y-4">
-          <AddFolderForm onAdd={handleAdd} disabled={status.scanning} />
-
           <ScanProgressBanner status={status} />
 
           <div className="flex items-center justify-between gap-2">

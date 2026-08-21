@@ -164,6 +164,8 @@ export const translationsRu = {
   "exifBackup.notConfigured": "Директория резервных копий EXIF не настроена",
 
   // Add folder form
+  "addFolder.title": "Добавить папку",
+  "addFolder.description": "Введите абсолютный путь к папке, которую нужно добавить в галерею.",
   "addFolder.placeholder": "Введите путь к папке, напр. C:\\Фото или /home/user/photos",
   "addFolder.button": "Добавить папку",
 
@@ -395,7 +397,9 @@ export const translationsRu = {
   "adminPanel.resetPassword": "Сбросить пароль",
   "adminPanel.toggleActive": "Переключить активность",
   "adminPanel.delete": "Удалить",
+  "adminPanel.deleteTitle": "Удалить пользователя",
   "adminPanel.deleteConfirm": "Удалить пользователя \"{displayName}\"?",
+  "adminPanel.deleting": "Удаление...",
   "adminPanel.deleteSuccess": "Пользователь удален",
   "adminPanel.createUserSuccess": "Пользователь создан",
   "adminPanel.deleteFailed": "Не удалось удалить пользователя",
@@ -833,6 +837,14 @@ export const translationsRu = {
   // LLM Providers
   "llm_providers.alias": "Алиас",
   "llm_providers.rename": "Переименовать",
+  "llm_providers.apiUrl": "API URL",
+  "llm_providers.apiKey": "API-ключ",
+  "llm_providers.apiKeyPlaceholder": "sk-...",
+  "llm_providers.typeOllama": "Ollama",
+  "llm_providers.typeOllamaCloud": "Ollama Cloud",
+  "llm_providers.typeOpenai": "Совместимый с OpenAI API",
+  "llm_providers.typeDeepseek": "DeepSeek",
+  "llm_providers.typeAlibaba": "Alibaba Cloud",
   "llm_providers.selectProvider": "Выберите провайдера",
   "llm_providers.selectModel": "Выберите модель",
   "llm_providers.loadModels": "Загрузить модели",

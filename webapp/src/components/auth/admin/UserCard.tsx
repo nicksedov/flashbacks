@@ -11,7 +11,7 @@ export interface UserCardProps {
   isCurrentUser: boolean
   onEdit: () => void
   onResetPassword: () => void
-  onDelete: () => Promise<void>
+  onDelete: () => void
   onToggleActive: () => Promise<void>
 }
 

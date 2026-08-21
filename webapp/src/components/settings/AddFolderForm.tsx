@@ -1,7 +1,15 @@
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { FolderPlus } from "lucide-react"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog"
+import { FolderPlus, Plus } from "lucide-react"
 import { useTranslation } from "@/i18n"
 
 interface AddFolderFormProps {
@@ -10,11 +18,12 @@ interface AddFolderFormProps {
 }
 
 export function AddFolderForm({ onAdd, disabled }: AddFolderFormProps) {
+  const [open, setOpen] = useState(false)
   const [path, setPath] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
   const { t } = useTranslation()
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault()
     const trimmed = path.trim()
     if (!trimmed) return
@@ -23,28 +32,57 @@ export function AddFolderForm({ onAdd, disabled }: AddFolderFormProps) {
     try {
       await onAdd(trimmed)
       setPath("")
+      setOpen(false)
     } finally {
       setIsSubmitting(false)
     }
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex gap-2">
-      <Input
-        value={path}
-        onChange={(e) => setPath(e.target.value)}
-        placeholder={t("addFolder.placeholder")}
-        disabled={disabled || isSubmitting}
-        className="flex-1 font-mono text-sm"
-      />
+    <Dialog open={open} onOpenChange={(next) => !isSubmitting && setOpen(next)}>
       <Button
-        type="submit"
-        disabled={disabled || isSubmitting || !path.trim()}
+        type="button"
         size="sm"
+        onClick={() => setOpen(true)}
+        disabled={disabled}
+        aria-haspopup="dialog"
       >
-        <FolderPlus className="mr-1.5 h-3.5 w-3.5" />
+        <Plus className="mr-1.5 h-3.5 w-3.5" />
         {t("addFolder.button")}
       </Button>
-    </form>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{t("addFolder.title")}</DialogTitle>
+          <DialogDescription>{t("addFolder.description")}</DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <Input
+            value={path}
+            onChange={(e) => setPath(e.target.value)}
+            placeholder={t("addFolder.placeholder")}
+            disabled={disabled || isSubmitting}
+            className="font-mono text-sm"
+            autoFocus
+          />
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setOpen(false)}
+              disabled={isSubmitting}
+            >
+              {t("common.cancel")}
+            </Button>
+            <Button
+              type="submit"
+              disabled={disabled || isSubmitting || !path.trim()}
+            >
+              <FolderPlus className="mr-1.5 h-3.5 w-3.5" />
+              {isSubmitting ? t("common.saving") : t("addFolder.button")}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   )
 }

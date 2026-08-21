@@ -7,6 +7,7 @@ import {
 } from "lucide-react"
 import { useAuth } from "@/providers/useAuth"
 import { Button } from "@/components/ui/button"
+import { IconButton } from "@/components/ui/icon-button"
 import { cn } from "@/lib/utils"
 
 interface SidebarProps {
@@ -202,14 +203,15 @@ export function Sidebar({
           </div>
         )}
         {/* Mobile close button */}
-        <button
+        <IconButton
           type="button"
-          className="ml-auto flex h-8 w-8 items-center justify-center rounded-md hover:bg-muted transition-colors md:hidden"
+          variant="ghost"
+          icon={X}
+          className="ml-auto h-8 w-8 md:hidden"
           onClick={onMobileClose}
           aria-label="Close sidebar"
-        >
-          <X className="h-5 w-5" />
-        </button>
+          title="Close sidebar"
+        />
       </div>
 
       {/* Navigation */}

@@ -12,6 +12,7 @@ import { useIntersectionObserver } from "@/hooks/useIntersectionObserver"
 import { fetchSubdirs } from "@/api/endpoints"
 import { useTranslation } from "@/i18n"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { ImageTile } from "./ImageTile"
 import type { GalleryImageDTO, SubdirEntry } from "@/types"
@@ -216,19 +217,21 @@ export function GalleryFoldersView(props: GalleryFoldersViewProps) {
       {/* Breadcrumbs + Up button bar */}
       <div className="flex items-center gap-2 flex-wrap min-h-9">
         {/* Root home button */}
-        <button
+        <Button
           type="button"
+          variant="ghost"
+          size="sm"
           onClick={handleGoRoot}
           className={cn(
-            "inline-flex items-center gap-1 rounded-md px-2 py-1 text-sm transition-colors",
+            "h-8 gap-1 px-2",
             currentPath === null
-              ? "bg-primary/10 text-primary font-medium"
+              ? "bg-primary/10 text-primary font-medium hover:bg-primary/10"
               : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
           )}
           title={homeTitle}
         >
           <Home className="h-4 w-4" />
-        </button>
+        </Button>
 
         {/* Breadcrumbs */}
         {breadcrumbs.map((segment, idx) => {
@@ -236,34 +239,38 @@ export function GalleryFoldersView(props: GalleryFoldersViewProps) {
           return (
             <span key={segment.path} className="flex items-center gap-1">
               <ChevronRight className="h-3 w-3 text-muted-foreground flex-shrink-0" />
-              <button
+              <Button
                 type="button"
+                variant="ghost"
+                size="sm"
                 onClick={() => handleBreadcrumbClick(segment.path)}
                 className={cn(
-                  "rounded-md px-2 py-1 text-sm transition-colors truncate max-w-[200px]",
+                  "h-8 truncate max-w-[200px] px-2",
                   isLast
-                    ? "bg-primary/10 text-primary font-medium"
+                    ? "bg-primary/10 text-primary font-medium hover:bg-primary/10"
                     : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
                 )}
                 title={segment.path}
               >
                 {segment.name}
-              </button>
+              </Button>
             </span>
           )
         })}
 
         {/* Up button (only when inside a folder) */}
         {currentPath !== null && (
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="sm"
             onClick={handleGoUp}
-            className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors ml-auto"
+            className="ml-auto h-8 gap-1 px-2 text-muted-foreground"
             title={t("gallery.folders.upOneLevel")}
           >
             <ArrowUp className="h-4 w-4" />
             <span className="hidden sm:inline">{t("gallery.folders.up")}</span>
-          </button>
+          </Button>
         )}
       </div>
 

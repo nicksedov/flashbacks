@@ -1,7 +1,7 @@
 import { useState } from "react"
 import { Settings, Brain, Server } from "lucide-react"
 import { useTranslation } from "@/i18n"
-import { UnderlineTabs } from "@/components/ui/underline-tabs"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { AdminGeneralTab } from "./AdminGeneralTab"
 import { AdminAnalysisTab } from "./AdminAnalysisTab"
 import { AdminLlmProvidersTab } from "./AdminLlmProvidersTab"
@@ -28,7 +28,16 @@ export function AdminSettingsTab() {
       </div>
 
       <div>
-        <UnderlineTabs tabs={TABS} value={activeTab} onValueChange={setActiveTab} />
+        <Tabs variant="underline" value={activeTab} onValueChange={(v) => setActiveTab(v as AdminTab)}>
+          <TabsList>
+            {TABS.map(({ id, labelKey, icon: Icon }) => (
+              <TabsTrigger key={id} value={id}>
+                <Icon className="h-3.5 w-3.5" />
+                {t(labelKey)}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </Tabs>
 
         <div className="mt-6">
           {activeTab === "general" && <AdminGeneralTab />}

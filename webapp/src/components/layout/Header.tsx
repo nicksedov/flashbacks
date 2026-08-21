@@ -65,15 +65,17 @@ export function Header({ onTabChange, onMobileMenuToggle }: HeaderProps) {
         ) : (
           <>
             {/* Mobile menu button */}
-            <button
+            <Button
               type="button"
-              className="flex h-9 w-9 items-center justify-center rounded-md hover:bg-muted transition-colors md:hidden"
+              variant="ghost"
+              size="icon"
+              className="md:hidden"
               onClick={onMobileMenuToggle}
               aria-label={t("header.menu")}
               title={t("header.menu")}
             >
               <Menu className="h-5 w-5" />
-            </button>
+            </Button>
 
             {/* Spacer for desktop alignment */}
             <div className="hidden md:block" />
@@ -82,9 +84,10 @@ export function Header({ onTabChange, onMobileMenuToggle }: HeaderProps) {
 
         {user && (
           <div className="flex items-center gap-3">
-            <button
+            <Button
               type="button"
-              className="flex items-center gap-2 rounded-md px-2 py-1 hover:bg-muted transition-colors cursor-pointer"
+              variant="ghost"
+              className="flex items-center gap-2 px-2 py-1"
               onClick={() => onTabChange("profile")}
             >
               {user.hasAvatar ? (
@@ -96,7 +99,7 @@ export function Header({ onTabChange, onMobileMenuToggle }: HeaderProps) {
               <Badge variant="outline" className="text-xs">
                 {user.role === "admin" ? t("adminPanel.roleAdmin") : t("adminPanel.roleUser")}
               </Badge>
-            </button>
+            </Button>
             <IconButton
               variant="ghost"
               size="sm"

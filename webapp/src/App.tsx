@@ -129,8 +129,8 @@ export default function App() {
         <div className="flex flex-1 flex-col overflow-hidden">
           <Header onTabChange={handleTabChange} onMobileMenuToggle={handleMobileMenuToggle} />
 
-        <main className={`flex-1 overflow-auto ${activeTab === "gallery-geolocation" ? "px-3 py-3" : "px-8 py-6"}`}>
-          <div className={activeTab === "gallery-geolocation" ? "mx-auto" : "mx-auto max-w-7xl"}>
+        <main className="flex-1 overflow-auto px-8 py-6">
+          <div className="mx-auto max-w-7xl">
             <Tabs value={activeTab} onValueChange={(v) => handleTabChange(v)}>
               <TabsContent value="settings">
                 <Suspense fallback={<div className="flex items-center justify-center py-20"><div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" /></div>}>

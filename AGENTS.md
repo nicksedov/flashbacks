@@ -38,6 +38,10 @@ flashbacks/
 - JSON tags must match frontend TypeScript names (camelCase)
 - Run unit tests after every code change
 
+### Design System
+- Before implementing any webapp UI, consult the authoritative design system spec at [`openspec/specs/design-system/spec.md`](openspec/specs/design-system/spec.md) and follow its token, component, layout, interaction, responsive, theming, and accessibility rules.
+- See [`docs/design-system.md`](docs/design-system.md) for the living audit trail of known UI drift vs the spec.
+
 ### TypeScript Standards
 - Strict mode, `verbatimModuleSyntax`, no unused vars
 - `import type` for type-only imports

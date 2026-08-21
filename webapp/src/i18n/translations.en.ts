@@ -164,6 +164,8 @@ export const translationsEn = {
   "exifBackup.notConfigured": "EXIF backup directory is not configured",
 
   // Add folder form
+  "addFolder.title": "Add Folder",
+  "addFolder.description": "Enter the absolute path of a folder to add to the gallery.",
   "addFolder.placeholder": "Enter folder path, e.g. C:\\Photos or /home/user/photos",
   "addFolder.button": "Add Folder",
 
@@ -395,7 +397,9 @@ export const translationsEn = {
   "adminPanel.resetPassword": "Reset Password",
   "adminPanel.toggleActive": "Toggle Active",
   "adminPanel.delete": "Delete",
+  "adminPanel.deleteTitle": "Delete User",
   "adminPanel.deleteConfirm": "Delete user \"{displayName}\"?",
+  "adminPanel.deleting": "Deleting...",
   "adminPanel.deleteSuccess": "User deleted",
   "adminPanel.createUserSuccess": "User created",
   "adminPanel.deleteFailed": "Failed to delete user",
@@ -833,6 +837,14 @@ export const translationsEn = {
   // LLM Providers
   "llm_providers.alias": "Alias",
   "llm_providers.rename": "Rename",
+  "llm_providers.apiUrl": "API URL",
+  "llm_providers.apiKey": "API Key",
+  "llm_providers.apiKeyPlaceholder": "sk-...",
+  "llm_providers.typeOllama": "Ollama",
+  "llm_providers.typeOllamaCloud": "Ollama Cloud",
+  "llm_providers.typeOpenai": "OpenAI API compatible",
+  "llm_providers.typeDeepseek": "DeepSeek",
+  "llm_providers.typeAlibaba": "Alibaba Cloud",
   "llm_providers.selectProvider": "Select a provider",
   "llm_providers.selectModel": "Select a model",
   "llm_providers.loadModels": "Load models",

@@ -531,7 +531,7 @@ export function AdminLlmProvidersTab() {
 
                         {provider.name !== "ollama_cloud" && (
                           <div className="space-y-2">
-                            <Label>API URL</Label>
+                            <Label>{t("llm_providers.apiUrl")}</Label>
                             <Input
                               value={editingApiUrl}
                               onChange={(e) => setEditingApiUrl(e.target.value)}
@@ -551,14 +551,14 @@ export function AdminLlmProvidersTab() {
 
                         {(provider.name === "openai" || provider.name === "ollama_cloud" || provider.name === "deepseek" || provider.name === "alibaba") && (
                           <div className="space-y-2">
-                            <Label>API Key</Label>
+                            <Label>{t("llm_providers.apiKey")}</Label>
                             <Input
                               type="password"
                               autoComplete="new-password"
                               value={editingApiKey}
                               onChange={(e) => setEditingApiKey(e.target.value)}
                               disabled={isSaving}
-                              placeholder="sk-..."
+                              placeholder={t("llm_providers.apiKeyPlaceholder")}
                             />
                           </div>
                         )}
@@ -696,7 +696,7 @@ export function AdminLlmProvidersTab() {
                   {/* API URL */}
                   {newProviderType !== "ollama_cloud" && (
                     <div className="space-y-2">
-                      <Label htmlFor="new-apiurl">API URL</Label>
+                      <Label htmlFor="new-apiurl">{t("llm_providers.apiUrl")}</Label>
                       <Input
                         id="new-apiurl"
                         placeholder={
@@ -720,7 +720,7 @@ export function AdminLlmProvidersTab() {
                     newProviderType === "deepseek" ||
                     newProviderType === "alibaba") && (
                     <div className="space-y-2">
-                      <Label htmlFor="new-apikey">API Key</Label>
+                      <Label htmlFor="new-apikey">{t("llm_providers.apiKey")}</Label>
                       <Input
                         id="new-apikey"
                         type="password"

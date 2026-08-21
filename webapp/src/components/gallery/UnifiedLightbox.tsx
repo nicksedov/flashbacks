@@ -20,7 +20,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
 import { Camera, MapPin, MapPinPlus, Image as ImageIcon, Pencil, FileText } from "lucide-react"
 import { GeoSearchForm } from "./GeoSearchForm"
-import { UnderlineTabs } from "@/components/ui/underline-tabs"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import type { ImageMetadataDTO } from "@/types"
 
 export type LightboxMode = "ai" | "exif" | "ocr" | "tags"
@@ -314,7 +314,16 @@ export function UnifiedLightbox({
 
         {/* Right: Panel with mode tabs */}
         <div className="w-full md:w-[400px] lg:w-[450px] md:min-w-[320px] border-t md:border-t-0 md:border-l bg-card h-full shrink-0 flex flex-col">
-          <UnderlineTabs tabs={TAB_CONFIG} value={activeMode} onValueChange={setActiveMode} />
+          <Tabs variant="underline" value={activeMode} onValueChange={(v) => setActiveMode(v as LightboxMode)}>
+            <TabsList>
+              {TAB_CONFIG.map(({ id, labelKey, icon: Icon }) => (
+                <TabsTrigger key={id} value={id}>
+                  <Icon className="h-3.5 w-3.5" />
+                  {t(labelKey)}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
 
           {/* Panel content */}
           <div className="flex-1 min-h-0 overflow-hidden flex flex-col">

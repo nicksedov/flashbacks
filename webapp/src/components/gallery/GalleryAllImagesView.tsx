@@ -3,6 +3,9 @@ import { GalleryImageGrid } from "@/components/gallery/GalleryImageGrid"
 import { useGalleryImages } from "@/hooks/useGalleryImages"
 import { useGalleryFolders } from "@/hooks/useGalleryFolders"
 import { Skeleton } from "@/components/ui/skeleton"
+import { InputWithIcon } from "@/components/ui/input"
+import { Button } from "@/components/ui/button"
+import { EmptyState } from "@/components/EmptyState"
 import { ImageIcon, ArrowDown, ArrowUp, Search, X, List } from "lucide-react"
 import { useTranslation } from "@/i18n"
 import { useIntersectionObserver } from "@/hooks/useIntersectionObserver"
@@ -188,29 +191,35 @@ export function GalleryAllImagesView({ onImageClick, onImageDownload, onImageDel
         <div className="flex items-center gap-2">
           {/* Search input */}
           <div className="relative">
-            <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <input
+            <InputWithIcon
               type="text"
               value={searchInput}
               onChange={handleSearchChange}
               placeholder={t("gallery.search.placeholder")}
-              className="h-9 w-70 rounded-md border bg-background pl-8 pr-8 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              leadingIcon={Search}
+              className="h-9 w-70 pr-8"
             />
             {searchInput && (
-              <button
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
                 onClick={handleClearSearch}
-                className="absolute right-1 top-1/2 -translate-y-1/2 h-6 w-6 rounded-sm hover:bg-accent flex items-center justify-center"
+                className="absolute right-1 top-1/2 h-6 w-6 -translate-y-1/2"
                 title={t("gallery.search.clear")}
+                aria-label={t("gallery.search.clear")}
               >
                 <X className="h-3 w-3 text-muted-foreground" />
-              </button>
+              </Button>
             )}
           </div>
 
           {/* Sort button */}
-          <button
+          <Button
+            type="button"
+            variant="ghost"
             onClick={handleSortToggle}
-            className="inline-flex items-center gap-2 rounded-md bg-transparent px-3 py-2 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+            className="gap-2 px-3 py-2 text-muted-foreground hover:text-accent-foreground"
             title={
               sortOrder === "newest" ? t("gallery.sortNewest") :
               sortOrder === "oldest" ? t("gallery.sortOldest") :
@@ -229,7 +238,7 @@ export function GalleryAllImagesView({ onImageClick, onImageDownload, onImageDel
                sortOrder === "oldest" ? t("gallery.sortOldest") :
                t("gallery.sortNone")}
             </span>
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -246,27 +255,21 @@ export function GalleryAllImagesView({ onImageClick, onImageDownload, onImageDel
           ))}
         </div>
       ) : images.length === 0 && !isLoading ? (
-        <div className="rounded-lg border border-dashed p-12 text-center">
-          <ImageIcon className="mx-auto h-10 w-10 text-muted-foreground/50" />
-          <p className="mt-2 text-sm font-medium text-muted-foreground">
-            {t("gallery.empty")}
-          </p>
-          <p className="text-xs text-muted-foreground/70">
-            {t("gallery.emptyHint")}
-          </p>
-        </div>
+        <EmptyState
+          size="sm"
+          icon={ImageIcon}
+          title={t("gallery.empty")}
+          description={t("gallery.emptyHint")}
+        />
       ) : (
         <>
           {searchQuery && images.length === 0 && !isLoading ? (
-            <div className="rounded-lg border border-dashed p-12 text-center">
-              <Search className="mx-auto h-10 w-10 text-muted-foreground/50" />
-              <p className="mt-2 text-sm font-medium text-muted-foreground">
-                {t("gallery.search.noResults", { query: searchQuery })}
-              </p>
-              <p className="text-xs text-muted-foreground/70">
-                {t("gallery.search.noResultsHint")}
-              </p>
-            </div>
+            <EmptyState
+              size="sm"
+              icon={Search}
+              title={t("gallery.search.noResults", { query: searchQuery })}
+              description={t("gallery.search.noResultsHint")}
+            />
           ) : (
             <>
               {searchQuery && (

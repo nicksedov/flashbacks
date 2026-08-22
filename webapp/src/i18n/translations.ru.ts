@@ -432,6 +432,7 @@ export const translationsRu = {
   "adminPanel.registerSuccess": "Учётная запись создана",
   "adminPanel.pendingTitle": "Учётная запись ожидает одобрения",
   "adminPanel.pendingDesc": "Ваша учётная запись ожидает одобрения администратора. Вы сможете войти после её утверждения.",
+  "adminPanel.registrationApprovalWarning": "Новые учётные записи требуют одобрения администратора перед входом.",
 
   // Админ-панель: очередь заявок на регистрацию
   "adminPanel.registrationRequests": "Заявки на регистрацию",

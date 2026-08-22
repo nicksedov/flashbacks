@@ -432,6 +432,7 @@ export const translationsEn = {
   "adminPanel.registerSuccess": "Account created",
   "adminPanel.pendingTitle": "Account pending approval",
   "adminPanel.pendingDesc": "Your account is awaiting administrator approval. You will be able to log in once it is approved.",
+  "adminPanel.registrationApprovalWarning": "New accounts require administrator approval before you can sign in.",
 
   // Admin: registration approval queue
   "adminPanel.registrationRequests": "Registration Requests",

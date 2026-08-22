@@ -25,7 +25,7 @@ const tabsListVariants = cva("inline-flex items-center justify-center text-muted
   variants: {
     variant: {
       segmented: "h-10 rounded-md bg-muted p-1",
-      underline: "w-full justify-start border-b border-border",
+      underline: "w-full justify-start",
     },
   },
   defaultVariants: {
@@ -56,7 +56,7 @@ const tabsTriggerVariants = cva(
         segmented:
           "rounded-sm px-3 py-1.5 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm",
         underline:
-          "-mb-px gap-1.5 border-b-2 border-transparent px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground data-[state=active]:border-primary data-[state=active]:text-primary",
+          "gap-1.5 border-b-2 border-transparent px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground data-[state=active]:border-primary data-[state=active]:text-primary",
       },
     },
     defaultVariants: {

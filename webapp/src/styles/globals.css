@@ -1,6 +1,37 @@
 @import "tailwindcss";
 @import "leaflet/dist/leaflet.css";
 
+/*
+ * Register semantic design tokens in the Tailwind v4 theme so that utilities
+ * such as bg-primary, text-primary, border-primary, bg-muted, etc. are
+ * generated. Defaults resolve to the light-purple palette; each theme class
+ * (see below) overrides the same variables at runtime, so utilities follow
+ * the active theme.
+ */
+@theme {
+  --color-background: var(--color-light-purple-bg);
+  --color-sidebar: var(--color-light-purple-sidebar);
+  --color-header: var(--color-light-purple-header);
+  --color-primary: var(--color-light-purple-primary);
+  --color-primary-foreground: var(--color-light-purple-primary-foreground);
+  --color-secondary: var(--color-light-purple-secondary);
+  --color-secondary-foreground: var(--color-light-purple-secondary-foreground);
+  --color-muted: var(--color-light-purple-muted);
+  --color-muted-foreground: var(--color-light-purple-muted-foreground);
+  --color-accent: var(--color-light-purple-accent);
+  --color-accent-foreground: var(--color-light-purple-accent-foreground);
+  --color-border: var(--color-light-purple-border);
+  --color-input: var(--color-light-purple-input);
+  --color-ring: var(--color-light-purple-ring);
+  --color-card: var(--color-light-purple-card);
+  --color-card-foreground: var(--color-light-purple-card-foreground);
+  --color-foreground: var(--color-light-purple-foreground);
+  --color-popover: var(--color-light-purple-popover);
+  --color-popover-foreground: var(--color-light-purple-popover-foreground);
+  --color-destructive: var(--color-light-purple-destructive);
+  --color-destructive-foreground: var(--color-light-purple-destructive-foreground);
+}
+
 :root {
   /* Light Purple Theme */
   --color-light-purple-bg: hsl(270 100% 98%);

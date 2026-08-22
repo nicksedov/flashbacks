@@ -22,7 +22,8 @@ import {
 import type { ChatMessage, ChatToolCallInfo, Conversation } from "@/types"
 import type { TranslationKey } from "@/i18n"
 import { OcrMarkdownRenderer } from "./OcrMarkdownRenderer"
-import { fetchThumbnail } from "@/api/endpoints"
+import { LazyThumbnail } from "../LazyThumbnail"
+import { formatRelativeTime } from "@/lib/format"
 
 interface ChatPanelProps {
   messages: ChatMessage[]
@@ -185,34 +186,8 @@ function extractImagePaths(message: ChatMessage): string[] {
 }
 
 function ThumbnailItem({ path }: { path: string }) {
-  const [src, setSrc] = useState<string | null>(null)
-
-  useEffect(() => {
-    let cancelled = false
-    fetchThumbnail(path)
-      .then((res) => {
-        if (!cancelled) setSrc(res.thumbnail)
-      })
-      .catch(() => {
-        // leave empty on failure
-      })
-    return () => { cancelled = true }
-  }, [path])
-
-  if (!src) {
-    return (
-      <div className="w-full h-full flex items-center justify-center">
-        <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
-      </div>
-    )
-  }
-
   return (
-    <img
-      src={src}
-      alt={path.split("/").pop() || path}
-      className="w-full h-full object-cover"
-    />
+    <LazyThumbnail path={path} fileName={path.split("/").pop() || path} loadingIcon="spinner" />
   )
 }
 
@@ -282,20 +257,6 @@ function TokenDoughnut({ percent, size = 22 }: { percent: number; size?: number 
       />
     </svg>
   )
-}
-
-function formatRelativeTime(dateStr: string): string {
-  const now = Date.now()
-  const then = new Date(dateStr).getTime()
-  const diffMs = now - then
-  const diffMin = Math.floor(diffMs / 60000)
-  if (diffMin < 1) return "just now"
-  if (diffMin < 60) return `${diffMin}m ago`
-  const diffHr = Math.floor(diffMin / 60)
-  if (diffHr < 24) return `${diffHr}h ago`
-  const diffDays = Math.floor(diffHr / 24)
-  if (diffDays < 30) return `${diffDays}d ago`
-  return new Date(dateStr).toLocaleDateString()
 }
 
 export function ChatPanel({

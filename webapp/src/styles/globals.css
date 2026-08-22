@@ -1,6 +1,37 @@
 @import "tailwindcss";
 @import "leaflet/dist/leaflet.css";
 
+/*
+ * Register semantic design tokens in the Tailwind v4 theme so that utilities
+ * such as bg-primary, text-primary, border-primary, bg-muted, etc. are
+ * generated. Defaults resolve to the light-purple palette; each theme class
+ * (see below) overrides the same variables at runtime, so utilities follow
+ * the active theme.
+ */
+@theme {
+  --color-background: var(--color-light-purple-bg);
+  --color-sidebar: var(--color-light-purple-sidebar);
+  --color-header: var(--color-light-purple-header);
+  --color-primary: var(--color-light-purple-primary);
+  --color-primary-foreground: var(--color-light-purple-primary-foreground);
+  --color-secondary: var(--color-light-purple-secondary);
+  --color-secondary-foreground: var(--color-light-purple-secondary-foreground);
+  --color-muted: var(--color-light-purple-muted);
+  --color-muted-foreground: var(--color-light-purple-muted-foreground);
+  --color-accent: var(--color-light-purple-accent);
+  --color-accent-foreground: var(--color-light-purple-accent-foreground);
+  --color-border: var(--color-light-purple-border);
+  --color-input: var(--color-light-purple-input);
+  --color-ring: var(--color-light-purple-ring);
+  --color-card: var(--color-light-purple-card);
+  --color-card-foreground: var(--color-light-purple-card-foreground);
+  --color-foreground: var(--color-light-purple-foreground);
+  --color-popover: var(--color-light-purple-popover);
+  --color-popover-foreground: var(--color-light-purple-popover-foreground);
+  --color-destructive: var(--color-light-purple-destructive);
+  --color-destructive-foreground: var(--color-light-purple-destructive-foreground);
+}
+
 :root {
   /* Light Purple Theme */
   --color-light-purple-bg: hsl(270 100% 98%);
@@ -19,6 +50,7 @@
   --color-light-purple-ring: hsl(270 80% 60%);
   --color-light-purple-card: hsl(270 100% 95%);
   --color-light-purple-card-foreground: hsl(270 80% 20%);
+  --color-light-purple-foreground: hsl(270 80% 20%);
   --color-light-purple-popover: hsl(270 100% 98%);
   --color-light-purple-popover-foreground: hsl(270 80% 20%);
   --color-light-purple-destructive: hsl(0 84% 60%);
@@ -41,6 +73,7 @@
   --color-dark-purple-ring: hsl(270 70% 65%);
   --color-dark-purple-card: hsl(270 25% 15%);
   --color-dark-purple-card-foreground: hsl(270 60% 85%);
+  --color-dark-purple-foreground: hsl(270 60% 85%);
   --color-dark-purple-popover: hsl(270 20% 12%);
   --color-dark-purple-popover-foreground: hsl(270 60% 85%);
   --color-dark-purple-destructive: hsl(0 60% 50%);
@@ -59,7 +92,7 @@
   --color-light-green-accent: hsl(150 70% 82%);
   --color-light-green-accent-foreground: hsl(150 75% 25%);
   --color-light-green-border: hsl(150 80% 70%);
-  --color-light-green-foreground: hsl(0 0% 100%);
+  --color-light-green-foreground: hsl(150 75% 20%);
   --color-light-green-input: hsl(150 55% 78%);
   --color-light-green-ring: hsl(150 75% 40%);
   --color-light-green-card: hsl(150 100% 94%);
@@ -86,6 +119,7 @@
   --color-dark-green-ring: hsl(150 65% 45%);
   --color-dark-green-card: hsl(150 25% 13%);
   --color-dark-green-card-foreground: hsl(150 60% 85%);
+  --color-dark-green-foreground: hsl(150 60% 85%);
   --color-dark-green-popover: hsl(150 20% 10%);
   --color-dark-green-popover-foreground: hsl(150 60% 85%);
   --color-dark-green-destructive: hsl(0 60% 50%);
@@ -108,6 +142,7 @@
   --color-light-blue-ring: hsl(210 85% 50%);
   --color-light-blue-card: hsl(210 100% 94%);
   --color-light-blue-card-foreground: hsl(210 85% 20%);
+  --color-light-blue-foreground: hsl(210 85% 20%);
   --color-light-blue-popover: hsl(210 100% 97%);
   --color-light-blue-popover-foreground: hsl(210 85% 20%);
   --color-light-blue-destructive: hsl(0 84% 60%);
@@ -130,6 +165,7 @@
   --color-dark-blue-ring: hsl(210 75% 55%);
   --color-dark-blue-card: hsl(210 25% 15%);
   --color-dark-blue-card-foreground: hsl(210 60% 85%);
+  --color-dark-blue-foreground: hsl(210 60% 85%);
   --color-dark-blue-popover: hsl(210 20% 12%);
   --color-dark-blue-popover-foreground: hsl(210 60% 85%);
   --color-dark-blue-destructive: hsl(0 60% 50%);
@@ -152,6 +188,7 @@
   --color-light-orange-ring: hsl(30 85% 55%);
   --color-light-orange-card: hsl(30 100% 94%);
   --color-light-orange-card-foreground: hsl(30 85% 20%);
+  --color-light-orange-foreground: hsl(30 85% 20%);
   --color-light-orange-popover: hsl(30 100% 97%);
   --color-light-orange-popover-foreground: hsl(30 85% 20%);
   --color-light-orange-destructive: hsl(0 84% 60%);
@@ -174,6 +211,7 @@
   --color-dark-orange-ring: hsl(30 75% 60%);
   --color-dark-orange-card: hsl(30 25% 15%);
   --color-dark-orange-card-foreground: hsl(30 60% 85%);
+  --color-dark-orange-foreground: hsl(30 60% 85%);
   --color-dark-orange-popover: hsl(30 20% 12%);
   --color-dark-orange-popover-foreground: hsl(30 60% 85%);
   --color-dark-orange-destructive: hsl(0 60% 50%);
@@ -196,6 +234,7 @@
   --color-dark-contrast-ring: hsl(200 100% 60%);
   --color-dark-contrast-card: hsl(0 0% 12%);
   --color-dark-contrast-card-foreground: hsl(0 0% 95%);
+  --color-dark-contrast-foreground: hsl(0 0% 95%);
   --color-dark-contrast-popover: hsl(0 0% 8%);
   --color-dark-contrast-popover-foreground: hsl(0 0% 95%);
   --color-dark-contrast-destructive: hsl(0 100% 70%);
@@ -223,6 +262,7 @@
   --color-ring: var(--color-light-purple-ring);
   --color-card: var(--color-light-purple-card);
   --color-card-foreground: var(--color-light-purple-card-foreground);
+  --color-foreground: var(--color-light-purple-foreground);
   --color-popover: var(--color-light-purple-popover);
   --color-popover-foreground: var(--color-light-purple-popover-foreground);
   --color-destructive: var(--color-light-purple-destructive);
@@ -252,6 +292,7 @@
   --color-ring: var(--color-dark-purple-ring);
   --color-card: var(--color-dark-purple-card);
   --color-card-foreground: var(--color-dark-purple-card-foreground);
+  --color-foreground: var(--color-dark-purple-foreground);
   --color-popover: var(--color-dark-purple-popover);
   --color-popover-foreground: var(--color-dark-purple-popover-foreground);
   --color-destructive: var(--color-dark-purple-destructive);
@@ -279,6 +320,7 @@
   --color-ring: var(--color-light-green-ring);
   --color-card: var(--color-light-green-card);
   --color-card-foreground: var(--color-light-green-card-foreground);
+  --color-foreground: var(--color-light-green-foreground);
   --color-popover: var(--color-light-green-popover);
   --color-popover-foreground: var(--color-light-green-popover-foreground);
   --color-destructive: var(--color-light-green-destructive);
@@ -301,6 +343,7 @@
   --color-ring: var(--color-dark-green-ring);
   --color-card: var(--color-dark-green-card);
   --color-card-foreground: var(--color-dark-green-card-foreground);
+  --color-foreground: var(--color-dark-green-foreground);
   --color-popover: var(--color-dark-green-popover);
   --color-popover-foreground: var(--color-dark-green-popover-foreground);
   --color-destructive: var(--color-dark-green-destructive);
@@ -323,6 +366,7 @@
   --color-ring: var(--color-light-blue-ring);
   --color-card: var(--color-light-blue-card);
   --color-card-foreground: var(--color-light-blue-card-foreground);
+  --color-foreground: var(--color-light-blue-foreground);
   --color-popover: var(--color-light-blue-popover);
   --color-popover-foreground: var(--color-light-blue-popover-foreground);
   --color-destructive: var(--color-light-blue-destructive);
@@ -345,6 +389,7 @@
   --color-ring: var(--color-dark-blue-ring);
   --color-card: var(--color-dark-blue-card);
   --color-card-foreground: var(--color-dark-blue-card-foreground);
+  --color-foreground: var(--color-dark-blue-foreground);
   --color-popover: var(--color-dark-blue-popover);
   --color-popover-foreground: var(--color-dark-blue-popover-foreground);
   --color-destructive: var(--color-dark-blue-destructive);
@@ -367,6 +412,7 @@
   --color-ring: var(--color-light-orange-ring);
   --color-card: var(--color-light-orange-card);
   --color-card-foreground: var(--color-light-orange-card-foreground);
+  --color-foreground: var(--color-light-orange-foreground);
   --color-popover: var(--color-light-orange-popover);
   --color-popover-foreground: var(--color-light-orange-popover-foreground);
   --color-destructive: var(--color-light-orange-destructive);
@@ -389,6 +435,7 @@
   --color-ring: var(--color-dark-orange-ring);
   --color-card: var(--color-dark-orange-card);
   --color-card-foreground: var(--color-dark-orange-card-foreground);
+  --color-foreground: var(--color-dark-orange-foreground);
   --color-popover: var(--color-dark-orange-popover);
   --color-popover-foreground: var(--color-dark-orange-popover-foreground);
   --color-destructive: var(--color-dark-orange-destructive);
@@ -411,6 +458,7 @@
   --color-ring: var(--color-dark-contrast-ring);
   --color-card: var(--color-dark-contrast-card);
   --color-card-foreground: var(--color-dark-contrast-card-foreground);
+  --color-foreground: var(--color-dark-contrast-foreground);
   --color-popover: var(--color-dark-contrast-popover);
   --color-popover-foreground: var(--color-dark-contrast-popover-foreground);
   --color-destructive: var(--color-dark-contrast-destructive);
@@ -419,7 +467,7 @@
 
 body {
   background-color: var(--color-background);
-  color: var(--color-card-foreground);
+  color: var(--color-foreground);
   font-family: system-ui, -apple-system, sans-serif;
 }
 
@@ -429,7 +477,7 @@ body {
 .dark-blue,
 .dark-orange,
 .dark-contrast {
-  color: var(--color-card-foreground);
+  color: var(--color-foreground);
 }
 
 /* Hide scrollbar for calendar days strip but keep scroll functionality */

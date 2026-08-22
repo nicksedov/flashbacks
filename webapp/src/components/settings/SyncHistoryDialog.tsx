@@ -6,28 +6,11 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { fetchSyncHistory } from "@/api/endpoints"
 import { useTranslation } from "@/i18n"
+import { formatDateTime } from "@/lib/format"
 import type { SyncHistoryEntry } from "@/types"
 import { Loader2, History } from "lucide-react"
 
 type PeriodPreset = "1d" | "7d" | "1m" | "custom"
-
-function formatDateTime(iso: string | null | undefined): string {
-  if (!iso) return ""
-  try {
-    let d: Date
-    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(iso)) {
-      const [datePart, timePart] = iso.split("T")
-      const [y, m, day] = datePart.split("-").map(Number)
-      const [h, min, s] = timePart.split(":").map(Number)
-      d = new Date(y, m - 1, day, h, min, s)
-    } else {
-      d = new Date(iso)
-    }
-    return d.toLocaleString()
-  } catch {
-    return iso
-  }
-}
 
 interface SyncHistoryDialogProps {
   open: boolean
@@ -92,7 +75,10 @@ export function SyncHistoryDialog({ open, onOpenChange }: SyncHistoryDialogProps
 
   useEffect(() => {
     if (open) {
+      // Fetching on dialog open intentionally sets loading state synchronously.
+      /* eslint-disable react-hooks/set-state-in-effect */
       loadHistory()
+      /* eslint-enable react-hooks/set-state-in-effect */
     }
   }, [open, loadHistory])
 

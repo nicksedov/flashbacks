@@ -12,8 +12,12 @@ import { useIntersectionObserver } from "@/hooks/useIntersectionObserver"
 import { fetchSubdirs } from "@/api/endpoints"
 import { useTranslation } from "@/i18n"
 import { Skeleton } from "@/components/ui/skeleton"
+import { ErrorBanner } from "@/components/ui/error-banner"
+import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
+import { getCommonPathPrefix, relativePath } from "@/lib/paths"
 import { ImageTile } from "./ImageTile"
+import { EmptyState } from "@/components/EmptyState"
 import type { GalleryImageDTO, SubdirEntry } from "@/types"
 
 interface GalleryFoldersViewProps {
@@ -25,44 +29,6 @@ interface GalleryFoldersViewProps {
 interface BreadcrumbSegment {
   name: string
   path: string
-}
-
-/**
- * Compute the longest common path prefix from a list of absolute paths.
- * Returns empty string if fewer than 2 paths or no common prefix beyond "/".
- * Example: ["/storage/gallery/photo", "/storage/gallery/camera"] → "/storage/gallery"
- */
-function getCommonPathPrefix(paths: string[]): string {
-  if (paths.length < 2) return ""
-
-  const parts = paths.map((p) => p.split("/").filter(Boolean))
-  const minLen = Math.min(...parts.map((p) => p.length))
-
-  if (minLen === 0) return ""
-
-  let commonCount = 0
-  for (let i = 0; i < minLen; i++) {
-    const segment = parts[0][i]
-    if (parts.every((p) => p[i] === segment)) {
-      commonCount++
-    } else {
-      break
-    }
-  }
-
-  if (commonCount === 0) return ""
-  return "/" + parts[0].slice(0, commonCount).join("/")
-}
-
-/**
- * Compute the relative path by stripping the base prefix.
- * Returns the path unchanged if basePath is empty or path doesn't start with it.
- */
-function relativePath(path: string, basePath: string): string {
-  if (!basePath) return path
-  if (!path.startsWith(basePath)) return path
-  const rel = path.slice(basePath.length)
-  return rel.startsWith("/") ? rel.slice(1) : rel
 }
 
 /**
@@ -216,19 +182,21 @@ export function GalleryFoldersView(props: GalleryFoldersViewProps) {
       {/* Breadcrumbs + Up button bar */}
       <div className="flex items-center gap-2 flex-wrap min-h-9">
         {/* Root home button */}
-        <button
+        <Button
           type="button"
+          variant="ghost"
+          size="sm"
           onClick={handleGoRoot}
           className={cn(
-            "inline-flex items-center gap-1 rounded-md px-2 py-1 text-sm transition-colors",
+            "h-8 gap-1 px-2",
             currentPath === null
-              ? "bg-primary/10 text-primary font-medium"
+              ? "bg-primary/10 text-primary font-medium hover:bg-primary/10"
               : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
           )}
           title={homeTitle}
         >
           <Home className="h-4 w-4" />
-        </button>
+        </Button>
 
         {/* Breadcrumbs */}
         {breadcrumbs.map((segment, idx) => {
@@ -236,43 +204,43 @@ export function GalleryFoldersView(props: GalleryFoldersViewProps) {
           return (
             <span key={segment.path} className="flex items-center gap-1">
               <ChevronRight className="h-3 w-3 text-muted-foreground flex-shrink-0" />
-              <button
+              <Button
                 type="button"
+                variant="ghost"
+                size="sm"
                 onClick={() => handleBreadcrumbClick(segment.path)}
                 className={cn(
-                  "rounded-md px-2 py-1 text-sm transition-colors truncate max-w-[200px]",
+                  "h-8 truncate max-w-[200px] px-2",
                   isLast
-                    ? "bg-primary/10 text-primary font-medium"
+                    ? "bg-primary/10 text-primary font-medium hover:bg-primary/10"
                     : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
                 )}
                 title={segment.path}
               >
                 {segment.name}
-              </button>
+              </Button>
             </span>
           )
         })}
 
         {/* Up button (only when inside a folder) */}
         {currentPath !== null && (
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="sm"
             onClick={handleGoUp}
-            className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors ml-auto"
+            className="ml-auto h-8 gap-1 px-2 text-muted-foreground"
             title={t("gallery.folders.upOneLevel")}
           >
             <ArrowUp className="h-4 w-4" />
             <span className="hidden sm:inline">{t("gallery.folders.up")}</span>
-          </button>
+          </Button>
         )}
       </div>
 
       {/* Error state */}
-      {imagesError && (
-        <div className="rounded-lg border border-destructive/20 bg-destructive/10 p-4 text-sm text-destructive">
-          {imagesError}
-        </div>
-      )}
+      {imagesError && <ErrorBanner message={imagesError} />}
 
       {/* Loading state */}
       {isLoading && currentPath !== null && (
@@ -296,12 +264,11 @@ export function GalleryFoldersView(props: GalleryFoldersViewProps) {
 
       {/* Inside folder: show subfolders + images */}
       {currentPath !== null && !isLoading && subdirs.length === 0 && images.length === 0 && (
-        <div className="rounded-lg border border-dashed p-12 text-center">
-          <FolderOpen className="mx-auto h-10 w-10 text-muted-foreground/50" />
-          <p className="mt-2 text-sm font-medium text-muted-foreground">
-            {t("gallery.folders.emptyFolder")}
-          </p>
-        </div>
+        <EmptyState
+          bordered
+          icon={FolderOpen}
+          title={t("gallery.folders.emptyFolder")}
+        />
       )}
 
       {currentPath !== null && !isLoading && (subdirs.length > 0 || images.length > 0) && (
@@ -368,11 +335,12 @@ function RootFoldersGrid({ folders, basePath, onEnterFolder, emptyText, emptyHin
 
   if (folders.length === 0) {
     return (
-      <div className="rounded-lg border border-dashed p-12 text-center">
-        <Folder className="mx-auto h-10 w-10 text-muted-foreground/50" />
-        <p className="mt-2 text-sm font-medium text-muted-foreground">{emptyText}</p>
-        <p className="text-xs text-muted-foreground/70">{emptyHint}</p>
-      </div>
+      <EmptyState
+        bordered
+        icon={Folder}
+        title={emptyText}
+        description={emptyHint}
+      />
     )
   }
 

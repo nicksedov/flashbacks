@@ -13,6 +13,7 @@ import { useScanStatus } from "@/hooks/useScanStatus"
 import { triggerScan } from "@/api/endpoints"
 import { DEFAULT_PAGE_SIZE } from "@/lib/constants"
 import { Skeleton } from "@/components/ui/skeleton"
+import { ErrorBanner } from "@/components/ui/error-banner"
 import { useTranslation } from "@/i18n"
 import type { FileDTO } from "@/types"
 
@@ -99,11 +100,7 @@ export function DeduplicationTab() {
 
       <ScanProgressBanner status={status} />
 
-      {error && (
-        <div className="rounded-lg border border-destructive/20 bg-destructive/10 p-4 text-sm text-destructive">
-          {error}
-        </div>
-      )}
+      {error && <ErrorBanner message={error} />}
 
       {isLoading ? (
         <div className="space-y-3">

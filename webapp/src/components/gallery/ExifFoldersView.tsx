@@ -2,11 +2,13 @@ import { useEffect } from "react"
 import { useTranslation } from "@/i18n"
 import { FileWarning } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
+import { ErrorBanner } from "@/components/ui/error-banner"
 import { ViewHeader } from "@/components/ui/view-header"
 import { PaginationFooter } from "@/components/ui/pagination-footer"
 import { useIntersectionObserver } from "@/hooks/useIntersectionObserver"
 import { useExifImages } from "@/hooks/useExifImages"
 import type { GalleryImageDTO } from "@/types"
+import { EmptyState } from "@/components/EmptyState"
 import { ExifImageGrid } from "./ExifImageGrid"
 
 interface ExifFoldersViewProps {
@@ -43,11 +45,7 @@ export function ExifFoldersView({ onImageClick, onImageDownload, onImageDelete, 
         />
       </div>
 
-      {error && (
-        <div className="rounded-lg border border-destructive/20 bg-destructive/10 p-4 text-sm text-destructive">
-          {error}
-        </div>
-      )}
+      {error && <ErrorBanner message={error} />}
 
       {!initialized ? (
         <div className="space-y-3">
@@ -56,15 +54,12 @@ export function ExifFoldersView({ onImageClick, onImageDownload, onImageDelete, 
           ))}
         </div>
       ) : images.length === 0 && !isLoading ? (
-        <div className="rounded-lg border border-dashed p-12 text-center">
-          <FileWarning className="mx-auto h-10 w-10 text-muted-foreground/50" />
-          <p className="mt-2 text-sm font-medium text-muted-foreground">
-            {t("exif.empty")}
-          </p>
-          <p className="text-xs text-muted-foreground/70">
-            {t("exif.emptyHint")}
-          </p>
-        </div>
+        <EmptyState
+          bordered
+          icon={FileWarning}
+          title={t("exif.empty")}
+          description={t("exif.emptyHint")}
+        />
       ) : (
         <>
           <ExifImageGrid

@@ -1,4 +1,5 @@
 import { useCallback, useState } from "react"
+import { toast } from "sonner"
 import { UnifiedLightbox } from "@/components/gallery/UnifiedLightbox"
 import { ExifFoldersView } from "@/components/gallery/ExifFoldersView"
 import {
@@ -13,6 +14,7 @@ import { Button } from "@/components/ui/button"
 import { deleteFiles } from "@/api/endpoints"
 import { useSettings } from "@/providers/useSettings"
 import { useTranslation } from "@/i18n"
+import { downloadImage } from "@/lib/download"
 import type { GalleryImageDTO } from "@/types"
 
 export function ExifTab() {
@@ -47,23 +49,18 @@ export function ExifTab() {
       deleteConfirm.removeThumbnail()
     } catch (err) {
       console.error("Failed to delete file:", err)
-      alert("Failed to delete file")
+      toast.error(t("deleteFiles.errorFailed"))
     } finally {
       setIsDeleting(false)
       setDeleteConfirm(null)
     }
-  }, [deleteConfirm, trashDir])
+  }, [deleteConfirm, trashDir, t])
 
   return (
     <>
       <ExifFoldersView
         onImageClick={handleImageClick}
-        onImageDownload={(image) => {
-          const link = document.createElement("a")
-          link.href = `/api/image?path=${encodeURIComponent(image.path)}`
-          link.download = image.fileName
-          link.click()
-        }}
+        onImageDownload={(image) => downloadImage(image.path, image.fileName)}
         onImageDelete={handleImageDelete}
         onAddGeo={handleAddGeo}
       />

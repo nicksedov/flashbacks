@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dialog"
 import { Folder, Trash2, FileImage } from "lucide-react"
 import { useTranslation } from "@/i18n"
+import { EmptyState } from "@/components/EmptyState"
 import type { GalleryFolderDTO } from "@/types"
 
 interface FolderListProps {
@@ -45,15 +46,12 @@ export function FolderList({ folders, onRemove, isLoading }: FolderListProps) {
 
   if (folders.length === 0) {
     return (
-      <div className="rounded-lg border border-dashed p-8 text-center">
-        <Folder className="mx-auto h-10 w-10 text-muted-foreground/50" />
-        <p className="mt-2 text-sm font-medium text-muted-foreground">
-          {t("folderList.empty")}
-        </p>
-        <p className="text-xs text-muted-foreground/70">
-          {t("folderList.emptyHint")}
-        </p>
-      </div>
+      <EmptyState
+        size="sm"
+        icon={Folder}
+        title={t("folderList.empty")}
+        description={t("folderList.emptyHint")}
+      />
     )
   }
 

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
+import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -16,6 +17,7 @@ import { SyncHistoryDialog } from "@/components/settings/SyncHistoryDialog"
 import { useSettings } from "@/providers/useSettings"
 import { RefreshCw, Trash2, Loader2, Zap, DatabaseZap, DatabaseBackup, Database, Clock, History } from "lucide-react"
 import { useTranslation, type TranslationKey } from "@/i18n"
+import { formatDateTime } from "@/lib/format"
 import type { SyncStatusResponse } from "@/types"
 
 // Weekday order for UI: Mon, Tue, Wed, Thu, Fri, Sat, Sun (Go time.Weekday: 1,2,3,4,5,6,0)
@@ -37,26 +39,6 @@ function syncDaysToString(days: boolean[]): string {
     .map((checked, i) => (checked ? String(i) : ""))
     .filter(Boolean)
     .join(",")
-}
-
-function formatDateTime(iso: string | null | undefined): string {
-  if (!iso) return ""
-  try {
-    // If the string has no timezone offset (naive ISO from backend pre-formatted
-    // in user's timezone), parse as local time to avoid double-conversion.
-    let d: Date
-    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(iso)) {
-      const [datePart, timePart] = iso.split("T")
-      const [y, m, day] = datePart.split("-").map(Number)
-      const [h, min, s] = timePart.split(":").map(Number)
-      d = new Date(y, m - 1, day, h, min, s)
-    } else {
-      d = new Date(iso)
-    }
-    return d.toLocaleString()
-  } catch {
-    return iso
-  }
 }
 
 export function AdminGeneralTab() {
@@ -81,6 +63,8 @@ export function AdminGeneralTab() {
   const [isThumbnailLoading, setIsThumbnailLoading] = useState(false)
   const [isSavingThumbnailCache, setIsSavingThumbnailCache] = useState(false)
   const [thumbnailCachePath, setThumbnailCachePath] = useState("")
+  const [clearCacheConfirmOpen, setClearCacheConfirmOpen] = useState(false)
+  const [cleanTrashConfirmOpen, setCleanTrashConfirmOpen] = useState(false)
 
   // Daily Sync Schedule state
   const [syncDays, setSyncDays] = useState<boolean[]>([false, true, true, true, true, true, false]) // index 0=Sun,1=Mon..6=Sat
@@ -209,10 +193,13 @@ export function AdminGeneralTab() {
     }
   }, [loadThumbnailCacheStats, t])
 
-  const handleClearThumbnailCache = useCallback(async () => {
+  const handleClearThumbnailCache = useCallback(() => {
     if (!thumbnailCacheStats?.totalFiles) return
-    if (!window.confirm(t("adminPanel.thumbnailCache.clearConfirm", { count: thumbnailCacheStats.totalFiles }))) return
+    setClearCacheConfirmOpen(true)
+  }, [thumbnailCacheStats])
 
+  const executeClearThumbnailCache = useCallback(async () => {
+    setClearCacheConfirmOpen(false)
     try {
       await invalidateAllThumbnails()
       toast.success(t("adminPanel.thumbnailCache.cleared"))
@@ -220,7 +207,7 @@ export function AdminGeneralTab() {
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t("adminPanel.thumbnailCache.clearFailed"))
     }
-  }, [thumbnailCacheStats, loadThumbnailCacheStats, t])
+  }, [loadThumbnailCacheStats, t])
 
   const handleSaveSchedule = useCallback(async () => {
     setIsSavingSchedule(true)
@@ -278,10 +265,13 @@ export function AdminGeneralTab() {
     }
   }, [exifBackupInput, t])
 
-  const handleCleanTrash = useCallback(async () => {
+  const handleCleanTrash = useCallback(() => {
     if (trashFileCount === 0) return
-    if (!window.confirm(t("trash.cleanConfirm", { count: trashFileCount }))) return
+    setCleanTrashConfirmOpen(true)
+  }, [trashFileCount])
 
+  const executeCleanTrash = useCallback(async () => {
+    setCleanTrashConfirmOpen(false)
     setIsCleaning(true)
     try {
       const result = await cleanTrash()
@@ -292,7 +282,7 @@ export function AdminGeneralTab() {
     } finally {
       setIsCleaning(false)
     }
-  }, [trashFileCount, loadTrashInfo, t])
+  }, [loadTrashInfo, t])
 
   const handleAdd = useCallback(
     async (path: string) => {
@@ -377,13 +367,14 @@ export function AdminGeneralTab() {
     <div className="space-y-6">
       {/* Gallery Folder Management */}
       <Card>
-        <CardHeader>
-          <CardTitle>{t("settings.galleryFolders")}</CardTitle>
-          <CardDescription>{t("settings.galleryFoldersDescription")}</CardDescription>
+        <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0">
+          <div>
+            <CardTitle>{t("settings.galleryFolders")}</CardTitle>
+            <CardDescription>{t("settings.galleryFoldersDescription")}</CardDescription>
+          </div>
+          <AddFolderForm onAdd={handleAdd} disabled={status.scanning} />
         </CardHeader>
         <CardContent className="space-y-4">
-          <AddFolderForm onAdd={handleAdd} disabled={status.scanning} />
-
           <ScanProgressBanner status={status} />
 
           <div className="flex items-center justify-between gap-2">
@@ -771,6 +762,29 @@ export function AdminGeneralTab() {
           </div>
         </CardContent>
       </Card>
+
+      <ConfirmDialog
+        open={clearCacheConfirmOpen}
+        onOpenChange={(open) => setClearCacheConfirmOpen(open)}
+        title={t("adminPanel.thumbnailCache.clearButton")}
+        description={thumbnailCacheStats ? t("adminPanel.thumbnailCache.clearConfirm", { count: thumbnailCacheStats.totalFiles }) : ""}
+        confirmLabel={t("common.delete")}
+        cancelLabel={t("common.cancel")}
+        onConfirm={() => void executeClearThumbnailCache()}
+        destructive
+      />
+
+      <ConfirmDialog
+        open={cleanTrashConfirmOpen}
+        onOpenChange={(open) => !isCleaning && setCleanTrashConfirmOpen(open)}
+        title={t("trash.cleanButton")}
+        description={t("trash.cleanConfirm", { count: trashFileCount })}
+        confirmLabel={isCleaning ? t("trash.cleaning") : t("trash.cleanButton")}
+        cancelLabel={t("common.cancel")}
+        onConfirm={() => void executeCleanTrash()}
+        loading={isCleaning}
+        destructive
+      />
     </div>
   )
 }

@@ -1,6 +1,7 @@
 import { useMemo } from "react"
 import { useTranslation } from "@/i18n"
 import { Folder } from "lucide-react"
+import { getBaseName } from "@/lib/paths"
 import type { GalleryImageDTO } from "@/types"
 import { ExifImageTile } from "./ExifImageTile"
 
@@ -10,12 +11,6 @@ interface ExifImageGridProps {
   onImageDownload?: (image: GalleryImageDTO) => void
   onImageDelete?: (image: GalleryImageDTO) => void
   onAddGeo?: (image: GalleryImageDTO) => void
-}
-
-function getFolderName(dirPath: string): string {
-  const normalized = dirPath.replace(/\\/g, "/").replace(/\/+$/, "")
-  const lastSlash = normalized.lastIndexOf("/")
-  return lastSlash >= 0 ? normalized.substring(lastSlash + 1) : normalized
 }
 
 export function ExifImageGrid({ images, onImageClick, onImageDownload, onImageDelete, onAddGeo }: ExifImageGridProps) {
@@ -38,7 +33,7 @@ export function ExifImageGrid({ images, onImageClick, onImageDownload, onImageDe
     for (const dir of order) {
       groups.push({
         dirPath: dir,
-        folderName: getFolderName(dir),
+        folderName: getBaseName(dir),
         images: map.get(dir)!,
       })
     }

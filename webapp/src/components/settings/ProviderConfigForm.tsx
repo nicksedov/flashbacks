@@ -3,16 +3,16 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Loader2, RefreshCw, Trash2, Pencil, X } from "lucide-react"
-import { useTranslation } from "@/i18n"
+import { useTranslation, type TranslationKey } from "@/i18n"
 import type { LlmProviderDTO, LlmModelDTO, LlmProviderType } from "@/types"
 
-// Provider type display labels
-const PROVIDER_LABELS: Record<LlmProviderType, string> = {
-  ollama: "Ollama",
-  ollama_cloud: "Ollama Cloud",
-  openai: "OpenAI API compatible",
-  deepseek: "DeepSeek",
-  alibaba: "Alibaba Cloud",
+// Provider type display label translation keys
+const PROVIDER_LABEL_KEYS: Record<LlmProviderType, TranslationKey> = {
+  ollama: "llm_providers.typeOllama",
+  ollama_cloud: "llm_providers.typeOllamaCloud",
+  openai: "llm_providers.typeOpenai",
+  deepseek: "llm_providers.typeDeepseek",
+  alibaba: "llm_providers.typeAlibaba",
 }
 
 interface ProviderConfigFormProps {
@@ -49,7 +49,8 @@ export function ProviderConfigForm({
     setEditingAlias(provider.alias)
   }
 
-  const getProviderLabel = (name: LlmProviderType): string => PROVIDER_LABELS[name] ?? name
+  const getProviderLabel = (name: LlmProviderType): string =>
+    PROVIDER_LABEL_KEYS[name] ? t(PROVIDER_LABEL_KEYS[name]) : name
 
   return (
     <div className="space-y-4 rounded-lg border p-4">
@@ -138,7 +139,7 @@ export function ProviderConfigForm({
       {/* API URL (hidden for ollama_cloud — predefined) */}
       {provider.name !== "ollama_cloud" && (
         <div className="space-y-2">
-          <Label htmlFor={`${namePrefix}-apiurl`}>API URL</Label>
+          <Label htmlFor={`${namePrefix}-apiurl`}>{t("llm_providers.apiUrl")}</Label>
           <Input
             id={`${namePrefix}-apiurl`}
             placeholder={
@@ -157,12 +158,12 @@ export function ProviderConfigForm({
       {/* API Key (only for providers that require key auth) */}
       {(provider.name === "openai" || provider.name === "ollama_cloud" || provider.name === "alibaba") && (
         <div className="space-y-2">
-          <Label htmlFor={`${namePrefix}-apikey`}>API Key</Label>
+          <Label htmlFor={`${namePrefix}-apikey`}>{t("llm_providers.apiKey")}</Label>
           <Input
             id={`${namePrefix}-apikey`}
             type="password"
             autoComplete="new-password"
-            placeholder="sk-..."
+            placeholder={t("llm_providers.apiKeyPlaceholder")}
             value={provider.apiKey}
             onChange={(e) => onFieldChange(provider.alias, "apiKey", e.target.value)}
           />

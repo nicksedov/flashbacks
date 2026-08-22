@@ -51,26 +51,3 @@ export function useIntersectionObserver({
 
   return sentinelRef
 }
-
-/**
- * Hook for managing pagination footer state.
- * Provides loading and "all loaded" indicators.
- */
-export interface PaginationFooterProps {
-  isLoading: boolean
-  hasMore: boolean
-  totalCount: number
-  loadingText?: string
-  allLoadedText?: string
-}
-
-export function usePaginationFooter({
-  isLoading,
-  hasMore,
-  totalCount,
-}: Pick<PaginationFooterProps, 'isLoading' | 'hasMore' | 'totalCount'>) {
-  const showLoading = isLoading
-  const showAllLoaded = !hasMore && totalCount > 0
-
-  return { showLoading, showAllLoaded }
-}

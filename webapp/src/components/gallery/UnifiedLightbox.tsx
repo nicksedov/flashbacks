@@ -20,7 +20,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
 import { Camera, MapPin, MapPinPlus, Image as ImageIcon, Pencil, FileText } from "lucide-react"
 import { GeoSearchForm } from "./GeoSearchForm"
-import { UnderlineTabs } from "@/components/ui/underline-tabs"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import type { ImageMetadataDTO } from "@/types"
 
 export type LightboxMode = "ai" | "exif" | "ocr" | "tags"
@@ -79,8 +79,13 @@ export function UnifiedLightbox({
     setInternalShowGeoForm(false)
     setStandardImageLoaded(false)
     setEnhancedPath(null)
-    processedEnhanceRef.current = new Set()
   }
+
+  // Reset the enhancement-processing dedupe cache when the image changes.
+  // Kept in an effect because refs must not be mutated during render.
+  useEffect(() => {
+    processedEnhanceRef.current = new Set()
+  }, [imagePath, initialMode])
 
   // OCR state
   const { ocrData, llmData, loading: ocrLoading, recognizing, resetState: resetOcr, handleRecognize } = useOcrState(
@@ -169,7 +174,9 @@ export function UnifiedLightbox({
     handleShowGeoForm(false)
   }, [reloadMetadata, handleShowGeoForm])
 
-  // Watch for completed enhance_image_quality tool calls
+  // Watch for completed enhance_image_quality tool calls.
+  // The state updates here intentionally mirror the external message stream
+  // (a new completed tool call), so the set-state-in-effect rule is disabled.
   useEffect(() => {
     for (const msg of messages) {
       if (msg.role !== "assistant" || !msg.toolCalls) continue
@@ -179,6 +186,7 @@ export function UnifiedLightbox({
           const key = `${msg.id}-${i}`
           if (!processedEnhanceRef.current.has(key)) {
             processedEnhanceRef.current.add(key)
+            /* eslint-disable react-hooks/set-state-in-effect */
             setStandardImageVersion(v => v + 1)
             // Parse the JSON result to extract enhanced path
             try {
@@ -189,6 +197,7 @@ export function UnifiedLightbox({
             } catch {
               // Result is not JSON (legacy format or no_change status)
             }
+            /* eslint-enable react-hooks/set-state-in-effect */
           }
         }
       }
@@ -314,7 +323,18 @@ export function UnifiedLightbox({
 
         {/* Right: Panel with mode tabs */}
         <div className="w-full md:w-[400px] lg:w-[450px] md:min-w-[320px] border-t md:border-t-0 md:border-l bg-card h-full shrink-0 flex flex-col">
-          <UnderlineTabs tabs={TAB_CONFIG} value={activeMode} onValueChange={setActiveMode} />
+          <div className="pt-2">
+            <Tabs variant="underline" value={activeMode} onValueChange={(v) => setActiveMode(v as LightboxMode)}>
+              <TabsList>
+                {TAB_CONFIG.map(({ id, labelKey, icon: Icon }) => (
+                  <TabsTrigger key={id} value={id}>
+                    <Icon className="h-3.5 w-3.5" />
+                    {t(labelKey)}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+            </Tabs>
+          </div>
 
           {/* Panel content */}
           <div className="flex-1 min-h-0 overflow-hidden flex flex-col">

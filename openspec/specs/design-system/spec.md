@@ -52,6 +52,11 @@ The webapp SHALL expose exactly one `Select` primitive and one set of tab semant
 - **WHEN** a new dropdown, select, or tabbed section is needed
 - **THEN** exactly one shared primitive exists and is reused rather than copied
 
+#### Scenario: Underline tabs have no divider under the tab set
+
+- **WHEN** a `Tabs` with the `underline` variant renders a set of tabs (for example, admin settings "Основные", "Инструменты анализа", "LLM провайдеры")
+- **THEN** there is no horizontal divider line under the set of tabs; the active tab is indicated only by its own bottom underline
+
 ### Requirement: Dialog surface uses tokens
 
 Dialog and popover surfaces SHALL derive their background and text colors from design tokens (`bg-popover`/`text-popover-foreground` or `bg-card`/`text-card-foreground`). Components MUST NOT branch on the active theme name to hardcode surfaces (for example, `bg-white/90` for light and `bg-black/90` for dark).

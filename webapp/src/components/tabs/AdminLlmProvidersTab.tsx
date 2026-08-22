@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
+import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -363,10 +364,18 @@ export function AdminLlmProvidersTab() {
     [editingAliasValue, editingApiUrl, editingApiKey, llmSettings?.providers, loadSettings, t, modelCache],
   )
 
+  const [deleteAlias, setDeleteAlias] = useState<string | null>(null)
+
   // Delete provider
-  const handleDeleteProvider = useCallback(
-    async (alias: string) => {
-      if (!confirm(t("llm_providers.deleteConfirm", { alias }))) return
+  const handleDeleteProvider = useCallback((alias: string) => {
+    setDeleteAlias(alias)
+  }, [])
+
+  const executeDeleteProvider = useCallback(
+    async () => {
+      const alias = deleteAlias
+      if (!alias) return
+      setDeleteAlias(null)
 
       // Check if provider is in use by any instrument
       if (llmSettings) {
@@ -402,7 +411,7 @@ export function AdminLlmProvidersTab() {
         setIsSaving(false)
       }
     },
-    [llmSettings, expandedProviderAlias, loadSettings, t],
+    [deleteAlias, llmSettings, expandedProviderAlias, loadSettings, t],
   )
 
   const getProviderLabel = (name: LlmProviderType): string => PROVIDER_LABELS[name] ?? name
@@ -531,7 +540,7 @@ export function AdminLlmProvidersTab() {
 
                         {provider.name !== "ollama_cloud" && (
                           <div className="space-y-2">
-                            <Label>API URL</Label>
+                            <Label>{t("llm_providers.apiUrl")}</Label>
                             <Input
                               value={editingApiUrl}
                               onChange={(e) => setEditingApiUrl(e.target.value)}
@@ -551,14 +560,14 @@ export function AdminLlmProvidersTab() {
 
                         {(provider.name === "openai" || provider.name === "ollama_cloud" || provider.name === "deepseek" || provider.name === "alibaba") && (
                           <div className="space-y-2">
-                            <Label>API Key</Label>
+                            <Label>{t("llm_providers.apiKey")}</Label>
                             <Input
                               type="password"
                               autoComplete="new-password"
                               value={editingApiKey}
                               onChange={(e) => setEditingApiKey(e.target.value)}
                               disabled={isSaving}
-                              placeholder="sk-..."
+                              placeholder={t("llm_providers.apiKeyPlaceholder")}
                             />
                           </div>
                         )}
@@ -696,7 +705,7 @@ export function AdminLlmProvidersTab() {
                   {/* API URL */}
                   {newProviderType !== "ollama_cloud" && (
                     <div className="space-y-2">
-                      <Label htmlFor="new-apiurl">API URL</Label>
+                      <Label htmlFor="new-apiurl">{t("llm_providers.apiUrl")}</Label>
                       <Input
                         id="new-apiurl"
                         placeholder={
@@ -720,7 +729,7 @@ export function AdminLlmProvidersTab() {
                     newProviderType === "deepseek" ||
                     newProviderType === "alibaba") && (
                     <div className="space-y-2">
-                      <Label htmlFor="new-apikey">API Key</Label>
+                      <Label htmlFor="new-apikey">{t("llm_providers.apiKey")}</Label>
                       <Input
                         id="new-apikey"
                         type="password"
@@ -775,6 +784,18 @@ export function AdminLlmProvidersTab() {
           </Card>
         </>
       )}
+
+      <ConfirmDialog
+        open={deleteAlias !== null}
+        onOpenChange={(open) => !isSaving && !open && setDeleteAlias(null)}
+        title={t("llm_providers.deleteTitle")}
+        description={deleteAlias ? t("llm_providers.deleteConfirm", { alias: deleteAlias }) : ""}
+        confirmLabel={isSaving ? t("common.saving") : t("common.delete")}
+        cancelLabel={t("common.cancel")}
+        onConfirm={() => void executeDeleteProvider()}
+        loading={isSaving}
+        destructive
+      />
     </div>
   )
 }

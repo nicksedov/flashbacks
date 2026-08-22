@@ -64,6 +64,11 @@ webui/
 - Theme variables defined in `src/theme/`
 - Dark mode support via CSS variables
 
+### Design System
+
+- The authoritative design system spec lives at [`openspec/specs/design-system/spec.md`](../openspec/specs/design-system/spec.md). Consult it before implementing any UI — tokens, component primitives and variants, layout/positioning, interaction patterns, responsive behavior, theming, and accessibility.
+- The living audit trail of known UI drift vs the spec is tracked in [`docs/design-system.md`](../docs/design-system.md).
+
 ## TypeScript Guidelines
 
 ### DO

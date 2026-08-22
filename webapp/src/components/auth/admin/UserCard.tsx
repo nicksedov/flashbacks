@@ -43,10 +43,14 @@ export function UserCard({
           <Badge variant={user.role === "admin" ? "default" : "secondary"}>
             {user.role === "admin" ? t("adminPanel.roleAdmin") : t("adminPanel.roleUser")}
           </Badge>
-          <AccountStatusBadge status={user.accountStatus} />
-          <Badge variant={user.isActive ? "outline" : "destructive"}>
-            {user.isActive ? t("adminPanel.statusActive") : t("adminPanel.statusDisabled")}
-          </Badge>
+          {/* accountStatus (approval) and isActive (enable/disable) are separate concepts:
+              avoid rendering the same "Активен" label twice for approved+enabled users. */}
+          {user.accountStatus !== "active" && <AccountStatusBadge status={user.accountStatus} />}
+          {user.accountStatus === "active" && (
+            <Badge variant={user.isActive ? "outline" : "destructive"}>
+              {user.isActive ? t("adminPanel.statusActive") : t("adminPanel.statusDisabled")}
+            </Badge>
+          )}
           {!isCurrentUser && (
             <>
               <Button variant="ghost" size="icon" onClick={onEdit}>

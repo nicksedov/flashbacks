@@ -6,7 +6,7 @@ import { Loader2, ShieldAlert, WifiOff } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card"
 import { useTranslation } from "@/i18n"
 
 const HEALTH_CHECK_INTERVAL_MS = 5000
@@ -159,16 +159,11 @@ export function LoginScreen() {
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-background to-muted p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-2 text-center">
-          <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-            <ShieldAlert className="h-6 w-6 text-primary" />
-          </div>
-          <CardTitle className="text-2xl font-bold">
-            {isBootstrapMode
-              ? t("adminPanel.bootstrapTitle")
-              : isRegisterMode
-                ? t("adminPanel.registerTitle")
-                : t("adminPanel.loginTitle")}
-          </CardTitle>
+          <img
+            src="/flashbacks_logo_welcomescreen.png"
+            alt="Flashbacks"
+            className="mx-auto mb-2 w-72 max-w-full h-auto object-contain"
+          />
           <CardDescription>
             {isBootstrapMode
               ? t("adminPanel.bootstrapDescAdmin")

@@ -128,7 +128,13 @@
     "delete_failed": "Failed to delete file from trash",
     "restore_failed": "Failed to restore file from trash",
     "restored": "File restored successfully",
-    "file_deleted": "File permanently deleted"
+    "file_deleted": "File permanently deleted",
+    "id_required": "Trash item ID is required",
+    "item_not_found": "Trash item not found",
+    "restore_no_original_path": "Cannot restore: the original location of this file is unknown",
+    "invalid_cursor": "Invalid trash list cursor",
+    "access_denied": "Access to this file is denied",
+    "clean_failed": "Failed to clean trash"
   },
 
   "description_gallery": "Gallery messages",

@@ -791,49 +791,58 @@ paths:
               schema:
                 $ref: "#/components/schemas/CleanTrashResponse"
 
-  /api/trash-list:
+  /api/trash:
     get:
-      summary: List files in trash
-      operationId: listTrashFiles
+      summary: List trash items grouped by deletion date
+      operationId: getTrash
       parameters:
-        - name: page
+        - name: cursor
           in: query
+          required: false
           schema:
-            type: integer
-            default: 1
+            type: string
+          description: Cursor for cursor-based pagination
         - name: pageSize
           in: query
+          required: false
           schema:
             type: integer
             default: 50
       responses:
         "200":
-          description: Trash files list
+          description: Trash items grouped by deletion date (newest first)
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  files:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        name:
-                          type: string
-                        path:
-                          type: string
-                        deletedAt:
-                          type: string
-                          format: date-time
-                        size:
-                          type: integer
-                  total:
-                    type: integer
+                $ref: "#/components/schemas/TrashListResponse"
+
+  /api/trash/image:
+    get:
+      summary: Serve a full-size image from the trash directory (lightbox)
+      operationId: getTrashImage
+      parameters:
+        - name: path
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Absolute path of the trashed file
+      responses:
+        "200":
+          description: Image file
+          content:
+            image/*:
+              schema:
+                type: string
+                format: binary
+        "403":
+          description: Path is outside the configured trash directory
+        "404":
+          description: Image not found
 
   /api/trash-restore:
     post:
-      summary: Restore file from trash
+      summary: Restore a trashed file to its original location by id
       operationId: restoreTrashFile
       requestBody:
         required: true
@@ -841,17 +850,32 @@ paths:
           application/json:
             schema:
               type: object
-              required: [path]
+              required: [id]
               properties:
-                path:
-                  type: string
+                id:
+                  type: integer
       responses:
         "200":
-          description: File restored
+          description: File restored to its original location
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  restoredPath:
+                    type: string
+        "400":
+          description: Missing id or original path unknown
+        "404":
+          description: Trash item not found
 
   /api/trash-delete:
     post:
-      summary: Permanently delete file from trash
+      summary: Permanently delete a trashed file by id
       operationId: deleteTrashFile
       requestBody:
         required: true
@@ -859,13 +883,17 @@ paths:
           application/json:
             schema:
               type: object
-              required: [path]
+              required: [id]
               properties:
-                path:
-                  type: string
+                id:
+                  type: integer
       responses:
         "200":
           description: File permanently deleted
+        "400":
+          description: Missing id
+        "404":
+          description: Trash item not found
 
   # ──────────────────────────────────────────────
   #  Image Metadata & GPS
@@ -2289,9 +2317,8 @@ components:
         syncTimezoneOffset:
           type: integer
         lastSyncAt:
-          type: string
+          type: [string, "null"]
           format: date-time
-          nullable: true
         lastSyncNew:
           type: integer
         lastSyncUpdated:
@@ -2305,32 +2332,23 @@ components:
       type: object
       properties:
         trashDir:
-          type: string
-          nullable: true
+          type: [string, "null"]
         exifBackupDir:
-          type: string
-          nullable: true
+          type: [string, "null"]
         thumbnailCachePath:
-          type: string
-          nullable: true
+          type: [string, "null"]
         thumbnailCacheSize:
-          type: integer
-          nullable: true
+          type: [integer, "null"]
         ocrConcurrentRequests:
-          type: integer
-          nullable: true
+          type: [integer, "null"]
         syncDays:
-          type: string
-          nullable: true
+          type: [string, "null"]
         dailySyncHour:
-          type: integer
-          nullable: true
+          type: [integer, "null"]
         dailySyncMinute:
-          type: integer
-          nullable: true
+          type: [integer, "null"]
         syncTimezoneOffset:
-          type: integer
-          nullable: true
+          type: [integer, "null"]
 
     UserSettingsDTO:
       type: object
@@ -2361,9 +2379,8 @@ components:
         running:
           type: boolean
         lastSyncAt:
-          type: string
+          type: [string, "null"]
           format: date-time
-          nullable: true
         lastSyncNew:
           type: integer
         lastSyncUpdated:
@@ -2469,6 +2486,59 @@ components:
       properties:
         deleted:
           type: integer
+        failed:
+          type: integer
+
+    TrashItemDTO:
+      type: object
+      properties:
+        id:
+          type: integer
+        fileName:
+          type: string
+        trashPath:
+          type: string
+        originalPath:
+          type: string
+        size:
+          type: integer
+        sizeHuman:
+          type: string
+        deletedAt:
+          type: string
+          format: date-time
+        thumbnail:
+          type: string
+
+    TrashDateGroup:
+      type: object
+      properties:
+        date:
+          type: string
+        label:
+          type: string
+        itemCount:
+          type: integer
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/TrashItemDTO"
+
+    TrashListResponse:
+      type: object
+      properties:
+        groups:
+          type: array
+          items:
+            $ref: "#/components/schemas/TrashDateGroup"
+        totalItems:
+          type: integer
+        totalGroups:
+          type: integer
+        hasMore:
+          type: boolean
+        nextCursor:
+          type: string
 
     ImageMetadataResponse:
       type: object
@@ -2476,8 +2546,7 @@ components:
         found:
           type: boolean
         metadata:
-          type: object
-          nullable: true
+          type: [object, "null"]
           properties:
             width:
               type: integer
@@ -2496,9 +2565,8 @@ components:
             focalLength:
               type: string
             dateTaken:
-              type: string
+              type: [string, "null"]
               format: date-time
-              nullable: true
             orientation:
               type: integer
             colorSpace:
@@ -2506,11 +2574,9 @@ components:
             software:
               type: string
             gpsLatitude:
-              type: number
-              nullable: true
+              type: [number, "null"]
             gpsLongitude:
-              type: number
-              nullable: true
+              type: [number, "null"]
             nameLocal:
               type: string
             nameEng:
@@ -2837,11 +2903,9 @@ components:
       type: object
       properties:
         apiUrl:
-          type: string
-          nullable: true
+          type: [string, "null"]
         apiKey:
-          type: string
-          nullable: true
+          type: [string, "null"]
 
     LlmOcrRequest:
       type: object
@@ -2868,8 +2932,7 @@ components:
         progress:
           type: string
         error:
-          type: string
-          nullable: true
+          type: [string, "null"]
 
     LlmOcrDataResponse:
       type: object
@@ -2887,8 +2950,7 @@ components:
         processingTimeMs:
           type: integer
         error:
-          type: string
-          nullable: true
+          type: [string, "null"]
 
     LlmModelsResponse:
       type: object
@@ -2974,11 +3036,9 @@ components:
           type: string
           enum: [pending, processing, completed, failed]
         result:
-          type: object
-          nullable: true
+          type: [object, "null"]
         error:
-          type: string
-          nullable: true
+          type: [string, "null"]
 
     TagScanStatusResponse:
       type: object
@@ -3114,12 +3174,10 @@ components:
       type: object
       properties:
         displayName:
-          type: string
-          nullable: true
+          type: [string, "null"]
         role:
-          type: string
+          type: [string, "null"]
           enum: [admin, user]
-          nullable: true
 
     ResetPasswordRequest:
       type: object

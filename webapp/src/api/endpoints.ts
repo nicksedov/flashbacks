@@ -29,7 +29,7 @@ import type {
   UpdateUserSettingsRequest,
   TrashInfoResponse,
   CleanTrashResponse,
-  TrashFileDTO,
+  TrashListResponse,
   RestoreTrashFileRequest,
   DeleteTrashFileRequest,
   ImageMetadataResponse,
@@ -316,16 +316,21 @@ export function cleanTrash(): Promise<CleanTrashResponse> {
   return apiPost<CleanTrashResponse>("/api/trash-clean")
 }
 
-export function fetchTrashList(): Promise<TrashFileDTO[]> {
-  return apiGet<TrashFileDTO[]>("/api/trash-list")
+export function fetchTrash(cursor?: string | null): Promise<TrashListResponse> {
+  const query = cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""
+  return apiGet<TrashListResponse>(`/api/trash${query}`)
 }
 
-export function restoreTrashFile(req: RestoreTrashFileRequest): Promise<{ success: boolean; restoredPath: string }> {
-  return apiPost<{ success: boolean; restoredPath: string }>("/api/trash-restore", req)
+export function restoreTrashFile(req: RestoreTrashFileRequest): Promise<{ success: boolean; message?: string; restoredPath: string }> {
+  return apiPost<{ success: boolean; message?: string; restoredPath: string }>("/api/trash-restore", req)
 }
 
 export function deleteTrashFile(req: DeleteTrashFileRequest): Promise<{ success: boolean }> {
   return apiPost<{ success: boolean }>("/api/trash-delete", req)
+}
+
+export function buildTrashImageUrl(trashPath: string): string {
+  return `/api/trash/image?path=${encodeURIComponent(trashPath)}`
 }
 
 // --- Image Metadata ---

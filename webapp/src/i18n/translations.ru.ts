@@ -21,6 +21,7 @@ export const translationsRu = {
   // Trash tab
   "trashTab.empty": "Корзина пуста",
   "trashTab.emptyHint": "Удаленные файлы появятся здесь, когда корзина включена.",
+  "trashTab.view": "Просмотр",
   "trashTab.restore": "Восстановить",
   "trashTab.deletePermanently": "Удалить",
   "trashTab.restoreFailed": "Не удалось восстановить файл",
@@ -32,6 +33,13 @@ export const translationsRu = {
   "trashTab.cleaning": "Очистка...",
   "trashTab.fileCount": "{count} файлов",
   "trashTab.fileCountOne": "{count} файл",
+  "trashTab.itemCount": "{count} элементов",
+  "trashTab.originalLocation": "Исходное расположение",
+  "trashTab.originalLocationUnknown": "Неизвестно",
+  "trashTab.deletedDate": "Удалено",
+  "trashTab.restored": "Файл восстановлен в исходное расположение",
+  "trashTab.cleanSuccess": "Корзина очищена",
+  "trashTab.cleanFailed": "Не удалось очистить корзину",
 
   // Loading
   "common.loading": "Загрузка...",
@@ -432,6 +440,7 @@ export const translationsRu = {
   "adminPanel.registerSuccess": "Учётная запись создана",
   "adminPanel.pendingTitle": "Учётная запись ожидает одобрения",
   "adminPanel.pendingDesc": "Ваша учётная запись ожидает одобрения администратора. Вы сможете войти после её утверждения.",
+  "adminPanel.registrationApprovalWarning": "Новые учётные записи требуют одобрения администратора перед входом.",
 
   // Админ-панель: очередь заявок на регистрацию
   "adminPanel.registrationRequests": "Заявки на регистрацию",

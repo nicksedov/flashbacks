@@ -36,7 +36,8 @@ func (fm *FileMover) MoveToTrashOrDelete(filePath, trashDir string) error {
 		if err := os.MkdirAll(trashDir, 0755); err != nil {
 			return err
 		}
-		return fm.moveToTrash(filePath, trashDir)
+		_, err := fm.moveToTrash(filePath, trashDir)
+		return err
 	}
 	return os.Remove(filePath)
 }
@@ -226,7 +227,20 @@ func copyAndDelete(src, dst string) error {
 	return nil
 }
 
-func (fm *FileMover) moveToTrash(filePath, trashDir string) error {
+// moveToTrash moves a file into the trash directory and records a TrashItem row
+// with the pre-deletion metadata (original path, size, deletion time, and the
+// original hash/mod time so restore can re-insert the image_files row without
+// recomputing the hash). It returns the destination path.
+func (fm *FileMover) moveToTrash(filePath, trashDir string) (string, error) {
+	// Look up the source file's hash/mod time before the move.
+	var img domain.ImageFile
+	var originalHash string
+	var originalModTime time.Time
+	if err := fm.db.Where("path = ?", filepath.ToSlash(filePath)).First(&img).Error; err == nil {
+		originalHash = img.Hash
+		originalModTime = img.ModTime
+	}
+
 	baseName := filepath.Base(filePath)
 	destPath := filepath.Join(trashDir, baseName)
 
@@ -237,10 +251,31 @@ func (fm *FileMover) moveToTrash(filePath, trashDir string) error {
 	}
 
 	if err := os.Rename(filePath, destPath); err != nil {
-		return copyAndDelete(filePath, destPath)
+		if copyErr := copyAndDelete(filePath, destPath); copyErr != nil {
+			return "", copyErr
+		}
 	}
 
-	return nil
+	// Record the trash item only after the move succeeded. A persistence failure
+	// must not undo the move (the file is already in trash).
+	size := int64(0)
+	if info, err := os.Stat(destPath); err == nil {
+		size = info.Size()
+	}
+	item := domain.TrashItem{
+		FileName:        filepath.Base(destPath),
+		TrashPath:       filepath.ToSlash(destPath),
+		OriginalPath:    filepath.ToSlash(filePath),
+		Size:            size,
+		DeletedAt:       time.Now(),
+		OriginalHash:    originalHash,
+		OriginalModTime: originalModTime,
+	}
+	if err := fm.db.Create(&item).Error; err != nil {
+		return destPath, nil
+	}
+
+	return destPath, nil
 }
 
 func pathsConflict(a, b string) string {

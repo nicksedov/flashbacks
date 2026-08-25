@@ -47,6 +47,17 @@ export default function App() {
     }
   }, [])
 
+  // Listen for login-success event to exit forced logout mode after re-authentication
+  useEffect(() => {
+    const handleLoginSuccess = () => {
+      setForceLogout(false)
+    }
+    window.addEventListener("login-success", handleLoginSuccess as EventListener)
+    return () => {
+      window.removeEventListener("login-success", handleLoginSuccess as EventListener)
+    }
+  }, [])
+
   // On mount, check if gallery has folders. If not, force settings tab.
   useEffect(() => {
     if (!isAuthenticated) return

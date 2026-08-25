@@ -1,112 +1,111 @@
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 import { useTranslation } from "@/i18n"
 import { ErrorBanner } from "@/components/ui/error-banner"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
-import { Trash2, RotateCcw, XCircle, Loader2, FolderOpen } from "lucide-react"
-import { fetchTrashList, restoreTrashFile, deleteTrashFile, cleanTrash } from "@/api/endpoints"
+import { Skeleton } from "@/components/ui/skeleton"
+import { ViewHeader } from "@/components/ui/view-header"
+import { PaginationFooter } from "@/components/ui/pagination-footer"
 import { EmptyState } from "@/components/EmptyState"
-import type { TrashFileDTO } from "@/types"
+import { Trash2, FolderOpen } from "lucide-react"
+import { cleanTrash, restoreTrashFile } from "@/api/endpoints"
+import { useTrashItems } from "@/hooks/useTrashItems"
+import { TrashTileGrid } from "@/components/trash/TrashTileGrid"
+import { TrashLightbox } from "@/components/trash/TrashLightbox"
+import type { TrashItemDTO } from "@/types"
 
 export function TrashTab() {
   const { t } = useTranslation()
-  const [files, setFiles] = useState<TrashFileDTO[]>([])
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [deleteTarget, setDeleteTarget] = useState<TrashFileDTO | null>(null)
+  const trash = useTrashItems()
   const [cleanAllOpen, setCleanAllOpen] = useState(false)
-  const [isDeleting, setIsDeleting] = useState(false)
   const [isCleaning, setIsCleaning] = useState(false)
+  const [lightboxItem, setLightboxItem] = useState<TrashItemDTO | null>(null)
+  const [restoringId, setRestoringId] = useState<number | null>(null)
+  const sentinelRef = useRef<HTMLDivElement>(null)
 
+  // Infinite scroll observer
   useEffect(() => {
-    let cancelled = false
-    ;(async () => {
+    const sentinel = sentinelRef.current
+    if (!sentinel) return
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && trash.hasMore && !trash.isLoading) {
+          void trash.loadMore()
+        }
+      },
+      { threshold: 0.1 }
+    )
+
+    observer.observe(sentinel)
+    return () => observer.disconnect()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trash.hasMore, trash.isLoading, trash.loadMore])
+
+  const handleRestore = useCallback(
+    async (item: TrashItemDTO) => {
+      if (restoringId !== null) return
+      setRestoringId(item.id)
       try {
-        const data = await fetchTrashList()
-        if (!cancelled) {
-          setFiles(data)
-          setError(null)
-        }
+        await restoreTrashFile({ id: item.id })
+        // Optimistic removal
+        trash.removeItem(item.id)
+        toast.success(t("trashTab.restored"))
       } catch (err) {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : "Failed to load trash")
-        }
+        console.error("Failed to restore:", err)
+        toast.error(t("trashTab.restoreFailed"))
       } finally {
-        if (!cancelled) setLoading(false)
+        setRestoringId(null)
       }
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
-  const handleRestore = useCallback(async (file: TrashFileDTO) => {
-    try {
-      await restoreTrashFile({ fileName: file.fileName })
-      setFiles((prev) => prev.filter((f) => f.fileName !== file.fileName))
-    } catch (err) {
-      console.error("Failed to restore:", err)
-      toast.error(t("trashTab.restoreFailed"))
-    }
-  }, [t])
-
-  const handleConfirmDelete = useCallback(async () => {
-    if (!deleteTarget) return
-    setIsDeleting(true)
-    try {
-      await deleteTrashFile({ fileName: deleteTarget.fileName })
-      setFiles((prev) => prev.filter((f) => f.fileName !== deleteTarget.fileName))
-      setDeleteTarget(null)
-    } catch (err) {
-      console.error("Failed to delete:", err)
-      toast.error(t("trashTab.deleteFailed"))
-    } finally {
-      setIsDeleting(false)
-    }
-  }, [deleteTarget, t])
+    },
+    [restoringId, trash, t]
+  )
 
   const handleConfirmCleanAll = useCallback(async () => {
     setIsCleaning(true)
     try {
       await cleanTrash()
-      setFiles([])
+      trash.reset()
       setCleanAllOpen(false)
+      toast.success(t("trashTab.cleanSuccess"))
     } catch (err) {
       console.error("Failed to clean trash:", err)
+      toast.error(t("trashTab.cleanFailed"))
     } finally {
       setIsCleaning(false)
     }
-  }, [])
+  }, [trash, t])
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Trash2 className="h-5 w-5 text-muted-foreground" />
-          <span className="text-sm text-muted-foreground">
-            {files.length === 1
-              ? t("trashTab.fileCountOne", { count: files.length })
-              : t("trashTab.fileCount", { count: files.length })}
-          </span>
-        </div>
-        {files.length > 0 && (
+        <ViewHeader
+          icon={Trash2}
+          textKey="trashTab.fileCount"
+          textValues={{ count: trash.totalItems.toLocaleString() }}
+          fallbackText={t("trashTab.fileCount", { count: "0" })}
+          isLoading={trash.isLoading && !trash.initialized}
+        />
+        {trash.totalItems > 0 && (
           <button
             onClick={() => setCleanAllOpen(true)}
             className="flex items-center gap-2 px-3 py-1.5 text-sm bg-destructive/10 hover:bg-destructive/20 text-destructive rounded transition-colors"
           >
-            <XCircle className="h-4 w-4" />
+            <Trash2 className="h-4 w-4" />
             {t("trashTab.cleanAll")}
           </button>
         )}
       </div>
 
-      {error && <ErrorBanner message={error} />}
+      {trash.error && <ErrorBanner message={trash.error} />}
 
-      {loading ? (
-        <div className="flex justify-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      {!trash.initialized ? (
+        <div className="space-y-3">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <Skeleton key={i} className="h-40 w-full rounded-lg" />
+          ))}
         </div>
-      ) : files.length === 0 ? (
+      ) : trash.groups.length === 0 ? (
         <EmptyState
           bordered
           icon={FolderOpen}
@@ -114,66 +113,22 @@ export function TrashTab() {
           description={t("trashTab.emptyHint")}
         />
       ) : (
-        <div className="rounded-lg border overflow-hidden">
-          <table className="w-full">
-            <thead className="bg-muted">
-              <tr>
-                <th className="text-left px-4 py-2 text-xs font-medium text-muted-foreground">
-                  {t("galleryList.fileName")}
-                </th>
-                <th className="text-left px-4 py-2 text-xs font-medium text-muted-foreground hidden sm:table-cell">
-                  {t("galleryList.size")}
-                </th>
-                <th className="text-right px-4 py-2 text-xs font-medium text-muted-foreground">
-                  {t("common.actions")}
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {files.map((file) => (
-                <tr key={file.fileName} className="border-t hover:bg-muted/30 transition-colors">
-                  <td className="px-4 py-2 text-sm font-medium truncate" title={file.fileName}>
-                    {file.fileName}
-                  </td>
-                  <td className="px-4 py-2 text-sm text-muted-foreground hidden sm:table-cell">
-                    {file.sizeHuman}
-                  </td>
-                  <td className="px-4 py-2 text-right">
-                    <div className="flex items-center justify-end gap-1">
-                      <button
-                        onClick={() => handleRestore(file)}
-                        className="p-1.5 rounded-lg hover:bg-emerald-100 dark:hover:bg-emerald-900/30 text-emerald-600 transition-colors"
-                        title={t("trashTab.restore")}
-                      >
-                        <RotateCcw className="h-4 w-4" />
-                      </button>
-                      <button
-                        onClick={() => setDeleteTarget(file)}
-                        className="p-1.5 rounded-lg hover:bg-destructive/10 text-destructive transition-colors"
-                        title={t("trashTab.deletePermanently")}
-                      >
-                        <XCircle className="h-4 w-4" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+        <>
+          <TrashTileGrid
+            groups={trash.groups}
+            onView={setLightboxItem}
+            onRestore={(item) => void handleRestore(item)}
+          />
 
-      <ConfirmDialog
-        open={!!deleteTarget}
-        onOpenChange={(open) => !isDeleting && !open && setDeleteTarget(null)}
-        title={t("trashTab.deletePermanently")}
-        description={t("trashTab.deleteConfirm", { fileName: deleteTarget?.fileName ?? "" })}
-        confirmLabel={isDeleting ? t("trashTab.deleting") : t("common.delete")}
-        cancelLabel={t("common.cancel")}
-        onConfirm={() => void handleConfirmDelete()}
-        loading={isDeleting}
-        destructive
-      />
+          <div ref={sentinelRef} className="h-4" />
+
+          <PaginationFooter
+            isLoading={trash.isLoading}
+            hasMore={trash.hasMore}
+            totalCount={trash.totalItems}
+          />
+        </>
+      )}
 
       <ConfirmDialog
         open={cleanAllOpen}
@@ -186,6 +141,8 @@ export function TrashTab() {
         loading={isCleaning}
         destructive
       />
+
+      <TrashLightbox item={lightboxItem} onOpenChange={(open) => !open && setLightboxItem(null)} />
     </div>
   )
 }

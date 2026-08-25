@@ -60,6 +60,7 @@ func InitDatabase(cfg *config.AppConfig) (*gorm.DB, error) {
 		&domain.TagEmbedding{},
 		&domain.ImageProcessingError{},
 		&domain.SyncHistory{},
+		&domain.TrashItem{},
 	); err != nil {
 		return nil, fmt.Errorf("failed to migrate database: %w", err)
 	}
@@ -68,6 +69,9 @@ func InitDatabase(cfg *config.AppConfig) (*gorm.DB, error) {
 
 	// Create composite index for calendar pagination: covers ORDER BY date_taken, image_file_id
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_image_metadata_date_taken_file_id ON image_metadata (date_taken, image_file_id)")
+
+	// Create composite index for trash list pagination: covers ORDER BY deleted_at, id
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_trash_items_deleted_at_id ON trash_items (deleted_at, id)")
 
 	// Case-insensitive unique login index for self-service registration.
 	// Existing case-conflicting logins (e.g. "Admin" vs "admin") must be resolved

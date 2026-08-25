@@ -6,9 +6,8 @@ import { Loader2, ShieldAlert, WifiOff } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card"
 import { useTranslation } from "@/i18n"
-import { PendingApprovalScreen } from "./PendingApprovalScreen"
 
 const HEALTH_CHECK_INTERVAL_MS = 5000
 
@@ -18,7 +17,6 @@ export function LoginScreen() {
   const { login, isBootstrapMode, setBootstrapVerified, accountCreationMode } = useAuth()
   const { t } = useTranslation()
   const [mode, setMode] = useState<AuthMode>("login")
-  const [pendingApproval, setPendingApproval] = useState(false)
 
   const [loginInput, setLoginInput] = useState("")
   const [password, setPassword] = useState("")
@@ -97,6 +95,7 @@ export function LoginScreen() {
 
       if (response.user) {
         login(response.user)
+        window.dispatchEvent(new CustomEvent("login-success"))
         toast.success(t("adminPanel.loginSuccess"))
       }
     } catch (err) {
@@ -139,15 +138,14 @@ export function LoginScreen() {
         password: registerPassword,
       })
 
-      if (response.pending) {
-        // Account awaits admin approval - show the pending screen
-        setPendingApproval(true)
-        return
-      }
-
-      if (response.user) {
-        login(response.user)
-        toast.success(t("adminPanel.registerSuccess"))
+      if (response.pending || response.user) {
+        // Account created (active or pending approval) - switch to the login form so the user can sign in
+        setMode("login")
+        setRegisterLogin("")
+        setRegisterDisplayName("")
+        setRegisterPassword("")
+        setRegisterPasswordConfirm("")
+        toast.success(response.pending ? t("adminPanel.pendingTitle") : t("adminPanel.registerSuccess"))
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : t("adminPanel.loginFailed")
@@ -157,24 +155,15 @@ export function LoginScreen() {
     }
   }
 
-  if (pendingApproval) {
-    return <PendingApprovalScreen onBackToLogin={() => setPendingApproval(false)} />
-  }
-
   return (
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-background to-muted p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-2 text-center">
-          <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-            <ShieldAlert className="h-6 w-6 text-primary" />
-          </div>
-          <CardTitle className="text-2xl font-bold">
-            {isBootstrapMode
-              ? t("adminPanel.bootstrapTitle")
-              : isRegisterMode
-                ? t("adminPanel.registerTitle")
-                : t("adminPanel.loginTitle")}
-          </CardTitle>
+          <img
+            src="/flashbacks_logo_welcomescreen.png"
+            alt="Flashbacks"
+            className="mx-auto mb-2 w-72 max-w-full h-auto object-contain"
+          />
           <CardDescription>
             {isBootstrapMode
               ? t("adminPanel.bootstrapDescAdmin")
@@ -215,6 +204,12 @@ export function LoginScreen() {
 
           {isRegisterMode ? (
             <form onSubmit={handleRegisterSubmit} className="space-y-4">
+              {accountCreationMode === "self_service_with_approval" && (
+                <div className="flex items-start gap-2 rounded-md bg-amber-500/10 p-3 text-sm text-amber-600 dark:text-amber-400">
+                  <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" />
+                  <span>{t("adminPanel.registrationApprovalWarning")}</span>
+                </div>
+              )}
               <div className="space-y-2">
                 <Label htmlFor="register-login">{t("adminPanel.login")}</Label>
                 <Input

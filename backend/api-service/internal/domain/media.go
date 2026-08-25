@@ -376,3 +376,26 @@ type OcrLlmRecognition struct {
 	CreatedAt           time.Time `json:"createdAt"`
 	UpdatedAt           time.Time `json:"updatedAt"`
 }
+
+// TrashItem represents a file that was moved to the trash directory.
+// It persists metadata about a deleted file (deletion date, restore path)
+// so the Trash can be rendered like the Gallery and restore is reliable.
+type TrashItem struct {
+	ID           uint      `gorm:"primaryKey" json:"id"`
+	FileName     string    `gorm:"not null" json:"fileName"`
+	TrashPath    string    `gorm:"uniqueIndex;not null" json:"trashPath"`
+	OriginalPath string    `gorm:"not null" json:"originalPath"`
+	Size         int64     `gorm:"not null" json:"size"`
+	DeletedAt    time.Time `gorm:"not null" json:"deletedAt"`
+	// OriginalHash/OriginalModTime are internal columns (not in the public DTO).
+	// Captured at delete time so restore can re-insert the image_files row
+	// without recomputing the hash.
+	OriginalHash    string    `json:"-"`
+	OriginalModTime time.Time `json:"-"`
+	CreatedAt       time.Time `json:"createdAt"`
+}
+
+// TableName overrides the default GORM table name (trash_items).
+func (TrashItem) TableName() string {
+	return "trash_items"
+}

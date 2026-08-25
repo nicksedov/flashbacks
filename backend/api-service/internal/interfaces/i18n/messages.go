@@ -147,12 +147,18 @@ const (
 	MsgGeoClusterNotFound   MessageKey = "geo.cluster_not_found"
 
 	// Trash restore messages
-	MsgTrashFileNameRequired MessageKey = "trash.file_name_required"
-	MsgTrashFileNotFound     MessageKey = "trash.file_not_found"
-	MsgTrashDeleteFailed     MessageKey = "trash.delete_failed"
-	MsgTrashRestoreFailed    MessageKey = "trash.restore_failed"
-	MsgTrashRestored         MessageKey = "trash.restored"
-	MsgTrashFileDeleted      MessageKey = "trash.file_deleted"
+	MsgTrashFileNameRequired      MessageKey = "trash.file_name_required"
+	MsgTrashFileNotFound          MessageKey = "trash.file_not_found"
+	MsgTrashDeleteFailed          MessageKey = "trash.delete_failed"
+	MsgTrashRestoreFailed         MessageKey = "trash.restore_failed"
+	MsgTrashRestored              MessageKey = "trash.restored"
+	MsgTrashFileDeleted           MessageKey = "trash.file_deleted"
+	MsgTrashIdRequired            MessageKey = "trash.id_required"
+	MsgTrashItemNotFound          MessageKey = "trash.item_not_found"
+	MsgTrashRestoreNoOriginalPath MessageKey = "trash.restore_no_original_path"
+	MsgTrashInvalidCursor         MessageKey = "trash.invalid_cursor"
+	MsgTrashAccessDenied          MessageKey = "trash.access_denied"
+	MsgTrashCleanFailed           MessageKey = "trash.clean_failed"
 
 	// LLM messages
 	MsgLlmModelsFailed MessageKey = "llm.models_failed"

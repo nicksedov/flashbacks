@@ -312,6 +312,35 @@ type CleanTrashResponse struct {
 	Failed  int `json:"failed"`
 }
 
+// TrashItemDTO represents a single trashed file in JSON responses.
+type TrashItemDTO struct {
+	ID           uint   `json:"id"`
+	FileName     string `json:"fileName"`
+	TrashPath    string `json:"trashPath"`
+	OriginalPath string `json:"originalPath"`
+	Size         int64  `json:"size"`
+	SizeHuman    string `json:"sizeHuman"`
+	DeletedAt    string `json:"deletedAt"`
+	Thumbnail    string `json:"thumbnail"`
+}
+
+// TrashDateGroup represents a group of trash items deleted on the same calendar day.
+type TrashDateGroup struct {
+	Date      string         `json:"date"`  // "YYYY-MM-DD"
+	Label     string         `json:"label"` // Human-readable label
+	ItemCount int            `json:"itemCount"`
+	Items     []TrashItemDTO `json:"items"`
+}
+
+// TrashListResponse is the JSON response for GET /api/trash.
+type TrashListResponse struct {
+	Groups      []TrashDateGroup `json:"groups"`
+	TotalItems  int              `json:"totalItems"`
+	TotalGroups int              `json:"totalGroups"`
+	HasMore     bool             `json:"hasMore"`
+	NextCursor  *string          `json:"nextCursor,omitempty"`
+}
+
 // --- Image Metadata API ---
 
 // ImageMetadataDTO represents image EXIF metadata and geolocation in JSON responses

@@ -21,6 +21,7 @@ export const translationsEn = {
   // Trash tab
   "trashTab.empty": "Trash is empty",
   "trashTab.emptyHint": "Deleted files will appear here when trash is enabled.",
+  "trashTab.view": "View",
   "trashTab.restore": "Restore",
   "trashTab.deletePermanently": "Delete",
   "trashTab.restoreFailed": "Failed to restore file",
@@ -32,6 +33,13 @@ export const translationsEn = {
   "trashTab.cleaning": "Emptying...",
   "trashTab.fileCount": "{count} file(s)",
   "trashTab.fileCountOne": "{count} file",
+  "trashTab.itemCount": "{count} item(s)",
+  "trashTab.originalLocation": "Original location",
+  "trashTab.originalLocationUnknown": "Unknown",
+  "trashTab.deletedDate": "Deleted on",
+  "trashTab.restored": "File restored to its original location",
+  "trashTab.cleanSuccess": "Trash emptied",
+  "trashTab.cleanFailed": "Failed to empty trash",
 
   // Loading
   "common.loading": "Loading...",
@@ -432,6 +440,7 @@ export const translationsEn = {
   "adminPanel.registerSuccess": "Account created",
   "adminPanel.pendingTitle": "Account pending approval",
   "adminPanel.pendingDesc": "Your account is awaiting administrator approval. You will be able to log in once it is approved.",
+  "adminPanel.registrationApprovalWarning": "New accounts require administrator approval before you can sign in.",
 
   // Admin: registration approval queue
   "adminPanel.registrationRequests": "Registration Requests",

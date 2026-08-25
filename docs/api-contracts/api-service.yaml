@@ -2825,7 +2825,7 @@ components:
       properties:
         type:
           type: string
-          enum: [chat, vl, embedding, image_edit]
+          enum: [chat, vl, embedding, image_edit, ocr]
         providerId:
           type: integer
         model:

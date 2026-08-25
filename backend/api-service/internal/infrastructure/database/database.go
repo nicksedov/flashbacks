@@ -125,5 +125,23 @@ func InitDatabase(cfg *config.AppConfig) (*gorm.DB, error) {
 		}
 	}
 
+	// Ensure an OCR instrument exists for installs that predate the separate
+	// OCR instrument. This runs regardless of provider count so existing
+	// deployments get an ocr row after upgrade, copying the provider + model
+	// from the current VL instrument. This preserves the pre-upgrade behavior
+	// (OCR used the same model as VL) while remaining independently editable.
+	var ocrCount int64
+	db.Model(&domain.LlmInstrumentSettings{}).Where("type = ?", domain.InstrumentOCR).Count(&ocrCount)
+	if ocrCount == 0 {
+		var vlInstrument domain.LlmInstrumentSettings
+		if err := db.Where("type = ?", domain.InstrumentVL).First(&vlInstrument).Error; err == nil {
+			db.Create(&domain.LlmInstrumentSettings{
+				Type:       domain.InstrumentOCR,
+				ProviderID: vlInstrument.ProviderID,
+				Model:      vlInstrument.Model,
+			})
+		}
+	}
+
 	return db, nil
 }

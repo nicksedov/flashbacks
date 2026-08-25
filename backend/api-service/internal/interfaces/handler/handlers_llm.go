@@ -20,6 +20,8 @@ func instrumentTypeFromString(s string) domain.InstrumentType {
 		return domain.InstrumentChat
 	case "vl":
 		return domain.InstrumentVL
+	case "ocr":
+		return domain.InstrumentOCR
 	case "embedding":
 		return domain.InstrumentEmbedding
 	case "image_edit":
@@ -400,7 +402,7 @@ func (s *Server) handleLlmRecognize(c *gin.Context) {
 		return
 	}
 
-	llmClient, provider, vlInstrument, ok := s.llmFactory.CreateVLClient(c)
+	llmClient, provider, ocrInstrument, ok := s.llmFactory.CreateOCRClient(c)
 	if !ok {
 		return
 	}
@@ -431,7 +433,7 @@ func (s *Server) handleLlmRecognize(c *gin.Context) {
 		return
 	}
 
-	_ = s.llmOcrService.StartRecognizeAsync(imageFile.ID, llmClient, provider, vlInstrument.Model)
+	_ = s.llmOcrService.StartRecognizeAsync(imageFile.ID, llmClient, provider, ocrInstrument.Model)
 	c.JSON(http.StatusAccepted, dto.LlmRecognizeStatusResponse{
 		Status: "processing",
 	})
@@ -682,7 +684,17 @@ func (s *Server) handleAiAction(c *gin.Context) {
 		return
 	}
 
-	llmClient, provider, vlInstrument, ok := s.llmFactory.CreateVLClient(c)
+	// OCR actions resolve their client from the ocr instrument; all VL actions
+	// (describe, tags, askQuestion) keep using the vl instrument.
+	var llmClient llm.Client
+	var provider domain.LlmProvider
+	var instrument domain.LlmInstrumentSettings
+	var ok bool
+	if req.Action == dto.AiActionRecognizeText {
+		llmClient, provider, instrument, ok = s.llmFactory.CreateOCRClient(c)
+	} else {
+		llmClient, provider, instrument, ok = s.llmFactory.CreateVLClient(c)
+	}
 	if !ok {
 		return
 	}
@@ -735,7 +747,7 @@ func (s *Server) handleAiAction(c *gin.Context) {
 		}
 	}
 
-	s.llmOcrService.StartAiActionAsync(taskID, imageFile.ID, string(req.Action), req.Question, req.Language, llmClient, provider, vlInstrument.Model)
+	s.llmOcrService.StartAiActionAsync(taskID, imageFile.ID, string(req.Action), req.Question, req.Language, llmClient, provider, instrument.Model)
 
 	c.JSON(http.StatusAccepted, dto.AiActionStartResponse{
 		TaskID: taskID,

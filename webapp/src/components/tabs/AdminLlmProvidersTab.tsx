@@ -25,6 +25,7 @@ import {
   MessageSquare,
   Brain,
   Wand2,
+  ScanText,
 } from "lucide-react"
 import { useTranslation } from "@/i18n"
 import type { LlmSettingsResponse, LlmProviderDTO, LlmModelDTO, LlmProviderType, LlmInstrumentType } from "@/types"
@@ -56,6 +57,7 @@ const INSTRUMENT_ICONS: Record<LlmInstrumentType, { icon: typeof MessageSquare; 
   vl: { icon: Eye, label: "llm_providers.usageShortVL" },
   embedding: { icon: Brain, label: "llm_providers.usageShortEmb" },
   image_edit: { icon: Wand2, label: "llm_providers.usageShortImgEdit" },
+  ocr: { icon: ScanText, label: "llm_providers.usageShortOCR" },
 }
 
 // Infer capabilities based on provider type and model name heuristics.

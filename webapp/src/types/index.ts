@@ -572,7 +572,7 @@ export interface OcrClassificationStatusResponse {
 export type LlmProviderType = "ollama" | "ollama_cloud" | "openai" | "deepseek" | "alibaba"
 
 // Instrument type for LLM instrument settings
-export type LlmInstrumentType = "chat" | "vl" | "embedding" | "image_edit"
+export type LlmInstrumentType = "chat" | "vl" | "embedding" | "image_edit" | "ocr"
 
 export interface LlmProviderDTO {
   id: number

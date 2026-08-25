@@ -70,6 +70,7 @@ func NewTestDB(t *testing.T) (*gorm.DB, func()) {
 		{Type: domain.InstrumentVL, ProviderID: p1.ID, Model: "minicpm-v"},
 		{Type: domain.InstrumentEmbedding, ProviderID: p1.ID, Model: "qwen3-embedding:4b"},
 		{Type: domain.InstrumentImageEdit, ProviderID: p2.ID, Model: "gpt-4-vision"},
+		{Type: domain.InstrumentOCR, ProviderID: p1.ID, Model: "minicpm-v"},
 	})
 	db.Create(&domain.TagScanSettings{ID: 1, Enabled: true, StartHour: 22, EndHour: 7})
 	db.Create(&domain.EmbeddingSettings{ID: 1, Dimension: 1024, BatchSize: 50})

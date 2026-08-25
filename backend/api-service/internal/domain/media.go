@@ -253,10 +253,11 @@ const (
 	InstrumentVL        InstrumentType = "vl"
 	InstrumentEmbedding InstrumentType = "embedding"
 	InstrumentImageEdit InstrumentType = "image_edit"
+	InstrumentOCR       InstrumentType = "ocr"
 )
 
 // LlmInstrumentSettings stores the provider + model assignment per instrument type.
-// One row per type (chat, vl, embedding, image_edit).
+// One row per type (chat, vl, embedding, image_edit, ocr).
 type LlmInstrumentSettings struct {
 	ID         uint           `gorm:"primaryKey" json:"id"`
 	Type       InstrumentType `gorm:"uniqueIndex;not null;size:50" json:"type"`

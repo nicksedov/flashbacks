@@ -97,8 +97,9 @@ export function UnifiedLightbox({
     activeMode === "tags" ? imagePath : null
   )
   const isTextDocument = ocrData?.isTextDocument ?? false
+  const isOcrRotated = isTextDocument && ocrData?.angle !== undefined
   const ocrImageUrl = imagePath
-    ? isTextDocument && ocrData?.angle !== undefined
+    ? isOcrRotated
       ? buildImageUrl(imagePath, "/api/ocr-image", { angle: ocrData.angle })
       : buildImageUrl(imagePath, "/api/image")
     : ""
@@ -286,11 +287,12 @@ export function UnifiedLightbox({
             ocrData={ocrData}
             isTextDocument={isTextDocument}
             loading={ocrLoading}
+            isRotated={isOcrRotated}
             imageRef={imageRef}
             displayDimensions={displayDimensions}
             imageLoaded={imageLoaded}
             handleImageLoad={handleImageLoad}
-            className="flex-1 flex items-center justify-center p-8 relative h-full"
+            className="flex-1 flex items-center justify-center relative h-full min-w-0 min-h-0"
           />
         ) : enhancedPath ? (
           <div className="flex-1 flex items-center justify-center bg-black min-h-[300px] min-w-0 h-full relative p-4">

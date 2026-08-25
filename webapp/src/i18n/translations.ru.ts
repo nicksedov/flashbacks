@@ -520,6 +520,9 @@ export const translationsRu = {
   "ocr.allLoaded": "Все {count} документов загружены",
 
   // OCR lightbox
+  "lightbox.ocr.loading": "Загрузка...",
+  "lightbox.ocr.loadingImage": "Загрузка изображения...",
+  "lightbox.ocr.preparing": "Подготовка изображения...",
 
   // API OCR messages
   "api.ocr.started": "OCR сканирование начато",

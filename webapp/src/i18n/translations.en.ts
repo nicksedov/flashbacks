@@ -520,6 +520,9 @@ export const translationsEn = {
   "ocr.allLoaded": "All {count} documents loaded",
 
   // OCR lightbox
+  "lightbox.ocr.loading": "Loading...",
+  "lightbox.ocr.loadingImage": "Loading image...",
+  "lightbox.ocr.preparing": "Preparing image...",
 
   // API OCR messages
   "api.ocr.started": "OCR scan started",

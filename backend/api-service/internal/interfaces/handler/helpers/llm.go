@@ -45,6 +45,12 @@ func (f *LLMFactory) CreateVLClient(c *gin.Context) (llm.Client, domain.LlmProvi
 	return f.createClientByInstrument(c, domain.InstrumentVL)
 }
 
+// CreateOCRClient creates an LLM client for OCR recognition from the ocr instrument settings.
+// Returns (Client, provider, instrument, success). If success is false, an error response has been written.
+func (f *LLMFactory) CreateOCRClient(c *gin.Context) (llm.Client, domain.LlmProvider, domain.LlmInstrumentSettings, bool) {
+	return f.createClientByInstrument(c, domain.InstrumentOCR)
+}
+
 // CreateImgEditClient creates an image edit LLM client from the image_edit instrument settings.
 // Returns (Client, provider, instrument, success). If success is false, an error response has been written.
 func (f *LLMFactory) CreateImgEditClient(c *gin.Context) (llm.Client, domain.LlmProvider, domain.LlmInstrumentSettings, bool) {

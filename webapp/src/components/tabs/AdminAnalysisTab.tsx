@@ -49,6 +49,7 @@ const INSTRUMENT_LABELS: Record<LlmInstrumentType, string> = {
   vl: "llm_ocr.vlSettings",
   embedding: "llm_ocr.embeddingSettings",
   image_edit: "llm_ocr.imgEditSettings",
+  ocr: "llm_ocr.ocrSettings",
 }
 
 const INSTRUMENT_DESCRIPTIONS: Record<LlmInstrumentType, string> = {
@@ -56,6 +57,7 @@ const INSTRUMENT_DESCRIPTIONS: Record<LlmInstrumentType, string> = {
   vl: "llm_ocr.vlSettingsDescription",
   embedding: "llm_ocr.embeddingSettingsDescription",
   image_edit: "llm_ocr.imgEditSettingsDescription",
+  ocr: "llm_ocr.ocrSettingsDescription",
 }
 
 const EMPTY_SETTINGS: LlmSettingsResponse = {
@@ -282,6 +284,7 @@ export function AdminAnalysisTab() {
 
   const chatInstrument = llmSettings.instruments.find(i => i.type === "chat")
   const vlInstrument = llmSettings.instruments.find(i => i.type === "vl")
+  const ocrInstrument = llmSettings.instruments.find(i => i.type === "ocr")
   const imgEditInstrument = llmSettings.instruments.find(i => i.type === "image_edit")
   const embeddingInstrument = llmSettings.instruments.find(i => i.type === "embedding")
 
@@ -472,9 +475,10 @@ export function AdminAnalysisTab() {
         </CardContent>
       </Card>
 
-      {/* Instrument Cards: Chat, VL, Image Edit */}
+      {/* Instrument Cards: Chat, VL, OCR, Image Edit */}
       {renderInstrumentCard("chat", chatInstrument)}
       {renderInstrumentCard("vl", vlInstrument)}
+      {renderInstrumentCard("ocr", ocrInstrument)}
       {renderInstrumentCard("image_edit", imgEditInstrument)}
 
       {/* Embeddings LLM Settings */}

@@ -2,7 +2,7 @@ import { useCallback, useState, useEffect } from "react"
 import { useTranslation } from "@/i18n"
 import {
   Settings, ImageIcon, FileScan, Shield, Users, ChevronDown, ChevronRight,
-  Folder, Calendar, FileText, MapPin, Trash2, Database, Search,
+  Folder, Calendar, FileText, MapPin, Trash2, Database, Search, Info,
   PanelLeftClose, PanelLeftOpen, X, Images,
 } from "lucide-react"
 import { useAuth } from "@/providers/useAuth"
@@ -80,6 +80,7 @@ export function Sidebar({
   const isToolsActive = ["deduplication", "ocr", "exif", "smart-search"].includes(activeTab)
   const isTrashActive = activeTab === "gallery-trash"
   const isAdminActive = activeTab === "admin-users" || activeTab === "admin-settings"
+  const isAboutActive = activeTab === "about"
 
   const groups: GroupItem[] = [
     {
@@ -282,6 +283,20 @@ export function Sidebar({
                 ))}
               </div>
             )}
+
+            <div className="space-y-1 mt-2">
+              <Button
+                variant={isAboutActive ? "default" : "ghost"}
+                className={cn(
+                  "w-full justify-center gap-0 h-10",
+                  isAboutActive && "bg-primary text-primary-foreground hover:bg-primary/90"
+                )}
+                title={t("tabs.about")}
+                onClick={() => handleSelect("about")}
+              >
+                <Info className="h-5 w-5 flex-shrink-0" />
+              </Button>
+            </div>
           </>
         ) : (
           <>
@@ -332,6 +347,21 @@ export function Sidebar({
                 {adminExpanded && renderSubItems(adminSubItems, handleSelect)}
               </div>
             )}
+
+            {/* About */}
+            <div className="space-y-1 mt-4">
+              <Button
+                variant={isAboutActive ? "default" : "ghost"}
+                className={cn(
+                  "w-full justify-start gap-3 h-9",
+                  isAboutActive && "bg-primary text-primary-foreground hover:bg-primary/90"
+                )}
+                onClick={() => handleSelect("about")}
+              >
+                <Info className="h-4 w-4 flex-shrink-0" />
+                <span className="flex-1 font-medium text-left">{t("tabs.about")}</span>
+              </Button>
+            </div>
           </>
         )}
       </nav>

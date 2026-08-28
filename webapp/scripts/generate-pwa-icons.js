@@ -4,7 +4,7 @@ import { resolve, dirname } from "path";
 import { fileURLToPath } from "url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const sourcePath = resolve(__dirname, "../public/icon-highres.png");
+const sourcePath = resolve(__dirname, "./icon-highres.png");
 const outDir = resolve(__dirname, "../public");
 
 const BG_COLOR = { r: 0, g: 0, b: 0, alpha: 0 }; // transparent

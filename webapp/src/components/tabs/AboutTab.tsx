@@ -74,6 +74,12 @@ const contacts: ContactLink[] = [
   { label: "Facebook", href: "https://www.facebook.com/nikolay.sedov.98", icon: FacebookIcon },
 ]
 
+/**
+ * Source of truth for the backend entries below: the direct (non-indirect)
+ * `require` entries across `backend/api-service/go.mod`, `backend/exif/go.mod`,
+ * `backend/ocr/go.mod`, and `tools/embeddings-builder/go.mod`. Update this list
+ * when those modules change, and re-verify each license link before shipping.
+ */
 const thirdPartyComponents: ThirdPartyComponent[] = [
   { name: "Radix UI Primitives", license: "MIT", url: "https://www.radix-ui.com/" },
   { name: "React", license: "MIT", url: "https://react.dev/" },
@@ -86,6 +92,25 @@ const thirdPartyComponents: ThirdPartyComponent[] = [
   { name: "class-variance-authority", license: "Apache-2.0", url: "https://cva.style/" },
   { name: "clsx", license: "MIT", url: "https://github.com/lukeed/clsx" },
   { name: "tailwind-merge", license: "MIT", url: "https://github.com/dcastil/tailwind-merge" },
+  { name: "Bild", license: "MIT", url: "https://github.com/anthonynsimon/bild/blob/HEAD/LICENSE" },
+  { name: "go-exiftool", license: "GPL-3.0", url: "https://github.com/barasher/go-exiftool/blob/HEAD/LICENSE" },
+  { name: "webp", license: "MIT", url: "https://github.com/deepteams/webp/blob/HEAD/LICENSE" },
+  { name: "Imaging", license: "MIT", url: "https://github.com/disintegration/imaging/blob/HEAD/LICENSE" },
+  { name: "Gin CORS", license: "MIT", url: "https://github.com/gin-contrib/cors/blob/HEAD/LICENSE" },
+  { name: "Gin", license: "MIT", url: "https://github.com/gin-gonic/gin/blob/HEAD/LICENSE" },
+  { name: "glebarez/sqlite", license: "MIT", url: "https://github.com/glebarez/sqlite/blob/HEAD/License" },
+  { name: "GoCluster", license: "MIT", url: "https://github.com/MadAppGang/gocluster/blob/HEAD/LICENSE" },
+  { name: "MCP Go SDK", license: "Apache-2.0", url: "https://github.com/modelcontextprotocol/go-sdk/blob/HEAD/LICENSE" },
+  { name: "openai-go", license: "Apache-2.0", url: "https://github.com/openai/openai-go/blob/HEAD/LICENSE" },
+  { name: "gosseract", license: "MIT", url: "https://github.com/otiai10/gosseract/blob/HEAD/LICENSE" },
+  { name: "testify", license: "MIT", url: "https://github.com/stretchr/testify/blob/HEAD/LICENSE" },
+  { name: "Google UUID", license: "BSD-3-Clause", url: "https://github.com/google/uuid/blob/HEAD/LICENSE" },
+  { name: "Wire", license: "Apache-2.0", url: "https://github.com/google/wire/blob/HEAD/LICENSE" },
+  { name: "godotenv", license: "MIT", url: "https://github.com/joho/godotenv/blob/HEAD/LICENCE" },
+  { name: "x/crypto", license: "BSD-3-Clause", url: "https://github.com/golang/crypto/blob/master/LICENSE" },
+  { name: "x/image", license: "BSD-3-Clause", url: "https://github.com/golang/image/blob/master/LICENSE" },
+  { name: "GORM", license: "MIT", url: "https://github.com/go-gorm/gorm/blob/master/LICENSE" },
+  { name: "GORM Postgres driver", license: "MIT", url: "https://github.com/go-gorm/postgres/blob/HEAD/License" },
 ]
 
 const features = [

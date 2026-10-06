@@ -51,8 +51,8 @@ services:
       DB_USER: postgres
       DB_PASSWORD: postgres
       DB_NAME: exif_db
-      SERVER_HOST: 0.0.0.0
-      SERVER_PORT: 5172
+      EXIF_HOST: 0.0.0.0
+      EXIF_PORT: 5172
     depends_on:
       postgres:
         condition: service_healthy

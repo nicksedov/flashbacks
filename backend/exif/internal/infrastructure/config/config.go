@@ -34,8 +34,20 @@ func Load() *Config {
 		ServerHost:       getEnv("EXIF_HOST", "0.0.0.0"),
 		ServerPort:       getEnv("EXIF_PORT", "5172"),
 		ExiftoolPoolSize: getEnvInt("EXIFTOOL_POOL_SIZE", 0),
-		LogLevel:         getEnv("LOG_LEVEL", "info"),
+		LogLevel:         getEnvFallback("EXIF_LOG_LEVEL", "LOG_LEVEL", "info"),
 	}
+}
+
+// getEnvFallback reads primary, then secondary (for backwards compatibility),
+// and finally falls back to defaultValue.
+func getEnvFallback(primary, secondary, defaultValue string) string {
+	if value, exists := os.LookupEnv(primary); exists {
+		return value
+	}
+	if value, exists := os.LookupEnv(secondary); exists {
+		return value
+	}
+	return defaultValue
 }
 
 func getEnvInt(key string, defaultValue int) int {

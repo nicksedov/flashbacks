@@ -1,7 +1,7 @@
 const CACHE_NAME = 'flashbacks-v3';
 const STATIC_ASSETS = [
   '/manifest.json',
-  '/favicon.svg',
+  '/favicon.png',
   '/apple-touch-icon.png',
   '/icon-192.png',
   '/icon-512.png',

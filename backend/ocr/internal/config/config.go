@@ -10,9 +10,13 @@ type Config struct {
 }
 
 // Load loads configuration from environment variables.
-// Defaults to port 5174 if PORT is not set.
+// The port is read from OCR_PORT. For backwards compatibility, PORT is used as
+// a fallback when OCR_PORT is not set. Defaults to port 5174 if neither is set.
 func Load() *Config {
-	port := os.Getenv("PORT")
+	port := os.Getenv("OCR_PORT")
+	if port == "" {
+		port = os.Getenv("PORT")
+	}
 	if port == "" {
 		port = "5174"
 	}

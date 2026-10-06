@@ -12,7 +12,7 @@
 # ======================================================================
 # Common builder stage — builds all three binaries
 # ======================================================================
-FROM golang:1.26.4-alpine AS builder
+FROM golang:1.27.1-alpine AS builder
 
 WORKDIR /build
 
@@ -104,7 +104,7 @@ RUN chown -R appuser:appgroup /app
 
 USER appuser
 
-ENV PORT=${OCR_PORT}
+ENV OCR_PORT=${OCR_PORT}
 EXPOSE ${OCR_PORT}
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \

@@ -395,7 +395,7 @@ function FolderTile({ name, path, fileCount, onEnter }: FolderTileProps) {
           </span>
         )}
       </div>
-      <p className="text-[11px] text-muted-foreground truncate mt-1 px-0.5 w-full text-center" title={name}>
+      <p className="text-sm text-muted-foreground truncate mt-1 px-0.5 w-full text-center" title={name}>
         {name}
       </p>
     </div>

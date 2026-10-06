@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
-import { ThemeProvider, type Theme } from "@/theme"
+import { DEFAULT_THEME, ThemeProvider, selectActiveTheme, type Theme } from "@/theme"
 import {
   I18nProvider,
   resolveInitialAuthLanguage,
@@ -17,7 +17,7 @@ interface SettingsProviderProps {
 }
 
 export function SettingsProvider({ children }: SettingsProviderProps) {
-  const [theme, setThemeState] = useState<Theme>("light-purple")
+  const [theme, setThemeState] = useState<Theme>(DEFAULT_THEME)
   const [language, setLanguageState] = useState<Language>("en")
   const [authLanguage, setAuthLanguageState] = useState<Language>(() => resolveInitialAuthLanguage())
   const [trashDir, setTrashDirState] = useState("")
@@ -32,6 +32,10 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
     () => isAuthLoading || (isAuthenticated && !settingsFetched),
     [isAuthLoading, isAuthenticated, settingsFetched]
   )
+
+  // The authorization screen must always use the default theme; the account
+  // theme is only applied once the user is authenticated.
+  const activeTheme = selectActiveTheme(isAuthenticated, theme)
 
   useEffect(() => {
     languageRef.current = language
@@ -51,7 +55,7 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
 
     // Load user settings for theme and language
     fetchUserSettings().catch(() => null).then((userSettings) => {
-      let effectiveTheme = userSettings?.theme || "light-purple"
+      let effectiveTheme = userSettings?.theme || DEFAULT_THEME
       
       // Migrate old theme values
       if (effectiveTheme in themeMigration) {
@@ -140,7 +144,7 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
   return (
     <SettingsContext.Provider
       value={{
-        theme,
+        theme: activeTheme,
         setTheme,
         toggleTheme,
         language,
@@ -152,7 +156,7 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
         isLoading,
       }}
     >
-      <ThemeProvider theme={theme}>
+      <ThemeProvider theme={activeTheme}>
         <I18nProvider language={selectActiveLanguage(isAuthenticated, language, authLanguage)}>
           {children}
         </I18nProvider>

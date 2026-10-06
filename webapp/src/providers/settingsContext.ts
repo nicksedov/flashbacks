@@ -3,6 +3,7 @@ import type { Theme } from "@/theme"
 import type { Language } from "@/i18n"
 
 export interface SettingsContextValue {
+  /** Active theme — the account theme when authenticated, otherwise the default theme. */
   theme: Theme
   setTheme: (theme: Theme) => void
   toggleTheme: () => void

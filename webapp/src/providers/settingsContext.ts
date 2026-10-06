@@ -6,8 +6,12 @@ export interface SettingsContextValue {
   theme: Theme
   setTheme: (theme: Theme) => void
   toggleTheme: () => void
+  /** Display language of the authenticated account (persisted to user settings). */
   language: Language
   setLanguage: (language: Language) => void
+  /** Display language used before authentication; independent of account settings. */
+  authLanguage: Language
+  setAuthLanguage: (language: Language) => void
   trashDir: string
   setTrashDir: (trashDir: string) => void
   isLoading: boolean

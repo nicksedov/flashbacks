@@ -1,13 +1,15 @@
 import { useEffect, useRef, useState } from "react"
 import { useAuth } from "@/providers/useAuth"
+import { useSettings } from "@/providers/useSettings"
 import { login as apiLogin, register as apiRegister, fetchAuthStatus } from "@/api/endpoints"
 import { toast } from "sonner"
-import { Loader2, ShieldAlert, WifiOff } from "lucide-react"
+import { Globe, Loader2, ShieldAlert, WifiOff } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card"
-import { useTranslation } from "@/i18n"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { useTranslation, type Language } from "@/i18n"
 
 const HEALTH_CHECK_INTERVAL_MS = 5000
 
@@ -15,6 +17,7 @@ type AuthMode = "login" | "register"
 
 export function LoginScreen() {
   const { login, isBootstrapMode, setBootstrapVerified, accountCreationMode } = useAuth()
+  const { authLanguage, setAuthLanguage } = useSettings()
   const { t } = useTranslation()
   const [mode, setMode] = useState<AuthMode>("login")
 
@@ -159,6 +162,26 @@ export function LoginScreen() {
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-background to-muted p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-2 text-center">
+          <div className="flex justify-end">
+            <Select value={authLanguage} onValueChange={(value) => setAuthLanguage(value as Language)}>
+              <SelectTrigger
+                id="auth-language-select"
+                aria-label={t("settings.language")}
+                className="h-11 w-auto min-w-11 gap-2"
+              >
+                <SelectValue>
+                  <span className="flex items-center gap-2">
+                    <Globe className="h-4 w-4" />
+                    {authLanguage === "en" ? "English" : "Русский"}
+                  </span>
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="en">English</SelectItem>
+                <SelectItem value="ru">Русский</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
           <img
             src="/flashbacks_logo_welcomescreen.png"
             alt="Flashbacks"

@@ -22,3 +22,4 @@
 
 - **Status legend:** ☐ = pending, ☑ = done (drift fixed), ✎ = intentionally deferred with a note.
 - Keep this file in sync with the master spec. When fixing a row, mark it done here **and** update the corresponding tasks/change artifacts.
+- **Auth language switcher (`add-auth-language-switcher`, 2026-10-07):** audited for drift — the login/registration language switcher reuses the shared `Select` primitive with semantic tokens, an accessible `aria-label`, Radix keyboard operation, and a 44px touch target. No new drift introduced.

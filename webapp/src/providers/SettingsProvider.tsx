@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import { ThemeProvider, type Theme } from "@/theme"
-import { I18nProvider, type Language } from "@/i18n"
+import {
+  I18nProvider,
+  resolveInitialAuthLanguage,
+  selectActiveLanguage,
+  writeStoredAuthLanguage,
+  type Language,
+} from "@/i18n"
 import { fetchUserSettings, fetchSettings, updateUserSettings } from "@/api/endpoints"
 import type { UpdateUserSettingsRequest } from "@/types"
 import { SettingsContext } from "./settingsContext"
@@ -13,6 +19,7 @@ interface SettingsProviderProps {
 export function SettingsProvider({ children }: SettingsProviderProps) {
   const [theme, setThemeState] = useState<Theme>("light-purple")
   const [language, setLanguageState] = useState<Language>("en")
+  const [authLanguage, setAuthLanguageState] = useState<Language>(() => resolveInitialAuthLanguage())
   const [trashDir, setTrashDirState] = useState("")
   const { isAuthenticated, isLoading: isAuthLoading } = useAuth()
   const [settingsFetched, setSettingsFetched] = useState(false)
@@ -119,6 +126,10 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
     },
     [persistSettings]
   )
+  const setAuthLanguage = useCallback((newLanguage: Language) => {
+    setAuthLanguageState(newLanguage)
+    writeStoredAuthLanguage(newLanguage)
+  }, [])
   const setTrashDir = useCallback(
     (newTrashDir: string) => {
       setTrashDirState(newTrashDir)
@@ -128,10 +139,21 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
 
   return (
     <SettingsContext.Provider
-      value={{ theme, setTheme, toggleTheme, language, setLanguage, trashDir, setTrashDir, isLoading }}
+      value={{
+        theme,
+        setTheme,
+        toggleTheme,
+        language,
+        setLanguage,
+        authLanguage,
+        setAuthLanguage,
+        trashDir,
+        setTrashDir,
+        isLoading,
+      }}
     >
       <ThemeProvider theme={theme}>
-        <I18nProvider language={language}>
+        <I18nProvider language={selectActiveLanguage(isAuthenticated, language, authLanguage)}>
           {children}
         </I18nProvider>
       </ThemeProvider>

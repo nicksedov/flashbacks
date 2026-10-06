@@ -1,10 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from "react"
-
-export interface PrefetchBuffer<R> {
-  page: number
-  promise: Promise<R> | null
-  data: R | null
-}
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 
 export interface UseInfiniteScrollOptions<T, R> {
   /** Fetch function that takes page number and page size */
@@ -38,15 +32,22 @@ export interface UseInfiniteScrollResult<T> {
   initialized: boolean
   /** Load next page */
   loadMore: () => Promise<void>
-  /** Reset state and invalidate prefetch */
+  /** Reset state and invalidate in-flight requests */
   reset: () => void
   /** Remove a specific item from the items list */
   removeItem: (key: string | number) => void
 }
 
 /**
- * Generic infinite scroll hook with prefetch support.
- * Handles pagination, duplicate prevention, and background prefetching.
+ * Generic infinite scroll hook.
+ *
+ * Handles pagination, duplicate prevention, and stale-request invalidation.
+ *
+ * Pagination is strictly on-demand: `loadMore()` fetches exactly one page
+ * (starting at page 1) and only when explicitly called. There is intentionally
+ * no eager next-page prefetch, so opening a view issues a single `page=1`
+ * request and further pages are fetched only when the caller (e.g. an
+ * IntersectionObserver sentinel) requests them.
  */
 export function useInfiniteScroll<T, R>(
   options: UseInfiniteScrollOptions<T, R>
@@ -77,68 +78,52 @@ export function useInfiniteScroll<T, R>(
   // Generation counter to invalidate stale requests after reset
   const generationRef = useRef(0)
 
-  const prefetchRef = useRef<PrefetchBuffer<R>>({
-    page: 0,
-    promise: null,
-    data: null,
+  // Synchronous re-entrancy guard. `isLoading` is React state and is therefore
+  // not updated within the same tick, so relying on it lets concurrent triggers
+  // (mount effect + IntersectionObserver, or React StrictMode double-invocation)
+  // all pass the guard and issue duplicate fetches. A ref is updated immediately.
+  const loadingRef = useRef(false)
+
+  // Keep the latest options in refs so `loadMore` can stay referentially stable
+  // without re-creating itself (and re-triggering dependents) on every render.
+  const fetchFnRef = useRef(fetchFn)
+  const pageSizeRef = useRef(pageSize)
+  const transformRef = useRef(transform)
+  const responseTotalRef = useRef(responseTotal)
+  const responseHasNextRef = useRef(responseHasNext)
+  const compareRef = useRef(compare)
+  const keyExtractorRef = useRef(keyExtractor)
+  useEffect(() => {
+    fetchFnRef.current = fetchFn
+    pageSizeRef.current = pageSize
+    transformRef.current = transform
+    responseTotalRef.current = responseTotal
+    responseHasNextRef.current = responseHasNext
+    compareRef.current = compare
+    keyExtractorRef.current = keyExtractor
   })
 
-  const startPrefetch = useCallback(
-    (page: number) => {
-      const buf = prefetchRef.current
-      if (buf.page === page && (buf.data || buf.promise)) {
-        return // already prefetching/prefetched this page
-      }
-      buf.page = page
-      buf.data = null
-      buf.promise = fetchFn(page, pageSize)
-        .then((result) => {
-          if (prefetchRef.current.page === page) {
-            prefetchRef.current.data = result
-          }
-          return result
-        })
-        .catch(() => {
-          prefetchRef.current.promise = null
-          return null as unknown as R
-        })
-    },
-    [fetchFn, pageSize]
-  )
-
-  const consumePrefetch = useCallback((): R | null => {
-    const buf = prefetchRef.current
-    if (buf.page === pageRef.current && buf.data) {
-      const data = buf.data
-      buf.page = 0
-      buf.data = null
-      buf.promise = null
-      return data
+  const isDuplicate = useCallback((existingItems: T[], newItem: T): boolean => {
+    const compareFn = compareRef.current
+    if (compareFn) {
+      return existingItems.some((item) => compareFn(item, newItem))
     }
-    return null
+    const extract = keyExtractorRef.current
+    const newKey = extract(newItem)
+    return existingItems.some((item) => extract(item) === newKey)
   }, [])
 
-  const isDuplicate = useCallback(
-    (existingItems: T[], newItem: T): boolean => {
-      if (compare) {
-        return existingItems.some((item) => compare(item, newItem))
-      }
-      const newKey = keyExtractor(newItem)
-      return existingItems.some((item) => keyExtractor(item) === newKey)
-    },
-    [compare, keyExtractor]
-  )
-
   const loadMore = useCallback(async () => {
-    if (isLoading) return
+    // Synchronous guard: prevent concurrent / duplicate fetches.
+    if (loadingRef.current) return
+    loadingRef.current = true
     setIsLoading(true)
     setError(null)
     // Capture current generation to detect stale requests
     const currentGeneration = generationRef.current
     try {
       const currentPage = pageRef.current
-      const prefetched = consumePrefetch()
-      const result = prefetched ?? (await fetchFn(currentPage, pageSize))
+      const result = await fetchFnRef.current(currentPage, pageSizeRef.current)
 
       // Abort if reset() was called during the fetch (generation changed)
       if (generationRef.current !== currentGeneration) {
@@ -146,23 +131,19 @@ export function useInfiniteScroll<T, R>(
       }
 
       setItems((prev) => {
-        const newItems = transform(result).filter((item) => !isDuplicate(prev, item))
+        const newItems = transformRef.current(result).filter((item) => !isDuplicate(prev, item))
         return [...prev, ...newItems]
       })
 
-      if (responseTotal) {
-        setTotal(responseTotal(result))
+      if (responseTotalRef.current) {
+        setTotal(responseTotalRef.current(result))
       }
-      if (responseHasNext) {
-        setHasMore(responseHasNext(result))
+      if (responseHasNextRef.current) {
+        setHasMore(responseHasNextRef.current(result))
       }
 
       pageRef.current += 1
       setInitialized(true)
-
-      if (!responseHasNext || responseHasNext(result)) {
-        startPrefetch(pageRef.current)
-      }
     } catch (err) {
       // Only set error if generation hasn't changed
       if (generationRef.current === currentGeneration) {
@@ -171,10 +152,11 @@ export function useInfiniteScroll<T, R>(
     } finally {
       // Only clear loading if generation hasn't changed
       if (generationRef.current === currentGeneration) {
+        loadingRef.current = false
         setIsLoading(false)
       }
     }
-  }, [isLoading, consumePrefetch, startPrefetch, fetchFn, pageSize, transform, responseTotal, responseHasNext, isDuplicate])
+  }, [isDuplicate])
 
   const reset = useCallback(() => {
     setItems([])
@@ -184,7 +166,8 @@ export function useInfiniteScroll<T, R>(
     setError(null)
     pageRef.current = 1
     setInitialized(false)
-    prefetchRef.current = { page: 0, promise: null, data: null }
+    // Release the synchronous guard so a fresh load can start immediately.
+    loadingRef.current = false
     // Increment generation to invalidate all in-flight requests
     generationRef.current += 1
   }, [])

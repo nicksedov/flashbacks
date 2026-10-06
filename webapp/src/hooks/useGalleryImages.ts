@@ -11,9 +11,18 @@ export function useGalleryImages(view: string, sortOrder: string = "newest", sea
   const searchRef = useRef(search)
   const dirPathRef = useRef(dirPath)
 
+  // Stable fetch function: all varying inputs are read from refs, so the
+  // identity never changes between renders. This keeps `loadMore` (and the
+  // effects/observers that depend on it) from re-firing on every render.
+  const fetchPage = useCallback(
+    (page: number, pageSize: number) =>
+      fetchGalleryImages(page, pageSize, viewRef.current, sortOrderRef.current, searchRef.current, dirPathRef.current),
+    []
+  )
+
   const { items, total, hasMore, isLoading, error, initialized, loadMore, reset, removeItem } =
     useInfiniteScroll<GalleryImageDTO, GalleryImagesResponse>({
-      fetchFn: (page, pageSize) => fetchGalleryImages(page, pageSize, viewRef.current, sortOrderRef.current, searchRef.current, dirPathRef.current),
+      fetchFn: fetchPage,
       pageSize: PAGE_SIZE,
       transform: (response) => response.images,
       responseTotal: (response) => response.totalImages,

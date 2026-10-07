@@ -88,7 +88,7 @@ func LoadConfig() *AppConfig {
 		DBPort:                      getEnv("DB_PORT", "5432"),
 		DBUser:                      getEnv("DB_USER", "postgres"),
 		DBPassword:                  getEnv("DB_PASSWORD", "postgres"),
-		DBName:                      getEnv("DB_NAME", "image_dedup"),
+		DBName:                      getEnv("DB_NAME", "flashbacks"),
 		ServerHost:                  getEnv("SERVER_HOST", "0.0.0.0"),
 		ServerPort:                  getEnv("SERVER_PORT", "5170"),
 		CORSOrigins:                 origins,

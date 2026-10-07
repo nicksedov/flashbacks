@@ -4,7 +4,7 @@
 
 The "About → Third-party components" tab currently lists only frontend
 libraries (React, Leaflet, Radix UI, …). The backend microservices
-(api-service, exif, ocr, shared, embeddings-builder) rely on a substantial set
+(core, exif, ocr, shared, embeddings-builder) rely on a substantial set
 of Go frameworks and libraries whose licenses are not disclosed anywhere in the
 product. Users self-hosting Flashbacks need this attribution to understand the
 licensing obligations of the shipped backend.

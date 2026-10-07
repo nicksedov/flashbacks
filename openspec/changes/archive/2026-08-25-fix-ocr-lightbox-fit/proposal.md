@@ -30,7 +30,7 @@ viewport.
 ## Non-goals
 
 - No changes to the OCR microservice (`backend/ocr`), the OCR/LLM recognition
-  pipeline, the api-service OCR endpoints, or the database schema.
+  pipeline, the core OCR endpoints, or the database schema.
 - No changes to the other lightbox tabs (their behavior already matches the
   expected result).
 - No rework of the bounding-box scaling math or the OCR data contract.

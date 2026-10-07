@@ -20,7 +20,7 @@ paths:
 
         These tools read/write EXIF data directly from image files.
         For fast cached metadata from the database, use the `get_cached_metadata`
-        tool provided by the api-service MCP server.
+        tool provided by the core MCP server.
 
         ## Tool Categories
 

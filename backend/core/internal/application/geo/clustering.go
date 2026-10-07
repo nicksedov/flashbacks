@@ -6,7 +6,7 @@ import (
 	"math"
 	"sync"
 
-	"github.com/flashbacks/api-service/internal/interfaces/dto"
+	"github.com/flashbacks/core/internal/interfaces/dto"
 
 	goclusterlib "github.com/MadAppGang/gocluster"
 	"gorm.io/gorm"

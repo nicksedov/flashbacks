@@ -1,8 +1,8 @@
 // Package main — embedding.go
 //
 // Standalone embedding client for the embeddings-builder utility.
-// Adapted from api-service/internal/infrastructure/llm/ — intentionally duplicated
-// to keep this module free of the main api-service's dependencies.
+// Adapted from core/internal/infrastructure/llm/ — intentionally duplicated
+// to keep this module free of the main core's dependencies.
 package main
 
 import (
@@ -15,7 +15,7 @@ import (
 	"time"
 )
 
-// Provider type constants (from api-service llm/client.go).
+// Provider type constants (from core llm/client.go).
 const (
 	ProviderOllama      = "ollama"
 	ProviderOllamaCloud = "ollama_cloud"

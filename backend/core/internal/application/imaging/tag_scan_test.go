@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/flashbacks/api-service/internal/domain"
-	imgutil "github.com/flashbacks/api-service/internal/infrastructure/imaging"
-	"github.com/flashbacks/api-service/internal/testutil"
+	"github.com/flashbacks/core/internal/domain"
+	imgutil "github.com/flashbacks/core/internal/infrastructure/imaging"
+	"github.com/flashbacks/core/internal/testutil"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

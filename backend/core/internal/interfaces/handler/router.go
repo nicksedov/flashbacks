@@ -1,7 +1,7 @@
 package handler
 
 import (
-	"github.com/flashbacks/api-service/internal/interfaces/middleware"
+	"github.com/flashbacks/core/internal/interfaces/middleware"
 
 	"github.com/gin-gonic/gin"
 )

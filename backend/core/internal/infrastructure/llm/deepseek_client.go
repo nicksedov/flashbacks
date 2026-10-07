@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/flashbacks/api-service/internal/infrastructure/imaging"
+	"github.com/flashbacks/core/internal/infrastructure/imaging"
 )
 
 // DeepSeekModelInfo holds known context window sizes for DeepSeek models.

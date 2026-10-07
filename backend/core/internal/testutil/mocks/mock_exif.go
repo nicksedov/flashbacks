@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/flashbacks/api-service/internal/domain"
+	"github.com/flashbacks/core/internal/domain"
 )
 
 // MockExifClient is a test stub implementing the imaging.ExifClient interface.

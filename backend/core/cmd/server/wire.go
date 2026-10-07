@@ -4,7 +4,7 @@
 package main
 
 import (
-	"github.com/flashbacks/api-service/internal/infrastructure/di"
+	"github.com/flashbacks/core/internal/infrastructure/di"
 	"github.com/google/wire"
 )
 

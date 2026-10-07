@@ -1,7 +1,7 @@
 # Flashbacks — Agent Context
 
 > **Project:** Flashbacks - Microservice-based duplicate image finder
-> **Architecture:** Microservices (webapp, api-service, exif, ocr)
+> **Architecture:** Microservices (webapp, core, exif, ocr)
 > **See:** [README.md](README.md) for project overview
 
 ## Project Structure
@@ -10,7 +10,7 @@
 flashbacks/
 ├── webapp/                   # React 19 SPA frontend
 ├── backend/                  # Backend microservices
-│   ├── api-service/          # Core Go API service
+│   ├── core/          # Core Go API service
 │   ├── exif/                 # EXIF metadata service
 │   └── ocr/                  # OCR text detection service
 ├── tools/                    # Utilities (embeddings-builder)
@@ -77,7 +77,7 @@ Each service has its own `AGENTS.md` with service-specific details:
 | Service | Agent Context |
 |---|---|
 | webapp | [webapp/AGENTS.md](webapp/AGENTS.md) |
-| api-service | [backend/api-service/AGENTS.md](backend/api-service/AGENTS.md) |
+| core | [backend/core/AGENTS.md](backend/core/AGENTS.md) |
 | tools | [tools/AGENTS.md](tools/AGENTS.md) |
 | exif | [backend/exif/AGENTS.md](backend/exif/AGENTS.md) |
 | ocr | [backend/ocr/AGENTS.md](backend/ocr/AGENTS.md) |

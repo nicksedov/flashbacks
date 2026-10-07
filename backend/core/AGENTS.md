@@ -16,7 +16,7 @@ This is the backend API service for the Flashbacks platform, a Go application pr
 ## Structure
 
 ```
-api-service/
+core/
 ├── cmd/server/main.go          # Entry point, DI
 └── internal/
     ├── application/            # Business logic
@@ -92,7 +92,7 @@ api-service/
 
 ```bash
 go mod tidy                              # Install dependencies
-go build -o api-service ./cmd/server/    # Build binary
+go build -o core ./cmd/server/    # Build binary
 go run ./cmd/server/                     # Dev: http://localhost:5170
 go test ./internal/application/... -count=1  # Run unit tests (ALWAYS after changes)
 go test ./internal/application/... -v    # Verbose test output
@@ -105,7 +105,7 @@ go test ./... -coverprofile=coverage.out # Coverage report
 DB_HOST=localhost
 DB_PORT=5432
 DB_NAME=api_db
-DB_USER=postgres
+DB_USER=flashbacks
 DB_PASSWORD=postgres
 SERVER_HOST=0.0.0.0
 SERVER_PORT=5170
@@ -131,7 +131,7 @@ EXIF_SERVICE_URL=http://localhost:5172
 
 ## API Endpoints
 
-See OpenAPI spec: `docs/api-contracts/api-service.yaml`
+See OpenAPI spec: `docs/api-contracts/core.yaml`
 
 Key routes:
 - `/api/auth/*` - Authentication

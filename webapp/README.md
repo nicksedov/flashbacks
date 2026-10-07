@@ -81,7 +81,7 @@ npm run test:watch
 
 ## API Integration
 
-WebUI communicates with the API service via REST endpoints defined in [`docs/api-contracts/api-service.yaml`](../docs/api-contracts/api-service.yaml).
+WebUI communicates with the API service via REST endpoints defined in [`docs/api-contracts/core.yaml`](../docs/api-contracts/core.yaml).
 
 The Vite dev server proxies `/api` requests to the backend service automatically.
 

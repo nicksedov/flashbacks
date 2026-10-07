@@ -29,7 +29,7 @@ func Init(cfg *config.Config) (*gorm.DB, error) {
 	}
 
 	// Run AutoMigrate for owned tables (image_metadata, geolocation_caches).
-	// Schema ownership was transferred from api-service to exif service.
+	// Schema ownership was transferred from core to exif service.
 	if err := db.AutoMigrate(&domain.ImageMetadata{}, &domain.GeolocationCache{}); err != nil {
 		return nil, fmt.Errorf("failed to migrate database tables: %w", err)
 	}

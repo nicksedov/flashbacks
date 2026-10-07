@@ -4,7 +4,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/flashbacks/api-service/internal/interfaces/dto"
+	"github.com/flashbacks/core/internal/interfaces/dto"
 
 	"github.com/stretchr/testify/assert"
 )

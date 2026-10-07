@@ -7,8 +7,8 @@ import (
 	"log"
 	"strings"
 
-	"github.com/flashbacks/api-service/internal/domain"
-	"github.com/flashbacks/api-service/internal/infrastructure/llm"
+	"github.com/flashbacks/core/internal/domain"
+	"github.com/flashbacks/core/internal/infrastructure/llm"
 
 	"gorm.io/gorm"
 )
@@ -239,25 +239,24 @@ func (s *ConversationService) SummarizeOlderMessages(ctx context.Context, convID
 	})
 }
 
-// ResolveModelMaxTokens reads LlmProviderModelCache for the given provider, finds model by name,
-// and returns its ContextLength. Returns 0 if not found/unavailable.
+// ResolveModelMaxTokens looks up the model's context window from the normalized
+// llm_provider_models table for the provider with the given alias. It matches by
+// either the API model id or the display name. Returns 0 if not found.
 func (s *ConversationService) ResolveModelMaxTokens(providerAlias, modelName string) int {
-	var cache domain.LlmProviderModelCache
-	if err := s.db.Where("provider_alias = ?", providerAlias).First(&cache).Error; err != nil {
+	var provider domain.LlmProvider
+	if err := s.db.Where("alias = ?", providerAlias).First(&provider).Error; err != nil {
 		return 0
 	}
 
-	var models []llm.ModelInfo
-	if err := json.Unmarshal([]byte(cache.ModelsJSON), &models); err != nil {
+	var model domain.LlmProviderModel
+	if err := s.db.
+		Where("llm_provider_id = ?", provider.ID).
+		Where("model_id = ? OR model_name = ?", modelName, modelName).
+		First(&model).Error; err != nil {
 		return 0
 	}
 
-	for _, m := range models {
-		if m.Name == modelName || m.ID == modelName {
-			return m.ContextLength
-		}
-	}
-	return 0
+	return model.ContextLength
 }
 
 // GenerateDisplaySummary generates an LLM summary for conversation history.

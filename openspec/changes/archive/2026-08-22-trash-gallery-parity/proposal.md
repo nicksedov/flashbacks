@@ -13,7 +13,7 @@ This change rebuilds the Trash section to be visually and structurally uniform w
 - **Backend — endpoint changes**: replace the ungrouped `GET /api/trash-list` with a grouped, cursor-paginated `GET /api/trash` that returns trash items grouped by deletion date and sorted from the latest date to the earliest; switch `POST /api/trash-restore` and `POST /api/trash-delete` from `fileName`-based to `id`-based operations; keep `GET /api/trash-info` and `POST /api/trash-clean` (now also clearing `trash_items` rows); add `GET /api/trash/image` to serve a full-size preview of a trashed file for the lightbox (verified against the configured trash directory, mirroring gallery access checks).
 - **Backend — thumbnails**: generate and embed thumbnails into trash list items (as data URLs), exactly like the gallery views do, so the grid shows image thumbnails.
 - **Frontend — Trash UI**: rewrite [`TrashTab.tsx`](../../webapp/src/components/tabs/TrashTab.tsx) as a gallery-style view: a responsive thumbnail grid grouped by deletion date (latest first), infinite scroll (cursor-based), and a two-button hover overlay — **View** (opens a lightbox showing the full image plus the original location before deletion and the deletion date) and **Restore** (restores the file to its original location). A view-level "Empty Trash" action remains available in the header.
-- **API contract & types**: update the OpenAPI contract at [`docs/api-contracts/api-service.yaml`](../../docs/api-contracts/api-service.yaml) for the trash endpoints, refresh the webapp TS types, and add en/ru translations for all new strings.
+- **API contract & types**: update the OpenAPI contract at [`docs/api-contracts/core.yaml`](../../docs/api-contracts/core.yaml) for the trash endpoints, refresh the webapp TS types, and add en/ru translations for all new strings.
 
 ## Capabilities
 
@@ -27,9 +27,9 @@ This change rebuilds the Trash section to be visually and structurally uniform w
 
 ## Impact
 
-- Backend api-service: new [`TrashItem`](../../backend/api-service/internal/domain/media.go) model, migration registration in [`database.go`](../../backend/api-service/internal/infrastructure/database/database.go), trash handler rework in [`handlers_trash.go`](../../backend/api-service/internal/interfaces/handler/handlers_trash.go), trash recording in [`fileops.go`](../../backend/api-service/internal/interfaces/handler/helpers/fileops.go), a trash access verifier, DTOs in [`media.go`](../../backend/api-service/internal/interfaces/dto/media.go), routes in [`router.go`](../../backend/api-service/internal/interfaces/handler/router.go), and i18n `Msg*` constants with en/ru entries.
+- Backend core: new [`TrashItem`](../../backend/core/internal/domain/media.go) model, migration registration in [`database.go`](../../backend/core/internal/infrastructure/database/database.go), trash handler rework in [`handlers_trash.go`](../../backend/core/internal/interfaces/handler/handlers_trash.go), trash recording in [`fileops.go`](../../backend/core/internal/interfaces/handler/helpers/fileops.go), a trash access verifier, DTOs in [`media.go`](../../backend/core/internal/interfaces/dto/media.go), routes in [`router.go`](../../backend/core/internal/interfaces/handler/router.go), and i18n `Msg*` constants with en/ru entries.
 - Webapp: [`TrashTab.tsx`](../../webapp/src/components/tabs/TrashTab.tsx) rewritten; new trash API/hook/types; a trash lightbox component; a trash tile grid component reusing gallery primitives; new i18n keys in en/ru.
-- Documentation/contracts: [`docs/api-contracts/api-service.yaml`](../../docs/api-contracts/api-service.yaml) updated; TS types refreshed via `make generate-types`.
+- Documentation/contracts: [`docs/api-contracts/core.yaml`](../../docs/api-contracts/core.yaml) updated; TS types refreshed via `make generate-types`.
 - No changes to the exif/ocr services, and no new third-party dependencies.
 
 ## Non-goals

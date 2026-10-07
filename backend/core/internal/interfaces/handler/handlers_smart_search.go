@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"strconv"
 
-	"github.com/flashbacks/api-service/internal/application/imaging"
-	"github.com/flashbacks/api-service/internal/interfaces/i18n"
+	"github.com/flashbacks/core/internal/application/imaging"
+	"github.com/flashbacks/core/internal/interfaces/i18n"
 
 	"github.com/gin-gonic/gin"
 	"golang.org/x/sync/errgroup"

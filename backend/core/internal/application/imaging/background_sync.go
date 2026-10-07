@@ -9,9 +9,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/flashbacks/api-service/internal/application/thumbnail"
-	"github.com/flashbacks/api-service/internal/domain"
-	"github.com/flashbacks/api-service/internal/infrastructure/geocoder"
+	"github.com/flashbacks/core/internal/application/thumbnail"
+	"github.com/flashbacks/core/internal/domain"
+	"github.com/flashbacks/core/internal/infrastructure/geocoder"
 
 	"gorm.io/gorm"
 )

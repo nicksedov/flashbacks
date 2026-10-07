@@ -9,7 +9,7 @@ Flashbacks is a microservices-based image management platform with AI-powered se
 | Service | Port | Description | Technology |
 |---------|------|-------------|------------|
 | **webui** | 5180 | Frontend SPA | React 19, TypeScript 6, Vite 8 |
-| **api-service** | 5170 | Main backend API | Go 1.25+, Gin, PostgreSQL 16+ |
+| **core** | 5170 | Main backend API | Go 1.25+, Gin, PostgreSQL 16+ |
 | **exif** | 5172 | EXIF metadata extraction | Go 1.25+ |
 | **ocr** | 5174 | Text recognition in images | Go 1.25+ |
 | **postgres** | 5432 | Database (multiple logical DBs) | PostgreSQL 16 with pgvector |
@@ -20,7 +20,7 @@ Flashbacks is a microservices-based image management platform with AI-powered se
 flashbacks/
 ├── webapp/                   # React 19 SPA frontend
 ├── backend/                  # Backend microservices
-│   ├── api-service/          # Core Go API service
+│   ├── core/          # Core Go API service
 │   ├── exif/                 # EXIF metadata service
 │   └── ocr/                  # OCR text detection service
 ├── tools/                    # Utilities (embeddings-builder)
@@ -48,7 +48,7 @@ flashbacks/
                                     │ /api/* (proxied)
                                     ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                           api-service :5170                              │
+│                               core :5170                                │
 │                         Main API Gateway Service                         │
 │                                                                           │
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐    │
@@ -78,7 +78,7 @@ flashbacks/
 ### Image Scanning
 
 1. User triggers scan via **webui**
-2. **api-service** scans directories for new images
+2. **core** scans directories for new images
 3. For each image:
    - Calls **exif** to extract metadata
    - Calls **ocr** to detect text
@@ -88,7 +88,7 @@ flashbacks/
 ### AI Chat / Smart Search
 
 1. User sends query via **webui** chat interface
-2. **api-service** processes query through LLM agent
+2. **core** processes query through LLM agent
 3. Agent may:
    - Search images via tag embeddings (pgvector similarity)
    - Call OCR service for text-based queries
@@ -96,7 +96,7 @@ flashbacks/
 
 ### Authentication Flow
 
-1. User submits credentials to **api-service** `/api/auth/login`
+1. User submits credentials to **core** `/api/auth/login`
 2. Service creates session and returns session cookie
 3. Subsequent requests include session cookie
 4. CSRF token required for state-changing operations
@@ -139,21 +139,21 @@ All services communicate via HTTP REST:
 
 | From | To | Purpose |
 |------|-----|---------|
-| webui | api-service | All user operations |
-| api-service | exif | EXIF extraction |
-| api-service | ocr | Text recognition |
-| embeddings-builder | api-service DB | Populate embeddings |
+| webui | core | All user operations |
+| core | exif | EXIF extraction |
+| core | ocr | Text recognition |
+| embeddings-builder | core DB | Populate embeddings |
 
 ## Configuration Management
 
 Each service uses environment variables (12-factor app):
 
 ```
-# api-service/.env.example
+# core/.env.example
 DB_HOST=localhost
 DB_PORT=5432
 DB_NAME=api_db
-DB_USER=postgres
+DB_USER=flashbacks
 DB_PASSWORD=postgres
 SERVER_PORT=5170
 CORS_ORIGINS=http://localhost:5180
@@ -175,7 +175,7 @@ docker-compose up -d
 cd webui && npm run dev
 
 # API Service
-cd api-service && go run ./cmd/server/
+cd core && go run ./cmd/server/
 
 # Embeddings Builder (on-demand)
 cd tools/embeddings-builder && go run ./cmd/embeddings-builder
@@ -186,7 +186,7 @@ cd tools/embeddings-builder && go run ./cmd/embeddings-builder
 Each service is deployed independently:
 
 1. **webui**: Static assets served by nginx or CDN
-2. **api-service**: Containerized, exposed on port 5170
+2. **core**: Containerized, exposed on port 5170
 3. **exif**: Containerized, internal network only
 4. **ocr**: Containerized, internal network only
 5. **postgres**: Managed database service or containerized
@@ -197,4 +197,4 @@ Each service is deployed independently:
 - Distributed tracing (Jaeger/OpenTelemetry)
 - GraphQL API for complex queries
 - Caching layer (Redis) for frequent queries
-- Horizontal scaling of api-service
+- Horizontal scaling of core

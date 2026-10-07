@@ -5,12 +5,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/flashbacks/api-service/internal/application/imaging"
-	"github.com/flashbacks/api-service/internal/domain"
-	"github.com/flashbacks/api-service/internal/domain/repository"
-	"github.com/flashbacks/api-service/internal/interfaces/dto"
-	"github.com/flashbacks/api-service/internal/interfaces/handler/helpers"
-	"github.com/flashbacks/api-service/internal/testutil"
+	"github.com/flashbacks/core/internal/application/imaging"
+	"github.com/flashbacks/core/internal/domain"
+	"github.com/flashbacks/core/internal/domain/repository"
+	"github.com/flashbacks/core/internal/interfaces/dto"
+	"github.com/flashbacks/core/internal/interfaces/handler/helpers"
+	"github.com/flashbacks/core/internal/testutil"
 
 	"gorm.io/gorm"
 )

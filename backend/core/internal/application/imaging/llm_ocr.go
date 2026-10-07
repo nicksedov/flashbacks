@@ -9,9 +9,9 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/flashbacks/api-service/internal/domain"
-	"github.com/flashbacks/api-service/internal/infrastructure/llm"
-	"github.com/flashbacks/api-service/internal/infrastructure/llm/prompts"
+	"github.com/flashbacks/core/internal/domain"
+	"github.com/flashbacks/core/internal/infrastructure/llm"
+	"github.com/flashbacks/core/internal/infrastructure/llm/prompts"
 
 	"gorm.io/gorm"
 )

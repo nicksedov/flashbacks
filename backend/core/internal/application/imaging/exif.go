@@ -1,7 +1,7 @@
 package imaging
 
 import (
-	"github.com/flashbacks/api-service/internal/domain"
+	"github.com/flashbacks/core/internal/domain"
 )
 
 // HasExifData returns true if any meaningful EXIF field is populated.

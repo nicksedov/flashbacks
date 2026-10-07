@@ -25,7 +25,7 @@ name together with its license identifier.
 ### Requirement: Backend Go dependencies are attributed
 
 The combined list SHALL include the third-party Go frameworks and libraries
-used by the backend services (api-service, exif, ocr, shared, and
+used by the backend services (core, exif, ocr, shared, and
 embeddings-builder). Modules owned by the Flashbacks project SHALL NOT be
 listed.
 

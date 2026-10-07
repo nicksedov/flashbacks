@@ -6,7 +6,7 @@
 SHELL := /bin/bash
 
 # Default service (can be overridden)
-SERVICE ?= api-service
+SERVICE ?= core
 
 # Docker Compose file
 COMPOSE_FILE := docker-compose.yml
@@ -56,9 +56,9 @@ rebuild: ## Rebuild and restart a specific service
 
 ##@ Development
 
-dev-api: ## Run api-service locally
-	@echo "${GREEN}Starting api-service in dev mode...${NC}"
-	@cd backend/api-service && go run ./cmd/server/
+dev-core: ## Run core locally
+	@echo "${GREEN}Starting core in dev mode...${NC}"
+	@cd backend/core && go run ./cmd/server/
 
 dev-webui: ## Run webui locally
 	@echo "${GREEN}Starting webui in dev mode...${NC}"
@@ -72,8 +72,8 @@ dev-exif: ## Run exif locally
 
 test: ## Run tests for a service
 	@echo "${GREEN}Running tests for $(SERVICE)...${NC}"
-ifeq ($(SERVICE),api-service)
-	@cd backend/api-service && go test ./internal/application/... -count=1 -v
+ifeq ($(SERVICE),core)
+	@cd backend/core && go test ./internal/application/... -count=1 -v
 else ifeq ($(SERVICE),webapp)
 	@cd webapp && npm test
 else ifeq ($(SERVICE),exif)
@@ -86,7 +86,7 @@ else
 endif
 
 test-all: ## Run tests for all services
-	@$(MAKE) test SERVICE=api-service
+	@$(MAKE) test SERVICE=core
 	@$(MAKE) test SERVICE=webapp
 	@$(MAKE) test SERVICE=exif
 	@$(MAKE) test SERVICE=ocr
@@ -95,8 +95,8 @@ test-all: ## Run tests for all services
 
 lint: ## Run linter for a service
 	@echo "${GREEN}Linting $(SERVICE)...${NC}"
-ifeq ($(SERVICE),api-service)
-	@cd backend/api-service && go vet ./...
+ifeq ($(SERVICE),core)
+	@cd backend/core && go vet ./...
 else ifeq ($(SERVICE),webapp)
 	@cd webapp && npm run lint && npx tsc -b
 else ifeq ($(SERVICE),exif)
@@ -109,7 +109,7 @@ else
 endif
 
 lint-all: ## Run linters for all services
-	@$(MAKE) lint SERVICE=api-service
+	@$(MAKE) lint SERVICE=core
 	@$(MAKE) lint SERVICE=webapp
 	@$(MAKE) lint SERVICE=exif
 	@$(MAKE) lint SERVICE=ocr
@@ -127,15 +127,15 @@ db-reset: ## Reset PostgreSQL database (WARNING: deletes all data)
 		echo "Aborted."; \
 	fi
 
-db-migrate: ## Run database migrations for api-service
+db-migrate: ## Run database migrations for core
 	@echo "${GREEN}Running database migrations...${NC}"
-	@cd backend/api-service && go run ./cmd/server/ --migrate-only
+	@cd backend/core && go run ./cmd/server/ --migrate-only
 
 ##@ Cleanup
 
 clean: ## Remove build artifacts and caches
 	@echo "${YELLOW}Cleaning up...${NC}"
-	@cd backend/api-service && rm -f image-toolkit coverage.out
+	@cd backend/core && rm -f image-toolkit coverage.out
 	@cd webapp && rm -rf dist node_modules/.vite
 	@cd backend/exif && rm -f exif
 	@cd backend/ocr && rm -f ocr
@@ -149,17 +149,17 @@ prune: ## Remove unused Docker resources
 
 generate-types: ## Generate TypeScript types from OpenAPI specs
 	@echo "${GREEN}Generating TypeScript types...${NC}"
-	@cd webapp && npx openapi-typescript ../docs/api-contracts/api-service.yaml -o src/types/api.ts
+	@cd webapp && npx openapi-typescript ../docs/api-contracts/core.yaml -o src/types/api.ts
 
 generate-go: ## Generate Go code from OpenAPI specs
 	@echo "${GREEN}Generating Go code...${NC}"
-	@cd backend/api-service && go generate ./...
+	@cd backend/core && go generate ./...
 
 ##@ Documentation
 
 docs: ## Serve API documentation locally
 	@echo "${GREEN}Serving API documentation...${NC}"
 	@echo "Open the following files in your browser:"
-	@echo "  - docs/api-contracts/api-service.yaml"
+	@echo "  - docs/api-contracts/core.yaml"
 	@echo "  - docs/api-contracts/exif.yaml"
 	@echo "  - docs/api-contracts/ocr.yaml"

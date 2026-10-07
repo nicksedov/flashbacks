@@ -1,11 +1,11 @@
 package repository
 
 import (
-	"github.com/flashbacks/api-service/internal/domain"
+	"github.com/flashbacks/core/internal/domain"
 	"gorm.io/gorm"
 )
 
-// LlmRepository provides data access for LLM settings, providers, and model caches.
+// LlmRepository provides data access for LLM settings, providers, and models.
 type LlmRepository interface {
 	// --- Providers ---
 	GetProviderByAlias(alias string) (*domain.LlmProvider, error)
@@ -13,13 +13,6 @@ type LlmRepository interface {
 	CreateProvider(provider *domain.LlmProvider) error
 	UpdateProviderByAlias(alias string, updates map[string]interface{}) error
 	DeleteProvider(provider *domain.LlmProvider) error
-
-	// --- Model Caches (deprecated JSON blob) ---
-	GetAllModelCaches() ([]domain.LlmProviderModelCache, error)
-	GetModelCacheByAlias(alias string) (*domain.LlmProviderModelCache, error)
-	UpsertModelCache(cache *domain.LlmProviderModelCache) error
-	DeleteModelCacheByAlias(alias string) error
-	UpdateModelCacheAlias(oldAlias, newAlias string) error
 
 	// --- Provider Models (normalized) ---
 	GetModelsByProviderID(providerID uint) ([]domain.LlmProviderModel, error)
@@ -83,43 +76,6 @@ func (r *gormLlmRepo) UpdateProviderByAlias(alias string, updates map[string]int
 
 func (r *gormLlmRepo) DeleteProvider(provider *domain.LlmProvider) error {
 	return r.db.Delete(provider).Error
-}
-
-// --- Model Caches (deprecated) ---
-
-func (r *gormLlmRepo) GetAllModelCaches() ([]domain.LlmProviderModelCache, error) {
-	var rows []domain.LlmProviderModelCache
-	err := r.db.Find(&rows).Error
-	return rows, err
-}
-
-func (r *gormLlmRepo) GetModelCacheByAlias(alias string) (*domain.LlmProviderModelCache, error) {
-	var c domain.LlmProviderModelCache
-	if err := r.db.Where("provider_alias = ?", alias).First(&c).Error; err != nil {
-		return nil, err
-	}
-	return &c, nil
-}
-
-func (r *gormLlmRepo) UpsertModelCache(cache *domain.LlmProviderModelCache) error {
-	var existing domain.LlmProviderModelCache
-	if err := r.db.Where("provider_alias = ?", cache.ProviderAlias).First(&existing).Error; err == nil {
-		return r.db.Model(&existing).Updates(map[string]interface{}{
-			"models_json": cache.ModelsJSON,
-			"fetched_at":  cache.FetchedAt,
-		}).Error
-	}
-	return r.db.Create(cache).Error
-}
-
-func (r *gormLlmRepo) DeleteModelCacheByAlias(alias string) error {
-	return r.db.Where("provider_alias = ?", alias).Delete(&domain.LlmProviderModelCache{}).Error
-}
-
-func (r *gormLlmRepo) UpdateModelCacheAlias(oldAlias, newAlias string) error {
-	return r.db.Model(&domain.LlmProviderModelCache{}).
-		Where("provider_alias = ?", oldAlias).
-		Update("provider_alias", newAlias).Error
 }
 
 // --- Provider Models (normalized) ---

@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/flashbacks/api-service/internal/infrastructure/llm"
+	"github.com/flashbacks/core/internal/infrastructure/llm"
 )
 
 // ExifAgent is a sub-agent that delegates EXIF metadata operations to the EXIF microservice via MCP.
@@ -183,7 +183,7 @@ func (ea *ExifAgent) ensureSession(ctx context.Context) (string, error) {
 			"protocolVersion": "2024-11-05",
 			"capabilities":    map[string]interface{}{},
 			"clientInfo": map[string]interface{}{
-				"name":    "flashbacks-api-service",
+				"name":    "flashbacks-core-service",
 				"version": "1.0.0",
 			},
 		},

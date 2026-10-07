@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/flashbacks/api-service/internal/domain"
+	"github.com/flashbacks/core/internal/domain"
 )
 
 // AppConfig holds all application configuration
@@ -86,7 +86,7 @@ func LoadConfig() *AppConfig {
 	return &AppConfig{
 		DBHost:                      getEnv("DB_HOST", "localhost"),
 		DBPort:                      getEnv("DB_PORT", "5432"),
-		DBUser:                      getEnv("DB_USER", "postgres"),
+		DBUser:                      getEnv("DB_USER", "flashbacks"),
 		DBPassword:                  getEnv("DB_PASSWORD", "postgres"),
 		DBName:                      getEnv("DB_NAME", "flashbacks"),
 		ServerHost:                  getEnv("SERVER_HOST", "0.0.0.0"),

@@ -3,8 +3,8 @@ package handler
 import (
 	"net/http"
 
-	"github.com/flashbacks/api-service/internal/application/imaging"
-	"github.com/flashbacks/api-service/internal/interfaces/i18n"
+	"github.com/flashbacks/core/internal/application/imaging"
+	"github.com/flashbacks/core/internal/interfaces/i18n"
 
 	"github.com/gin-gonic/gin"
 )

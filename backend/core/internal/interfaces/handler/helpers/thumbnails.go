@@ -3,8 +3,8 @@ package helpers
 import (
 	"sync"
 
-	"github.com/flashbacks/api-service/internal/application/thumbnail"
-	"github.com/flashbacks/api-service/internal/interfaces/dto"
+	"github.com/flashbacks/core/internal/application/thumbnail"
+	"github.com/flashbacks/core/internal/interfaces/dto"
 )
 
 // ThumbnailBatch handles parallel thumbnail generation via the unified ThumbnailProvider.

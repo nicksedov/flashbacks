@@ -7,9 +7,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/flashbacks/api-service/internal/application/background"
-	"github.com/flashbacks/api-service/internal/domain"
-	"github.com/flashbacks/api-service/internal/infrastructure/ocr"
+	"github.com/flashbacks/core/internal/application/background"
+	"github.com/flashbacks/core/internal/domain"
+	"github.com/flashbacks/core/internal/infrastructure/ocr"
 
 	"gorm.io/gorm"
 )

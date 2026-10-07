@@ -3,7 +3,7 @@ package mocks
 import (
 	"context"
 
-	"github.com/flashbacks/api-service/internal/infrastructure/llm"
+	"github.com/flashbacks/core/internal/infrastructure/llm"
 )
 
 // MockLlmClient is a mock implementation of llm.Client for testing.

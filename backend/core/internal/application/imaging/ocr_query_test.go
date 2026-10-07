@@ -4,9 +4,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/flashbacks/api-service/internal/domain"
-	"github.com/flashbacks/api-service/internal/testutil"
-	"github.com/flashbacks/api-service/internal/testutil/fixtures"
+	"github.com/flashbacks/core/internal/domain"
+	"github.com/flashbacks/core/internal/testutil"
+	"github.com/flashbacks/core/internal/testutil/fixtures"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

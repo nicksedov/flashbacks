@@ -3,7 +3,7 @@ package middleware
 import (
 	"time"
 
-	"github.com/flashbacks/api-service/internal/infrastructure/config"
+	"github.com/flashbacks/core/internal/infrastructure/config"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"

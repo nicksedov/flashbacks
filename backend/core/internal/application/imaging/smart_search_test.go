@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/flashbacks/api-service/internal/domain"
-	"github.com/flashbacks/api-service/internal/testutil"
+	"github.com/flashbacks/core/internal/domain"
+	"github.com/flashbacks/core/internal/testutil"
 	"gorm.io/gorm"
 
 	"github.com/stretchr/testify/assert"

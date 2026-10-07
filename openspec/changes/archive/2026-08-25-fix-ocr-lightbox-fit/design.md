@@ -43,7 +43,7 @@ actually fit. No part of the measurement/scaling math needs to change.
 
 **Non-Goals:**
 
-- No OCR service, api-service, DB, or OpenAPI changes (see Decision 3).
+- No OCR service, core, DB, or OpenAPI changes (see Decision 3).
 - No changes to the other lightbox tabs.
 - No rework of the OCR data contract or the box-scaling formula.
 

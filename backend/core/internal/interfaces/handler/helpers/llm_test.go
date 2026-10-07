@@ -5,8 +5,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/flashbacks/api-service/internal/domain"
-	"github.com/flashbacks/api-service/internal/testutil"
+	"github.com/flashbacks/core/internal/domain"
+	"github.com/flashbacks/core/internal/testutil"
 
 	"github.com/gin-gonic/gin"
 )

@@ -6,10 +6,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/flashbacks/api-service/internal/application/background"
-	"github.com/flashbacks/api-service/internal/domain"
-	imgutil "github.com/flashbacks/api-service/internal/infrastructure/imaging"
-	"github.com/flashbacks/api-service/internal/infrastructure/llm"
+	"github.com/flashbacks/core/internal/application/background"
+	"github.com/flashbacks/core/internal/domain"
+	imgutil "github.com/flashbacks/core/internal/infrastructure/imaging"
+	"github.com/flashbacks/core/internal/infrastructure/llm"
 
 	"gorm.io/gorm"
 )

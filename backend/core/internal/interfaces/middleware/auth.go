@@ -3,9 +3,9 @@ package middleware
 import (
 	"net/http"
 
-	"github.com/flashbacks/api-service/internal/application/auth"
-	"github.com/flashbacks/api-service/internal/domain"
-	"github.com/flashbacks/api-service/internal/interfaces/i18n"
+	"github.com/flashbacks/core/internal/application/auth"
+	"github.com/flashbacks/core/internal/domain"
+	"github.com/flashbacks/core/internal/interfaces/i18n"
 
 	"github.com/gin-gonic/gin"
 )

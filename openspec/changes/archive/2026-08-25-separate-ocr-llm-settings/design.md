@@ -1,11 +1,11 @@
 ## Context
 
-LLM clients are created per-instrument via [`LLMFactory`](backend/api-service/internal/interfaces/handler/helpers/llm.go:15), which reads a `llm_instrument_settings` row keyed by a unique `type` column (`chat`, `vl`, `embedding`, `image_edit`) and builds a client from that row's provider + model. Today both LLM OCR recognition and all VL actions resolve the `vl` row through [`CreateVLClient`](backend/api-service/internal/interfaces/handler/helpers/llm.go:44). See [`proposal.md`](openspec/changes/separate-ocr-llm-settings/proposal.md) for motivation.
+LLM clients are created per-instrument via [`LLMFactory`](backend/core/internal/interfaces/handler/helpers/llm.go:15), which reads a `llm_instrument_settings` row keyed by a unique `type` column (`chat`, `vl`, `embedding`, `image_edit`) and builds a client from that row's provider + model. Today both LLM OCR recognition and all VL actions resolve the `vl` row through [`CreateVLClient`](backend/core/internal/interfaces/handler/helpers/llm.go:44). See [`proposal.md`](openspec/changes/separate-ocr-llm-settings/proposal.md) for motivation.
 
 Two backend call sites share the VL client today:
 
-- [`handleLlmRecognize`](backend/api-service/internal/interfaces/handler/handlers_llm.go:397) — the LLM OCR path.
-- [`handleAiAction`](backend/api-service/internal/interfaces/handler/handlers_llm.go:679) — handles `describe`, `tags`, `recognizeText`, `askQuestion`.
+- [`handleLlmRecognize`](backend/core/internal/interfaces/handler/handlers_llm.go:397) — the LLM OCR path.
+- [`handleAiAction`](backend/core/internal/interfaces/handler/handlers_llm.go:679) — handles `describe`, `tags`, `recognizeText`, `askQuestion`.
 
 The instrument table already stores one row per type with a `uniqueIndex` on `type`, so a new instrument type is a new row, not a schema change.
 
@@ -15,7 +15,7 @@ The instrument table already stores one row per type with a `uniqueIndex` on `ty
 
 - Give LLM OCR its own instrument (`ocr`) that is fully independent from `vl`.
 - Preserve backward compatibility for existing deployments: after upgrade, OCR keeps working with the model it previously shared with VL.
-- Keep the change confined to api-service (routing + seed) and webapp (types + one card + i18n) with no new services or dependencies.
+- Keep the change confined to core (routing + seed) and webapp (types + one card + i18n) with no new services or dependencies.
 
 **Non-Goals:**
 
@@ -28,13 +28,13 @@ The instrument table already stores one row per type with a `uniqueIndex` on `ty
 
 ### Decision 1: Reuse the existing `llm_instrument_settings` table with a new `ocr` type
 
-Add `InstrumentOCR InstrumentType = "ocr"` to [`domain/media.go`](backend/api-service/internal/domain/media.go:251). No GORM migration is needed — the type is a string column with a unique index, and AutoMigrate already creates the table.
+Add `InstrumentOCR InstrumentType = "ocr"` to [`domain/media.go`](backend/core/internal/domain/media.go:251). No GORM migration is needed — the type is a string column with a unique index, and AutoMigrate already creates the table.
 
 - *Alternative considered*: A separate `ocr_settings` table. Rejected — it duplicates provider/model storage and breaks the uniform instrument model used everywhere else.
 
 ### Decision 2: Add `CreateOCRClient` mirroring `CreateVLClient`
 
-Add `CreateOCRClient(c) (llm.Client, domain.LlmProvider, domain.LlmInstrumentSettings, bool)` to [`LLMFactory`](backend/api-service/internal/interfaces/handler/helpers/llm.go:15) that calls the existing `createClientByInstrument(c, domain.InstrumentOCR)`. This keeps error semantics identical (404 "settings not found" / 500 "recognition failed").
+Add `CreateOCRClient(c) (llm.Client, domain.LlmProvider, domain.LlmInstrumentSettings, bool)` to [`LLMFactory`](backend/core/internal/interfaces/handler/helpers/llm.go:15) that calls the existing `createClientByInstrument(c, domain.InstrumentOCR)`. This keeps error semantics identical (404 "settings not found" / 500 "recognition failed").
 
 - *Alternative considered*: Parameterizing `createClientByInstrument` with a runtime string from the request. Rejected — the instrument type is a compile-time constant, and typed helpers keep call sites self-documenting.
 
@@ -47,7 +47,7 @@ This is the only behavioral change in the request path; the `RecognizeWithLlm`/`
 
 ### Decision 4: Idempotent "ensure OCR instrument" seed for upgrades
 
-The existing seed in [`database.go`](backend/api-service/internal/infrastructure/database/database.go:91) only runs when there are zero providers, so existing installs would never get an `ocr` row. Add a separate idempotent step that runs regardless of provider count: if no `ocr` instrument exists, create one copied from the current `vl` instrument's `ProviderID` and `Model`. This preserves the pre-upgrade behavior (OCR uses the same model VL used) while still being independently editable afterward.
+The existing seed in [`database.go`](backend/core/internal/infrastructure/database/database.go:91) only runs when there are zero providers, so existing installs would never get an `ocr` row. Add a separate idempotent step that runs regardless of provider count: if no `ocr` instrument exists, create one copied from the current `vl` instrument's `ProviderID` and `Model`. This preserves the pre-upgrade behavior (OCR uses the same model VL used) while still being independently editable afterward.
 
 - *Alternative considered*: Rely on the admin to configure OCR from the new UI card (the update handler already creates a missing row). Rejected as the sole mechanism — it would leave OCR broken immediately after upgrade until someone visits the tab.
 
@@ -57,10 +57,10 @@ Reuse [`renderInstrumentCard`](webapp/src/components/tabs/AdminAnalysisTab.tsx:2
 
 ### Decision 6: Contract + type union updates
 
-- Add `ocr` to the `LlmInstrumentDTO.type` enum in [`docs/api-contracts/api-service.yaml`](docs/api-contracts/api-service.yaml:2828).
+- Add `ocr` to the `LlmInstrumentDTO.type` enum in [`docs/api-contracts/core.yaml`](docs/api-contracts/core.yaml:2828).
 - Add `"ocr"` to the `LlmInstrumentType` union in [`webapp/src/types/index.ts`](webapp/src/types/index.ts:575).
 
-The api-service `types/api.ts` is generated from the OpenAPI doc via `make generate-types`, so the contract change and the TS type change must stay consistent.
+The core `types/api.ts` is generated from the OpenAPI doc via `make generate-types`, so the contract change and the TS type change must stay consistent.
 
 ### Decision 7: No Wire regeneration
 
@@ -75,6 +75,6 @@ The api-service `types/api.ts` is generated from the OpenAPI doc via `make gener
 
 ## Migration Plan
 
-1. Deploy api-service with the ensure-seed step: on startup it creates the `ocr` instrument copied from `vl` if absent.
+1. Deploy core with the ensure-seed step: on startup it creates the `ocr` instrument copied from `vl` if absent.
 2. Deploy webapp with the new card and updated labels.
-3. Rollback: api-service rollback leaves an extra `ocr` row unused (harmless); webapp rollback removes the card but existing OCR requests would again use `vl` only if the old binary is restored.
+3. Rollback: core rollback leaves an extra `ocr` row unused (harmless); webapp rollback removes the card but existing OCR requests would again use `vl` only if the old binary is restored.

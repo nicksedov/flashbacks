@@ -202,7 +202,7 @@ type LlmProvider struct {
 }
 
 // LlmProviderModel stores a single model per provider row.
-// Replaces the JSON-blob LlmProviderModelCache with normalized relational storage.
+// Replaces the legacy JSON-blob model cache with normalized relational storage.
 type LlmProviderModel struct {
 	ID            uint      `gorm:"primaryKey" json:"id"`
 	LlmProviderID uint      `gorm:"not null;index" json:"llmProviderId"`
@@ -233,16 +233,6 @@ type LlmModelCapability struct {
 // TableName overrides the default GORM table name.
 func (LlmModelCapability) TableName() string {
 	return "llm_model_capabilities"
-}
-
-// LlmProviderModelCache stores cached model lists per provider.
-// Deprecated: Use LlmProviderModel and LlmModelCapability instead.
-// Kept for migration compatibility; will be removed after migration.
-type LlmProviderModelCache struct {
-	ID            uint      `gorm:"primaryKey" json:"id"`
-	ProviderAlias string    `gorm:"uniqueIndex;not null" json:"providerAlias"`
-	ModelsJSON    string    `gorm:"type:text;not null" json:"modelsJson"` // JSON array of {id, name, size?}
-	FetchedAt     time.Time `json:"fetchedAt"`
 }
 
 // InstrumentType defines the type of an LLM instrument.

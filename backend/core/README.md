@@ -25,16 +25,16 @@ go run ./cmd/server/
 
 ```bash
 # Build the image
-docker build -t api-service .
+docker build -t core .
 
 # Run the container
 docker run -p 5170:5170 \
   -e DB_HOST=host.docker.internal \
   -e DB_PORT=5432 \
-  -e DB_USER=postgres \
+  -e DB_USER=flashbacks \
   -e DB_PASSWORD=postgres \
-  -e DB_NAME=image_toolkit \
-  api-service
+  -e DB_NAME=flashbacks \
+  core
 ```
 
 ## Development
@@ -44,7 +44,7 @@ The API service runs on `http://localhost:5170` by default.
 ### Project Structure
 
 ```
-api-service/
+core/
 ├── cmd/server/main.go          # Entry point, dependency injection
 ├── internal/
 │   ├── application/            # Business logic
@@ -105,7 +105,7 @@ go test ./... -coverprofile=coverage.out
 
 ## API Documentation
 
-OpenAPI specification: [`docs/api-contracts/api-service.yaml`](../docs/api-contracts/api-service.yaml)
+OpenAPI specification: [`docs/api-contracts/core.yaml`](../docs/api-contracts/core.yaml)
 
 ## Architecture
 

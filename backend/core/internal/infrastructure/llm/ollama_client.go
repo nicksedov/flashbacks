@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/flashbacks/api-service/internal/infrastructure/imaging"
+	"github.com/flashbacks/core/internal/infrastructure/imaging"
 )
 
 // OllamaClient implements Client for Ollama API

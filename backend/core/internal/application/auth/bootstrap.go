@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/flashbacks/api-service/internal/domain"
+	"github.com/flashbacks/core/internal/domain"
 
 	"gorm.io/gorm"
 )

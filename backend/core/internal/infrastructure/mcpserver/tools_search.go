@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/flashbacks/api-service/internal/application/imaging"
-	"github.com/flashbacks/api-service/internal/domain"
-	"github.com/flashbacks/api-service/internal/infrastructure/llm"
+	"github.com/flashbacks/core/internal/application/imaging"
+	"github.com/flashbacks/core/internal/domain"
+	"github.com/flashbacks/core/internal/infrastructure/llm"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )

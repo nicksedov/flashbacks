@@ -8,7 +8,7 @@ Defines the deleted-files (Trash) capability: persistent backend storage of dele
 
 ### Requirement: Persistent deleted-file metadata
 
-The api-service SHALL persist a `TrashItem` record for every file moved to the trash directory. The record SHALL store:
+The core SHALL persist a `TrashItem` record for every file moved to the trash directory. The record SHALL store:
 
 - `id` — unique identifier
 - `fileName` — the file name inside the trash directory

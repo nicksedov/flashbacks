@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/flashbacks/api-service/internal/infrastructure/healthcheck"
-	"github.com/flashbacks/api-service/internal/infrastructure/retry"
+	"github.com/flashbacks/core/internal/infrastructure/healthcheck"
+	"github.com/flashbacks/core/internal/infrastructure/retry"
 	shareddomain "github.com/flashbacks/shared/domain"
 )
 

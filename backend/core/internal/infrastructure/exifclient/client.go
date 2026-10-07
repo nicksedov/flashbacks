@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/flashbacks/api-service/internal/domain"
+	"github.com/flashbacks/core/internal/domain"
 )
 
 // HTTPExifClient implements ExifClient by calling the EXIF microservice over HTTP.

@@ -113,7 +113,7 @@ npm run preview      # Preview production build
 ## API Integration
 
 - API base URL: `/api` (proxied via Vite)
-- OpenAPI spec: `docs/api-contracts/api-service.yaml`
+- OpenAPI spec: `docs/api-contracts/core.yaml`
 - Use fetch API with proper error handling
 - Include CSRF token in headers for mutations
 

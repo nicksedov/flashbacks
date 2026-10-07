@@ -52,7 +52,7 @@ go build -o embeddings-builder ./cmd/embeddings-builder/
 
 ## How It Works
 
-1. Connects to the PostgreSQL database used by `api-service`
+1. Connects to the PostgreSQL database used by `core`
 2. Reads `llm_settings` and `llm_providers` tables to determine the embedding provider and model
 3. Creates per-model child tables (`tag_embeddings_<model_name>`) with the correct vector dimension
 4. Processes images in batches, fetching their tags and generating embeddings

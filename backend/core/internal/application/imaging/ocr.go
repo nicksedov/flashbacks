@@ -12,8 +12,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/flashbacks/api-service/internal/domain"
-	"github.com/flashbacks/api-service/internal/infrastructure/ocr"
+	"github.com/flashbacks/core/internal/domain"
+	"github.com/flashbacks/core/internal/infrastructure/ocr"
 
 	"github.com/deepteams/webp"
 	"github.com/disintegration/imaging"

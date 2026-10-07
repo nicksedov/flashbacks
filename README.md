@@ -7,7 +7,7 @@ A microservice-based application for finding and managing duplicate images.
 | Service | Repository | Description | Port |
 |---|---|---|---|
 | **webapp** | [flashbacks/webapp](https://github.com/flashbacks/webapp) | React SPA frontend | 5180 |
-| **api-service** | [flashbacks/api-service](https://github.com/flashbacks/api-service) | Core API (auth, scan, gallery, OCR, tags) | 5170 |
+| **core** | [flashbacks/core-service](https://github.com/flashbacks/core) | Core API (auth, scan, gallery, OCR, tags) | 5170 |
 | **exif** | [flashbacks/exif](https://github.com/flashbacks/exif) | EXIF metadata extraction & GPS writing | 5172 |
 | **ocr** | [flashbacks/ocr](https://github.com/flashbacks/ocr) | OCR text detection (Tesseract) | 5174 |
 
@@ -30,7 +30,7 @@ Open http://localhost:5180 in your browser.
 ### Development Setup
 See individual service READMEs:
 - [webapp Development Guide](webapp/README.md)
-- [api-service Development Guide](backend/api-service/README.md)
+- [core Development Guide](backend/core/README.md)
 - [exif Development Guide](backend/exif/README.md)
 - [ocr Development Guide](backend/ocr/README.md)
 - [tools Development Guide](tools/README.md)
@@ -39,7 +39,7 @@ See individual service READMEs:
 See [docs/architecture.md](docs/architecture.md).
 
 ## API Documentation
-- [api-service OpenAPI](docs/api-contracts/api-service.yaml)
+- [core OpenAPI](docs/api-contracts/core.yaml)
 - [exif OpenAPI](docs/api-contracts/exif.yaml)
 - [ocr OpenAPI](docs/api-contracts/ocr.yaml)
 

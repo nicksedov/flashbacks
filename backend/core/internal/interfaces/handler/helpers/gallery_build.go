@@ -3,8 +3,8 @@ package helpers
 import (
 	"path/filepath"
 
-	"github.com/flashbacks/api-service/internal/domain"
-	"github.com/flashbacks/api-service/internal/interfaces/dto"
+	"github.com/flashbacks/core/internal/domain"
+	"github.com/flashbacks/core/internal/interfaces/dto"
 )
 
 // BuildGalleryImageDTO converts a domain.ImageFile to a GalleryImageDTO with

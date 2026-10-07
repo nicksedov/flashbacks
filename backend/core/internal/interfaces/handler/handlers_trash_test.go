@@ -11,11 +11,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/flashbacks/api-service/internal/domain"
-	"github.com/flashbacks/api-service/internal/interfaces/dto"
-	"github.com/flashbacks/api-service/internal/interfaces/handler/helpers"
-	"github.com/flashbacks/api-service/internal/testutil"
-	"github.com/flashbacks/api-service/internal/testutil/fixtures"
+	"github.com/flashbacks/core/internal/domain"
+	"github.com/flashbacks/core/internal/interfaces/dto"
+	"github.com/flashbacks/core/internal/interfaces/handler/helpers"
+	"github.com/flashbacks/core/internal/testutil"
+	"github.com/flashbacks/core/internal/testutil/fixtures"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"

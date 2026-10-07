@@ -13,11 +13,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/flashbacks/api-service/internal/application/imaging"
-	"github.com/flashbacks/api-service/internal/domain"
-	imgutil "github.com/flashbacks/api-service/internal/infrastructure/imaging"
-	"github.com/flashbacks/api-service/internal/infrastructure/llm"
-	"github.com/flashbacks/api-service/internal/infrastructure/llm/prompts"
+	"github.com/flashbacks/core/internal/application/imaging"
+	"github.com/flashbacks/core/internal/domain"
+	imgutil "github.com/flashbacks/core/internal/infrastructure/imaging"
+	"github.com/flashbacks/core/internal/infrastructure/llm"
+	"github.com/flashbacks/core/internal/infrastructure/llm/prompts"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )

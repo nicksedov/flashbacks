@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/flashbacks/api-service/internal/infrastructure/imaging"
+	"github.com/flashbacks/core/internal/infrastructure/imaging"
 )
 
 // OpenAIClient implements Client for OpenAI-compatible API

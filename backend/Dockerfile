@@ -3,7 +3,7 @@
 # Unified Dockerfile for Flashbacks backend microservices
 #
 # Build specific service:
-#   docker build --target=api         -t flashbacks/api .
+#   docker build --target=core        -t flashbacks/core .
 #   docker build --target=exif        -t flashbacks/exif .
 #   docker build --target=ocr         -t flashbacks/ocr .
 #
@@ -17,7 +17,7 @@ FROM golang:1.27.1-alpine AS builder
 WORKDIR /build
 
 # Install all build dependencies (CGO deps needed for gosseract/ocr)
-# api and exif set CGO_ENABLED=0, so extra packages are harmless
+# core and exif set CGO_ENABLED=0, so extra packages are harmless
 RUN apk update && apk add --no-cache \
     git \
     gcc \
@@ -29,9 +29,9 @@ RUN apk update && apk add --no-cache \
 # Must be at /build/shared/ so that `replace ../shared` works for all services
 COPY shared/ /build/shared/
 
-# ---------- api-service dependencies ----------
-COPY api-service/go.mod api-service/go.sum ./api-service/
-RUN cd api-service && go mod download
+# ---------- core dependencies ----------
+COPY core/go.mod core/go.sum ./core/
+RUN cd core && go mod download
 
 # ---------- exif dependencies ----------
 COPY exif/go.mod exif/go.sum ./exif/
@@ -42,32 +42,32 @@ COPY ocr/go.mod ocr/go.sum ./ocr/
 RUN cd ocr && go mod download
 
 # ---------- Copy all source code ----------
-COPY api-service/ ./api-service/
+COPY core/ ./core/
 COPY exif/ ./exif/
 COPY ocr/ ./ocr/
 
 # ---------- Build all binaries ----------
-RUN cd api-service && CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -ldflags="-w -s" -o /build/bin/api-service ./cmd/server
-RUN cd exif       && CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /build/bin/exif ./cmd/server
-RUN cd ocr        && CGO_ENABLED=1 GOOS=linux go build -ldflags="-w -s" -o /build/bin/ocr ./cmd/server
+RUN cd core && CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -ldflags="-w -s" -o /build/bin/core ./cmd/server
+RUN cd exif && CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /build/bin/exif ./cmd/server
+RUN cd ocr  && CGO_ENABLED=1 GOOS=linux go build -ldflags="-w -s" -o /build/bin/ocr ./cmd/server
 
 # ======================================================================
 # Runtime stages — each pulls only its binary from the common builder
 # ======================================================================
 
-# --- api-service runtime ---
-FROM alpine:3.24 AS api
+# --- core runtime ---
+FROM alpine:3.24 AS core
 
 RUN apk add --no-cache ca-certificates tzdata curl
 
 WORKDIR /app
 
-COPY --from=builder /build/bin/api-service ./api-service
+COPY --from=builder /build/bin/core ./core
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 
 EXPOSE 5170
 
-CMD ["./api-service"]
+CMD ["./core"]
 
 # --- exif runtime ---
 FROM alpine:3.24 AS exif

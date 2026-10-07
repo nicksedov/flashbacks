@@ -8,10 +8,10 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/flashbacks/api-service/internal/application/background"
-	"github.com/flashbacks/api-service/internal/domain"
-	"github.com/flashbacks/api-service/internal/infrastructure/database"
-	"github.com/flashbacks/api-service/internal/infrastructure/llm"
+	"github.com/flashbacks/core/internal/application/background"
+	"github.com/flashbacks/core/internal/domain"
+	"github.com/flashbacks/core/internal/infrastructure/database"
+	"github.com/flashbacks/core/internal/infrastructure/llm"
 
 	"gorm.io/gorm"
 )

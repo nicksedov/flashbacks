@@ -1,6 +1,6 @@
 ## Context
 
-The Trash today is filesystem-only: [`handlers_trash.go`](../../backend/api-service/internal/interfaces/handler/handlers_trash.go) reads the configured `trashDir` with `os.ReadDir` for every request and returns `fileName/size/sizeHuman/modTime` — no persisted deletion date, no original path, no thumbnail. Deletion flows run through [`helpers.FileMover`](../../backend/api-service/internal/interfaces/handler/helpers/fileops.go), which moves a file into the trash directory (suffixing on name collision) and then removes the `image_files` row via `DeleteFromDB` — the original location is discarded at that moment. The frontend [`TrashTab.tsx`](../../webapp/src/components/tabs/TrashTab.tsx) renders this as a plain table with restore/delete icons and a "clean all" action.
+The Trash today is filesystem-only: [`handlers_trash.go`](../../backend/core/internal/interfaces/handler/handlers_trash.go) reads the configured `trashDir` with `os.ReadDir` for every request and returns `fileName/size/sizeHuman/modTime` — no persisted deletion date, no original path, no thumbnail. Deletion flows run through [`helpers.FileMover`](../../backend/core/internal/interfaces/handler/helpers/fileops.go), which moves a file into the trash directory (suffixing on name collision) and then removes the `image_files` row via `DeleteFromDB` — the original location is discarded at that moment. The frontend [`TrashTab.tsx`](../../webapp/src/components/tabs/TrashTab.tsx) renders this as a plain table with restore/delete icons and a "clean all" action.
 
 The Gallery is the reference implementation: [`GalleryAllImagesView.tsx`](../../webapp/src/components/gallery/GalleryAllImagesView.tsx) drives [`useGalleryImages`](../../webapp/src/hooks/useGalleryImages.ts) → [`useInfiniteScroll`](../../webapp/src/hooks/useInfiniteScroll.ts) → [`GalleryImageGrid`](../../webapp/src/components/gallery/GalleryImageGrid.tsx) → [`ImageTile`](../../webapp/src/components/gallery/ImageTile.tsx) over [`TileFrame`/`TileThumbnail`](../../webapp/src/components/gallery/TileFrame.tsx) + [`TileOverlay`](../../webapp/src/components/gallery/TileOverlay.tsx); the calendar view ([`GalleryCalendarView`](../../webapp/src/components/gallery/GalleryCalendarView.tsx)) additionally demonstrates date-grouping with cursor pagination via [`useCursorInfiniteScroll`](../../webapp/src/hooks/useCursorInfiniteScroll.ts). Thumbnails are produced server-side and embedded into DTOs as data URLs.
 
@@ -23,7 +23,7 @@ The Gallery is the reference implementation: [`GalleryAllImagesView.tsx`](../../
 
 ### D1 — `TrashItem` domain model and table
 
-Add to [`domain/media.go`](../../backend/api-service/internal/domain/media.go):
+Add to [`domain/media.go`](../../backend/core/internal/domain/media.go):
 
 ```go
 type TrashItem struct {
@@ -39,9 +39,9 @@ type TrashItem struct {
 }
 ```
 
-`OriginalHash`/`OriginalModTime` are internal columns (not in the public DTO) captured at delete time so restore can re-insert the `image_files` row without recomputing the hash. Register the model in [`database.go`](../../backend/api-service/internal/infrastructure/database/database.go) `AutoMigrate` and add an index on `deleted_at` (an explicit composite index on `(deleted_at, id)` mirrors the calendar pagination index if needed).
+`OriginalHash`/`OriginalModTime` are internal columns (not in the public DTO) captured at delete time so restore can re-insert the `image_files` row without recomputing the hash. Register the model in [`database.go`](../../backend/core/internal/infrastructure/database/database.go) `AutoMigrate` and add an index on `deleted_at` (an explicit composite index on `(deleted_at, id)` mirrors the calendar pagination index if needed).
 
-*Alternatives considered:* keeping the filesystem as the source of truth and only adding a sidecar metadata file per trash file (rejected — no queryable ordering/grouping and no reliable restore path); a fully separate trash service (rejected — unnecessary; trash is a small surface in api-service).
+*Alternatives considered:* keeping the filesystem as the source of truth and only adding a sidecar metadata file per trash file (rejected — no queryable ordering/grouping and no reliable restore path); a fully separate trash service (rejected — unnecessary; trash is a small surface in core).
 
 ### D2 — Record at move time, inside `FileMover`
 
@@ -57,7 +57,7 @@ type TrashItem struct {
 - `GET /api/trash-info` and `POST /api/trash-clean` remain; clean now also deletes all `TrashItem` rows.
 - `GET /api/trash/image?path=...` serves the full-size image for the lightbox, verified against the configured trash directory.
 
-New DTOs live in [`dto/media.go`](../../backend/api-service/internal/interfaces/dto/media.go): `TrashItemDTO{id, fileName, trashPath, originalPath, size, sizeHuman, deletedAt, thumbnail}`, `TrashDateGroup{date, label, itemCount, items}`, `TrashListResponse{groups, totalItems, totalGroups, hasMore, nextCursor}`.
+New DTOs live in [`dto/media.go`](../../backend/core/internal/interfaces/dto/media.go): `TrashItemDTO{id, fileName, trashPath, originalPath, size, sizeHuman, deletedAt, thumbnail}`, `TrashDateGroup{date, label, itemCount, items}`, `TrashListResponse{groups, totalItems, totalGroups, hasMore, nextCursor}`.
 
 *Alternatives considered:* keeping `fileName` keys for restore/delete (rejected — trash file names are suffixed on collision, so `fileName` is ambiguous; `id` is stable and unique).
 
@@ -89,7 +89,7 @@ Restore moves `trashPath` → `originalPath` (recreating directories and suffixi
 
 ### D9 — i18n and contract/type refresh
 
-New `TranslationKey` entries in [`translations.en.ts`](../../webapp/src/i18n/translations.en.ts) and [`translations.ru.ts`](../../webapp/src/i18n/translations.ru.ts) (view, restore, original location, deleted date, empty state, toasts). New backend `Msg*` constants plus en/ru locale entries in [`interfaces/i18n/locales`](../../backend/api-service/internal/interfaces/i18n/locales/en.json). The OpenAPI contract at [`docs/api-contracts/api-service.yaml`](../../docs/api-contracts/api-service.yaml) is updated to match the new endpoints (it currently diverges from the Go handlers), and `make generate-types` refreshes the webapp TS types.
+New `TranslationKey` entries in [`translations.en.ts`](../../webapp/src/i18n/translations.en.ts) and [`translations.ru.ts`](../../webapp/src/i18n/translations.ru.ts) (view, restore, original location, deleted date, empty state, toasts). New backend `Msg*` constants plus en/ru locale entries in [`interfaces/i18n/locales`](../../backend/core/internal/interfaces/i18n/locales/en.json). The OpenAPI contract at [`docs/api-contracts/core.yaml`](../../docs/api-contracts/core.yaml) is updated to match the new endpoints (it currently diverges from the Go handlers), and `make generate-types` refreshes the webapp TS types.
 
 ## Risks / Trade-offs
 

@@ -1,4 +1,4 @@
-module github.com/flashbacks/api-service
+module github.com/flashbacks/core
 
 go 1.25.0
 

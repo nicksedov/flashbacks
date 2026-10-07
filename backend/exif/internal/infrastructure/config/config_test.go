@@ -52,8 +52,8 @@ func TestLoadDefaults(t *testing.T) {
 	if cfg.LogLevel != "info" {
 		t.Errorf("LogLevel = %q, want %q", cfg.LogLevel, "info")
 	}
-	if cfg.DBName != "image_toolkit" {
-		t.Errorf("DBName = %q, want %q", cfg.DBName, "image_toolkit")
+	if cfg.DBName != "flashbacks" {
+		t.Errorf("DBName = %q, want %q", cfg.DBName, "flashbacks")
 	}
 }
 

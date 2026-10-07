@@ -76,7 +76,7 @@ const contacts: ContactLink[] = [
 
 /**
  * Source of truth for the backend entries below: the direct (non-indirect)
- * `require` entries across `backend/api-service/go.mod`, `backend/exif/go.mod`,
+ * `require` entries across `backend/core/go.mod`, `backend/exif/go.mod`,
  * `backend/ocr/go.mod`, and `tools/embeddings-builder/go.mod`. Update this list
  * when those modules change, and re-verify each license link before shipping.
  */

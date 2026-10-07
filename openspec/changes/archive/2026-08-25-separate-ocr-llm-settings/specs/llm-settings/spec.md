@@ -77,5 +77,5 @@ The API contract SHALL list `ocr` as a valid value for the LLM instrument `type`
 
 #### Scenario: OpenAPI enum includes ocr
 
-- **WHEN** the api-service OpenAPI document is inspected
+- **WHEN** the core OpenAPI document is inspected
 - **THEN** the `LlmInstrumentDTO.type` enum includes the value `ocr` alongside `chat`, `vl`, `embedding`, and `image_edit`

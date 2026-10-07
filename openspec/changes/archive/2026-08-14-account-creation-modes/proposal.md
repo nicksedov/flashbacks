@@ -25,8 +25,8 @@ Flashbacks currently supports only admin-created accounts (bootstrap setup + adm
 
 ## Impact
 
-- Backend api-service: [`internal/domain/auth.go`](../backend/api-service/internal/domain/auth.go), config, auth application service, auth handlers, DTOs, audit actions, database migrations.
+- Backend core: [`internal/domain/auth.go`](../backend/core/internal/domain/auth.go), config, auth application service, auth handlers, DTOs, audit actions, database migrations.
 - Frontend webapp: [`LoginScreen.tsx`](../webapp/src/components/auth/LoginScreen.tsx), [`PendingApprovalScreen.tsx`](../webapp/src/components/auth/PendingApprovalScreen.tsx), [`AuthProvider.tsx`](../webapp/src/providers/AuthProvider.tsx), admin panel components under [`components/auth/admin/`](../webapp/src/components/auth/admin/).
-- API contract: [`docs/api-contracts/api-service.yaml`](../docs/api-contracts/api-service.yaml) (new/changed endpoints and DTO fields).
+- API contract: [`docs/api-contracts/core.yaml`](../docs/api-contracts/core.yaml) (new/changed endpoints and DTO fields).
 - i18n: new en/ru keys for registration, approval, and login-status messages.
 - Unaffected: exif, ocr, shared services; MCP contracts.

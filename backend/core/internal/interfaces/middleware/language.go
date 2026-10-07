@@ -1,7 +1,7 @@
 package middleware
 
 import (
-	"github.com/flashbacks/api-service/internal/domain"
+	"github.com/flashbacks/core/internal/domain"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"

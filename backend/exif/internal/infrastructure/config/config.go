@@ -27,9 +27,9 @@ func Load() *Config {
 	return &Config{
 		DBHost:           getEnv("DB_HOST", "localhost"),
 		DBPort:           getEnv("DB_PORT", "5432"),
-		DBUser:           getEnv("DB_USER", "postgres"),
+		DBUser:           getEnv("DB_USER", "flashbacks"),
 		DBPassword:       getEnv("DB_PASSWORD", "postgres"),
-		DBName:           getEnv("DB_NAME", "image_toolkit"),
+		DBName:           getEnv("DB_NAME", "flashbacks"),
 		DBSSLMode:        getEnv("DB_SSLMODE", "disable"),
 		ServerHost:       getEnv("EXIF_HOST", "0.0.0.0"),
 		ServerPort:       getEnv("EXIF_PORT", "5172"),

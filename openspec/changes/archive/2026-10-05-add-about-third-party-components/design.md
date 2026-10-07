@@ -15,7 +15,7 @@ Current state in [`webapp/src/components/tabs/AboutTab.tsx`](../../../webapp/src
   Eleven frontend entries are listed; the list is rendered as a single
   ungrouped `<ul>`.
 - The backend is four Go modules with direct third-party dependencies:
-  `backend/api-service/go.mod`, `backend/exif/go.mod`,
+  `backend/core/go.mod`, `backend/exif/go.mod`,
   `backend/ocr/go.mod`, and `tools/embeddings-builder/go.mod`
   (`backend/shared/go.mod` has none).
 
@@ -77,7 +77,7 @@ deliberately selected.
 - `github.com/stretchr/testify` is a direct requirement and is therefore
   included, even though it is test-only.
 - Module versions differ between services (e.g. `gorm.io/gorm` v1.31.2 in
-  api-service vs v1.30.0 in exif); the list de-duplicates by module path and
+  core vs v1.30.0 in exif); the list de-duplicates by module path and
   does not show versions.
 
 ### D4 — License link targets

@@ -57,7 +57,7 @@ Set the following environment variables before starting the service:
 | `DB_PORT`        | `5432`         | PostgreSQL port               |
 | `DB_USER`        | `postgres`     | Database user                 |
 | `DB_PASSWORD`    | `postgres`     | Database password             |
-| `DB_NAME`        | `image_toolkit`| Database name                 |
+| `DB_NAME`        | `flashbacks`| Database name                 |
 | `DB_SSLMODE`     | `disable`      | SSL mode                      |
 | `EXIF_HOST`      | `0.0.0.0`      | Server bind address           |
 | `EXIF_PORT`      | `5172`         | Server port                   |
@@ -83,9 +83,9 @@ docker build -t exif .
 docker run -p 5172:5172 \
   -e DB_HOST=host.docker.internal \
   -e DB_PORT=5432 \
-  -e DB_USER=postgres \
+  -e DB_USER=flashbacks \
   -e DB_PASSWORD=postgres \
-  -e DB_NAME=image_toolkit \
+  -e DB_NAME=flashbacks \
   exif
 ```
 

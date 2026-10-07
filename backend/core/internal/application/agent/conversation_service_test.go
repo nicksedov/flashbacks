@@ -7,9 +7,9 @@ import (
 	"testing"
 	"unicode/utf8"
 
-	"github.com/flashbacks/api-service/internal/domain"
-	"github.com/flashbacks/api-service/internal/infrastructure/llm"
-	"github.com/flashbacks/api-service/internal/testutil"
+	"github.com/flashbacks/core/internal/domain"
+	"github.com/flashbacks/core/internal/infrastructure/llm"
+	"github.com/flashbacks/core/internal/testutil"
 )
 
 func TestCreateConversation(t *testing.T) {
@@ -536,13 +536,15 @@ func TestResolveModelMaxTokens(t *testing.T) {
 
 	svc := NewConversationService(db)
 
-	// Insert a model cache entry with context length
-	modelsJSON := `[{"id":"llama3:latest","name":"llama3:latest","size":4000000000,"contextLength":8192},{"id":"mistral:latest","name":"mistral:latest","size":3000000000,"contextLength":32768}]`
-	cache := domain.LlmProviderModelCache{
-		ProviderAlias: "ollama_1",
-		ModelsJSON:    modelsJSON,
+	// Seed a provider with normalized model rows carrying context lengths.
+	provider := domain.LlmProvider{Name: "ollama", Alias: "ollama_1", ApiUrl: "http://localhost:11434"}
+	if err := db.Create(&provider).Error; err != nil {
+		t.Fatalf("failed to seed provider: %v", err)
 	}
-	db.Create(&cache)
+	db.Create([]domain.LlmProviderModel{
+		{LlmProviderID: provider.ID, ModelID: "llama3:latest", ModelName: "llama3:latest", Size: 4000000000, ContextLength: 8192},
+		{LlmProviderID: provider.ID, ModelID: "mistral:latest", ModelName: "mistral:latest", Size: 3000000000, ContextLength: 32768},
+	})
 
 	// Found model
 	maxTokens := svc.ResolveModelMaxTokens("ollama_1", "llama3:latest")

@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/flashbacks/api-service/internal/domain"
-	"github.com/flashbacks/api-service/internal/infrastructure/llm"
-	"github.com/flashbacks/api-service/internal/testutil"
+	"github.com/flashbacks/core/internal/domain"
+	"github.com/flashbacks/core/internal/infrastructure/llm"
+	"github.com/flashbacks/core/internal/testutil"
 )
 
 // mockToolProvider implements ToolProvider for testing.

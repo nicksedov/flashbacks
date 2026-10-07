@@ -7,12 +7,12 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/flashbacks/api-service/internal/application/agent"
-	"github.com/flashbacks/api-service/internal/domain"
-	"github.com/flashbacks/api-service/internal/infrastructure/llm"
-	"github.com/flashbacks/api-service/internal/interfaces/dto"
-	"github.com/flashbacks/api-service/internal/interfaces/i18n"
-	"github.com/flashbacks/api-service/internal/interfaces/middleware"
+	"github.com/flashbacks/core/internal/application/agent"
+	"github.com/flashbacks/core/internal/domain"
+	"github.com/flashbacks/core/internal/infrastructure/llm"
+	"github.com/flashbacks/core/internal/interfaces/dto"
+	"github.com/flashbacks/core/internal/interfaces/i18n"
+	"github.com/flashbacks/core/internal/interfaces/middleware"
 
 	"github.com/gin-gonic/gin"
 )
@@ -229,7 +229,7 @@ func (s *Server) handleSendMessage(c *gin.Context) {
 	})
 }
 
-// resolveMaxTokens resolves max tokens from active provider/model cache, falling back to config default.
+// resolveMaxTokens resolves max tokens from the active provider's model table, falling back to config default.
 // For DeepSeek providers, also checks the known model registry as a fallback.
 func (s *Server) resolveMaxTokens(c *gin.Context) int {
 	// Get model from chat instrument settings
@@ -239,7 +239,7 @@ func (s *Server) resolveMaxTokens(c *gin.Context) int {
 	}
 	provider := instrument.Provider
 
-	// Try database cache first
+	// Resolve from the normalized provider models table first
 	modelMax := s.conversationService.ResolveModelMaxTokens(provider.Alias, instrument.Model)
 	if modelMax > 0 {
 		return modelMax

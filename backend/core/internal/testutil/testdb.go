@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/flashbacks/api-service/internal/domain"
+	"github.com/flashbacks/core/internal/domain"
 
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
@@ -23,6 +23,18 @@ func NewTestDB(t *testing.T) (*gorm.DB, func()) {
 	if err != nil {
 		t.Fatalf("failed to connect to test database: %v", err)
 	}
+
+	// In-memory SQLite databases are scoped to a single connection: GORM's
+	// default pool may open several connections, each with its own empty
+	// ":memory:" database. Pin the pool to one connection so every query sees
+	// the same schema and data (otherwise migrations run on one connection
+	// while later queries hit another, yielding "no such table").
+	sqlDB, err := db.DB()
+	if err != nil {
+		t.Fatalf("failed to access test database handle: %v", err)
+	}
+	sqlDB.SetMaxOpenConns(1)
+	sqlDB.SetMaxIdleConns(1)
 
 	// Run auto-migration for all domain models
 	if err := db.AutoMigrate(

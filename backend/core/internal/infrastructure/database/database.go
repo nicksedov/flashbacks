@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/flashbacks/api-service/internal/domain"
-	"github.com/flashbacks/api-service/internal/infrastructure/config"
+	"github.com/flashbacks/core/internal/domain"
+	"github.com/flashbacks/core/internal/infrastructure/config"
 
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -52,7 +52,6 @@ func InitDatabase(cfg *config.AppConfig) (*gorm.DB, error) {
 		&domain.EmbeddingSettings{},
 		&domain.OcrLlmRecognition{},
 		&domain.ImageTag{},
-		&domain.LlmProviderModelCache{},
 		&domain.LlmProviderModel{},
 		&domain.LlmModelCapability{},
 		&domain.Conversation{},
@@ -72,6 +71,11 @@ func InitDatabase(cfg *config.AppConfig) (*gorm.DB, error) {
 
 	// Create composite index for trash list pagination: covers ORDER BY deleted_at, id
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_trash_items_deleted_at_id ON trash_items (deleted_at, id)")
+
+	// Drop the legacy llm_provider_model_caches table. Its data was migrated to
+	// the normalized llm_provider_models table in a prior release; the JSON-blob
+	// model cache is no longer read or written.
+	db.Exec("DROP TABLE IF EXISTS llm_provider_model_caches")
 
 	// Case-insensitive unique login index for self-service registration.
 	// Existing case-conflicting logins (e.g. "Admin" vs "admin") must be resolved

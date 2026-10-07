@@ -4,7 +4,7 @@
 
 - [x] 1.1 Enumerate every direct third-party Go module (a `require` entry
   without an `// indirect` marker) from
-  [`backend/api-service/go.mod`](../../../backend/api-service/go.mod:1),
+  [`backend/core/go.mod`](../../../backend/core/go.mod:1),
   [`backend/exif/go.mod`](../../../backend/exif/go.mod:1),
   [`backend/ocr/go.mod`](../../../backend/ocr/go.mod:1), and
   [`tools/embeddings-builder/go.mod`](../../../tools/embeddings-builder/go.mod:1);

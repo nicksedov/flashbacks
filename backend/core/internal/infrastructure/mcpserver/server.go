@@ -7,10 +7,10 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/flashbacks/api-service/internal/application/agent"
-	"github.com/flashbacks/api-service/internal/application/imaging"
-	"github.com/flashbacks/api-service/internal/infrastructure/llm"
-	"github.com/flashbacks/api-service/internal/interfaces/handler/helpers"
+	"github.com/flashbacks/core/internal/application/agent"
+	"github.com/flashbacks/core/internal/application/imaging"
+	"github.com/flashbacks/core/internal/infrastructure/llm"
+	"github.com/flashbacks/core/internal/interfaces/handler/helpers"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"gorm.io/gorm"

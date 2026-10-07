@@ -7,8 +7,8 @@
 package main
 
 import (
-	"github.com/flashbacks/api-service/internal/infrastructure/di"
-	"github.com/flashbacks/api-service/internal/interfaces/handler"
+	"github.com/flashbacks/core/internal/infrastructure/di"
+	"github.com/flashbacks/core/internal/interfaces/handler"
 )
 
 // Injectors from wire.go:

@@ -13,7 +13,7 @@ context: |
   - webapp (5180 dev / 80 container): React 19, TypeScript 6, Vite 8,
     Tailwind CSS 4, Radix UI, React Leaflet, react-markdown, sonner, Vitest 4,
     ESLint 9
-  - api-service (5170): Go 1.25, Gin, GORM (Postgres + SQLite), Google Wire,
+  - core (5170): Go 1.25, Gin, GORM (Postgres + SQLite), Google Wire,
     pgvector, MCP go-sdk
   - exif (5172): Go 1.25, Gin, go-exiftool, golang.org/x/image, GORM, MCP go-sdk
   - ocr (5174): Go 1.25, gosseract (Tesseract), bild, imaging
@@ -23,16 +23,16 @@ context: |
   - Docker Compose for local dev; nginx serves built webapp
 
   ## Project Structure
-  webapp/ (React SPA), backend/{api-service,exif,ocr,shared},
+  webapp/ (React SPA), backend/{core,exif,ocr,shared},
   tools/embeddings-builder, docs/ (architecture, api-contracts, mcp-contracts,
   specs), openspec/, scripts/, tests/
 
   ## Architecture Conventions
   - Microservices over HTTP REST only; no cross-service DB writes
   - Clean Architecture in Go: domain -> application -> infrastructure -> interfaces
-  - api-service DI via Google Wire (wire.go + wire_gen.go); after changing the
+  - core DI via Google Wire (wire.go + wire_gen.go); after changing the
     graph run `go generate ./...`
-  - 12-factor env config (see backend/api-service/.env.example)
+  - 12-factor env config (see backend/core/.env.example)
 
   ## Go Conventions
   - PascalCase exported / camelCase unexported; no identifier redeclaration
@@ -42,7 +42,7 @@ context: |
     locale entries together
   - JSON tags (camelCase) must match webapp TypeScript types
   - Unit tests on in-memory SQLite (never assume Postgres-only behavior)
-  - Test: go test ./internal/application/... -count=1 (api-service);
+  - Test: go test ./internal/application/... -count=1 (core);
     go test ./... -count=1 (exif/ocr)
 
   ## TypeScript/React Conventions
@@ -57,10 +57,10 @@ context: |
   ## i18n
   - English (en) and Russian (ru) always in sync
   - webapp: src/i18n/translations.en.ts + translations.ru.ts
-  - api-service: internal/interfaces/i18n/locales/en.json + ru.json
+  - core: internal/interfaces/i18n/locales/en.json + ru.json
 
   ## API Contracts
-  - OpenAPI: docs/api-contracts/{api-service,exif,ocr}.yaml
+  - OpenAPI: docs/api-contracts/{core,exif,ocr}.yaml
   - MCP tools: docs/mcp-contracts/*.yaml
   - On OpenAPI change: make generate-types -> webapp/src/types/api.ts
 
@@ -69,7 +69,7 @@ context: |
     per-environment CORS, encrypted API keys
 
   ## Testing
-  - api-service: go test ./internal/application/... -count=1
+  - core: go test ./internal/application/... -count=1
   - exif/ocr: go test ./... -count=1
   - webapp: npm test (Vitest)
   - ocr integration: pytest in tests/ocr/
@@ -89,7 +89,7 @@ rules:
   design:
     - Follow clean architecture layering (domain -> application -> infrastructure -> interfaces)
     - Document Wire DI graph changes and note that wire_gen.go must be regenerated
-    - Describe inter-service REST communication explicitly (api-service -> exif/ocr)
+    - Describe inter-service REST communication explicitly (core -> exif/ocr)
   tasks:
     - Break tasks into small, independently verifiable chunks
     - Every Go task must include running the relevant `go test` command

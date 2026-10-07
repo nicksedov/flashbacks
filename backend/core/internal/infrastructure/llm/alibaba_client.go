@@ -18,7 +18,7 @@ import (
 
 	_ "github.com/deepteams/webp"
 
-	"github.com/flashbacks/api-service/internal/infrastructure/imaging"
+	"github.com/flashbacks/core/internal/infrastructure/imaging"
 )
 
 // AlibabaClient implements Client for Alibaba Cloud DashScope (MaaS) API.

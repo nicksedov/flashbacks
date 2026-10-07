@@ -8,8 +8,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/flashbacks/api-service/internal/domain"
-	"github.com/flashbacks/api-service/internal/infrastructure/llm"
+	"github.com/flashbacks/core/internal/domain"
+	"github.com/flashbacks/core/internal/infrastructure/llm"
 )
 
 // AgentConfig holds agent configuration.

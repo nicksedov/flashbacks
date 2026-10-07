@@ -3,7 +3,7 @@ package imaging
 import (
 	"context"
 
-	"github.com/flashbacks/api-service/internal/domain"
+	"github.com/flashbacks/core/internal/domain"
 )
 
 // ExifClient abstracts EXIF operations for dependency injection.

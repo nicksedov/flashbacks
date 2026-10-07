@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"text/template"
 
-	"github.com/flashbacks/api-service/internal/infrastructure/llm/prompts"
+	"github.com/flashbacks/core/internal/infrastructure/llm/prompts"
 )
 
 //go:embed prompts/ocr_system.txt

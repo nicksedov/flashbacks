@@ -4,8 +4,8 @@ import (
 	"context"
 	"io"
 
-	"github.com/flashbacks/api-service/internal/infrastructure/healthcheck"
-	"github.com/flashbacks/api-service/internal/infrastructure/ocr"
+	"github.com/flashbacks/core/internal/infrastructure/healthcheck"
+	"github.com/flashbacks/core/internal/infrastructure/ocr"
 	shareddomain "github.com/flashbacks/shared/domain"
 )
 

@@ -6,13 +6,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/flashbacks/api-service/internal/application/auth"
-	"github.com/flashbacks/api-service/internal/application/imaging"
-	"github.com/flashbacks/api-service/internal/application/thumbnail"
-	"github.com/flashbacks/api-service/internal/domain"
-	"github.com/flashbacks/api-service/internal/infrastructure/config"
-	"github.com/flashbacks/api-service/internal/interfaces/handler"
-	"github.com/flashbacks/api-service/internal/interfaces/middleware"
+	"github.com/flashbacks/core/internal/application/auth"
+	"github.com/flashbacks/core/internal/application/imaging"
+	"github.com/flashbacks/core/internal/application/thumbnail"
+	"github.com/flashbacks/core/internal/domain"
+	"github.com/flashbacks/core/internal/infrastructure/config"
+	"github.com/flashbacks/core/internal/interfaces/handler"
+	"github.com/flashbacks/core/internal/interfaces/middleware"
 
 	"gorm.io/gorm"
 )

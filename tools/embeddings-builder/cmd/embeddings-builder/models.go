@@ -3,7 +3,7 @@ package main
 import "time"
 
 // ImageTag represents a single AI-generated tag for an image.
-// Source: api-service/internal/domain/media.go — ImageTag struct.
+// Source: core/internal/domain/media.go — ImageTag struct.
 type ImageTag struct {
 	ID          uint   `gorm:"primaryKey"`
 	ImageFileID uint   `gorm:"index;not null"`
@@ -12,7 +12,7 @@ type ImageTag struct {
 
 // TagEmbedding is the parent table for per-image embedding metadata.
 // Actual vector data is stored in per-model child tables tag_embeddings_<model_name>.
-// Source: api-service/internal/domain/media.go — TagEmbedding struct.
+// Source: core/internal/domain/media.go — TagEmbedding struct.
 type TagEmbedding struct {
 	ID          uint `gorm:"primaryKey"`
 	ImageFileID uint `gorm:"index;not null"`
@@ -22,7 +22,7 @@ type TagEmbedding struct {
 }
 
 // TagEmbeddingModel represents a row in a per-model child table tag_embeddings_<model_name>.
-// Source: api-service/internal/domain/media.go — TagEmbeddingModel struct.
+// Source: core/internal/domain/media.go — TagEmbeddingModel struct.
 type TagEmbeddingModel struct {
 	ID              uint   `gorm:"primaryKey"`
 	TagEmbeddingsID uint   `gorm:"not null"`
@@ -43,7 +43,7 @@ type EmbeddingSetupHash struct {
 }
 
 // LlmSettings holds LLM provider and embedding configuration.
-// Source: api-service/internal/domain/media.go — LlmSettings struct.
+// Source: core/internal/domain/media.go — LlmSettings struct.
 type LlmSettings struct {
 	ID                     uint   `gorm:"primaryKey"`
 	ActiveProvider         string `gorm:"default:ollama_1;not null"`
@@ -55,7 +55,7 @@ type LlmSettings struct {
 }
 
 // LlmProvider represents a configured LLM provider instance.
-// Source: api-service/internal/domain/media.go — LlmProvider struct.
+// Source: core/internal/domain/media.go — LlmProvider struct.
 type LlmProvider struct {
 	ID        uint   `gorm:"primaryKey"`
 	Name      string `gorm:"index;not null"`

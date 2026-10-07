@@ -9,11 +9,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/flashbacks/api-service/internal/domain"
-	"github.com/flashbacks/api-service/internal/infrastructure/ocr"
-	"github.com/flashbacks/api-service/internal/testutil"
-	"github.com/flashbacks/api-service/internal/testutil/fixtures"
-	"github.com/flashbacks/api-service/internal/testutil/mocks"
+	"github.com/flashbacks/core/internal/domain"
+	"github.com/flashbacks/core/internal/infrastructure/ocr"
+	"github.com/flashbacks/core/internal/testutil"
+	"github.com/flashbacks/core/internal/testutil/fixtures"
+	"github.com/flashbacks/core/internal/testutil/mocks"
 	shareddomain "github.com/flashbacks/shared/domain"
 
 	"github.com/stretchr/testify/assert"

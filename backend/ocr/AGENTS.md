@@ -73,7 +73,7 @@ go test -race -cover ./...
 
 ### Run
 ```bash
-OCR_PORT=5174 ./ocr
+OCR_HOST=0.0.0.0 OCR_PORT=5174 ./ocr
 ```
 
 ### Health check

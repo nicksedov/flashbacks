@@ -30,7 +30,7 @@ func main() {
 	mux.HandleFunc("/ocr/api/v1/classify", classifyHandler.Classify)
 
 	// 5. Create HTTP server
-	addr := ":" + cfg.Port
+	addr := fmt.Sprintf("%s:%s", cfg.Host, cfg.Port)
 	srv := &http.Server{
 		Addr:         addr,
 		Handler:      mux,

@@ -622,7 +622,7 @@ export function AdminLlmProvidersTab() {
                       </Button>
 
                       {isExpanded && (
-                        <div className="mt-2 space-y-0.5 max-h-64 overflow-y-auto border rounded-md">
+                        <div className="mt-2 space-y-0.5 max-h-64 overflow-y-auto bg-muted rounded-md">
                           {models.length === 0 && !isLoadingModels ? (
                             <p className="text-xs text-muted-foreground text-center py-4">
                               {t("llm_providers.noModelsLoaded")}
@@ -670,7 +670,7 @@ export function AdminLlmProvidersTab() {
             </CardHeader>
             <CardContent>
               {showNewProvider ? (
-                <div className="space-y-3 rounded-lg border p-4">
+                <div className="space-y-3 rounded-lg bg-muted p-4">
                   <h4 className="text-sm font-medium">{t("llm_providers.newProvider")}</h4>
 
                   {/* Provider Type */}

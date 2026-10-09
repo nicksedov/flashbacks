@@ -400,7 +400,7 @@ export function AdminAnalysisTab() {
           <CardDescription>{t("adminPanel.ocr.description")}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex items-center justify-between rounded-lg border p-3">
+          <div className="flex items-center justify-between rounded-lg bg-muted p-3">
             <div className="space-y-1">
               <div className="text-sm font-medium">{t("adminPanel.ocr.status")}</div>
               {isOcrLoading ? (
@@ -451,7 +451,7 @@ export function AdminAnalysisTab() {
           <CardDescription>{t("adminPanel.exif.description")}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex items-center justify-between rounded-lg border p-3">
+          <div className="flex items-center justify-between rounded-lg bg-muted p-3">
             <div className="space-y-1">
               <div className="text-sm font-medium">{t("adminPanel.exif.status")}</div>
               {isExifLoading ? <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />{t("common.loading")}</div> : (
@@ -493,7 +493,7 @@ export function AdminAnalysisTab() {
           ) : (
             <div className="space-y-4">
               {/* Embedding provider + model (inline, not a nested card) */}
-              <div className="space-y-3 rounded-lg border p-4">
+              <div className="space-y-3 rounded-lg bg-muted p-4">
                 {(() => {
                   const alias = embeddingInstrument?.providerAlias ?? ""
                   const model = embeddingInstrument?.model ?? ""
@@ -567,7 +567,7 @@ export function AdminAnalysisTab() {
           <CardDescription>{t("tagScan.description")}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex items-center space-x-2 rounded-lg border p-3">
+          <div className="flex items-center space-x-2 rounded-lg bg-muted p-3">
             <Checkbox id="tag-scan-enabled" checked={tagScanEnabled} onCheckedChange={checked => handleTagScanFieldChange("tagScanEnabled", checked === true)} />
             <div className="space-y-0.5"><Label htmlFor="tag-scan-enabled">{t("tagScan.enabled")}</Label><p className="text-xs text-muted-foreground">{t("tagScan.description")}</p></div>
           </div>
@@ -609,7 +609,7 @@ export function AdminAnalysisTab() {
               {tagScanStatus && (
                 <div className="space-y-2">
                   <Label>{t("tagScan.status")}</Label>
-                  <div className="flex items-center gap-4 rounded-lg border p-3">
+                  <div className="flex items-center gap-4 rounded-lg bg-muted p-3">
                     <div className="flex items-center gap-2">
                       <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
                         tagScanStatus.running && !tagScanStatus.paused ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200" :

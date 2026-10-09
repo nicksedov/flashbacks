@@ -489,7 +489,7 @@ export function AdminGeneralTab() {
           </div>
 
           {/* Sync Status */}
-          <div className="rounded-md border p-3 space-y-2">
+          <div className="rounded-lg bg-muted p-3 space-y-2">
             <div className="flex items-center gap-2 text-sm font-medium">
               <Clock className="h-4 w-4" />
               {t("settings.dailySync.status")}
@@ -590,7 +590,7 @@ export function AdminGeneralTab() {
             </div>
           </div>
 
-          <div className="flex items-center justify-between rounded-md border p-3">
+          <div className="flex items-center justify-between rounded-lg bg-muted p-3">
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Trash2 className="h-4 w-4" />
               {!trashDir ? (
@@ -663,7 +663,7 @@ export function AdminGeneralTab() {
         </CardHeader>
         <CardContent className="space-y-4">
           {/* Cache Status */}
-          <div className="flex items-center justify-between rounded-lg border p-3">
+          <div className="flex items-center justify-between rounded-lg bg-muted p-3">
             <div className="space-y-1">
               <div className="text-sm font-medium">{t("adminPanel.thumbnailCache.status")}</div>
               {isThumbnailLoading ? (

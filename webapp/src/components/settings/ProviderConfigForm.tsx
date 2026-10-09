@@ -53,7 +53,7 @@ export function ProviderConfigForm({
     PROVIDER_LABEL_KEYS[name] ? t(PROVIDER_LABEL_KEYS[name]) : name
 
   return (
-    <div className="space-y-4 rounded-lg border p-4">
+    <div className="space-y-4 rounded-lg bg-muted p-4">
       <div className="flex items-center justify-between">
         <h4 className="text-sm font-medium">
           {t("llm_providers.providerLabel", { alias: provider.alias })}
@@ -191,7 +191,7 @@ export function ProviderConfigForm({
           </Button>
         </div>
         {availableModels.length > 0 && (
-          <div className="max-h-40 overflow-y-auto border rounded-md p-2 text-xs text-muted-foreground space-y-1">
+          <div className="max-h-40 overflow-y-auto bg-muted rounded-md p-2 text-xs text-muted-foreground space-y-1">
             {availableModels.map((model) => (
               <div key={model.id} className="font-mono">{model.name}</div>
             ))}

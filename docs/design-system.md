@@ -17,6 +17,7 @@
 | 9 | `--color-foreground` undefined | [`globals.css`](../webapp/src/styles/globals.css) | Define for all 9 themes | ☑ |
 | 10 | Per-tab content gutter special case | [`App.tsx`](../webapp/src/App.tsx) (`px-8 py-6` vs geolocation `px-3 py-3`) | Single gutter/max-width policy | ☑ |
 | 11 | Hardcoded English strings | [`ProviderConfigForm.tsx`](../webapp/src/components/settings/ProviderConfigForm.tsx) | i18n keys, en + ru | ☑ |
+| 12 | Nested bordered panels inside settings cards (frames within frames) | [`AdminGeneralTab.tsx`](../webapp/src/components/tabs/AdminGeneralTab.tsx), [`AdminAnalysisTab.tsx`](../webapp/src/components/tabs/AdminAnalysisTab.tsx), [`AdminLlmProvidersTab.tsx`](../webapp/src/components/tabs/AdminLlmProvidersTab.tsx), [`ProviderConfigForm.tsx`](../webapp/src/components/settings/ProviderConfigForm.tsx) | Borderless `bg-muted` inset fill; no `border` inside a `Card` | ☑ |
 
 ## Notes
 
@@ -24,3 +25,4 @@
 - Keep this file in sync with the master spec. When fixing a row, mark it done here **and** update the corresponding tasks/change artifacts.
 - **Auth language switcher (`add-auth-language-switcher`, 2026-10-07):** audited for drift — the login/registration language switcher reuses the shared `Select` primitive with semantic tokens, an accessible `aria-label`, Radix keyboard operation, and a 44px touch target. No new drift introduced.
 - **Gallery → Folders folder-name caption (2026-10-07):** the `FolderTile` label in [`GalleryFoldersView.tsx`](../webapp/src/components/gallery/GalleryFoldersView.tsx) was moved off the off-scale `text-[11px]` onto `text-sm` (larger and on the defined typography scale). Image-caption tiles ([`TileFrame.tsx`](../webapp/src/components/gallery/TileFrame.tsx), [`SmartSearchTile.tsx`](../webapp/src/components/gallery/SmartSearchTile.tsx)) still use `text-[11px]` and remain as typography-scale drift.
+- **Nested settings panels (`replace-nested-borders-with-inset-fill`, 2026-10-09):** bordered panels nested inside settings cards (Admin General/Analysis/LLM Providers and the provider config form) were converted to borderless `bg-muted` inset fills. The design system now limits grouping surfaces to one level of bordered container (the `Card`); see [`openspec/specs/design-system/spec.md`](../openspec/specs/design-system/spec.md).

@@ -44,7 +44,7 @@ NC     := \033[0m
         up start down stop restart status logs \
         run-core run-exif run-ocr run-webapp \
         dev-core dev-exif dev-ocr dev-webapp \
-        test test-all test-go test-core test-exif test-ocr test-webapp test-ocr-integration test-pytest \
+        test test-all test-go test-core test-exif test-ocr test-webapp test-webapp-integration test-ocr-integration test-pytest \
         lint lint-all lint-core lint-exif lint-ocr lint-webapp \
         db-migrate db-shell generate-types generate-go clean clean-tools
 
@@ -194,6 +194,10 @@ test-ocr: ## Run ocr Go unit tests
 test-webapp: ## Run webapp unit tests (Vitest)
 	@echo "${GREEN}Testing webapp…${NC}"
 	@cd webapp && npm test
+
+test-webapp-integration: ## Run webapp HTTP integration tests (Vitest) against a booted core service
+	@echo "${GREEN}Testing webapp (integration)…${NC}"
+	@cd webapp && npm run test:integration
 
 test-go: ## Run all Go unit tests
 	@$(MAKE) --no-print-directory test-core

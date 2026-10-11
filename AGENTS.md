@@ -15,8 +15,8 @@ flashbacks/
 │   └── ocr/                  # OCR text detection service
 ├── tools/                    # Utilities (embeddings-builder)
 ├── docs/                     # Shared documentation & API contracts
+├── scripts/                  # Host-native dev/test scripts (dev.sh, bootstrap.sh)
 ├── skills/                   # Shared AI agent skills
-├── docker-compose.yml        # Local dev environment
 └── Makefile                  # Common commands
 ```
 

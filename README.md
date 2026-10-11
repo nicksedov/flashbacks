@@ -13,19 +13,43 @@ A microservice-based application for finding and managing duplicate images.
 
 ## Quick Start
 
-### Prerequisites
-- Docker & Docker Compose
-- Go 1.25+ (for local development)
-- Node.js 22+ (for frontend development)
+The development stack runs directly on the host inside the IDE container — no
+Docker images and no docker-compose. PostgreSQL (with the `pgvector` extension)
+is an external, shared service configured through `.env`.
 
-### Run All Services
+### Prerequisites
+- Go 1.25+
+- Node.js 22+ and npm
+- Python 3.11+ (for the OCR pytest suite)
+- Tesseract OCR with development headers (for the `ocr` service)
+- Access to a PostgreSQL 16+ instance with the `pgvector` extension
+
+### Setup
 ```bash
 git clone https://github.com/flashbacks/flashbacks.git
 cd flashbacks
-docker compose up -d
+make env      # create .env, then set the DB_* credentials
+make setup    # Go modules, npm deps, pytest venv, local ExifTool
+make doctor   # verify the toolchain and database reachability
 ```
 
-Open http://localhost:5180 in your browser.
+### Run All Services
+```bash
+make up       # start core (5170), exif (5172), ocr (5174), webapp (5180)
+make status   # show PIDs and URLs
+make logs     # tail service logs
+make down     # stop everything
+```
+
+Open http://localhost:5180 in your browser. To run a single service in the
+foreground, use `make dev-core`, `make dev-exif`, `make dev-ocr` or
+`make dev-webapp`.
+
+### Testing
+```bash
+make test-all             # Go (core/exif/ocr) + webapp unit tests
+make test-ocr-integration # pytest against a running OCR service
+```
 
 ### Development Setup
 See individual service READMEs:

@@ -27,8 +27,9 @@ flashbacks/
 ├── docs/                     # Shared documentation
 │   ├── api-contracts/        # API contracts (OpenAPI specs)
 │   └── mcp-contracts/        # MCP tool contracts
+├── scripts/                  # Host-native dev scripts (dev.sh, bootstrap.sh)
+├── tests/                    # Integration tests (pytest for OCR)
 ├── skills/                   # Shared AI agent skills
-├── docker-compose.yml        # Local dev environment
 └── Makefile                  # Common commands
 ```
 
@@ -68,8 +69,8 @@ flashbacks/
 │ exif          │   │ocr            │   │   postgres    │
 │    :5172      │   │    :5174      │   │    :5432      │
 │               │   │               │   │               │
-│ EXIF metadata │   │ Text recognition│  │  api_db       │
-│ extraction    │   │ & classification│ │  exif_db      │
+│ EXIF metadata │   │ Text recognition│  │  flashbacks   │
+│ extraction    │   │ & classification│ │  (pgvector)   │
 └───────────────┘   └───────────────┘   └───────────────┘
 ```
 
@@ -83,7 +84,7 @@ flashbacks/
    - Calls **exif** to extract metadata
    - Calls **ocr** to detect text
    - Generates thumbnail
-   - Stores results in **postgres** (`api_db`)
+   - Stores results in **postgres** (shared `flashbacks` database)
 
 ### AI Chat / Smart Search
 
@@ -103,26 +104,26 @@ flashbacks/
 
 ## Database Schema
 
-### api_db (Primary Database)
+A single PostgreSQL database (`flashbacks`) is shared by every service. `core`
+owns most tables and auto-migrates them on startup; the `exif` service owns
+`image_metadata` and `geolocation_caches`.
 
 ```
-image_files          # Image metadata
-image_tags           # AI-generated tags
-tag_embeddings       # Parent table for embeddings
-tag_embeddings_*     # Per-model child tables (pgvector)
-users                # User accounts
-sessions             # Authentication sessions
-llm_settings         # LLM provider configuration
-llm_providers        # LLM provider instances
-conversations        # Chat history
-messages             # Chat messages
-```
+# Owned by core
+image_files           # Image metadata
+image_tags            # AI-generated tags
+tag_embeddings        # Parent table for embeddings
+tag_embeddings_*      # Per-model child tables (pgvector)
+users                 # User accounts
+sessions              # Authentication sessions
+llm_settings          # LLM provider configuration
+llm_providers         # LLM provider instances
+conversations         # Chat history
+conversation_messages # Chat messages
 
-### exif_db (EXIF Metadata)
-
-```
-exif_data            # EXIF metadata per image
-gps_coordinates      # Geolocation data
+# Owned by exif
+image_metadata        # EXIF metadata per image
+geolocation_caches    # Geolocation data
 ```
 
 ## Security
@@ -146,15 +147,18 @@ All services communicate via HTTP REST:
 
 ## Configuration Management
 
-Each service uses environment variables (12-factor app):
+Each service uses environment variables (12-factor app). For local development
+a single repository-level `.env` (created from `.env.example`) is loaded by the
+Makefile and `scripts/dev.sh` and exported to every service:
 
 ```
-# core/.env.example
-DB_HOST=localhost
+# .env
+DB_HOST=postgreshost
 DB_PORT=5432
-DB_NAME=api_db
+DB_NAME=flashbacks
 DB_USER=flashbacks
-DB_PASSWORD=postgres
+DB_PASSWORD=…
+DB_SSLMODE=disable
 SERVER_PORT=5170
 CORS_ORIGINS=http://localhost:5180
 BOOTSTRAP_LOGIN=admin
@@ -165,19 +169,29 @@ EXIF_SERVICE_URL=http://localhost:5172
 
 ## Local Development
 
+Services run directly on the host inside the IDE container; PostgreSQL is an
+external, shared service configured through `.env` (see `.env.example`).
+
 ```bash
-# Start all services via Docker Compose
-docker-compose up -d
+make env      # create .env, then set the DB credentials
+make setup    # install host prerequisites (Go deps, npm, pytest venv, exiftool)
+make up       # start core, exif, ocr and webapp in the background
+make status   # show PIDs and URLs
+make down     # stop everything
+```
 
-# Or run services individually:
+Run a single service in the foreground:
 
-# Frontend
-cd webui && npm run dev
+```bash
+make dev-core    # core   :5170
+make dev-exif    # exif   :5172
+make dev-ocr     # ocr    :5174
+make dev-webapp  # webapp :5180
+```
 
-# API Service
-cd core && go run ./cmd/server/
+Embeddings Builder (on-demand):
 
-# Embeddings Builder (on-demand)
+```bash
 cd tools/embeddings-builder && go run ./cmd/embeddings-builder
 ```
 
@@ -189,7 +203,7 @@ Each service is deployed independently:
 2. **core**: Containerized, exposed on port 5170
 3. **exif**: Containerized, internal network only
 4. **ocr**: Containerized, internal network only
-5. **postgres**: Managed database service or containerized
+5. **postgres**: External PostgreSQL 17 with pgvector (shared by all services)
 
 ## Future Enhancements
 

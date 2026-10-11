@@ -4,7 +4,7 @@ Pytest configuration for OCR integration tests.
 Base URL configuration (priority order):
 1. --base-url CLI argument:  pytest integration/ --base-url http://localhost:5174
 2. OCR_CLASSIFIER_URL environment variable
-3. Default: http://ocr:5174
+3. Default: http://localhost:5174
 """
 
 import os
@@ -17,7 +17,7 @@ def pytest_addoption(parser):
         action="store",
         default=None,
         help="Base URL of the OCR service "
-             "(default: $OCR_CLASSIFIER_URL or http://ocr:5174)",
+             "(default: $OCR_CLASSIFIER_URL or http://localhost:5174)",
     )
 
 
@@ -32,7 +32,7 @@ def base_url(request):
     if env_value:
         return env_value.rstrip("/")
 
-    return "http://ocr:5174"
+    return "http://localhost:5174"
 
 
 @pytest.fixture(scope="session")

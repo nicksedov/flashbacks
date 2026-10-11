@@ -149,3 +149,11 @@ dataset/**/temp/
 .roo/
 .gigacode/
 .gigaide/
+
+# ===========================
+# Local dev runtime (host-native)
+# ===========================
+# PID files, logs and compiled service binaries
+.run/
+# Locally bootstrapped tools (e.g. exiftool)
+.tools/

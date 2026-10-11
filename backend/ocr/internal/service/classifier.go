@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"fmt"
 	"image"
+	"math"
+	"sort"
 
 	"github.com/otiai10/gosseract/v2"
 )
@@ -41,15 +43,20 @@ type BoundingBox struct {
 
 // ClassifierResult contains the results of text detection on an image.
 type ClassifierResult struct {
-	MeanConfidence     float64       `json:"mean_confidence"`
-	WeightedConfidence float64       `json:"weighted_confidence"`
-	TokenCount         int           `json:"token_count"`
-	Boxes              []BoundingBox `json:"boxes"`
-	Angle              int           `json:"angle"`
-	ScaleFactor        float64       `json:"scale_factor"`
-	IsTextDocument     bool          `json:"is_text_document"`
-	BoundingBoxWidth   int           `json:"bounding_box_width"`
-	BoundingBoxHeight  int           `json:"bounding_box_height"`
+	MeanConfidence     float64 `json:"mean_confidence"`
+	WeightedConfidence float64 `json:"weighted_confidence"`
+	// DenseTextConfidence is the token-weighted confidence measured after
+	// dropping the lowest-confidence DenseTextTrimFraction of tokens. It is an
+	// internal metric used by the dense-text decision rule and is not part of
+	// the public /classify response.
+	DenseTextConfidence float64       `json:"-"`
+	TokenCount          int           `json:"token_count"`
+	Boxes               []BoundingBox `json:"boxes"`
+	Angle               int           `json:"angle"`
+	ScaleFactor         float64       `json:"scale_factor"`
+	IsTextDocument      bool          `json:"is_text_document"`
+	BoundingBoxWidth    int           `json:"bounding_box_width"`
+	BoundingBoxHeight   int           `json:"bounding_box_height"`
 }
 
 // Classifier performs OCR-based text detection on images.
@@ -115,15 +122,17 @@ func (c *Classifier) processBoundingBoxes(boxes []gosseract.BoundingBox, imgWidt
 	}
 
 	meanConfidence, weightedConfidence := c.calculateConfidenceMetrics(resultBoxes, totalTokens)
+	denseTextConfidence := computeDenseTextConfidence(resultBoxes, totalTokens)
 
 	return &ClassifierResult{
-		MeanConfidence:     meanConfidence,
-		WeightedConfidence: weightedConfidence,
-		TokenCount:         totalTokens,
-		Boxes:              resultBoxes,
-		Angle:              0,
-		BoundingBoxWidth:   imgWidth,
-		BoundingBoxHeight:  imgHeight,
+		MeanConfidence:      meanConfidence,
+		WeightedConfidence:  weightedConfidence,
+		DenseTextConfidence: denseTextConfidence,
+		TokenCount:          totalTokens,
+		Boxes:               resultBoxes,
+		Angle:               0,
+		BoundingBoxWidth:    imgWidth,
+		BoundingBoxHeight:   imgHeight,
 	}, nil
 }
 
@@ -180,6 +189,47 @@ func (c *Classifier) calculateConfidenceMetrics(boxes []BoundingBox, totalTokens
 	weightedConfidence = clampFloat64(weightedConfidence, 0.0, 1.0)
 
 	return meanConfidence, weightedConfidence
+}
+
+// computeDenseTextConfidence returns the token-weighted confidence measured
+// after discarding the DenseTextTrimFraction share of tokens with the lowest
+// per-box confidence. Per-token confidence is approximated by weighting each
+// box's confidence with its token count.
+func computeDenseTextConfidence(boxes []BoundingBox, totalTokens int) float64 {
+	if len(boxes) == 0 || totalTokens == 0 {
+		return 0
+	}
+
+	sorted := make([]BoundingBox, len(boxes))
+	copy(sorted, boxes)
+	sort.Slice(sorted, func(i, j int) bool {
+		return sorted[i].Confidence < sorted[j].Confidence
+	})
+
+	dropTarget := int(math.Floor(float64(totalTokens) * DenseTextTrimFraction))
+	dropped := 0
+	idx := 0
+	for idx < len(sorted) && dropped < dropTarget {
+		dropped += countTokens(sorted[idx].Word)
+		idx++
+	}
+
+	var weightedSum float64
+	var remainingTokens int
+	for _, box := range sorted[idx:] {
+		tokens := countTokens(box.Word)
+		if tokens == 0 {
+			continue
+		}
+		weightedSum += box.Confidence * float64(tokens)
+		remainingTokens += tokens
+	}
+
+	if remainingTokens == 0 {
+		return 0
+	}
+
+	return clampFloat64(weightedSum/float64(remainingTokens), 0.0, 1.0)
 }
 
 // clampFloat64 clamps a float64 value to the range [min, max].
@@ -241,7 +291,7 @@ func (c *Classifier) detectWithoutPreprocessing(imageData []byte, rule DecisionR
 	}
 	result.Angle = 0
 	result.ScaleFactor = 0
-	result.IsTextDocument = EvaluateDecision(result.WeightedConfidence, result.TokenCount, rule)
+	result.IsTextDocument = EvaluateDecision(result, rule)
 	return result, nil
 }
 
@@ -281,7 +331,7 @@ func (c *Classifier) detectTextOriginal(imageData []byte, scaleFactor float64, r
 	result.ScaleFactor = scaleFactor
 	result.BoundingBoxWidth = imgWidth
 	result.BoundingBoxHeight = imgHeight
-	result.IsTextDocument = EvaluateDecision(result.WeightedConfidence, result.TokenCount, rule)
+	result.IsTextDocument = EvaluateDecision(result, rule)
 
 	return result, nil
 }
@@ -292,7 +342,7 @@ func (c *Classifier) detectTextWithRotations(preprocessed *image.Gray, scaleFact
 	candidateAngles := detectSkewAngle(preprocessed)
 
 	if len(candidateAngles) == 0 {
-		phase1Result.IsTextDocument = EvaluateDecision(phase1Result.WeightedConfidence, phase1Result.TokenCount, rule)
+		phase1Result.IsTextDocument = EvaluateDecision(phase1Result, rule)
 		return phase1Result, nil
 	}
 
@@ -318,7 +368,7 @@ func (c *Classifier) tryRotationAngles(preprocessed *image.Gray, scaleFactor flo
 		}
 	}
 
-	bestResult.IsTextDocument = EvaluateDecision(bestResult.WeightedConfidence, bestResult.TokenCount, rule)
+	bestResult.IsTextDocument = EvaluateDecision(bestResult, rule)
 	return bestResult, nil
 }
 
@@ -342,7 +392,7 @@ func (c *Classifier) trySingleRotation(preprocessed *image.Gray, scaleFactor flo
 	res.BoundingBoxWidth = imgWidth
 	res.BoundingBoxHeight = imgHeight
 
-	if EvaluateDecision(res.WeightedConfidence, res.TokenCount, rule) {
+	if EvaluateDecision(res, rule) {
 		res.IsTextDocument = true
 		return res, true
 	}

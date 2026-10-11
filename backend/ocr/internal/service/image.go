@@ -15,6 +15,16 @@ import (
 const (
 	medianRadius = 1.0 // Radius for median blur (kernel size 3 = radius 1)
 
+	// blurDownscaleThreshold is the scale factor below which the median blur is
+	// applied: heavy downscaling of high-resolution sources introduces aliasing
+	// noise that the blur removes.
+	blurDownscaleThreshold = 0.75
+	// blurUpscaleThreshold is the scale factor at or above which the median blur
+	// is applied again: strong upscaling amplifies noise. In the near-native
+	// band between the two thresholds the image is already clean, so the blur
+	// only smears thin strokes and lowers OCR confidence, and is skipped.
+	blurUpscaleThreshold = 2.0
+
 	// Image size thresholds for dynamic scaling
 	minDimension    = 32                // Minimum dimension in pixels (skip if smaller)
 	halfMegapixel   = 524_288           // 0.5 MP
@@ -82,15 +92,25 @@ func preprocessImage(img image.Image) (*image.Gray, float64, int, int) {
 	newW, newH, scaleFactor := calculateScaleDimensions(w, h, pixels)
 
 	// Step 1: Scale image using cubic interpolation (CatmullRom)
-	scaled := imaging.Resize(img, newW, newH, imaging.CatmullRom)
+	var scaled image.Image = imaging.Resize(img, newW, newH, imaging.CatmullRom)
 
-	// Step 2: Apply median blur to reduce noise
-	blurred := effect.Median(scaled, medianRadius)
+	// Step 2: Apply median blur only where it helps — heavily downscaled
+	// (aliasing) or strongly upscaled (noise) sources. In the near-native band
+	// it smears thin strokes, so it is skipped there.
+	if shouldApplyMedianBlur(scaleFactor) {
+		scaled = effect.Median(scaled, medianRadius)
+	}
 
 	// Step 3: Convert to grayscale, light gray (224..255) treated as pure white
-	grayImg := convertToGray(blurred, 224)
+	grayImg := convertToGray(scaled, 224)
 
 	return grayImg, scaleFactor, newW, newH
+}
+
+// shouldApplyMedianBlur reports whether the median blur should be applied for a
+// given resize scale factor.
+func shouldApplyMedianBlur(scaleFactor float64) bool {
+	return scaleFactor < blurDownscaleThreshold || scaleFactor >= blurUpscaleThreshold
 }
 
 // calculateScaleDimensions determines target dimensions based on megapixel thresholds.

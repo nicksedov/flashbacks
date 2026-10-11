@@ -19,8 +19,9 @@ context: |
   - ocr (5174): Go 1.25, gosseract (Tesseract), bild, imaging
   - shared: Go 1.25 shared domain package (exif, ocr)
   - embeddings-builder: Go 1.25, GORM, godotenv
-  - postgres (5432): PostgreSQL 17 + pgvector; logical DBs api_db, exif_db
-  - Docker Compose for local dev; nginx serves built webapp
+  - postgres (5432): external PostgreSQL 17 + pgvector; single shared DB "flashbacks"
+  - Host-native dev & tests via Makefile + scripts/dev.sh (no Docker Compose);
+    nginx serves the built webapp
 
   ## Project Structure
   webapp/ (React SPA), backend/{core,exif,ocr,shared},

@@ -204,9 +204,15 @@ export function getFreePort(): Promise<number> {
  * Launches the compiled `core` service against the staging database on a free
  * port and resolves once `/api/auth/status` responds successfully.
  */
+export interface CoreServiceOptions {
+  /** Overrides `ACCOUNT_CREATION_MODE` for the booted service. */
+  accountCreationMode?: string
+}
+
 export async function startCoreService(
   config: IntegrationConfig,
   binaryPath: string,
+  options: CoreServiceOptions = {},
 ): Promise<RunningCore> {
   const port = await getFreePort()
   const chunks: string[] = []
@@ -225,7 +231,7 @@ export async function startCoreService(
       CORS_ORIGINS: "*",
       BOOTSTRAP_LOGIN: config.bootstrapLogin,
       BOOTSTRAP_PASSWORD: config.bootstrapPassword,
-      ACCOUNT_CREATION_MODE: "admin_only",
+      ACCOUNT_CREATION_MODE: options.accountCreationMode ?? "admin_only",
       // Keep background workers out of the way for a fast, deterministic boot.
       OCR_ENABLED: "false",
       BACKGROUND_SYNC_ENABLED: "false",
@@ -323,4 +329,87 @@ export function readCookie(response: Response, name: string): string | undefined
   }
 
   return undefined
+}
+
+/** Name of the session cookie set by the core auth handlers. */
+export const SESSION_COOKIE_NAME = "session_id"
+
+/** Subset of the user DTO fields the integration tests assert on. */
+export interface UserSummary {
+  id: number
+  login: string
+  displayName: string
+  role: string
+  accountStatus: string
+  rejectionReason: string
+  isActive: boolean
+}
+
+export interface CreateUserInput {
+  login: string
+  displayName: string
+  role: string
+  password: string
+}
+
+/** Thin wrapper around the core HTTP API used by the integration tests. */
+export interface CoreClient {
+  getStatus(): Promise<Response>
+  login(login: string, password: string): Promise<Response>
+  register(login: string, displayName: string, password: string): Promise<Response>
+  bootstrapSetup(newPassword: string, displayName: string): Promise<Response>
+  getMe(token: string): Promise<Response>
+  listUsers(token: string, status?: string): Promise<Response>
+  approve(token: string, id: number): Promise<Response>
+  reject(token: string, id: number, reason: string): Promise<Response>
+  createUser(token: string, input: CreateUserInput): Promise<Response>
+}
+
+export function createCoreClient(baseUrl: string): CoreClient {
+  const jsonHeaders = { "Content-Type": "application/json" }
+  const withAuth = (token: string) => ({ Cookie: `${SESSION_COOKIE_NAME}=${token}` })
+
+  return {
+    getStatus: () => fetch(`${baseUrl}/api/auth/status`),
+    login: (login, password) =>
+      fetch(`${baseUrl}/api/auth/login`, {
+        method: "POST",
+        headers: jsonHeaders,
+        body: JSON.stringify({ login, password }),
+      }),
+    register: (login, displayName, password) =>
+      fetch(`${baseUrl}/api/auth/register`, {
+        method: "POST",
+        headers: jsonHeaders,
+        body: JSON.stringify({ login, displayName, password }),
+      }),
+    bootstrapSetup: (newPassword, displayName) =>
+      fetch(`${baseUrl}/api/auth/bootstrap/setup`, {
+        method: "POST",
+        headers: jsonHeaders,
+        body: JSON.stringify({ newPassword, displayName }),
+      }),
+    getMe: (token) => fetch(`${baseUrl}/api/auth/me`, { headers: withAuth(token) }),
+    listUsers: (token, status) =>
+      fetch(
+        status
+          ? `${baseUrl}/api/admin/users?status=${encodeURIComponent(status)}`
+          : `${baseUrl}/api/admin/users`,
+        { headers: withAuth(token) },
+      ),
+    approve: (token, id) =>
+      fetch(`${baseUrl}/api/admin/users/${id}/approve`, { method: "POST", headers: withAuth(token) }),
+    reject: (token, id, reason) =>
+      fetch(`${baseUrl}/api/admin/users/${id}/reject`, {
+        method: "POST",
+        headers: { ...jsonHeaders, ...withAuth(token) },
+        body: JSON.stringify({ reason }),
+      }),
+    createUser: (token, input) =>
+      fetch(`${baseUrl}/api/admin/users`, {
+        method: "POST",
+        headers: { ...jsonHeaders, ...withAuth(token) },
+        body: JSON.stringify(input),
+      }),
+  }
 }

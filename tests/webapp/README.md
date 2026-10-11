@@ -23,7 +23,7 @@ because that is where the `vitest` and `pg` packages are installed; it anchors
 
 - Go toolchain (the suite compiles `backend/core` with `go build`)
 - `webapp` npm dependencies installed (`make setup-webapp`)
-- A reachable PostgreSQL instance with the `flashbacks-test` database (see `.env`)
+- A reachable PostgreSQL instance with the `flashbacks-test` database (see `test.env`)
 - PostgreSQL superuser credentials for the one-off `vector` extension bootstrap
 
 ## Running
@@ -41,15 +41,20 @@ cd webapp && npx vitest run --config vitest.integration.config.ts account-creati
 
 ## Configuration
 
-Configuration is read from the process environment first, then from the
-repository `.env`, then from development defaults.
+Values are read from the process environment first, then from the git-ignored
+`test.env` profile at the repository root, then from the defaults below. That
+profile is not committed — create it once from `.env.example`:
+
+```bash
+cp .env.example test.env   # then set DB_NAME=flashbacks-test and the DB_* credentials
+```
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `IT_DB_NAME` | `DB_NAME` from `.env` (`flashbacks-test`) | Test database under test |
+| `DB_NAME` | `flashbacks-test` | Test database under test |
 | `IT_ALLOW_NON_STAGING` | *(unset)* | Set to `1` to allow a non-staging `DB_NAME` |
 | `POSTGRES_SUPERUSER` | `postgres` | Superuser used once to enable the `vector` extension |
-| `POSTGRES_PASSWORD` | `DB_PASSWORD` from `.env` | Password of that superuser |
+| `POSTGRES_PASSWORD` | `DB_PASSWORD` | Password of that superuser |
 | `IT_BOOTSTRAP_PASSWORD` | `ItBootstrap!2345` | Password applied by `bootstrap/setup` |
 | `IT_BOOTSTRAP_DISPLAY_NAME` | `Integration Admin` | Display name applied by `bootstrap/setup` |
 

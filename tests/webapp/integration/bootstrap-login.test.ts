@@ -13,8 +13,8 @@
 // Run with:  make test-webapp-integration
 //            (or, from the webapp directory: npm run test:integration)
 //
-// The database is `IT_DB_NAME` (default `flashbacks-test`); the production
-// database is never touched.
+// The database name comes from `DB_NAME` in the git-ignored `test.env` profile
+// (default `flashbacks-test`); the production database is never touched.
 
 import { mkdtempSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"

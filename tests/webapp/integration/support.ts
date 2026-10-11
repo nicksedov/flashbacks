@@ -8,9 +8,11 @@
 // small helpers for asserting on the responses. PostgreSQL access uses the `pg`
 // client so no external `psql`/`docker` binary is required.
 //
-// SAFETY: the production database ("flashbacks") is never touched. The target
-// database is `IT_DB_NAME`, falling back to `DB_NAME` from the repository
-// `.env` (default `flashbacks-test`).
+// Configuration comes from the process environment and the git-ignored
+// `test.env` profile at the repository root.
+//
+// SAFETY: the production database ("flashbacks") is never touched — `DB_NAME`
+// defaults to the dedicated throwaway `flashbacks-test` database.
 
 import { execFileSync, spawn } from "node:child_process"
 import type { ChildProcess } from "node:child_process"
@@ -28,6 +30,9 @@ export const REPO_ROOT = path.resolve(HERE, "..", "..", "..")
 
 /** Directory of the `core` Go service. */
 export const CORE_SERVICE_DIR = path.join(REPO_ROOT, "backend", "core")
+
+/** Git-ignored environment profile loaded by the integration suites. */
+export const TEST_ENV_FILE = path.join(REPO_ROOT, "test.env")
 
 /** Database that integration tests must never modify. */
 const PRODUCTION_DB = "flashbacks"
@@ -81,17 +86,18 @@ function parseEnvFile(file: string): Record<string, string> {
 
 /**
  * Resolves the integration test configuration from the process environment,
- * falling back to the repository `.env` and finally to development defaults.
+ * falling back to the repository `test.env` profile and finally to development
+ * defaults.
  */
 export function loadConfig(): IntegrationConfig {
-  const fileEnv = parseEnvFile(path.join(REPO_ROOT, ".env"))
+  const fileEnv = parseEnvFile(TEST_ENV_FILE)
   const pick = (key: string, fallback: string): string => process.env[key] ?? fileEnv[key] ?? fallback
 
-  const dbName = pick("IT_DB_NAME", pick("DB_NAME", "flashbacks-test"))
+  const dbName = pick("DB_NAME", "flashbacks-test")
   if (dbName === PRODUCTION_DB && process.env.IT_ALLOW_NON_STAGING !== "1") {
     throw new Error(
       `Refusing to run integration tests against the production database "${PRODUCTION_DB}". ` +
-        `Set IT_DB_NAME (e.g. flashbacks-test) or IT_ALLOW_NON_STAGING=1 to override.`,
+        `Set DB_NAME (e.g. flashbacks-test) in test.env, or IT_ALLOW_NON_STAGING=1 to override.`,
     )
   }
 

@@ -167,6 +167,11 @@ OCR_SERVICE_URL=http://localhost:5174
 EXIF_SERVICE_URL=http://localhost:5172
 ```
 
+The HTTP integration suites in `tests/` do not read `.env`. They load their own
+git-ignored `test.env` profile (created from `.env.example` the same way) and
+take the database from `DB_NAME`, defaulting to the throwaway `flashbacks-test`
+database.
+
 ## Local Development
 
 Services run directly on the host inside the IDE container; PostgreSQL is an

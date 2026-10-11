@@ -11,7 +11,8 @@ tests/webapp/
 ├── integration/
 │   ├── support.ts                # Boot the service, DB resets, HTTP client helpers
 │   ├── bootstrap-login.test.ts   # Bootstrap login flow
-│   └── account-creation.test.ts  # self_service / self_service_with_approval / admin_only
+│   ├── account-creation.test.ts  # self_service / self_service_with_approval / admin_only
+│   └── gallery-folders.test.ts   # Gallery folders settings (add/list/remove)
 └── tsconfig.json                 # Type-checking for the suite
 ```
 

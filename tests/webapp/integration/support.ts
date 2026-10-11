@@ -361,6 +361,25 @@ export interface CreateUserInput {
   password: string
 }
 
+/** Subset of the gallery-folder DTO fields the integration tests assert on. */
+export interface GalleryFolderSummary {
+  id: number
+  path: string
+  fileCount: number
+  createdAt: string
+}
+
+export interface GalleryFoldersResult {
+  folders: GalleryFolderSummary[]
+  totalFolders: number
+}
+
+export interface AddFolderResult {
+  message: string
+  folder: GalleryFolderSummary
+  scanStarted: boolean
+}
+
 /** Thin wrapper around the core HTTP API used by the integration tests. */
 export interface CoreClient {
   getStatus(): Promise<Response>
@@ -372,6 +391,9 @@ export interface CoreClient {
   approve(token: string, id: number): Promise<Response>
   reject(token: string, id: number, reason: string): Promise<Response>
   createUser(token: string, input: CreateUserInput): Promise<Response>
+  listFolders(token: string): Promise<Response>
+  addFolder(token: string, path: string): Promise<Response>
+  removeFolder(token: string, id: number): Promise<Response>
 }
 
 export function createCoreClient(baseUrl: string): CoreClient {
@@ -420,5 +442,14 @@ export function createCoreClient(baseUrl: string): CoreClient {
         headers: { ...jsonHeaders, ...withAuth(token) },
         body: JSON.stringify(input),
       }),
+    listFolders: (token) => fetch(`${baseUrl}/api/folders`, { headers: withAuth(token) }),
+    addFolder: (token, path) =>
+      fetch(`${baseUrl}/api/folders`, {
+        method: "POST",
+        headers: { ...jsonHeaders, ...withAuth(token) },
+        body: JSON.stringify({ path }),
+      }),
+    removeFolder: (token, id) =>
+      fetch(`${baseUrl}/api/folders/${id}`, { method: "DELETE", headers: withAuth(token) }),
   }
 }

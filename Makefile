@@ -25,6 +25,9 @@ SERVICE     ?= core
 ENVFILE     := .env
 TESTENVFILE := test.env
 DEV         := scripts/dev.sh
+# Test targets run against the integration profile (test.env), never the
+# developer .env — dev.sh honours FLASHBACKS_ENV_FILE.
+DEV_TEST    := FLASHBACKS_ENV_FILE=$(TESTENVFILE) $(DEV)
 BOOTSTRAP := scripts/bootstrap.sh
 
 # Python virtualenv used by the OCR integration (pytest) suite
@@ -223,7 +226,7 @@ test-ocr-integration: ## Run OCR HTTP integration tests (pytest) against the run
 	@if [ ! -x "$(PY)" ]; then \
 	  echo "${RED}pytest venv missing — run: make setup-pytest${NC}"; exit 1; \
 	fi
-	@$(DEV) status ocr | grep -q running || { echo "${YELLOW}Starting OCR service…${NC}"; $(DEV) start ocr; }
+	@$(DEV_TEST) status ocr | grep -q running || { echo "${YELLOW}Starting OCR service…${NC}"; $(DEV_TEST) start ocr; }
 	@$(LOAD_TEST_ENV) $(PY) -m pytest tests/ocr/integration \
 	  --base-url "$${OCR_CLASSIFIER_URL:-http://localhost:5174}" -v
 

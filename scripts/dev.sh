@@ -5,6 +5,8 @@
 # Runs core / exif / ocr (Go binaries) and webapp (Vite) directly inside the
 # IDE container — no Docker, no docker-compose. Configuration is read from the
 # repository-level .env file (see .env.example) and exported to every service.
+# Set FLASHBACKS_ENV_FILE to load a different profile (the test targets point it
+# at test.env); relative paths are resolved from the repository root.
 #
 # Usage:
 #   scripts/dev.sh build   [service ...]   # compile core/exif/ocr binaries
@@ -24,7 +26,12 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 RUN_DIR="$ROOT_DIR/.run"
 BIN_DIR="$RUN_DIR/bin"
 LOG_DIR="$RUN_DIR/logs"
-ENV_FILE="$ROOT_DIR/.env"
+# Environment profile exported to every service. Defaults to the repository
+# .env; FLASHBACKS_ENV_FILE overrides it so integration-test targets can run
+# against test.env without a developer .env being present.
+ENV_FILE="${FLASHBACKS_ENV_FILE:-$ROOT_DIR/.env}"
+# Accept relative overrides regardless of the caller's working directory.
+[[ "$ENV_FILE" = /* ]] || ENV_FILE="$ROOT_DIR/$ENV_FILE"
 
 ALL_SERVICES=(core exif ocr webapp)
 
@@ -46,6 +53,11 @@ load_env() {
     . "$ENV_FILE"
     set +a
     info "Loaded environment from ${ENV_FILE#"$ROOT_DIR"/}"
+  elif [[ -n "${FLASHBACKS_ENV_FILE:-}" ]]; then
+    # An explicit profile was requested — fail loudly instead of silently
+    # falling back to defaults.
+    err "Environment profile not found: $ENV_FILE"
+    exit 1
   else
     warn "No .env found — run 'cp .env.example .env' and set DB credentials"
   fi

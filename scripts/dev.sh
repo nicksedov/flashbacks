@@ -50,10 +50,10 @@ load_env() {
     warn "No .env found — run 'cp .env.example .env' and set DB credentials"
   fi
 
-  # Make a locally bootstrapped exiftool (if present) visible to the exif service.
-  if [[ -d "$ROOT_DIR/.tools/bin" ]]; then
-    export PATH="$ROOT_DIR/.tools/bin:$PATH"
-  fi
+  # Expose project-local tools bootstrapped into .tools/ (exiftool, tesseract)
+  # to every service — including the CGO/rpath settings the OCR build needs.
+  # shellcheck source=scripts/toolenv.sh
+  . "$ROOT_DIR/scripts/toolenv.sh"
 
   # Fall back to sane defaults so the stack starts even without a full .env.
   : "${DB_HOST:=postgreshost}"

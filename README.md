@@ -21,7 +21,8 @@ is an external, shared service configured through `.env`.
 - Go 1.25+
 - Node.js 22+ and npm
 - Python 3.11+ (for the OCR pytest suite)
-- Tesseract OCR with development headers (for the `ocr` service)
+- Tesseract OCR bootstrapped project-locally via `make tools` (no root); the
+  `ocr` service links against it through CGO
 - Access to a PostgreSQL 16+ instance with the `pgvector` extension
 
 ### Setup
@@ -29,7 +30,7 @@ is an external, shared service configured through `.env`.
 git clone https://github.com/flashbacks/flashbacks.git
 cd flashbacks
 make env      # create .env, then set the DB_* credentials
-make setup    # Go modules, npm deps, pytest venv, local ExifTool
+make setup    # Go modules, npm deps, pytest venv, local ExifTool + Tesseract
 make doctor   # verify the toolchain and database reachability
 ```
 

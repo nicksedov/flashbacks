@@ -5,7 +5,7 @@
 #
 # Quick start:
 #   make env          # create .env from .env.example (then set DB credentials)
-#   make setup        # install all host prerequisites (Go deps, npm, venv, exiftool)
+#   make setup        # install all host prerequisites (Go deps, npm, venv, exiftool, tesseract)
 #   make doctor       # verify toolchain + database reachability
 #   make up           # start core, exif, ocr and webapp in the background
 #
@@ -21,9 +21,10 @@ SHELL := /bin/bash
 export LC_ALL := C
 
 # ─── Configuration ───────────────────────────────────────────────────────────
-SERVICE   ?= core
-ENVFILE   := .env
-DEV       := scripts/dev.sh
+SERVICE     ?= core
+ENVFILE     := .env
+TESTENVFILE := test.env
+DEV         := scripts/dev.sh
 BOOTSTRAP := scripts/bootstrap.sh
 
 # Python virtualenv used by the OCR integration (pytest) suite
@@ -33,13 +34,16 @@ PY          := $(PYTEST_VENV)/bin/python
 # Load .env into the current shell (prefix for recipes that need DB creds)
 LOAD_ENV = set -a; [ -f $(ENVFILE) ] && . ./$(ENVFILE); set +a;
 
+# Integration tests use their own git-ignored profile — never .env
+LOAD_TEST_ENV = set -a; [ -f $(TESTENVFILE) ] && . ./$(TESTENVFILE); set +a;
+
 # Colours for output
 GREEN  := \033[0;32m
 YELLOW := \033[1;33m
 RED    := \033[0;31m
 NC     := \033[0m
 
-.PHONY: help all doctor env setup setup-env setup-webapp setup-pytest deps tools \
+.PHONY: help all doctor env setup setup-env setup-webapp setup-pytest deps tools tools-exiftool tools-tesseract \
         build build-core build-exif build-ocr \
         up start down stop restart status logs \
         run-core run-exif run-ocr run-webapp \
@@ -64,9 +68,13 @@ doctor: ## Check host toolchain, local tools and database reachability
 	@bash -euo pipefail -c ' \
 	  check() { printf "  %-12s" "$$1"; if command -v "$$1" >/dev/null 2>&1; then echo "OK"; else echo "MISSING"; fi; }; \
 	  echo "Toolchain:"; \
-	  for c in go node npm python3 tesseract perl curl tar setsid; do check "$$c"; done; \
+	  for c in go node npm python3 perl curl tar setsid; do check "$$c"; done; \
 	  printf "  %-12s" "exiftool"; \
-	  if command -v exiftool >/dev/null 2>&1 || [ -x .tools/bin/exiftool ]; then echo "OK (host or .tools)"; else echo "MISSING (run: make tools)"; fi'
+	  if command -v exiftool >/dev/null 2>&1 || [ -x .tools/bin/exiftool ]; then echo "OK (host or .tools)"; else echo "MISSING (run: make tools)"; fi; \
+	  printf "  %-12s" "tesseract"; \
+	  if [ -x .tools/tesseract/usr/bin/tesseract ]; then echo "OK (.tools)"; \
+	  elif command -v tesseract >/dev/null 2>&1; then echo "OK (host; run: make tools for project-scope)"; \
+	  else echo "MISSING (run: make tools)"; fi'
 	@bash -euo pipefail -c ' \
 	  set -a; [ -f $(ENVFILE) ] && . ./$(ENVFILE); set +a; \
 	  host="$${DB_HOST:-postgreshost}"; port="$${DB_PORT:-5432}"; \
@@ -84,7 +92,7 @@ env: ## Create .env from .env.example (does not overwrite an existing .env)
 
 ##@ Setup
 
-setup: ## Install every host prerequisite (Go deps, npm, pytest venv, exiftool)
+setup: ## Install every host prerequisite (Go deps, npm, pytest venv, exiftool, tesseract)
 	@$(BOOTSTRAP) all
 
 setup-env: env ## Alias for 'env'
@@ -98,8 +106,15 @@ setup-pytest: ## Create the pytest virtualenv and install its requirements
 deps: ## Download Go module dependencies for every service
 	@$(BOOTSTRAP) godeps
 
-tools: ## Install ExifTool locally into .tools/ (no root required)
+tools: ## Install ExifTool + Tesseract locally into .tools/ (no root required)
 	@$(BOOTSTRAP) exiftool
+	@$(BOOTSTRAP) tesseract
+
+tools-exiftool: ## Install ExifTool locally into .tools/ (no root required)
+	@$(BOOTSTRAP) exiftool
+
+tools-tesseract: ## Install Tesseract OCR (libs + eng/rus) locally into .tools/ (no root required)
+	@$(BOOTSTRAP) tesseract
 
 ##@ Build
 
@@ -189,7 +204,7 @@ test-exif: ## Run exif Go unit tests
 
 test-ocr: ## Run ocr Go unit tests
 	@echo "${GREEN}Testing ocr…${NC}"
-	@cd backend/ocr && go test ./... -count=1
+	@. ./scripts/toolenv.sh && cd backend/ocr && go test ./... -count=1
 
 test-webapp: ## Run webapp unit tests (Vitest)
 	@echo "${GREEN}Testing webapp…${NC}"
@@ -209,7 +224,7 @@ test-ocr-integration: ## Run OCR HTTP integration tests (pytest) against the run
 	  echo "${RED}pytest venv missing — run: make setup-pytest${NC}"; exit 1; \
 	fi
 	@$(DEV) status ocr | grep -q running || { echo "${YELLOW}Starting OCR service…${NC}"; $(DEV) start ocr; }
-	@$(LOAD_ENV) $(PY) -m pytest tests/ocr/integration \
+	@$(LOAD_TEST_ENV) $(PY) -m pytest tests/ocr/integration \
 	  --base-url "$${OCR_CLASSIFIER_URL:-http://localhost:5174}" -v
 
 test-pytest: test-ocr-integration ## Alias for 'test-ocr-integration'
@@ -240,7 +255,7 @@ lint-exif: ## Vet exif
 	@cd backend/exif && go vet ./...
 
 lint-ocr: ## Vet ocr
-	@cd backend/ocr && go vet ./...
+	@. ./scripts/toolenv.sh && cd backend/ocr && go vet ./...
 
 lint-webapp: ## Lint + type-check webapp and its integration tests
 	@cd webapp && npm run lint && npx tsc -b && npx tsc -p ../tests/webapp

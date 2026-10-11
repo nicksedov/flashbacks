@@ -5,9 +5,30 @@ HTTP-сервис для определения наличия текста на
 ## Требования
 
 - Go 1.25+
-- Tesseract OCR (должен быть установлен в системе)
+- Tesseract OCR (libtesseract + leptonica) и языковые данные eng/rus
 
 ### Установка Tesseract
+
+Сервис линкуется с libtesseract/libleptonica через CGO (gosseract), поэтому ему
+нужны и заголовочные файлы, и разделяемые библиотеки. В этом проекте Tesseract
+устанавливается **локально для проекта** в `.tools/tesseract/` — без root и без
+системного `apt` (тот же подход, что и для ExifTool):
+
+```bash
+make tools-tesseract   # только Tesseract
+make tools             # ExifTool + Tesseract
+```
+
+`scripts/bootstrap.sh tesseract` резолвит актуальные `.deb`-пакеты Ubuntu
+(`tesseract-ocr`, `libtesseract5`, `libtesseract-dev`, `liblept5`,
+`libleptonica-dev`, языковые данные eng/rus/osd и недостающие
+runtime-зависимости) и распаковывает их в `.tools/tesseract/`. Скрипт
+`scripts/toolenv.sh` экспортирует `PATH`, `LD_LIBRARY_PATH`, `CGO_CPPFLAGS`,
+`CGO_CXXFLAGS`, `CGO_LDFLAGS` и `TESSDATA_PREFIX` — их автоматически
+подхватывают `make` и `scripts/dev.sh`.
+
+Альтернативно можно использовать системный Tesseract (с обязательными
+заголовками разработки):
 
 **Windows:**
 ```bash
@@ -17,7 +38,7 @@ choco install tesseract
 
 **Linux (Ubuntu/Debian):**
 ```bash
-sudo apt-get install tesseract-ocr
+sudo apt-get install tesseract-ocr tesseract-ocr-rus libtesseract-dev
 ```
 
 **macOS:**

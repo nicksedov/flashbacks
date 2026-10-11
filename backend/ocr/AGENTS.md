@@ -56,18 +56,25 @@ golangci-lint run                        # нет новых замечаний
 
 ## Commands
 
+> Tesseract is installed project-locally (`make tools-tesseract`) and its paths
+> are exported by `scripts/toolenv.sh`; `make` targets already source it. When
+> running `go` commands by hand, source it first.
+
 ### Build
 ```bash
+. ../../scripts/toolenv.sh
 go build -o ocr ./cmd/server
 ```
 
 ### Lint
 ```bash
+. ../../scripts/toolenv.sh
 golangci-lint run
 ```
 
 ### Test
 ```bash
+. ../../scripts/toolenv.sh
 go test -race -cover ./...
 ```
 

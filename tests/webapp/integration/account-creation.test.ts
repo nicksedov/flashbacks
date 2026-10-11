@@ -1,6 +1,9 @@
 // HTTP integration tests for the account-creation scenarios.
 //
-// Each `describe` boots the real `core` service against the staging database
+// Location: tests/webapp/integration/ (shared helpers in ./support.ts).
+// Runner:   webapp/vitest.integration.config.ts
+//
+// Each `describe` boots the real `core` service against the test database
 // with a specific `ACCOUNT_CREATION_MODE`, completes bootstrap to obtain an
 // admin session, and drives the flow over HTTP exactly as the webapp does.
 //
@@ -12,7 +15,8 @@
 //                                reject without reason; non-pending guard
 //   - admin_only:                registration disabled; admin-created account
 //
-// Run with:  npm run test:integration
+// Run with:  make test-webapp-integration
+//            (or, from the webapp directory: npm run test:integration)
 
 import { mkdtempSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
@@ -22,6 +26,7 @@ import {
   SESSION_COOKIE_NAME,
   buildCoreService,
   createCoreClient,
+  ensureVectorExtension,
   loadConfig,
   readCookie,
   resetBootstrapState,
@@ -59,11 +64,16 @@ async function bootstrapped(mode: string): Promise<Bootstrapped> {
 async function shutDown(service: Bootstrapped): Promise<void> {
   await service.core.stop()
   await resetBootstrapState(config).catch(() => {
-    // Best-effort: leave staging in bootstrap mode for the next run.
+    // Best-effort: leave the test database in bootstrap mode for the next run.
   })
 }
 
-beforeAll(() => {
+beforeAll(async () => {
+  // The `core` service refuses to boot unless pgvector is already present and
+  // only a superuser may create it. Ensure it here as well so this file does
+  // not depend on another suite having run first (the call is idempotent).
+  await ensureVectorExtension(config)
+
   workingDir = mkdtempSync(path.join(tmpdir(), "flashbacks-accounts-it-"))
   binaryPath = path.join(workingDir, "core")
   buildCoreService(binaryPath)

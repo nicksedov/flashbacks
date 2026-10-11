@@ -74,6 +74,7 @@ context: |
   - exif/ocr: go test ./... -count=1
   - webapp: npm test (Vitest)
   - ocr integration: pytest in tests/ocr/
+  - webapp integration: vitest in tests/webapp/ (runner config: webapp/vitest.integration.config.ts)
 
 # Per-artifact rules (optional)
 # Add custom rules for specific artifacts.

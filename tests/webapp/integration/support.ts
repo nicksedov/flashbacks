@@ -1,13 +1,16 @@
-// Shared support utilities for webapp HTTP integration tests.
+// Shared support utilities for the webapp HTTP integration tests.
 //
-// These helpers boot the real `core` Go service against a staging PostgreSQL
-// database, wait until it answers `/api/auth/status`, and expose small helpers
-// for asserting on the responses. PostgreSQL access uses the `pg` client so no
-// external `psql`/`docker` binary is required.
+// The suite lives at `tests/webapp/integration/` (repository level) and is
+// executed by Vitest via `webapp/package.json` -> `npm run test:integration`.
+//
+// These helpers boot the real `core` Go service against the dedicated test
+// PostgreSQL database, wait until it answers `/api/auth/status`, and expose
+// small helpers for asserting on the responses. PostgreSQL access uses the `pg`
+// client so no external `psql`/`docker` binary is required.
 //
 // SAFETY: the production database ("flashbacks") is never touched. The target
-// database defaults to the one configured in the repository `.env`
-// (`DB_NAME=flashbacks-staging`) and can be overridden with `IT_DB_NAME`.
+// database is `IT_DB_NAME`, falling back to `DB_NAME` from the repository
+// `.env` (default `flashbacks-test`).
 
 import { execFileSync, spawn } from "node:child_process"
 import type { ChildProcess } from "node:child_process"
@@ -20,8 +23,8 @@ import type { Client as PgClient } from "pg"
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 
-/** Absolute path to the repository root (the parent of `webapp`). */
-export const REPO_ROOT = path.resolve(HERE, "..", "..")
+/** Absolute path to the repository root (three levels above this file). */
+export const REPO_ROOT = path.resolve(HERE, "..", "..", "..")
 
 /** Directory of the `core` Go service. */
 export const CORE_SERVICE_DIR = path.join(REPO_ROOT, "backend", "core")
@@ -84,11 +87,11 @@ export function loadConfig(): IntegrationConfig {
   const fileEnv = parseEnvFile(path.join(REPO_ROOT, ".env"))
   const pick = (key: string, fallback: string): string => process.env[key] ?? fileEnv[key] ?? fallback
 
-  const dbName = pick("IT_DB_NAME", pick("DB_NAME", "flashbacks-staging"))
+  const dbName = pick("IT_DB_NAME", pick("DB_NAME", "flashbacks-test"))
   if (dbName === PRODUCTION_DB && process.env.IT_ALLOW_NON_STAGING !== "1") {
     throw new Error(
       `Refusing to run integration tests against the production database "${PRODUCTION_DB}". ` +
-        `Set IT_DB_NAME (e.g. flashbacks-staging) or IT_ALLOW_NON_STAGING=1 to override.`,
+        `Set IT_DB_NAME (e.g. flashbacks-test) or IT_ALLOW_NON_STAGING=1 to override.`,
     )
   }
 
@@ -129,7 +132,7 @@ async function withClient<T>(
 }
 
 /**
- * Ensures the pgvector extension exists in the staging database.
+ * Ensures the pgvector extension exists in the test database.
  *
  * The `core` service runs `CREATE EXTENSION IF NOT EXISTS vector` on startup
  * and treats a failure as fatal. Because the extension is not "trusted" and the
@@ -201,8 +204,8 @@ export function getFreePort(): Promise<number> {
 }
 
 /**
- * Launches the compiled `core` service against the staging database on a free
- * port and resolves once `/api/auth/status` responds successfully.
+ * Launches the compiled `core` service against the test database on a free port
+ * and resolves once `/api/auth/status` responds successfully.
  */
 export interface CoreServiceOptions {
   /** Overrides `ACCOUNT_CREATION_MODE` for the booted service. */

@@ -1,0 +1,32 @@
+{
+  "compilerOptions": {
+    "target": "es2023",
+    "lib": ["ES2023"],
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "types": ["node"],
+    "typeRoots": ["../../webapp/node_modules/@types"],
+    "noEmit": true,
+    "skipLibCheck": true,
+
+    /* Linting (mirrors webapp/tsconfig.node.json) */
+    "strict": true,
+    "verbatimModuleSyntax": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "erasableSyntaxOnly": true,
+    "noFallthroughCasesInSwitch": true,
+
+    /*
+     * The suite lives outside the `webapp` package, so its dependencies
+     * (`vitest`, `pg` types) are not reachable through the usual
+     * `node_modules` walk-up. Map them explicitly to the webapp copies; every
+     * transitive import resolves normally from inside `webapp/node_modules`.
+     */
+    "paths": {
+      "pg": ["../../webapp/node_modules/@types/pg"],
+      "vitest": ["../../webapp/node_modules/vitest"]
+    }
+  },
+  "include": ["integration/**/*.ts"]
+}

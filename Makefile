@@ -195,7 +195,7 @@ test-webapp: ## Run webapp unit tests (Vitest)
 	@echo "${GREEN}Testing webapp…${NC}"
 	@cd webapp && npm test
 
-test-webapp-integration: ## Run webapp HTTP integration tests (Vitest) against a booted core service
+test-webapp-integration: ## Run webapp HTTP integration tests (tests/webapp, Vitest; boots core itself)
 	@echo "${GREEN}Testing webapp (integration)…${NC}"
 	@cd webapp && npm run test:integration
 
@@ -242,8 +242,8 @@ lint-exif: ## Vet exif
 lint-ocr: ## Vet ocr
 	@cd backend/ocr && go vet ./...
 
-lint-webapp: ## Lint + type-check webapp
-	@cd webapp && npm run lint && npx tsc -b
+lint-webapp: ## Lint + type-check webapp and its integration tests
+	@cd webapp && npm run lint && npx tsc -b && npx tsc -p ../tests/webapp
 
 lint-all: ## Lint every service
 	@$(MAKE) --no-print-directory lint-core

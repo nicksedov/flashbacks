@@ -1,16 +1,20 @@
 // HTTP integration test for the bootstrap login flow.
 //
+// Location: tests/webapp/integration/ (shared helpers in ./support.ts).
+// Runner:   webapp/vitest.integration.config.ts
+//
 // The suite boots the real `core` service (compiled Go binary) against the
-// staging PostgreSQL database, then drives the bootstrap authentication flow
+// test PostgreSQL database, then drives the bootstrap authentication flow
 // over HTTP exactly as the webapp does:
 //
 //   status (bootstrap mode) → reject bad creds → bootstrap login
 //   → bootstrap/setup (creates admin) → normal login with the new password
 //
-// Run with:  npm run test:integration
+// Run with:  make test-webapp-integration
+//            (or, from the webapp directory: npm run test:integration)
 //
-// The database defaults to `DB_NAME` from the repository `.env`
-// (`flashbacks-staging`); the production database is never touched.
+// The database is `IT_DB_NAME` (default `flashbacks-test`); the production
+// database is never touched.
 
 import { mkdtempSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
@@ -48,7 +52,7 @@ function postJson(pathname: string, body: unknown): Promise<Response> {
 }
 
 beforeAll(async () => {
-  // Provision the staging schema prerequisites and force bootstrap mode.
+  // Provision the test database schema prerequisites and force bootstrap mode.
   await ensureVectorExtension(config)
   await resetBootstrapState(config)
 

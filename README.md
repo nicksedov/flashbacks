@@ -47,8 +47,9 @@ foreground, use `make dev-core`, `make dev-exif`, `make dev-ocr` or
 
 ### Testing
 ```bash
-make test-all             # Go (core/exif/ocr) + webapp unit tests
-make test-ocr-integration # pytest against a running OCR service
+make test-all               # Go (core/exif/ocr) + webapp unit tests
+make test-ocr-integration   # pytest against a running OCR service
+make test-webapp-integration # webapp HTTP integration tests (tests/webapp) against the test DB
 ```
 
 ### Development Setup

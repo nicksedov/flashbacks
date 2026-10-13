@@ -36,3 +36,9 @@ The Analysis tab instrument model dropdowns SHALL list only models whose capabil
 
 - **WHEN** an admin opens the model dropdown for the embedding instrument
 - **THEN** only models capable of embedding are listed
+
+<!-- focused-spec:id=llm-settings.embedding-excludes-non-embedding -->
+#### Scenario: Embedding dropdown excludes chat and vision models
+
+- **WHEN** an admin opens the model dropdown for the embedding instrument for a provider whose model is capable of `chat`, `tool_calling`, and `vision` but not `embedding`
+- **THEN** that model is not listed

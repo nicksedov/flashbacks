@@ -18,9 +18,17 @@
 
 ## 3. Evidence integration (apply phase)
 
-- [ ] 3.1 Add registry entries for the ten new scenario IDs to `.focused-spec/evidence.yaml` using the runner/selector table in design.md, and confirm `node_modules/.bin/focused-spec validate --scope current` reports no missing or duplicate bindings.
+- [ ] 3.1 Add registry entries for the new scenario IDs in design.md's evidence plan to `.focused-spec/evidence.yaml` (including `llm-settings.embedding-excludes-non-embedding` and `llm-model-metadata.ollama-chat-vision-not-embedding`), and confirm `node_modules/.bin/focused-spec validate --scope current` reports no missing or duplicate bindings.
 - [ ] 3.2 Execute the new evidence: `node_modules/.bin/focused-spec run --scope current` passes with no remaining `planned:` references.
 - [ ] 3.3 Mutation-check every new or changed evidence entry (revert the behavior hunk, observe FAIL, restore, observe PASS) and record the fail → restore → pass triple.
+
+## 4. Instrument filter hardening (embedding-list fix)
+
+- [x] 4.1 Make `filterModelsForInstrument` fail closed for an unmapped instrument type in [`webapp/src/lib/llm-model-filter.ts`](../../../webapp/src/lib/llm-model-filter.ts:23). Verify `cd webapp && npm run lint && npx tsc -b`.
+- [x] 4.2 Add webapp regression tests: a chat/vision model (e.g. Ollama `gemma4`) is excluded from the embedding list, and an unrecognized instrument type yields no models. Verify `cd webapp && npm test -- llm-model-filter`.
+- [x] 4.3 Add the backend regression test `TestOllamaChatVisionModelIsNotEmbeddingCapable` proving the `completion`/`vision`/`tools`/`thinking` model is not embedding-capable. Verify `cd backend/core && go test ./internal/infrastructure/llm/... -count=1`.
+- [x] 4.4 Show the `noCompatibleModels` hint in the Embeddings LLM Settings card in [`webapp/src/components/tabs/AdminAnalysisTab.tsx`](../../../webapp/src/components/tabs/AdminAnalysisTab.tsx:533). Verify `cd webapp && npm run lint && npx tsc -b`.
+- [x] 4.5 Bind and execute the evidence for `llm-settings.embedding-excludes-non-embedding` and `llm-model-metadata.ollama-chat-vision-not-embedding`; mutation-check both (PASS → regress FAIL → restore PASS). Verify `node_modules/.bin/focused-spec run --scope current --scenario <id>`.
 
 ## Workflow follow-up
 

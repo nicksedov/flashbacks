@@ -33,7 +33,9 @@ untyped string array, so expanding values needs no schema change.
 
 - No change to `inferCapabilitiesByID` heuristics for Ollama/OpenAI/DeepSeek
   beyond consistency.
-- No new instrument types or changes to `llm-model-filter.ts` instrument mapping.
+- No new instrument types, and no change to the `llm-model-filter.ts`
+  instrument→capability values; only the unmatched-mapping branch is hardened to
+  fail closed (see D5).
 - No refactor of the provider DTO/shape or the REST surface.
 
 ## Decisions
@@ -104,10 +106,27 @@ capability union and its label keys. `ModelDetailsDialog.tsx` renders
 the `inferCapabilities` filter to accept all standardized values. All labels are
 added to `translations.en.ts` and `translations.ru.ts` together.
 
+### D5 — Instrument model filter fails closed
+
+`filterModelsForInstrument` keeps its instrument→capability values but no longer
+returns every model when an instrument type is missing from the mapping. An
+unrecognized type yields an empty list, so a missing or mistyped mapping can
+never leak non-compatible models into a dropdown — for example a chat-only model
+into the Embeddings LLM Settings list. The embedding dropdown therefore lists only
+models whose capabilities include `embedding`.
+
+*Alternative considered:* leave the fail-open branch and rely on the mapping being
+complete — rejected because a single missing or renamed key would silently expose
+every model to every instrument.
+
 ## Risks / Trade-offs
 
 - **[Admin-facing metadata changes]** → Documented as **BREAKING** in the
   proposal; capability values for Alibaba models change.
+- **[Fail-closed filter hides models for an unmapped instrument type]** → An
+  instrument added without a capability mapping would show an empty list instead
+  of every model; the explicit mapping and its regression test surface the
+  omission during development.
 - **[`exactly` assertions may be order-sensitive]** → Backend tests compare
   capability sets order-insensitively (sort before compare).
 - **[Vision heuristic could regress image-input chat models]** → The rule adds
@@ -141,7 +160,9 @@ apply phase).
 | `llm-model-metadata.alibaba-omni` | `go` | `./internal/infrastructure/llm::TestAlibabaOmniCapability` |
 | `llm-model-metadata.alibaba-reasoning` | `go` | `./internal/infrastructure/llm::TestAlibabaReasoningCapability` |
 | `llm-model-metadata.model-details-new-capability-label` | `vitest` | `webapp/src/components/settings/ModelDetailsDialog.test.tsx::ModelDetailsDialog > labels a new capability` |
+| `llm-model-metadata.ollama-chat-vision-not-embedding` | `go` | `./internal/infrastructure/llm::TestOllamaChatVisionModelIsNotEmbeddingCapable` |
 | `llm-settings.chat-excludes-non-text` | `vitest` | `webapp/src/lib/llm-model-filter.test.ts::filterModelsForInstrument > chat excludes non-text models` |
+| `llm-settings.embedding-excludes-non-embedding` | `vitest` | `webapp/src/lib/llm-model-filter.test.ts::filterModelsForInstrument > embedding excludes a chat/vision model (e.g. Ollama gemma4)` |
 
 ## Open Questions
 

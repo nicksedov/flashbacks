@@ -25,6 +25,10 @@ incomplete and misleading.
   `world_model` + `video_generation`).
 - Stop seeding `chat`/`tool_calling` for models that cannot produce text output, so
   only genuinely chat-capable models are advertised as chat.
+- Fail the instrument model filter closed: a model is offered for an instrument
+  only when its normalized capabilities include that instrument's required
+  capability, so a chat/vision model can no longer appear in the Embeddings LLM
+  Settings list when its capability mapping is absent or mistyped.
 - **BREAKING** (admin-facing metadata): the `capabilities` values returned by the LLM
   models API change for Alibaba models — non-text generators lose the incorrect
   `chat`/`tool_calling` (and where applicable `vision`) values, and gain the new
@@ -42,10 +46,13 @@ _None — the behavior changes belong to the existing metadata and settings capa
 
 - `llm-model-metadata`: the standardized capability vocabulary is expanded and every
   provider capability code is mapped; capability derivation no longer assigns
-  `chat`/`tool_calling` to non-text models; the model details view displays the new
-  capabilities with en/ru labels.
+  `chat`/`tool_calling` to non-text models; a chat/vision model is not advertised as
+  embedding-capable; the model details view displays the new capabilities with en/ru
+  labels.
 - `llm-settings`: the chat instrument dropdown lists only genuinely chat-capable
-  models; non-text generators (video, speech, image generation) are excluded.
+  models; non-text generators (video, speech, image generation) are excluded. The
+  embedding dropdown likewise lists only embedding-capable models — chat/vision
+  models are excluded — because the instrument filter fails closed.
 
 ## Impact
 
@@ -55,8 +62,10 @@ _None — the behavior changes belong to the existing metadata and settings capa
   (`alibabaCatalogModelToInfo`), plus their unit tests under
   `backend/core/internal/infrastructure/llm/`.
 - **Webapp**: `webapp/src/components/settings/ModelDetailsDialog.tsx`,
-  `webapp/src/components/tabs/AdminLlmProvidersTab.tsx`, a shared capability
-  vocabulary module, `webapp/src/i18n/translations.en.ts` +
+  `webapp/src/components/tabs/AdminLlmProvidersTab.tsx`,
+  `webapp/src/components/tabs/AdminAnalysisTab.tsx`,
+  `webapp/src/lib/llm-model-filter.ts` (fail-closed instrument filter), a shared
+  capability vocabulary module, `webapp/src/i18n/translations.en.ts` +
   `translations.ru.ts`, and their tests.
 - **API contract**: `docs/api-contracts/core.yaml`, schema `LlmModelDTO.capabilities`
   — the value set expands; the field remains an array of strings (no enum), so no
@@ -67,9 +76,10 @@ _None — the behavior changes belong to the existing metadata and settings capa
 
 - No new instrument types. No video, speech, or audio instrument is introduced; the
   new capabilities are metadata only.
-- No change to the instrument→capability mapping in
+- No change to the instrument→capability *values* in
   `webapp/src/lib/llm-model-filter.ts` (chat stays `chat`; vl/ocr stay `vision`;
-  image edit stays `image_edit`; embedding stays `embedding`).
+  image edit stays `image_edit`; embedding stays `embedding`). Only the
+  unmatched/missing-mapping branch is hardened to fail closed.
 - No change to Ollama/DeepSeek/OpenAI provider parsing beyond keeping them consistent
   with the shared normalizer.
 - No new dependency.

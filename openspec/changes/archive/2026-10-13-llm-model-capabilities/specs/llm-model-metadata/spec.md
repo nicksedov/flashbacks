@@ -16,6 +16,12 @@ The system SHALL parse model metadata from each provider's native model-listing 
 - **WHEN** Ollama `/api/show` reports the `vision` capability
 - **THEN** the model's input modalities include `image`
 
+<!-- focused-spec:id=llm-model-metadata.ollama-chat-vision-not-embedding -->
+#### Scenario: Ollama chat/vision model is not embedding capable
+
+- **WHEN** Ollama `/api/show` reports the capabilities `completion`, `vision`, `tools`, and `thinking` for a model
+- **THEN** the model's capabilities do not include `embedding`
+
 #### Scenario: DeepSeek context window is parsed
 
 - **WHEN** DeepSeek `/models` returns a `context_window` for a model

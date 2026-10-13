@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest"
 import { filterModelsForInstrument } from "./llm-model-filter"
-import type { LlmModelDTO } from "@/types"
+import type { LlmInstrumentType, LlmModelDTO } from "@/types"
 
 const models: LlmModelDTO[] = [
   { id: "chat-1", name: "Chat", capabilities: ["chat", "tool_calling"] },
@@ -34,5 +34,23 @@ describe("filterModelsForInstrument", () => {
   it("embedding returns only embedding-capable models", () => {
     const ids = filterModelsForInstrument(models, "embedding").map((m) => m.id)
     expect(ids).toEqual(["embed-1"])
+  })
+
+  it("embedding excludes a chat/vision model (e.g. Ollama gemma4)", () => {
+    const gemma4: LlmModelDTO = {
+      id: "gemma4:31b",
+      name: "gemma4:31b",
+      capabilities: ["chat", "tool_calling", "vision"],
+    }
+    const ids = filterModelsForInstrument([...models, gemma4], "embedding").map((m) => m.id)
+    expect(ids).toEqual(["embed-1"])
+  })
+
+  it("fails closed for an unrecognized instrument type", () => {
+    const ids = filterModelsForInstrument(
+      models,
+      "embeddings" as unknown as LlmInstrumentType,
+    ).map((m) => m.id)
+    expect(ids).toEqual([])
   })
 })

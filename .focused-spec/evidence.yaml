@@ -147,3 +147,9 @@ scopes:
     llm-settings.embedding-filter:
       evidence:
         - vitest::webapp/src/lib/llm-model-filter.test.ts::filterModelsForInstrument > embedding returns only embedding-capable models
+    llm-settings.embedding-excludes-non-embedding:
+      evidence:
+        - vitest::webapp/src/lib/llm-model-filter.test.ts::filterModelsForInstrument > embedding excludes a chat/vision model (e.g. Ollama gemma4)
+    llm-model-metadata.ollama-chat-vision-not-embedding:
+      evidence:
+        - go::./internal/infrastructure/llm::TestOllamaChatVisionModelIsNotEmbeddingCapable

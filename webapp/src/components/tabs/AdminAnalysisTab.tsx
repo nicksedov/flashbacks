@@ -533,6 +533,9 @@ export function AdminAnalysisTab() {
                         ) : (
                           <div className="space-y-2">
                             <Input value={model} onChange={e => saveInstrument("embedding", "model", e.target.value)} placeholder="qwen3-embedding:4b" />
+                            {models.length > 0 && compatibleModels.length === 0 && (
+                              <p className="text-xs text-muted-foreground">{t("llm_providers.noCompatibleModels")}</p>
+                            )}
                             {models.length > 0 && isManual && <Button variant="link" size="sm" className="px-0 h-auto text-xs" onClick={() => { const s = new Set(manualModelInputs); s.delete("embedding"); setManualModelInputs(s) }}>{t("llm_providers.selectFromModels")}</Button>}
                           </div>
                         )}

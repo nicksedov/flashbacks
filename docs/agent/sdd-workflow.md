@@ -8,7 +8,6 @@ branching step, and the scenario-authoring/evidence contract owned by
 | Concern | Owner |
 |---|---|
 | Lifecycle stages (propose → apply → sync → archive) | `.roo/skills/openspec-*` |
-| CLI availability before every stage | `.roo/skills/openspec-install` |
 | Branch creation before planning | `.roo/skills/feature-branch` |
 | Scenario contract + executable evidence | `.roo/skills/focused-spec` |
 | Project artifact rules & guidance | `openspec/config.yaml` |
@@ -38,10 +37,6 @@ branching step, and the scenario-authoring/evidence contract owned by
                 │
                 ▼
    ┌───────────────────────┐
-   │ 0. preflight          │  openspec-install  → CLI present & current
-   └───────────┬───────────┘
-               ▼
-   ┌───────────────────────┐
    │ 1. PROPOSE  (plan)    │  feature-branch  → branch off main FIRST
    │                       │  openspec-propose → proposal/specs/design/tasks
    │                       │  focused-spec     → scenario contract (planned:)
@@ -66,7 +61,6 @@ branching step, and the scenario-authoring/evidence contract owned by
 
 | Stage | Skill | May write | Must not |
 |---|---|---|---|
-| preflight | `openspec-install` | CLI install/PATH, `openspec update` regeneration | touch `openspec/specs/`, `openspec/changes/` |
 | propose | `feature-branch`, `openspec-propose`, `focused-spec` | `openspec/changes/<name>/**` | project code |
 | apply | `openspec-apply-change`, `focused-spec` | project code, `tasks.md` checkboxes | main specs, change artifacts beyond tasks |
 | sync | `openspec-sync-specs` | `openspec/specs/**` | change artifacts |
@@ -74,19 +68,12 @@ branching step, and the scenario-authoring/evidence contract owned by
 
 ---
 
-## 3. Stage 0 — preflight (run at the start of every stage)
+## 3. Store selection (before every stage)
 
-`openspec-install` checks that the `openspec` CLI is available and recent:
-`command -v openspec && openspec --version`, then a PATH/global-bin search, then
-`npm install -g @fission-ai/openspec@latest` when it is genuinely missing.
-Run `openspec update` after a fresh install or upgrade so the generated
-`openspec-*` skills and commands in `.roo/` stay aligned with the CLI version.
-
-Store selection: if the work lives in a registered store, run
-`openspec store list --json` and keep `--store <id>` on every `new change`,
-`status`, `instructions`, `list`, `show`, `validate`, `archive`, `doctor`,
-`context`, `schemas`, and `view` call. Otherwise the commands act on the nearest
-local `openspec/` root.
+If the work lives in a registered store, run `openspec store list --json` and
+keep `--store <id>` on every `new change`, `status`, `instructions`, `list`,
+`show`, `validate`, `archive`, `doctor`, `context`, `schemas`, and `view` call.
+Otherwise the commands act on the nearest local `openspec/` root.
 
 ---
 
@@ -373,10 +360,6 @@ A change is done only when all of the following hold:
 ## 11. Command cheat sheet
 
 ```bash
-# preflight
-command -v openspec && openspec --version
-openspec update
-
 # branch (feature-branch skill)
 git branch --show-current
 git checkout main && git pull origin main

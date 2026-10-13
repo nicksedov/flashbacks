@@ -173,7 +173,7 @@ the resolved installation's version, the requested `topic`, and non-empty
 compatible local installation.
 
 > **Local install prerequisite.** `focused-spec` is a project-local dependency:
-> [`package.json`](../package.json:1) declares `focused-spec@^0.9.1` plus the
+> [`package.json`](../../package.json:1) declares `focused-spec@^0.9.1` plus the
 > evidence toolchain it drives — `@focused-spec/runner-go`,
 > `@focused-spec/runner-pytest`, `@focused-spec/runner-vitest`,
 > `@focused-spec/format-gherkin`, `@focused-spec/format-markdown`. The installed

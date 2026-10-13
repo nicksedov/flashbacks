@@ -26,80 +26,84 @@ or done directly.
 
 ```
 flashbacks/
-├── webapp/                   # React 19 SPA frontend
-├── backend/                  # Backend microservices
+├── webapp/            # React 19 SPA frontend
+├── backend/           # Backend microservices
 │   ├── core/          # Core Go API service
-│   ├── exif/                 # EXIF metadata service
-│   └── ocr/                  # OCR text detection service
-├── tools/                    # Utilities (embeddings-builder)
-├── docs/                     # Shared documentation & API contracts
-├── scripts/                  # Host-native dev/test scripts (dev.sh, bootstrap.sh)
-├── skills/                   # Shared AI agent skills
-└── Makefile                  # Common commands
+│   ├── exif/          # EXIF metadata service
+│   └── ocr/           # OCR text detection service
+├── tools/             # Utilities (embeddings-builder)
+├── docs/              # Shared documentation & API contracts
+├── scripts/           # Host-native dev/test scripts (dev.sh, bootstrap.sh)
+└── Makefile           # Common commands
 ```
 
 ## General Coding Standards
 
-### All Languages
+These rules apply to the whole repository, regardless of language or component.
+
 - English only (comments, names, docs)
 - No `any` type without justification
 - Follow clean architecture principles
-- Keep i18n en/ru in sync
+- Keep i18n en/ru in sync — never ship one locale only
+- Keep API field names aligned across the stack (Go JSON tags ↔ webapp TypeScript)
+- Run the component's full check suite after every code change
 
-### Go Standards
-- PascalCase exported, camelCase unexported
-- Explicit error handling, no panics
-- No identifier redeclaration in same scope
-- Use `slog` for structured JSON logging
-- i18n: Use `Msg*` constants, convert: `string(i18n.MsgX)`
-- Validation: `i18n.CreateValidationError(i18n.ValidationError)`
-- JSON tags must match frontend TypeScript names (camelCase)
-- Run unit tests after every code change
+## Component Requirements — read before touching component code
 
-### Design System
-- Before implementing any webapp UI, consult the authoritative design system spec at [`openspec/specs/design-system/spec.md`](openspec/specs/design-system/spec.md) and follow its token, component, layout, interaction, responsive, theming, and accessibility rules.
-- See [`docs/design-system.md`](docs/design-system.md) for the living audit trail of known UI drift vs the spec.
+This file holds **only** project-wide rules. Component-specific requirements live
+in `docs/agent/` and are mandatory reading:
 
-### TypeScript Standards
-- Strict mode, `verbatimModuleSyntax`, no unused vars
-- `import type` for type-only imports
-- Strict `TranslationKey` type — no arbitrary strings in `t()`
-- Path alias: `@/*` → `src/*`
-- Field names must match Go JSON tags exactly
-- Functional React components only (no classes)
+- **Before changing code of a component, read that component's requirements
+  document** and follow it. For that component its rules are authoritative and
+  override this file wherever they differ.
+- When a change spans components (e.g. renaming a Go JSON tag that the webapp
+  consumes), read **every** affected component's document.
+- New component-specific rules belong in the component document, not here.
+- Component documents are part of the change: update them in the same commit as
+  the code they describe.
+
+| Component | Paths | Requirements document |
+|---|---|---|
+| Go services (core, exif, ocr, shared) | `backend/` | [`docs/agent/go-services.md`](docs/agent/go-services.md) |
+| Go tooling (CLI utilities) | `tools/` | [`docs/agent/go-services.md`](docs/agent/go-services.md) |
+| Webapp (React + TypeScript) | `webapp/` | [`docs/agent/webapp.md`](docs/agent/webapp.md) |
+| Any file-changing task (process) | — | [`docs/agent/sdd-workflow.md`](docs/agent/sdd-workflow.md) |
+
+Before implementing any webapp UI, also consult the authoritative design system
+spec at [`openspec/specs/design-system/spec.md`](openspec/specs/design-system/spec.md)
+and its drift audit at [`docs/design-system.md`](docs/design-system.md).
 
 ## DO NOT
 - ❌ Use `any` without justification
-- ❌ Redeclare Go identifiers in same scope
 - ❌ Use arbitrary strings for i18n keys
-- ❌ Mix `Msg*`/`Err*` (use `Msg*`)
-- ❌ Skip `MessageKey` → `string` conversion
-- ❌ Create React class components
-- ❌ Bypass TypeScript strict checks
+- ❌ Ship a change with only one locale (en/ru) updated
+- ❌ Break the Go JSON tag ↔ TypeScript field mapping
+- ❌ Skip the per-component checks listed in `docs/agent/*.md`
+- ❌ Start file-changing work before the task mode is confirmed
+- ❌ Bypass TypeScript strict checks or Go `vet`
 
 ## MUST
-- ✅ Match TS properties to Go JSON tags
-- ✅ Use `import type` for type-only imports
-- ✅ Handle all Go errors explicitly
-- ✅ Use context providers for shared state
+- ✅ Ask the user for the task mode (SDD cycle vs. direct) before any file-changing task
+- ✅ Read the component requirements document before changing that component
 - ✅ Follow clean architecture
 - ✅ Keep i18n en/ru in sync
-- ✅ Cover new Go code with unit-tests
-- ✅ Run tests after every code change
-- ✅ Functional React components only
-- ✅ Ask the user for the task mode (SDD cycle vs. direct) before any file-changing task
+- ✅ Cover new code with unit tests
+- ✅ Run the component's tests and linters after every code change
+- ✅ Match TS properties to Go JSON tags
+- ✅ Update the component requirements document when its rules change
 
 ## Local Agent Contexts
 
-Each service has its own `AGENTS.md` with service-specific details:
+Some components ship their own `AGENTS.md` with local detail. Read it **together
+with** the matching requirements document:
 
-| Service | Agent Context |
-|---|---|
-| webapp | [webapp/AGENTS.md](webapp/AGENTS.md) |
-| core | [backend/core/AGENTS.md](backend/core/AGENTS.md) |
-| tools | [tools/AGENTS.md](tools/AGENTS.md) |
-| exif | [backend/exif/AGENTS.md](backend/exif/AGENTS.md) |
-| ocr | [backend/ocr/AGENTS.md](backend/ocr/AGENTS.md) |
+| Component | Local context | Component requirements |
+|---|---|---|
+| webapp | [webapp/AGENTS.md](webapp/AGENTS.md) | [docs/agent/webapp.md](docs/agent/webapp.md) |
+| core | [backend/core/AGENTS.md](backend/core/AGENTS.md) | [docs/agent/go-services.md](docs/agent/go-services.md) |
+| ocr | [backend/ocr/AGENTS.md](backend/ocr/AGENTS.md) | [docs/agent/go-services.md](docs/agent/go-services.md) |
+| exif | — (no local file) | [docs/agent/go-services.md](docs/agent/go-services.md) |
+| tools | — (no local file) | [docs/agent/go-services.md](docs/agent/go-services.md) |
 
 ## MCP Tools
 

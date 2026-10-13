@@ -46,6 +46,10 @@ These rules apply to the whole repository, regardless of language or component.
 - Follow clean architecture principles
 - Keep i18n en/ru in sync — never ship one locale only
 - Keep API field names aligned across the stack (Go JSON tags ↔ webapp TypeScript)
+- Validate input on both client and server — never trust one side alone
+- Document exported/public APIs
+- Justify every new dependency in the change description
+- No breaking change to a public API without an explicit requirement
 - Run the component's full check suite after every code change
 
 ## Component Requirements — read before touching component code
@@ -92,18 +96,14 @@ and its drift audit at [`docs/design-system.md`](docs/design-system.md).
 - ✅ Match TS properties to Go JSON tags
 - ✅ Update the component requirements document when its rules change
 
-## Local Agent Contexts
+## Component Documentation
 
-Some components ship their own `AGENTS.md` with local detail. Read it **together
-with** the matching requirements document:
-
-| Component | Local context | Component requirements |
-|---|---|---|
-| webapp | [webapp/AGENTS.md](webapp/AGENTS.md) | [docs/agent/webapp.md](docs/agent/webapp.md) |
-| core | [backend/core/AGENTS.md](backend/core/AGENTS.md) | [docs/agent/go-services.md](docs/agent/go-services.md) |
-| ocr | [backend/ocr/AGENTS.md](backend/ocr/AGENTS.md) | [docs/agent/go-services.md](docs/agent/go-services.md) |
-| exif | — (no local file) | [docs/agent/go-services.md](docs/agent/go-services.md) |
-| tools | — (no local file) | [docs/agent/go-services.md](docs/agent/go-services.md) |
+Components do **not** ship their own `AGENTS.md` — the documents in the table
+above are the single source of truth for component rules. The service READMEs
+(`webapp/README.md`, `backend/core/README.md`,
+`backend/exif/README.md`, `backend/ocr/README.md`,
+`tools/embeddings-builder/README.md`) document setup, commands and endpoints for
+humans; they are not rule sources.
 
 ## MCP Tools
 

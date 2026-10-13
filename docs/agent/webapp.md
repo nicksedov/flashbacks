@@ -6,11 +6,12 @@ translations, or the generated API types.
 
 Project-wide rules (English-only, clean architecture, i18n en/ru parity, task
 mode) live in [`AGENTS.md`](../../AGENTS.md:1). Rules here are component-specific
-and win over the root file whenever the two differ. The local context is
-[`webapp/AGENTS.md`](../../webapp/AGENTS.md:1).
+and win over the root file whenever the two differ, and they are the **only** rule
+source for the webapp — there is no local `webapp/AGENTS.md`.
 
-And the backend contract that feeds it is documented in
-[`docs/agent/go-services.md`](go-services.md).
+The backend contract that feeds it is documented in
+[`docs/agent/go-services.md`](go-services.md); setup details for humans live in
+[`webapp/README.md`](../../webapp/README.md:1).
 
 ---
 
@@ -75,6 +76,7 @@ Placed next to it: `tests/webapp/` holds the HTTP integration suite
   `React.SyntheticEvent<HTMLFormElement>`.
 - Lazy-loaded tabs wrap named exports:
   `lazy(() => import("...").then(m => ({ default: m.X })))`.
+- Cover utility functions and hooks with unit tests.
 - Test user interactions, not implementation details; mock external dependencies.
 
 ## 5. i18n rules
@@ -92,6 +94,8 @@ Placed next to it: `tests/webapp/` holds the HTTP integration suite
 - API base URL is `/api`, proxied by Vite in dev; use the `fetch` client in
   `src/api/client.ts` with proper error handling.
 - Include the CSRF token on mutating requests; session-based auth.
+- Use type-safe form validation and surface user-friendly error messages; client
+  validation complements server-side validation and never replaces it.
 - Types mirroring the backend live in `webapp/src/types/api.ts`, generated from
   [`docs/api-contracts/core.yaml`](../api-contracts/core.yaml) —
   **whenever the OpenAPI spec changes, run `make generate-types`** instead of
@@ -146,4 +150,4 @@ npm run build           # tsc -b && vite build — must succeed
 
 - [`docs/agent/go-services.md`](go-services.md) — the backend counterpart.
 - [`docs/agent/sdd-workflow.md`](sdd-workflow.md) — SDD cycle and evidence gate.
-- [`webapp/AGENTS.md`](../../webapp/AGENTS.md:1) — local context (stack, structure, commands).
+- [`webapp/README.md`](../../webapp/README.md:1) — setup, commands and scripts.

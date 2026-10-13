@@ -8,13 +8,17 @@ The project-wide rules (English-only, clean architecture, i18n en/ru parity, tas
 mode) live in [`AGENTS.md`](../../AGENTS.md:1). Rules here are component-specific
 and win over the root file whenever the two differ.
 
-| Component | Path | Role | Port | Local context |
+| Component | Path | Role | Port | README |
 |---|---|---|---|---|
-| core | `backend/core/` | Core REST API: auth, scan, gallery, OCR orchestration, tags, chat, trash | 5170 | [`backend/core/AGENTS.md`](../../backend/core/AGENTS.md:1) |
+| core | `backend/core/` | Core REST API: auth, scan, gallery, OCR orchestration, tags, chat, trash | 5170 | [`backend/core/README.md`](../../backend/core/README.md:1) |
 | exif | `backend/exif/` | EXIF read/write, GPS writing, MCP endpoint | 5172 | [`backend/exif/README.md`](../../backend/exif/README.md:1) |
-| ocr | `backend/ocr/` | Text detection / document classification via Tesseract | 5174 | [`backend/ocr/AGENTS.md`](../../backend/ocr/AGENTS.md:1) |
-| shared | `backend/shared/` | Shared domain types (`exif.go`, `ocr.go`) consumed by the services | — | this document |
+| ocr | `backend/ocr/` | Text detection / document classification via Tesseract | 5174 | [`backend/ocr/README.md`](../../backend/ocr/README.md:1) |
+| shared | `backend/shared/` | Shared domain types (`exif.go`, `ocr.go`) consumed by the services | — | — |
 | embeddings-builder | `tools/embeddings-builder/` | CLI that backfills `tag_embeddings` via pgvector | — | [`tools/embeddings-builder/README.md`](../../tools/embeddings-builder/README.md:1) |
+
+This document is the **only** rule source for these components: they no longer
+ship a local `AGENTS.md`. The READMEs above document setup and endpoints for
+humans.
 
 ---
 
@@ -115,8 +119,6 @@ Make targets wrap the same commands: `make test-core`, `make test-exif`,
 - MCP tool definitions must stay aligned with
   [`docs/mcp-contracts/exif-mcp-tools.yaml`](../mcp-contracts/exif-mcp-tools.yaml).
 - **Required checks**: `go test ./... -count=1`, `go vet ./...`.
-- There is no local `backend/exif/AGENTS.md`: this document is the authority for
-  exif changes.
 
 ## 5. ocr — `backend/ocr/`
 
@@ -126,12 +128,16 @@ Make targets wrap the same commands: `make test-core`, `make test-exif`,
   `PATH`, `LD_LIBRARY_PATH`, `CGO_*FLAGS`, `TESSDATA_PREFIX`. **Source it before
   running any `go` command by hand** (`. ../../scripts/toolenv.sh`); `make`
   targets already do it.
+- **HTTP surface**: `POST /classify` (text detection / document verdict) and
+  `GET /health`.
 - **Frozen surface**: do not change the `/classify` signature without an explicit
   requirement; no breaking changes to the public API.
 - **Tests**: table-driven style; datasets under `tests/ocr/dataset/{image,inscription,rus}`
   and `tests/ocr/dataset/README.md`; keep classification accuracy from regressing.
 - **Performance targets**: p95 latency for `/classify` < 5000 ms, memory < 100 MB
   per request.
+- **Coverage**: `go test -race -coverprofile=coverage.out ./...`; coverage must
+  not drop.
 - **Required checks**: `go build -o ocr ./cmd/server`, `go vet ./...`,
   `go test -race -cover ./...`, `golangci-lint run` (config `.golangci.yml`).
   Integration suite: `make test-ocr-integration` (pytest, requires a running
@@ -174,6 +180,9 @@ Make targets wrap the same commands: `make test-core`, `make test-exif`,
 
 - [`docs/agent/webapp.md`](webapp.md) — the TypeScript/React counterpart.
 - [`docs/agent/sdd-workflow.md`](sdd-workflow.md) — SDD cycle and evidence gate.
-- [`backend/core/AGENTS.md`](../../backend/core/AGENTS.md:1),
-  [`backend/ocr/AGENTS.md`](../../backend/ocr/AGENTS.md:1) — local contexts.
 - [`docs/architecture.md`](../architecture.md) — service topology and ports.
+- [`backend/core/README.md`](../../backend/core/README.md:1),
+  [`backend/exif/README.md`](../../backend/exif/README.md:1),
+  [`backend/ocr/README.md`](../../backend/ocr/README.md:1),
+  [`tools/embeddings-builder/README.md`](../../tools/embeddings-builder/README.md:1)
+  — service setup and endpoints.

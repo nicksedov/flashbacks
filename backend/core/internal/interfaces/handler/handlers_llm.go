@@ -70,12 +70,19 @@ func domainModelsToDTOs(models []domain.LlmProviderModel) []dto.LlmModelDTO {
 		for j, c := range m.Capabilities {
 			caps[j] = c.Capability
 		}
+		mods := make([]string, len(m.Modalities))
+		for j, mod := range m.Modalities {
+			mods[j] = mod.Modality
+		}
 		dtos[i] = dto.LlmModelDTO{
-			ID:            m.ModelID,
-			Name:          m.ModelName,
-			Size:          m.Size,
-			ContextLength: m.ContextLength,
-			Capabilities:  caps,
+			ID:                 m.ModelID,
+			Name:               m.ModelName,
+			Size:               m.Size,
+			ContextLength:      m.ContextLength,
+			Capabilities:       caps,
+			Modalities:         mods,
+			InputPricePerMTok:  m.InputPricePerMTok,
+			OutputPricePerMTok: m.OutputPricePerMTok,
 		}
 	}
 	return dtos
@@ -622,22 +629,33 @@ func (s *Server) handleGetLlmModels(c *gin.Context) {
 	domainModels := make([]domain.LlmProviderModel, len(models))
 	for i, m := range models {
 		modelDTOs[i] = dto.LlmModelDTO{
-			ID:            m.ID,
-			Name:          m.Name,
-			Size:          m.Size,
-			ContextLength: m.ContextLength,
-			Capabilities:  m.Capabilities,
+			ID:                 m.ID,
+			Name:               m.Name,
+			Size:               m.Size,
+			ContextLength:      m.ContextLength,
+			Capabilities:       m.Capabilities,
+			Modalities:         m.Modalities,
+			InputPricePerMTok:  m.InputPricePerMTok,
+			OutputPricePerMTok: m.OutputPricePerMTok,
 		}
 		domainModels[i] = domain.LlmProviderModel{
-			ModelID:       m.ID,
-			ModelName:     m.Name,
-			Size:          m.Size,
-			ContextLength: m.ContextLength,
+			ModelID:            m.ID,
+			ModelName:          m.Name,
+			Size:               m.Size,
+			ContextLength:      m.ContextLength,
+			InputPricePerMTok:  m.InputPricePerMTok,
+			OutputPricePerMTok: m.OutputPricePerMTok,
 		}
 		if len(m.Capabilities) > 0 {
 			domainModels[i].Capabilities = make([]domain.LlmModelCapability, len(m.Capabilities))
 			for j, cap := range m.Capabilities {
 				domainModels[i].Capabilities[j] = domain.LlmModelCapability{Capability: cap}
+			}
+		}
+		if len(m.Modalities) > 0 {
+			domainModels[i].Modalities = make([]domain.LlmModelModality, len(m.Modalities))
+			for j, mod := range m.Modalities {
+				domainModels[i].Modalities[j] = domain.LlmModelModality{Modality: mod}
 			}
 		}
 	}

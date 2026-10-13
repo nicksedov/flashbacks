@@ -28,6 +28,7 @@ import {
   ScanText,
 } from "lucide-react"
 import { useTranslation } from "@/i18n"
+import { ModelDetailsDialog } from "@/components/settings/ModelDetailsDialog"
 import type { LlmSettingsResponse, LlmProviderDTO, LlmModelDTO, LlmProviderType, LlmInstrumentType } from "@/types"
 
 // Provider type display labels
@@ -138,6 +139,7 @@ export function AdminLlmProvidersTab() {
   const [modelCache, setModelCache] = useState<Record<string, LlmModelDTO[]>>({})
   const [expandedProviderAlias, setExpandedProviderAlias] = useState<string | null>(null)
   const [loadingModelsAlias, setLoadingModelsAlias] = useState<string | null>(null)
+  const [detailsModel, setDetailsModel] = useState<LlmModelDTO | null>(null)
 
   // New provider form — model is now set per instrument, not on the provider
   const [showNewProvider, setShowNewProvider] = useState(false)
@@ -631,9 +633,12 @@ export function AdminLlmProvidersTab() {
                             models.map((model) => {
                               const caps = inferCapabilities(provider.name, model.id, model.capabilities)
                               return (
-                                <div
+                                <button
                                   key={model.id}
-                                  className="flex items-center justify-between px-3 py-1.5 text-xs hover:bg-muted/50"
+                                  type="button"
+                                  onClick={() => setDetailsModel(model)}
+                                  title={t("llm_providers.viewDetails")}
+                                  className="flex w-full items-center justify-between px-3 py-1.5 text-xs hover:bg-muted/50"
                                 >
                                   <span className="font-medium truncate">{model.name}</span>
                                   <div className="flex items-center gap-2 flex-shrink-0 ml-2">
@@ -650,7 +655,7 @@ export function AdminLlmProvidersTab() {
                                       </Badge>
                                     ) : null}
                                   </div>
-                                </div>
+                                </button>
                               )
                             })
                           )}
@@ -797,6 +802,14 @@ export function AdminLlmProvidersTab() {
         onConfirm={() => void executeDeleteProvider()}
         loading={isSaving}
         destructive
+      />
+
+      <ModelDetailsDialog
+        model={detailsModel}
+        open={detailsModel !== null}
+        onOpenChange={(open) => {
+          if (!open) setDetailsModel(null)
+        }}
       />
     </div>
   )

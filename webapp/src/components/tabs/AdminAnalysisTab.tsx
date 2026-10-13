@@ -25,6 +25,7 @@ import {
 } from "@/api/endpoints"
 import { Shield, Loader2, Zap, Wand2, Play, Square, RefreshCw, Database } from "lucide-react"
 import { useTranslation } from "@/i18n"
+import { filterModelsForInstrument } from "@/lib/llm-model-filter"
 import type {
   OCRStatus,
   OcrClassificationStatusResponse,
@@ -293,6 +294,7 @@ export function AdminAnalysisTab() {
     const alias = instrument?.providerAlias ?? ""
     const model = instrument?.model ?? ""
     const models = modelCache[alias] ?? []
+    const compatibleModels = filterModelsForInstrument(models, type)
     const isManual = manualModelInputs.has(type)
     const isLoadingModelsVal = loadingModelsAlias === alias
 
@@ -342,14 +344,14 @@ export function AdminAnalysisTab() {
                     {t("llm_providers.loadModels")}
                   </Button>
                 </div>
-                {models.length > 0 && !isManual ? (
+                {compatibleModels.length > 0 && !isManual ? (
                   <div className="space-y-2">
                     <Select value={model} onValueChange={(v) => saveInstrument(type, "model", v)}>
                       <SelectTrigger>
                         <SelectValue placeholder={t("llm_providers.selectModel")} />
                       </SelectTrigger>
                       <SelectContent>
-                        {models.map(m => (
+                        {compatibleModels.map(m => (
                           <SelectItem key={m.id} value={m.id}>{m.name}{m.size ? ` (${(m.size / 1073741824).toFixed(1)} GB)` : ""}</SelectItem>
                         ))}
                       </SelectContent>
@@ -361,6 +363,9 @@ export function AdminAnalysisTab() {
                 ) : (
                   <div className="space-y-2">
                     <Input value={model} onChange={(e) => saveInstrument(type, "model", e.target.value)} placeholder="minicpm-v" />
+                    {models.length > 0 && compatibleModels.length === 0 && (
+                      <p className="text-xs text-muted-foreground">{t("llm_providers.noCompatibleModels")}</p>
+                    )}
                     {models.length > 0 && isManual && (
                       <Button variant="link" size="sm" className="px-0 h-auto text-xs" onClick={() => { const s = new Set(manualModelInputs); s.delete(type); setManualModelInputs(s) }}>
                         {t("llm_providers.selectFromModels")}
@@ -498,6 +503,7 @@ export function AdminAnalysisTab() {
                   const alias = embeddingInstrument?.providerAlias ?? ""
                   const model = embeddingInstrument?.model ?? ""
                   const models = modelCache[alias] ?? []
+                  const compatibleModels = filterModelsForInstrument(models, "embedding")
                   const isManual = manualModelInputs.has("embedding")
                   const isLoadingModelsVal = loadingModelsAlias === alias
                   return (
@@ -516,11 +522,11 @@ export function AdminAnalysisTab() {
                             {isLoadingModelsVal ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <RefreshCw className="mr-1 h-3 w-3" />}{t("llm_providers.loadModels")}
                           </Button>
                         </div>
-                        {models.length > 0 && !isManual ? (
+                        {compatibleModels.length > 0 && !isManual ? (
                           <div className="space-y-2">
                             <Select value={model} onValueChange={v => saveInstrument("embedding", "model", v)}>
                               <SelectTrigger><SelectValue placeholder={t("llm_providers.selectModel")} /></SelectTrigger>
-                              <SelectContent>{models.map(m => <SelectItem key={m.id} value={m.id}>{m.name}{m.size ? ` (${(m.size / 1073741824).toFixed(1)} GB)` : ""}</SelectItem>)}</SelectContent>
+                              <SelectContent>{compatibleModels.map(m => <SelectItem key={m.id} value={m.id}>{m.name}{m.size ? ` (${(m.size / 1073741824).toFixed(1)} GB)` : ""}</SelectItem>)}</SelectContent>
                             </Select>
                             <Button variant="link" size="sm" className="px-0 h-auto text-xs" onClick={() => setManualModelInputs(s => new Set(s).add("embedding"))}>{t("llm_providers.enterModelManually")}</Button>
                           </div>

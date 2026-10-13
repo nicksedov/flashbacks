@@ -76,17 +76,24 @@ func NewDeepSeekClient(baseURL, apiKey, model string) *DeepSeekClient {
 // ContextWindow returns the known context window size for the configured model.
 // Falls back to 128K if the model is not in the registry.
 func (c *DeepSeekClient) ContextWindow() int {
-	// Exact match first
-	if info, ok := knownDeepSeekModels[c.Model]; ok {
+	if w := deepSeekKnownContext(c.Model); w > 0 {
+		return w
+	}
+	return 128000
+}
+
+// deepSeekKnownContext returns the known context window for a model ID using
+// exact then prefix matching, or 0 when the model is unknown.
+func deepSeekKnownContext(modelID string) int {
+	if info, ok := knownDeepSeekModels[modelID]; ok {
 		return info.ContextWindow
 	}
-	// Prefix match (e.g. "deepseek-chat-v2" → match "deepseek-chat")
 	for prefix, info := range knownDeepSeekModels {
-		if strings.HasPrefix(c.Model, prefix) {
+		if strings.HasPrefix(modelID, prefix) {
 			return info.ContextWindow
 		}
 	}
-	return 128000 // safe fallback
+	return 0
 }
 
 // --- Request / Response types ---
@@ -287,8 +294,14 @@ func (c *DeepSeekClient) Chat(ctx context.Context, req ChatRequest) (*ChatRespon
 }
 
 // ListModels returns a list of available models from the DeepSeek API.
+// It prefers the rich /models endpoint (context_window, modalities, name) and
+// falls back to the OpenAI-compatible /v1/models endpoint when unavailable.
 func (c *DeepSeekClient) ListModels(ctx context.Context) ([]ModelInfo, error) {
 	shortClient := newAPIClient(c.baseURL, 30*time.Second, c.headers)
+
+	if models, err := c.listRichModels(ctx, shortClient); err == nil && len(models) > 0 {
+		return models, nil
+	}
 
 	var modelsResp openAIModelsResponse
 	if err := shortClient.doJSON(ctx, http.MethodGet, "/v1/models", nil, &modelsResp, nil); err != nil {
@@ -298,22 +311,76 @@ func (c *DeepSeekClient) ListModels(ctx context.Context) ([]ModelInfo, error) {
 	models := make([]ModelInfo, len(modelsResp.Data))
 	for i, m := range modelsResp.Data {
 		info := ModelInfo{
-			ID:   m.ID,
-			Name: m.ID,
+			ID:            m.ID,
+			Name:          m.ID,
+			ContextLength: deepSeekKnownContext(m.ID),
+			Capabilities:  inferCapabilitiesByID(m.ID),
 		}
-		// Attach known context window if available
-		if known, ok := knownDeepSeekModels[m.ID]; ok {
-			info.ContextLength = known.ContextWindow
-		} else {
-			// Try prefix match
-			for prefix, ki := range knownDeepSeekModels {
-				if strings.HasPrefix(m.ID, prefix) {
-					info.ContextLength = ki.ContextWindow
-					break
-				}
-			}
+		input, output := inferModalities(info.Capabilities)
+		info.Modalities = mergeModalities(input, output)
+		if p, ok := lookupModelPricing(m.ID); ok {
+			info.InputPricePerMTok = p.InputPerMTok
+			info.OutputPricePerMTok = p.OutputPerMTok
 		}
 		models[i] = info
+	}
+
+	return models, nil
+}
+
+// deepSeekRichModel is the rich model descriptor returned by DeepSeek GET /models.
+type deepSeekRichModel struct {
+	ID               string   `json:"id"`
+	Name             string   `json:"name"`
+	ContextWindow    int      `json:"context_window"`
+	MaxOutputTokens  int      `json:"max_output_tokens"`
+	InputModalities  []string `json:"input_modalities"`
+	OutputModalities []string `json:"output_modalities"`
+}
+
+type deepSeekRichModelsResponse struct {
+	Data []deepSeekRichModel `json:"data"`
+}
+
+// listRichModels parses the rich DeepSeek /models response into ModelInfo values.
+func (c *DeepSeekClient) listRichModels(ctx context.Context, client *apiClient) ([]ModelInfo, error) {
+	var resp deepSeekRichModelsResponse
+	if err := client.doJSON(ctx, http.MethodGet, "/models", nil, &resp, nil); err != nil {
+		return nil, err
+	}
+
+	models := make([]ModelInfo, 0, len(resp.Data))
+	for _, m := range resp.Data {
+		if m.ID == "" {
+			continue
+		}
+		info := ModelInfo{
+			ID:            m.ID,
+			Name:          m.Name,
+			ContextLength: m.ContextWindow,
+			Modalities:    mergeModalities(m.InputModalities, m.OutputModalities),
+		}
+		if info.Name == "" {
+			info.Name = m.ID
+		}
+		if info.ContextLength == 0 {
+			info.ContextLength = deepSeekKnownContext(m.ID)
+		}
+		if len(info.Modalities) == 0 {
+			info.Capabilities = inferCapabilitiesByID(m.ID)
+			input, output := inferModalities(info.Capabilities)
+			info.Modalities = mergeModalities(input, output)
+		} else {
+			info.Capabilities = capabilitiesFromModalities(info.Modalities)
+		}
+		if strings.Contains(strings.ToLower(m.ID), "embedding") {
+			info.Capabilities = []string{"embedding"}
+		}
+		if p, ok := lookupModelPricing(m.ID); ok {
+			info.InputPricePerMTok = p.InputPerMTok
+			info.OutputPricePerMTok = p.OutputPerMTok
+		}
+		models = append(models, info)
 	}
 
 	return models, nil

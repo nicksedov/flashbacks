@@ -2970,7 +2970,24 @@ components:
         name:
           type: string
         size:
-          type: string
+          type: integer
+          format: int64
+        contextLength:
+          type: integer
+        capabilities:
+          type: array
+          items:
+            type: string
+        modalities:
+          type: array
+          items:
+            type: string
+        inputPricePerMTok:
+          type: number
+          format: double
+        outputPricePerMTok:
+          type: number
+          format: double
 
     ProbeEmbeddingDimensionRequest:
       type: object

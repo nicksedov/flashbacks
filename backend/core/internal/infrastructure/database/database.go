@@ -54,6 +54,7 @@ func InitDatabase(cfg *config.AppConfig) (*gorm.DB, error) {
 		&domain.ImageTag{},
 		&domain.LlmProviderModel{},
 		&domain.LlmModelCapability{},
+		&domain.LlmModelModality{},
 		&domain.Conversation{},
 		&domain.ConversationMessage{},
 		&domain.TagEmbedding{},

@@ -225,13 +225,16 @@ func (c *OllamaClient) ListModels(ctx context.Context) ([]ModelInfo, error) {
 			defer wg.Done()
 			sem <- struct{}{}
 			defer func() { <-sem }()
-			ctxLen, caps := c.fetchModelDetails(ctx, models[idx].Name)
+			ctxLen, caps, mods := c.fetchModelDetails(ctx, models[idx].Name)
 			mu.Lock()
 			if ctxLen > 0 {
 				models[idx].ContextLength = ctxLen
 			}
 			if len(caps) > 0 {
 				models[idx].Capabilities = caps
+			}
+			if len(mods) > 0 {
+				models[idx].Modalities = mods
 			}
 			mu.Unlock()
 		}(i)
@@ -241,8 +244,9 @@ func (c *OllamaClient) ListModels(ctx context.Context) ([]ModelInfo, error) {
 	return models, nil
 }
 
-// fetchModelDetails calls /api/show to extract context_length and capabilities for a model.
-func (c *OllamaClient) fetchModelDetails(ctx context.Context, modelName string) (int, []string) {
+// fetchModelDetails calls /api/show to extract context_length, capabilities, and
+// modalities for a model.
+func (c *OllamaClient) fetchModelDetails(ctx context.Context, modelName string) (int, []string, []string) {
 	// Use a short-lived client with 30s timeout for this call
 	shortClient := newAPIClient(c.baseURL, 30*time.Second, c.headers)
 
@@ -253,7 +257,7 @@ func (c *OllamaClient) fetchModelDetails(ctx context.Context, modelName string) 
 	}
 	err := shortClient.doJSON(ctx, http.MethodPost, "/api/show", map[string]string{"name": modelName}, &showResp, nil)
 	if err != nil {
-		return 0, nil
+		return 0, nil, nil
 	}
 
 	// Extract context_length from model_info map using the architecture key.
@@ -282,22 +286,15 @@ func (c *OllamaClient) fetchModelDetails(ctx context.Context, modelName string) 
 		}
 	}
 
-	// Map Ollama capability names to standardized names used in the frontend.
-	// Ollama returns snake_case like "tools", "embedding" - normalize to match
-	// the frontend ModelCapability type: "chat", "tool_calling", "vision", "embedding".
-	caps := make([]string, 0, len(showResp.Capabilities))
-	for _, c := range showResp.Capabilities {
-		switch c {
-		case "tools":
-			caps = append(caps, "tool_calling")
-		case "embedding":
-			caps = append(caps, "embedding")
-		case "vision":
-			caps = append(caps, "vision")
-		case "chat":
-			caps = append(caps, "chat")
-		}
+	// Map Ollama capability names to the standardized set used by the frontend
+	// (chat, tool_calling, vision, embedding, image_edit). Ollama reports names
+	// like "completion", "thinking", "tools", "embedding", "vision".
+	caps := normalizeCapabilities(showResp.Capabilities)
+	if len(caps) == 0 {
+		caps = inferCapabilitiesByID(modelName)
 	}
+	input, output := inferModalities(caps)
+	mods := mergeModalities(input, output)
 
-	return ctxLen, caps
+	return ctxLen, caps, mods
 }

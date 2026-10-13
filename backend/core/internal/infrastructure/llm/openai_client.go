@@ -386,7 +386,10 @@ type openAIModel struct {
 	Created int64  `json:"created"`
 }
 
-// ListModels returns a list of available models from OpenAI-compatible server
+// ListModels returns a list of available models from an OpenAI-compatible
+// server, enriched with capabilities, modalities, and pricing inferred from the
+// model ID plus the static registry (the OpenAI-compatible API exposes no
+// metadata beyond the model ID).
 func (c *OpenAIClient) ListModels(ctx context.Context) ([]ModelInfo, error) {
 	// Use a shorter timeout for model listing
 	shortClient := newAPIClient(c.baseURL, 30*time.Second, c.headers)
@@ -398,10 +401,18 @@ func (c *OpenAIClient) ListModels(ctx context.Context) ([]ModelInfo, error) {
 
 	models := make([]ModelInfo, len(modelsResp.Data))
 	for i, m := range modelsResp.Data {
-		models[i] = ModelInfo{
-			ID:   m.ID,
-			Name: m.ID,
+		info := ModelInfo{
+			ID:           m.ID,
+			Name:         m.ID,
+			Capabilities: inferCapabilitiesByID(m.ID),
 		}
+		input, output := inferModalities(info.Capabilities)
+		info.Modalities = mergeModalities(input, output)
+		if p, ok := lookupModelPricing(m.ID); ok {
+			info.InputPricePerMTok = p.InputPerMTok
+			info.OutputPricePerMTok = p.OutputPerMTok
+		}
+		models[i] = info
 	}
 
 	return models, nil

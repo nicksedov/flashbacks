@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState, type MouseEvent, type TouchEvent } from "react"
 import { Check, Copy, X, GripVertical } from "lucide-react"
-import { Button } from "@/components/ui/button"
+import { LightboxAction } from "./lightboxChrome"
 import { useTranslation } from "@/i18n"
 
 interface ImageCompareSliderProps {
@@ -115,37 +115,31 @@ export function ImageCompareSlider({
         </div>
       </div>
 
-      {/* Action buttons */}
-      <div className="flex justify-center gap-3 pb-2">
-        <Button
+      {/* Action buttons — icon-first below md with a 44px touch target */}
+      <div className="flex flex-wrap justify-center gap-3 pb-2">
+        <LightboxAction
           variant="outline"
-          size="sm"
+          icon={<X className="h-4 w-4" />}
+          label={t("enhance.reject")}
           onClick={onReject}
           disabled={isReplacing || isSavingCopy || isRejecting}
-          className="gap-1.5"
-        >
-          <X className="h-4 w-4" />
-          {t("enhance.reject")}
-        </Button>
-        <Button
+        />
+        <LightboxAction
           variant="outline"
-          size="sm"
+          icon={<Copy className="h-4 w-4" />}
+          label={isSavingCopy ? t("enhance.savingCopy") : t("enhance.saveCopy")}
+          ariaLabel={t("enhance.saveCopy")}
           onClick={onSaveCopy}
           disabled={isReplacing || isSavingCopy || isRejecting}
-          className="gap-1.5"
-        >
-          <Copy className="h-4 w-4" />
-          {isSavingCopy ? t("enhance.savingCopy") : t("enhance.saveCopy")}
-        </Button>
-        <Button
-          size="sm"
+        />
+        <LightboxAction
+          variant="default"
+          icon={<Check className="h-4 w-4" />}
+          label={isReplacing ? t("enhance.replacing") : t("enhance.replace")}
+          ariaLabel={t("enhance.replace")}
           onClick={onReplace}
           disabled={isReplacing || isSavingCopy || isRejecting}
-          className="gap-1.5"
-        >
-          <Check className="h-4 w-4" />
-          {isReplacing ? t("enhance.replacing") : t("enhance.replace")}
-        </Button>
+        />
       </div>
     </div>
   )

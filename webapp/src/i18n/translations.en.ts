@@ -247,6 +247,9 @@ export const translationsEn = {
   "lightbox.tab.exif": "Details",
   "lightbox.tab.ocr": "OCR",
   "lightbox.tab.tags": "Tags",
+  "lightbox.panel.show": "Show details",
+  "lightbox.panel.hide": "Hide details",
+  "lightbox.panel.details": "Details",
 
   // Metadata panel
   "metadata.title": "Image Details",

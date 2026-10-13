@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react"
 import { useTranslation } from "@/i18n"
 import { Button } from "@/components/ui/button"
+import { LightboxInfoReadout } from "./lightboxChrome"
 import {
   Send,
   Square,
@@ -390,9 +391,10 @@ export function ChatPanel({
           {hasConversation && maxTokens > 0 ? (
             <div className="flex items-center gap-1.5 flex-1 min-w-0">
               <TokenDoughnut percent={tokenPercent} />
-              <span className="text-xs text-muted-foreground tabular-nums whitespace-nowrap">
-                {formatNumber(tokenCount)} / {formatNumber(maxTokens)}
-              </span>
+              <LightboxInfoReadout
+                text={`${formatNumber(tokenCount)} / ${formatNumber(maxTokens)}`}
+                className="text-xs text-muted-foreground tabular-nums whitespace-nowrap"
+              />
               {/* DeepSeek cache hit indicator */}
               {(promptCacheHitTokens ?? 0) > 0 && (
                 <span

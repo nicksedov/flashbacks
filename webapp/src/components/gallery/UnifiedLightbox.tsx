@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react"
-import { Sparkles, Info, ScanText, Tags } from "lucide-react"
-import type { LucideIcon } from "lucide-react"
+import { Info } from "lucide-react"
 import { useTranslation } from "@/i18n"
 import { LightboxDialog } from "./lightbox/LightboxDialog"
 import { buildImageUrl } from "@/utils/buildImageUrl"
@@ -9,6 +8,7 @@ import { OcrResultPanel } from "./lightbox/OcrResultPanel"
 import { TagsPanel } from "./lightbox/TagsPanel"
 import { ChatPanel } from "./lightbox/ChatPanel"
 import { ImageCompareSlider } from "./lightbox/ImageCompareSlider"
+import { MobileDetailPanel } from "./lightbox/MobileDetailPanel"
 import { useOcrState } from "@/hooks/useOcrState"
 import { useTagsState } from "@/hooks/useTagsState"
 import { useImageDimensions } from "@/hooks/useImageDimensions"
@@ -20,10 +20,11 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
 import { Camera, MapPin, MapPinPlus, Image as ImageIcon, Pencil, FileText } from "lucide-react"
 import { GeoSearchForm } from "./GeoSearchForm"
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import type { ImageMetadataDTO } from "@/types"
+import { LightboxTabBar } from "./lightbox/lightboxChrome"
+import type { LightboxMode } from "./lightbox/lightboxChrome"
 
-export type LightboxMode = "ai" | "exif" | "ocr" | "tags"
+export type { LightboxMode }
 
 interface UnifiedLightboxProps {
   imagePath: string | null
@@ -32,13 +33,6 @@ interface UnifiedLightboxProps {
   showGeoForm?: boolean
   onShowGeoFormChange?: (show: boolean) => void
 }
-
-const TAB_CONFIG: { id: LightboxMode; labelKey: "lightbox.tab.ai" | "lightbox.tab.exif" | "lightbox.tab.ocr" | "lightbox.tab.tags"; icon: LucideIcon }[] = [
-  { id: "ai", labelKey: "lightbox.tab.ai", icon: Sparkles },
-  { id: "exif", labelKey: "lightbox.tab.exif", icon: Info },
-  { id: "ocr", labelKey: "lightbox.tab.ocr", icon: ScanText },
-  { id: "tags", labelKey: "lightbox.tab.tags", icon: Tags },
-]
 
 export function UnifiedLightbox({
   imagePath,
@@ -51,6 +45,7 @@ export function UnifiedLightbox({
   const [activeMode, setActiveMode] = useState<LightboxMode>(initialMode)
   const [internalShowGeoForm, setInternalShowGeoForm] = useState(false)
   const [standardImageLoaded, setStandardImageLoaded] = useState(false)
+  const [panelOpen, setPanelOpen] = useState(false)
   const isGeoFormVisible = showGeoForm ?? internalShowGeoForm
 
   const handleShowGeoForm = useCallback((show: boolean) => {
@@ -79,6 +74,7 @@ export function UnifiedLightbox({
     setInternalShowGeoForm(false)
     setStandardImageLoaded(false)
     setEnhancedPath(null)
+    setPanelOpen(false)
   }
 
   // Reset the enhancement-processing dedupe cache when the image changes.
@@ -279,7 +275,7 @@ export function UnifiedLightbox({
       titleKey="lightbox.title"
       descriptionKey="lightbox.description"
     >
-      <div className="flex h-full">
+      <div className="flex h-full relative">
         {/* Left: Image panel */}
         {activeMode === "ocr" ? (
           <OcrImagePanel
@@ -323,19 +319,10 @@ export function UnifiedLightbox({
           </div>
         )}
 
-        {/* Right: Panel with mode tabs */}
-        <div className="w-full md:w-[400px] lg:w-[450px] md:min-w-[320px] border-t md:border-t-0 md:border-l bg-card h-full shrink-0 flex flex-col">
+        {/* Right: Panel with mode tabs — collapsible overlay below md */}
+        <MobileDetailPanel open={panelOpen} onOpenChange={setPanelOpen}>
           <div className="pt-2">
-            <Tabs variant="underline" value={activeMode} onValueChange={(v) => setActiveMode(v as LightboxMode)}>
-              <TabsList>
-                {TAB_CONFIG.map(({ id, labelKey, icon: Icon }) => (
-                  <TabsTrigger key={id} value={id}>
-                    <Icon className="h-3.5 w-3.5" />
-                    {t(labelKey)}
-                  </TabsTrigger>
-                ))}
-              </TabsList>
-            </Tabs>
+            <LightboxTabBar value={activeMode} onValueChange={setActiveMode} />
           </div>
 
           {/* Panel content */}
@@ -398,7 +385,7 @@ export function UnifiedLightbox({
               />
             )}
           </div>
-        </div>
+        </MobileDetailPanel>
       </div>
     </LightboxDialog>
   )

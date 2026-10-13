@@ -18,7 +18,10 @@ export function LightboxDialog({ open, onOpenChange, titleKey, descriptionKey, c
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[95vw] w-[95vw] h-[90vh] p-0 overflow-hidden flex flex-col">
+      {/* The lightbox renders its own single close control
+          (`data-testid="lightbox-close"`), so the shared dialog close is
+          suppressed — two overlapping close controls are what regressed. */}
+      <DialogContent hideClose className="max-w-[95vw] w-[95vw] h-[90vh] p-0 overflow-hidden flex flex-col">
         <VisuallyHidden>
           <DialogTitle>{t(titleKey)}</DialogTitle>
           <DialogDescription>{t(descriptionKey)}</DialogDescription>
@@ -26,7 +29,10 @@ export function LightboxDialog({ open, onOpenChange, titleKey, descriptionKey, c
         <Button
           variant="ghost"
           size="sm"
-          className="absolute right-2 top-2 z-10 h-8 w-8 p-0 bg-background/80 text-foreground hover:bg-muted/80 rounded-full"
+          aria-label={t("common.close")}
+          title={t("common.close")}
+          data-testid="lightbox-close"
+          className="absolute right-2 top-2 z-30 h-11 w-11 p-0 bg-background/80 text-foreground hover:bg-muted/80 rounded-full md:h-8 md:w-8"
           onClick={() => onOpenChange(false)}
         >
           <X className="h-4 w-4" />

@@ -15,3 +15,96 @@ scopes:
     design-system.icon-first-actions:
       evidence:
         - vitest::webapp/src/components/layout/Header.test.tsx::Header > hides the logout text label below md while keeping the icon and accessible name
+    design-system.mobile-lightbox-image-first:
+      evidence:
+        - vitest::webapp/src/components/gallery/lightbox/MobileDetailPanel.test.tsx::MobileDetailPanel > overlays the panel without adding a side column below md
+    design-system.mobile-lightbox-panel-collapsed:
+      evidence:
+        - vitest::webapp/src/components/gallery/lightbox/MobileDetailPanel.test.tsx::MobileDetailPanel > starts collapsed below md
+    design-system.mobile-lightbox-panel-toggle:
+      evidence:
+        - vitest::webapp/src/components/gallery/lightbox/MobileDetailPanel.test.tsx::MobileDetailPanel > expands the panel when the toggle is activated
+    design-system.mobile-lightbox-panel-collapse:
+      evidence:
+        - vitest::webapp/src/components/gallery/lightbox/MobileDetailPanel.test.tsx::MobileDetailPanel > collapses the panel when the toggle is activated again
+    design-system.mobile-lightbox-toggle-placement:
+      evidence:
+        - vitest::webapp/src/components/gallery/lightbox/MobileDetailPanel.test.tsx::MobileDetailPanel > keeps the toggle at a consistent reachable position in both states
+    design-system.mobile-lightbox-image-unchanged:
+      evidence:
+        - vitest::webapp/src/components/gallery/lightbox/MobileDetailPanel.test.tsx::MobileDetailPanel > keeps the panel absolutely positioned so the image keeps its size
+    design-system.mobile-lightbox-panel-overlay:
+      evidence:
+        - vitest::webapp/src/components/gallery/lightbox/MobileDetailPanel.test.tsx::MobileDetailPanel > covers about 80% of the area when expanded below md
+    design-system.mobile-lightbox-scrim:
+      evidence:
+        - vitest::webapp/src/components/gallery/lightbox/MobileDetailPanel.test.tsx::MobileDetailPanel > renders a scrim over the exposed image when expanded
+    design-system.mobile-lightbox-dismiss-outside:
+      evidence:
+        - vitest::webapp/src/components/gallery/lightbox/MobileDetailPanel.test.tsx::MobileDetailPanel > collapses when the exposed image area is tapped
+    design-system.mobile-lightbox-panel-portrait-bottom:
+      evidence:
+        - vitest::webapp/src/components/gallery/lightbox/MobileDetailPanel.test.tsx::MobileDetailPanel > anchors to the bottom in portrait
+    design-system.mobile-lightbox-panel-landscape-right:
+      evidence:
+        - vitest::webapp/src/components/gallery/lightbox/MobileDetailPanel.test.tsx::MobileDetailPanel > anchors to the right in landscape
+    design-system.mobile-lightbox-rotation-persist:
+      evidence:
+        - vitest::webapp/src/components/gallery/lightbox/MobileDetailPanel.test.tsx::MobileDetailPanel > keeps the panel expanded across orientation changes
+    design-system.mobile-lightbox-toggle-accessible:
+      evidence:
+        - vitest::webapp/src/components/gallery/lightbox/MobileDetailPanel.test.tsx::MobileDetailPanel > exposes an accessible name and a 44px touch target
+    design-system.mobile-lightbox-toggle-aria-expanded:
+      evidence:
+        - vitest::webapp/src/components/gallery/lightbox/MobileDetailPanel.test.tsx::MobileDetailPanel > exposes aria-expanded and aria-controls on the toggle
+    design-system.mobile-lightbox-toggle-visible-label:
+      evidence:
+        - vitest::webapp/src/components/gallery/lightbox/MobileDetailPanel.test.tsx::MobileDetailPanel > shows a visible label on the collapsed toggle
+    design-system.mobile-lightbox-keyboard-visible:
+      evidence:
+        - vitest::webapp/src/components/gallery/lightbox/MobileDetailPanel.test.tsx::MobileDetailPanel > uses a dynamic viewport height so the input stays above the keyboard
+    design-system.mobile-lightbox-safe-area:
+      evidence:
+        - vitest::webapp/src/components/gallery/lightbox/MobileDetailPanel.test.tsx::MobileDetailPanel > insets the panel from the safe-area edges
+    design-system.mobile-lightbox-reduced-motion:
+      evidence:
+        - vitest::webapp/src/components/gallery/lightbox/MobileDetailPanel.test.tsx::MobileDetailPanel > suppresses the transition under reduced motion
+    design-system.mobile-lightbox-focus-management:
+      evidence:
+        - vitest::webapp/src/components/gallery/lightbox/MobileDetailPanel.test.tsx::MobileDetailPanel > moves focus into the panel and back to the toggle
+    design-system.mobile-lightbox-back-dismiss:
+      evidence:
+        - vitest::webapp/src/components/gallery/lightbox/MobileDetailPanel.test.tsx::MobileDetailPanel > collapses on Escape before the dialog closes
+    design-system.mobile-lightbox-tabs-wrap:
+      evidence:
+        - vitest::webapp/src/components/gallery/lightbox/LightboxDialog.test.tsx::LightboxDialog > wraps the tab bar without horizontal overflow below md
+    design-system.mobile-lightbox-icon-first-actions:
+      evidence:
+        - vitest::webapp/src/components/gallery/lightbox/LightboxDialog.test.tsx::LightboxDialog > hides action text labels below md while keeping the icon and accessible name
+    design-system.mobile-lightbox-chrome-touch-targets:
+      evidence:
+        - vitest::webapp/src/components/gallery/lightbox/LightboxDialog.test.tsx::LightboxDialog > gives the close control a 44px touch target below md
+    design-system.mobile-lightbox-info-label-collapse:
+      evidence:
+        - vitest::webapp/src/components/gallery/lightbox/LightboxDialog.test.tsx::LightboxDialog > collapses a long informational readout to an info icon below md
+    design-system.mobile-lightbox-compare-actions:
+      evidence:
+        - vitest::webapp/src/components/gallery/UnifiedLightbox.test.tsx::UnifiedLightbox > collapses compare-slider actions to icons below md
+    design-system.mobile-lightbox-trash-header:
+      evidence:
+        - vitest::webapp/src/components/trash/TrashLightbox.test.tsx::TrashLightbox > truncates the title and keeps a 44px chrome target below md
+    design-system.mobile-lightbox-single-close-control:
+      evidence:
+        - vitest::webapp/src/components/gallery/lightbox/LightboxDialog.test.tsx::LightboxDialog > renders a single close control
+    design-system.mobile-lightbox-close-above-panel:
+      evidence:
+        - vitest::webapp/src/components/gallery/lightbox/LightboxDialog.test.tsx::LightboxDialog > draws the close control above the detail panel
+    design-system.mobile-lightbox-desktop-column-ratio:
+      evidence:
+        - vitest::webapp/src/components/gallery/lightbox/MobileDetailPanel.test.tsx::MobileDetailPanel > keeps the fixed-width column at md and above
+    design-system.mobile-lightbox-desktop-tabs-single-row:
+      evidence:
+        - vitest::webapp/src/components/gallery/lightbox/LightboxDialog.test.tsx::LightboxDialog > keeps the tab bar on a single row at md and above
+    design-system.mobile-lightbox-info-popup-contained:
+      evidence:
+        - vitest::webapp/src/components/gallery/lightbox/LightboxDialog.test.tsx::LightboxDialog > opens the info popup inside the lightbox on mobile

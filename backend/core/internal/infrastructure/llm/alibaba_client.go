@@ -12,6 +12,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -734,9 +735,15 @@ type alibabaModel struct {
 	ID string `json:"id"`
 }
 
-// ListModels returns available models from the Alibaba Cloud OpenAI-compatible API.
-// It fetches detailed info (context length, capabilities) for each model concurrently.
+// ListModels returns available models from Alibaba Cloud.
+// It prefers the native ModelStudio catalog (/api/v1/models) which carries
+// prices, modalities, context window, and capabilities, and falls back to the
+// OpenAI-compatible /models listing enriched with heuristics and the registry.
 func (c *AlibabaClient) ListModels(ctx context.Context) ([]ModelInfo, error) {
+	if models, err := c.listCatalogModels(ctx); err == nil && len(models) > 0 {
+		return models, nil
+	}
+
 	shortClient := newAPIClient(c.compatibleClient.baseURL, 30*time.Second, c.compatibleClient.headers)
 
 	var modelsResp alibabaModelsResponse
@@ -760,7 +767,8 @@ func (c *AlibabaClient) ListModels(ctx context.Context) ([]ModelInfo, error) {
 		}
 	}
 
-	// Fetch detailed info for each model concurrently (context length, capabilities)
+	// Fetch detailed info for each model concurrently (context length,
+	// capabilities, modalities, and pricing).
 	const maxConcurrency = 8
 	sem := make(chan struct{}, maxConcurrency)
 	var wg sync.WaitGroup
@@ -782,6 +790,15 @@ func (c *AlibabaClient) ListModels(ctx context.Context) ([]ModelInfo, error) {
 				if len(details.Capabilities) > 0 {
 					models[idx].Capabilities = details.Capabilities
 				}
+				if len(details.Modalities) > 0 {
+					models[idx].Modalities = details.Modalities
+				}
+				if details.InputPricePerMTok > 0 {
+					models[idx].InputPricePerMTok = details.InputPricePerMTok
+				}
+				if details.OutputPricePerMTok > 0 {
+					models[idx].OutputPricePerMTok = details.OutputPricePerMTok
+				}
 				mu.Unlock()
 			}
 		}(i)
@@ -791,9 +808,8 @@ func (c *AlibabaClient) ListModels(ctx context.Context) ([]ModelInfo, error) {
 	return models, nil
 }
 
-// GetModelDetails fetches detailed information for a specific model via the OpenAI-compatible API.
-// This endpoint provides context_length and other model metadata.
-// Falls back to default context_length (128000) if not available from API or heuristics.
+// GetModelDetails fetches detailed information for a specific model via the
+// OpenAI-compatible API and falls back to ID heuristics plus the static registry.
 func (c *AlibabaClient) GetModelDetails(ctx context.Context, modelID string) (*ModelInfo, error) {
 	shortClient := newAPIClient(c.compatibleClient.baseURL, 30*time.Second, c.compatibleClient.headers)
 
@@ -805,27 +821,141 @@ func (c *AlibabaClient) GetModelDetails(ctx context.Context, modelID string) (*M
 	}
 
 	if err := shortClient.doJSON(ctx, http.MethodGet, "/v1/models/"+modelID, nil, &modelResp, nil); err != nil {
-		// API call failed - return fallback values based on model ID heuristics
-		ctxLen := inferContextLength(modelID)
-		caps := inferAlibabaCapabilities(modelID)
-		return &ModelInfo{
-			ID:            modelID,
-			Name:          modelID,
-			ContextLength: ctxLen,
-			Capabilities:  caps,
-		}, nil
+		return alibabaEnrichedModelInfo(modelID, modelID), nil
 	}
 
-	// Try to get context_length from the model ID (for known models)
-	ctxLen := inferContextLength(modelID)
-	caps := inferAlibabaCapabilities(modelID)
+	name := modelResp.ID
+	if name == "" {
+		name = modelID
+	}
+	return alibabaEnrichedModelInfo(modelID, name), nil
+}
 
-	return &ModelInfo{
+// alibabaEnrichedModelInfo builds model metadata from ID heuristics and the
+// static pricing registry for a model that has no catalog entry.
+func alibabaEnrichedModelInfo(modelID, name string) *ModelInfo {
+	caps := inferAlibabaCapabilities(modelID)
+	input, output := inferModalities(caps)
+	info := &ModelInfo{
 		ID:            modelID,
-		Name:          modelResp.ID,
-		ContextLength: ctxLen,
+		Name:          name,
+		ContextLength: inferContextLength(modelID),
 		Capabilities:  caps,
-	}, nil
+		Modalities:    mergeModalities(input, output),
+	}
+	if p, ok := lookupModelPricing(modelID); ok {
+		info.InputPricePerMTok = p.InputPerMTok
+		info.OutputPricePerMTok = p.OutputPerMTok
+	}
+	return info
+}
+
+// alibabaCatalogResponse is the native ModelStudio model catalog response.
+type alibabaCatalogResponse struct {
+	Output struct {
+		Total  int                   `json:"total"`
+		Models []alibabaCatalogModel `json:"models"`
+	} `json:"output"`
+}
+
+type alibabaCatalogModel struct {
+	Model             string              `json:"model"`
+	Name              string              `json:"name"`
+	Capabilities      []string            `json:"capabilities"`
+	Prices            []alibabaPriceRange `json:"prices"`
+	InferenceMetadata struct {
+		RequestModality  []string `json:"request_modality"`
+		ResponseModality []string `json:"response_modality"`
+	} `json:"inference_metadata"`
+	ModelInfo struct {
+		ContextWindow *int `json:"context_window"`
+	} `json:"model_info"`
+}
+
+type alibabaPriceRange struct {
+	Prices []alibabaPrice `json:"prices"`
+}
+
+type alibabaPrice struct {
+	Type      string `json:"type"`
+	Price     string `json:"price"`
+	PriceUnit string `json:"price_unit"`
+}
+
+// listCatalogModels fetches the native ModelStudio catalog and converts it.
+func (c *AlibabaClient) listCatalogModels(ctx context.Context) ([]ModelInfo, error) {
+	shortClient := newAPIClient(c.baseURL, 30*time.Second, c.headers)
+
+	var resp alibabaCatalogResponse
+	if err := shortClient.doJSON(ctx, http.MethodGet, "/api/v1/models?page_no=1&page_size=200", nil, &resp, nil); err != nil {
+		return nil, err
+	}
+
+	models := make([]ModelInfo, 0, len(resp.Output.Models))
+	for _, m := range resp.Output.Models {
+		if m.Model == "" {
+			continue
+		}
+		models = append(models, alibabaCatalogModelToInfo(m))
+	}
+	return models, nil
+}
+
+// alibabaCatalogModelToInfo converts a catalog entry into a ModelInfo.
+func alibabaCatalogModelToInfo(m alibabaCatalogModel) ModelInfo {
+	info := ModelInfo{ID: m.Model, Name: m.Name}
+	if info.Name == "" {
+		info.Name = m.Model
+	}
+	if m.ModelInfo.ContextWindow != nil && *m.ModelInfo.ContextWindow > 0 {
+		info.ContextLength = *m.ModelInfo.ContextWindow
+	}
+	info.Modalities = mergeModalities(m.InferenceMetadata.RequestModality, m.InferenceMetadata.ResponseModality)
+	info.Capabilities = capabilitiesFromModalities(info.Modalities)
+	for _, cap := range normalizeCapabilities(m.Capabilities) {
+		info.Capabilities = appendUnique(info.Capabilities, cap)
+	}
+
+	lower := strings.ToLower(m.Model)
+	if strings.Contains(lower, "embedding") {
+		info.Capabilities = []string{"embedding"}
+	}
+	if strings.Contains(lower, "image-edit") || strings.Contains(lower, "image_edit") {
+		info.Capabilities = appendUnique(info.Capabilities, "image_edit")
+	}
+
+	if input, output, ok := alibabaCatalogPricing(m.Prices); ok {
+		info.InputPricePerMTok = input
+		info.OutputPricePerMTok = output
+	}
+	if info.ContextLength == 0 {
+		info.ContextLength = inferContextLength(m.Model)
+	}
+	return info
+}
+
+// alibabaCatalogPricing extracts the standard input/output per-1M-token prices
+// from the catalog's Default price range.
+func alibabaCatalogPricing(ranges []alibabaPriceRange) (input, output float64, ok bool) {
+	if len(ranges) == 0 {
+		return 0, 0, false
+	}
+	for _, p := range ranges[0].Prices {
+		if p.PriceUnit != "Per 1M tokens" {
+			continue
+		}
+		val, err := strconv.ParseFloat(p.Price, 64)
+		if err != nil {
+			continue
+		}
+		switch p.Type {
+		case "input_token", "omni_input_token":
+			input = val
+		case "output_token", "omni_output_token":
+			output = val
+		}
+	}
+	return input, output, input > 0 || output > 0
 }
 
 // inferContextLength returns context length based on model ID heuristics.
@@ -887,6 +1017,11 @@ func inferAlibabaCapabilities(modelID string) []string {
 	// OCR capabilities
 	if strings.Contains(lower, "ocr") {
 		caps = append(caps, "vision")
+	}
+
+	// Image editing models
+	if strings.Contains(lower, "image-edit") || strings.Contains(lower, "image_edit") {
+		caps = appendUnique(caps, "image_edit")
 	}
 
 	return caps

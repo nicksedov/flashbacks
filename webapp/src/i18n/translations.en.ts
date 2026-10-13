@@ -779,6 +779,13 @@ export const translationsEn = {
   "llm_providers.cannotDeleteInUse": "Cannot delete provider currently used for: {usages}. Change the setting in the Analysis Tools tab first.",
   "llm_providers.cannotDeleteInUseTooltip": "Provider is currently in use and cannot be deleted",
   "llm_providers.manageInProvidersTab": "Manage in LLM Providers",
+  "llm_providers.viewDetails": "View model details",
+  "llm_providers.noCompatibleModels": "No models compatible with this instrument. Use manual entry below.",
+  "llm_model_details.contextLength": "Context length",
+  "llm_model_details.modalities": "Modalities",
+  "llm_model_details.capabilities": "Capabilities",
+  "llm_model_details.inputPrice": "Input price (per 1M tokens)",
+  "llm_model_details.outputPrice": "Output price (per 1M tokens)",
 
   // Chat / Agent
   "chat.title": "AI Assistant",

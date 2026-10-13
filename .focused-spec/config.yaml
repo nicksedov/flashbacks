@@ -20,3 +20,8 @@ runners:
   vitest:
     package: "@focused-spec/runner-vitest"
     timeoutMs: 180000
+  go:
+    package: "@focused-spec/runner-go"
+    options:
+      commandArgs: ["-C", "backend/core"]
+    timeoutMs: 180000

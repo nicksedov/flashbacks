@@ -58,6 +58,7 @@ func NewTestDB(t *testing.T) (*gorm.DB, func()) {
 		&domain.ConversationMessage{},
 		&domain.LlmProviderModel{},
 		&domain.LlmModelCapability{},
+		&domain.LlmModelModality{},
 		&domain.GeolocationCache{},
 		&domain.TagEmbedding{},
 		&domain.ImageProcessingError{},

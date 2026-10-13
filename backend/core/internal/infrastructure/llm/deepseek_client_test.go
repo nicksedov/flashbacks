@@ -276,3 +276,70 @@ func TestDeepSeekChat_NoUsageInResponse(t *testing.T) {
 		t.Error("expected nil usage when not provided in response")
 	}
 }
+
+func TestDeepSeekContextParsed(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{
+			"object": "list",
+			"data": [
+				{
+					"id": "deepseek-flash",
+					"name": "DeepSeek-V4.1-Flash",
+					"context_window": 1048576,
+					"max_output_tokens": 393216,
+					"input_modalities": ["text", "image"],
+					"output_modalities": ["text"]
+				}
+			]
+		}`))
+	}))
+	defer server.Close()
+
+	c := NewDeepSeekClient(server.URL, "test-key", "deepseek-chat")
+	models, err := c.ListModels(context.Background())
+	if err != nil {
+		t.Fatalf("ListModels failed: %v", err)
+	}
+	if len(models) != 1 {
+		t.Fatalf("expected 1 model, got %d", len(models))
+	}
+	if models[0].ContextLength != 1048576 {
+		t.Errorf("expected context length 1048576, got %d", models[0].ContextLength)
+	}
+}
+
+func TestDeepSeekModalitiesParsed(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{
+			"object": "list",
+			"data": [
+				{
+					"id": "deepseek-flash",
+					"name": "DeepSeek-V4.1-Flash",
+					"context_window": 1048576,
+					"max_output_tokens": 393216,
+					"input_modalities": ["text", "image"],
+					"output_modalities": ["text"]
+				}
+			]
+		}`))
+	}))
+	defer server.Close()
+
+	c := NewDeepSeekClient(server.URL, "test-key", "deepseek-chat")
+	models, err := c.ListModels(context.Background())
+	if err != nil {
+		t.Fatalf("ListModels failed: %v", err)
+	}
+	if len(models) != 1 {
+		t.Fatalf("expected 1 model, got %d", len(models))
+	}
+	if !containsFold(models[0].Modalities, "text") {
+		t.Errorf("expected text modality, got %v", models[0].Modalities)
+	}
+	if !containsFold(models[0].Modalities, "image") {
+		t.Errorf("expected image modality, got %v", models[0].Modalities)
+	}
+}

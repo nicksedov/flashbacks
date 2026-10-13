@@ -25,11 +25,14 @@ type ImageEditor interface {
 
 // ModelInfo represents information about an available LLM model
 type ModelInfo struct {
-	ID            string   `json:"id"`
-	Name          string   `json:"name"`
-	Size          int64    `json:"size,omitempty"`
-	ContextLength int      `json:"contextLength,omitempty"` // 0 = unknown
-	Capabilities  []string `json:"capabilities,omitempty"`  // e.g. ["chat","tool_calling","vision","embedding"]
+	ID                 string   `json:"id"`
+	Name               string   `json:"name"`
+	Size               int64    `json:"size,omitempty"`
+	ContextLength      int      `json:"contextLength,omitempty"`      // 0 = unknown
+	Capabilities       []string `json:"capabilities,omitempty"`       // e.g. ["chat","tool_calling","vision","embedding","image_edit"]
+	Modalities         []string `json:"modalities,omitempty"`         // e.g. ["text","image"]; empty = unknown
+	InputPricePerMTok  float64  `json:"inputPricePerMTok,omitempty"`  // USD per 1M tokens; 0 = unknown
+	OutputPricePerMTok float64  `json:"outputPricePerMTok,omitempty"` // USD per 1M tokens; 0 = unknown
 }
 
 // Provider type enumeration

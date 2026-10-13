@@ -2144,7 +2144,15 @@ export interface components {
         LlmModelDTO: {
             id?: string;
             name?: string;
-            size?: string;
+            /** Format: int64 */
+            size?: number;
+            contextLength?: number;
+            capabilities?: string[];
+            modalities?: string[];
+            /** Format: double */
+            inputPricePerMTok?: number;
+            /** Format: double */
+            outputPricePerMTok?: number;
         };
         ProbeEmbeddingDimensionRequest: {
             providerAlias: string;

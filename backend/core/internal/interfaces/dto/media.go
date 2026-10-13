@@ -647,11 +647,14 @@ type TagScanStatusResponse struct {
 
 // LlmModelDTO represents an available LLM model
 type LlmModelDTO struct {
-	ID            string   `json:"id"`
-	Name          string   `json:"name"`
-	Size          int64    `json:"size,omitempty"`
-	ContextLength int      `json:"contextLength,omitempty"`
-	Capabilities  []string `json:"capabilities,omitempty"`
+	ID                 string   `json:"id"`
+	Name               string   `json:"name"`
+	Size               int64    `json:"size,omitempty"`
+	ContextLength      int      `json:"contextLength,omitempty"`
+	Capabilities       []string `json:"capabilities,omitempty"`
+	Modalities         []string `json:"modalities,omitempty"`
+	InputPricePerMTok  float64  `json:"inputPricePerMTok,omitempty"`
+	OutputPricePerMTok float64  `json:"outputPricePerMTok,omitempty"`
 }
 
 // LlmModelsResponse for GET /api/llm/models

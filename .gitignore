@@ -160,3 +160,9 @@ dataset/**/temp/
 .run/
 # Locally bootstrapped tools (e.g. exiftool)
 .tools/
+
+# ===========================
+# Provider API reference scratch
+# ===========================
+# Captured provider model-catalog responses and request scripts
+models/

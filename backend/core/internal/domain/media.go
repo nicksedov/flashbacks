@@ -204,18 +204,21 @@ type LlmProvider struct {
 // LlmProviderModel stores a single model per provider row.
 // Replaces the legacy JSON-blob model cache with normalized relational storage.
 type LlmProviderModel struct {
-	ID            uint      `gorm:"primaryKey" json:"id"`
-	LlmProviderID uint      `gorm:"not null;index" json:"llmProviderId"`
-	ModelID       string    `gorm:"not null" json:"modelId"`        // API model identifier (e.g. "deepseek-v4-flash")
-	ModelName     string    `gorm:"not null" json:"modelName"`      // Display name
-	Size          int64     `gorm:"default:0" json:"size"`          // Model file size in bytes (0 = unknown)
-	ContextLength int       `gorm:"default:0" json:"contextLength"` // Context window in tokens (0 = unknown)
-	CreatedAt     time.Time `json:"createdAt"`
-	UpdatedAt     time.Time `json:"updatedAt"`
+	ID                 uint      `gorm:"primaryKey" json:"id"`
+	LlmProviderID      uint      `gorm:"not null;index" json:"llmProviderId"`
+	ModelID            string    `gorm:"not null" json:"modelId"`             // API model identifier (e.g. "deepseek-v4-flash")
+	ModelName          string    `gorm:"not null" json:"modelName"`           // Display name
+	Size               int64     `gorm:"default:0" json:"size"`               // Model file size in bytes (0 = unknown)
+	ContextLength      int       `gorm:"default:0" json:"contextLength"`      // Context window in tokens (0 = unknown)
+	InputPricePerMTok  float64   `gorm:"default:0" json:"inputPricePerMTok"`  // USD per 1M input tokens (0 = unknown)
+	OutputPricePerMTok float64   `gorm:"default:0" json:"outputPricePerMTok"` // USD per 1M output tokens (0 = unknown)
+	CreatedAt          time.Time `json:"createdAt"`
+	UpdatedAt          time.Time `json:"updatedAt"`
 
 	// GORM relations
 	Provider     LlmProvider          `gorm:"foreignKey:LlmProviderID;constraint:OnDelete:CASCADE" json:"-"`
 	Capabilities []LlmModelCapability `gorm:"foreignKey:ModelID;constraint:OnDelete:CASCADE" json:"-"`
+	Modalities   []LlmModelModality   `gorm:"foreignKey:ModelID;constraint:OnDelete:CASCADE" json:"-"`
 }
 
 // TableName overrides the default GORM table name.
@@ -223,7 +226,7 @@ func (LlmProviderModel) TableName() string {
 	return "llm_provider_models"
 }
 
-// LlmModelCapability stores a capability for a model (e.g. "chat", "tool_calling", "vision", "embedding").
+// LlmModelCapability stores a capability for a model (e.g. "chat", "tool_calling", "vision", "embedding", "image_edit").
 type LlmModelCapability struct {
 	ID         uint   `gorm:"primaryKey" json:"id"`
 	ModelID    uint   `gorm:"not null;index" json:"modelId"`
@@ -233,6 +236,18 @@ type LlmModelCapability struct {
 // TableName overrides the default GORM table name.
 func (LlmModelCapability) TableName() string {
 	return "llm_model_capabilities"
+}
+
+// LlmModelModality stores an input or output modality for a model (e.g. "text", "image").
+type LlmModelModality struct {
+	ID       uint   `gorm:"primaryKey" json:"id"`
+	ModelID  uint   `gorm:"not null;index" json:"modelId"`
+	Modality string `gorm:"size:50;not null" json:"modality"`
+}
+
+// TableName overrides the default GORM table name.
+func (LlmModelModality) TableName() string {
+	return "llm_model_modalities"
 }
 
 // InstrumentType defines the type of an LLM instrument.

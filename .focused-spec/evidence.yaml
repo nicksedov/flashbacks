@@ -108,3 +108,42 @@ scopes:
     design-system.mobile-lightbox-info-popup-contained:
       evidence:
         - vitest::webapp/src/components/gallery/lightbox/LightboxDialog.test.tsx::LightboxDialog > opens the info popup inside the lightbox on mobile
+    llm-model-metadata.metadata-exposed:
+      evidence:
+        - go::./internal/interfaces/dto::TestLlmModelDTOMetadataFields
+    llm-model-metadata.ollama-capabilities-normalized:
+      evidence:
+        - go::./internal/infrastructure/llm::TestOllamaCapabilitiesNormalized
+    llm-model-metadata.ollama-vision-modality:
+      evidence:
+        - go::./internal/infrastructure/llm::TestOllamaVisionModality
+    llm-model-metadata.deepseek-context-parsed:
+      evidence:
+        - go::./internal/infrastructure/llm::TestDeepSeekContextParsed
+    llm-model-metadata.deepseek-modalities-parsed:
+      evidence:
+        - go::./internal/infrastructure/llm::TestDeepSeekModalitiesParsed
+    llm-model-metadata.alibaba-pricing-parsed:
+      evidence:
+        - go::./internal/infrastructure/llm::TestAlibabaPricingParsed
+    llm-model-metadata.alibaba-modalities-parsed:
+      evidence:
+        - go::./internal/infrastructure/llm::TestAlibabaModalitiesParsed
+    llm-model-metadata.model-details-window:
+      evidence:
+        - vitest::webapp/src/components/settings/ModelDetailsDialog.test.tsx::ModelDetailsDialog > shows context length, modalities, capabilities and pricing
+    llm-settings.chat-filter:
+      evidence:
+        - vitest::webapp/src/lib/llm-model-filter.test.ts::filterModelsForInstrument > chat returns only chat-capable models
+    llm-settings.vl-filter:
+      evidence:
+        - vitest::webapp/src/lib/llm-model-filter.test.ts::filterModelsForInstrument > vl returns only vision-capable models
+    llm-settings.ocr-filter:
+      evidence:
+        - vitest::webapp/src/lib/llm-model-filter.test.ts::filterModelsForInstrument > ocr returns only vision-capable models
+    llm-settings.image-edit-filter:
+      evidence:
+        - vitest::webapp/src/lib/llm-model-filter.test.ts::filterModelsForInstrument > image_edit returns only image-edit-capable models
+    llm-settings.embedding-filter:
+      evidence:
+        - vitest::webapp/src/lib/llm-model-filter.test.ts::filterModelsForInstrument > embedding returns only embedding-capable models

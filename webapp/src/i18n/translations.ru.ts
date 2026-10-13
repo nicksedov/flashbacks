@@ -779,6 +779,13 @@ export const translationsRu = {
   "llm_providers.cannotDeleteInUse": "Нельзя удалить провайдера, используемого для: {usages}. Сначала измените настройку во вкладке Инструменты анализа.",
   "llm_providers.cannotDeleteInUseTooltip": "Провайдер используется и не может быть удалён",
   "llm_providers.manageInProvidersTab": "Управление в LLM провайдерах",
+  "llm_providers.viewDetails": "Показать сведения о модели",
+  "llm_providers.noCompatibleModels": "Нет моделей, совместимых с этим инструментом. Используйте ручной ввод ниже.",
+  "llm_model_details.contextLength": "Размер контекста",
+  "llm_model_details.modalities": "Модальности",
+  "llm_model_details.capabilities": "Возможности",
+  "llm_model_details.inputPrice": "Цена ввода (за 1M токенов)",
+  "llm_model_details.outputPrice": "Цена вывода (за 1M токенов)",
 
   // Чат / Агент
   "chat.title": "ИИ-ассистент",

@@ -61,7 +61,10 @@ func normalizeCapabilities(raw []string) []string {
 			out = appendUnique(out, "vision")
 		case "embedding", "embeddings":
 			out = appendUnique(out, "embedding")
-		case "image_edit", "image-edit":
+		case "image_edit", "image-edit", "image_generation", "image-generation", "ig":
+			// Alibaba ModelStudio reports image-generation models with the "IG"
+			// capability code. Qwen-Image models unify generation and editing, so
+			// IG is treated as image-edit capable for instrument filtering.
 			out = appendUnique(out, "image_edit")
 		}
 	}

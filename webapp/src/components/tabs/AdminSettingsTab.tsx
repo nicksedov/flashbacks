@@ -29,7 +29,7 @@ export function AdminSettingsTab() {
 
       <div>
         <Tabs variant="underline" value={activeTab} onValueChange={(v) => setActiveTab(v as AdminTab)}>
-          <TabsList>
+          <TabsList className="flex-wrap">
             {TABS.map(({ id, labelKey, icon: Icon }) => (
               <TabsTrigger key={id} value={id}>
                 <Icon className="h-3.5 w-3.5" />

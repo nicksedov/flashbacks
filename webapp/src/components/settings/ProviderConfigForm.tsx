@@ -79,7 +79,7 @@ export function ProviderConfigForm({
       <div className="space-y-2">
         <Label htmlFor={`${namePrefix}-alias`}>{t("llm_providers.alias")}</Label>
         {isEditingAlias ? (
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Input
               id={`${namePrefix}-alias`}
               value={editingAlias}

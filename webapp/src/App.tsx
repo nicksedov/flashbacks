@@ -142,7 +142,7 @@ export default function App() {
         <div className="flex flex-1 flex-col overflow-hidden">
           <Header onTabChange={handleTabChange} onMobileMenuToggle={handleMobileMenuToggle} />
 
-        <main className="flex-1 overflow-auto px-8 py-6">
+        <main className="flex-1 overflow-auto px-2 py-4 sm:px-8 sm:py-6">
           <div className="mx-auto max-w-7xl">
             <Tabs value={activeTab} onValueChange={(v) => handleTabChange(v)}>
               <TabsContent value="settings">

@@ -201,11 +201,8 @@ export function GalleryAllImagesView({ onImageClick, onImageDownload, onImageDel
             isLoading={!initialized}
           />
         </div>
-        <div className="md:hidden">
-          <InfoPopover text={countText} />
-        </div>
 
-        {/* Right side: search and sort (stacks vertically below md) */}
+        {/* Right side: search, info and sort (stacks vertically below md) */}
         <div className="flex w-full items-center gap-2 md:w-auto">
           {/* Search input */}
           <div className="relative min-w-0 flex-1 md:flex-none">
@@ -230,6 +227,11 @@ export function GalleryAllImagesView({ onImageClick, onImageDownload, onImageDel
                 <X className="h-3 w-3 text-muted-foreground" />
               </Button>
             )}
+          </div>
+
+          {/* Info popover: mobile-only, placed before the sort control in the same row */}
+          <div className="md:hidden">
+            <InfoPopover text={countText} />
           </div>
 
           {/* Sort button: icon-only on mobile */}

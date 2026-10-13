@@ -297,7 +297,7 @@ export function GalleryCalendarView({ onImageClick, onImageDownload, onImageDele
       )}
 
       {/* Header with image count and sort toggle (stacks vertically below md) */}
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+      <div className="flex items-center justify-between gap-3">
         {/* Count: long label on desktop, icon + auto-hiding popup on mobile */}
         <div className="hidden items-center gap-2 md:flex">
           <CalendarIcon className="h-5 w-5 text-muted-foreground" />
@@ -307,25 +307,28 @@ export function GalleryCalendarView({ onImageClick, onImageDownload, onImageDele
             <span className="text-sm text-muted-foreground">{countText}</span>
           )}
         </div>
-        <div className="md:hidden">
-          <InfoPopover text={countText} />
-        </div>
 
-        <Button
-          type="button"
-          variant="ghost"
-          onClick={handleSortToggle}
-          className="gap-2 px-3 py-2 text-muted-foreground hover:text-accent-foreground"
-          title={sortLabel}
-          aria-label={sortLabel}
-        >
-          {calendar.sortOrder === "newest" ? (
-            <ArrowDown className="h-4 w-4" />
-          ) : (
-            <ArrowUp className="h-4 w-4" />
-          )}
-          <span className="hidden md:inline">{sortLabel}</span>
-        </Button>
+        {/* Mobile: info + sort in one row; desktop: sort alone, aligned right */}
+        <div className="ml-auto flex items-center gap-2">
+          <div className="md:hidden">
+            <InfoPopover text={countText} />
+          </div>
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={handleSortToggle}
+            className="gap-2 px-3 py-2 text-muted-foreground hover:text-accent-foreground"
+            title={sortLabel}
+            aria-label={sortLabel}
+          >
+            {calendar.sortOrder === "newest" ? (
+              <ArrowDown className="h-4 w-4" />
+            ) : (
+              <ArrowUp className="h-4 w-4" />
+            )}
+            <span className="hidden md:inline">{sortLabel}</span>
+          </Button>
+        </div>
       </div>
 
       {/* Horizontal Calendar Widget */}

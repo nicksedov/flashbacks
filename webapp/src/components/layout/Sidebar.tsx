@@ -393,7 +393,7 @@ export function Sidebar({
       {/* Mobile backdrop */}
       {mobileOpen && (
         <div
-          className="sidebar-backdrop fixed inset-0 z-40 md:hidden"
+          className="sidebar-backdrop fixed inset-0 z-[1050] md:hidden"
           onClick={onMobileClose}
           aria-hidden="true"
         />
@@ -402,11 +402,13 @@ export function Sidebar({
       {/* Sidebar */}
       <aside
         className={cn(
-          "sidebar-transition sticky top-0 flex h-screen flex-shrink-0 flex-col z-50",
+          "sidebar-transition sticky top-0 flex h-screen flex-shrink-0 flex-col",
           // Desktop width
           collapsed ? "hidden md:flex md:w-16" : "hidden md:flex md:w-64",
-          // Mobile: overlay
-          mobileOpen ? "fixed inset-y-0 left-0 flex w-64" : ""
+          // Mobile: overlay drawer. It must stack above Leaflet map panes/controls
+          // (z-index up to 1000) so the map does not cover the expanded panel.
+          // Desktop keeps z-50 so dialogs (also z-50) stay above the sidebar.
+          mobileOpen ? "fixed inset-y-0 left-0 z-[1100] flex w-64" : "z-50"
         )}
         style={{ backgroundColor: 'var(--color-sidebar)' }}
       >

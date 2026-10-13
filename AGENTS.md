@@ -111,6 +111,6 @@ humans; they are not rule sources.
 |---|---|
 | **filesystem** | Read, write, edit, move, and search project files |
 | **github** | Manage repos, branches, PRs, issues, commits |
+| **memory** | Persist knowledge across sessions in a knowledge graph |
 | **postgres** | Run read-only SQL queries against the database |
-| **sequentialthinking** | Break down complex multi-step problems |
 | **context7** | Up-to-date version-specific docs for external libraries |

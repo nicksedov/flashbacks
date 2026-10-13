@@ -78,12 +78,15 @@ func TestHandleGetTrash_GroupingAndOrder(t *testing.T) {
 	svc, db, cleanup := newTrashTestServer(t, trashDir)
 	defer cleanup()
 
-	// Three items: two on the same (newest) day, one on an older day.
+	// Three items: two on the same (newest) day, one on an older day. Anchor to
+	// midday of the current local day so the two "same day" timestamps cannot
+	// straddle midnight when the test runs between 00:00 and 01:59 local time.
 	now := time.Now()
-	older := now.AddDate(0, 0, -2)
-	itemA := makeTrashItem(t, db, "a.jpg", filepath.ToSlash(filepath.Join(trashDir, "a.jpg")), "/gallery/a.jpg", 100, now.Add(-time.Hour))
-	itemB := makeTrashItem(t, db, "b.jpg", filepath.ToSlash(filepath.Join(trashDir, "b.jpg")), "/gallery/b.jpg", 200, now.Add(-2*time.Hour))
-	itemC := makeTrashItem(t, db, "c.jpg", filepath.ToSlash(filepath.Join(trashDir, "c.jpg")), "/gallery/c.jpg", 300, older)
+	newestDay := time.Date(now.Year(), now.Month(), now.Day(), 12, 0, 0, 0, now.Location())
+	olderDay := newestDay.AddDate(0, 0, -2)
+	itemA := makeTrashItem(t, db, "a.jpg", filepath.ToSlash(filepath.Join(trashDir, "a.jpg")), "/gallery/a.jpg", 100, newestDay.Add(-time.Hour))
+	itemB := makeTrashItem(t, db, "b.jpg", filepath.ToSlash(filepath.Join(trashDir, "b.jpg")), "/gallery/b.jpg", 200, newestDay.Add(-2*time.Hour))
+	itemC := makeTrashItem(t, db, "c.jpg", filepath.ToSlash(filepath.Join(trashDir, "c.jpg")), "/gallery/c.jpg", 300, olderDay)
 
 	// Create the files on disk so reconciliation keeps them.
 	for _, p := range []string{itemA.TrashPath, itemB.TrashPath, itemC.TrashPath} {

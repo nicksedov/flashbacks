@@ -4,6 +4,24 @@
 > **Architecture:** Microservices (webapp, core, exif, ocr)
 > **See:** [README.md](README.md) for project overview
 
+## Task Mode — SDD or Direct
+
+**The user decides the mode of a task, never the agent.**
+
+Before starting any task that changes files, you MUST ask the user whether it
+should be run through the SDD cycle ([`docs/agent/sdd-workflow.md`](docs/agent/sdd-workflow.md))
+or done directly.
+
+- Do NOT choose the mode yourself, and do NOT start file-changing work before the
+  user answers.
+- Ask per task: a previous answer, the size of the request, or the mode of an
+  earlier task never authorizes skipping the question.
+- A prompt that asks for code, fixes, or a new artifact is still an unanswered
+  mode question — surface it before touching files.
+- SDD mode means the full cycle (branch → propose → apply → sync → archive) under
+  [`docs/agent/sdd-workflow.md`](docs/agent/sdd-workflow.md); direct mode means
+  editing the files in place without a change proposal.
+
 ## Project Structure
 
 ```
@@ -69,6 +87,7 @@ flashbacks/
 - ✅ Cover new Go code with unit-tests
 - ✅ Run tests after every code change
 - ✅ Functional React components only
+- ✅ Ask the user for the task mode (SDD cycle vs. direct) before any file-changing task
 
 ## Local Agent Contexts
 

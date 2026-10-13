@@ -1,5 +1,13 @@
 {
   "dependencies": {
     "openspec": "^0.0.0"
+  },
+  "devDependencies": {
+    "@focused-spec/format-gherkin": "^0.9.1",
+    "@focused-spec/format-markdown": "^0.9.1",
+    "@focused-spec/runner-go": "^0.9.1",
+    "@focused-spec/runner-pytest": "^0.9.1",
+    "@focused-spec/runner-vitest": "^0.9.1",
+    "focused-spec": "^0.9.1"
   }
 }

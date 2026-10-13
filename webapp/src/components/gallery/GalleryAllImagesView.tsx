@@ -13,6 +13,7 @@ import { useTranslation } from "@/i18n"
 import { useIntersectionObserver } from "@/hooks/useIntersectionObserver"
 import { PaginationFooter } from "@/components/ui/pagination-footer"
 import { ViewHeader } from "@/components/ui/view-header"
+import { InfoPopover } from "@/components/ui/info-popover"
 import { useGallerySelection } from "@/providers/useGallerySelection"
 import { BulkMoveDialog } from "@/components/gallery/BulkMoveDialog"
 import { moveFiles } from "@/api/endpoints"
@@ -179,27 +180,39 @@ export function GalleryAllImagesView({ onImageClick, onImageDownload, onImageDel
     }
   }, [selectedCount, registerActions])
 
+  const countText = totalImages === 1
+    ? t("gallery.imageCountOne", { count: totalImages.toLocaleString() })
+    : t("gallery.imageCount", { count: totalImages.toLocaleString() })
+  const sortLabel = sortOrder === "newest"
+    ? t("gallery.sortNewest")
+    : sortOrder === "oldest"
+      ? t("gallery.sortOldest")
+      : t("gallery.sortNone")
+
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-3">
-        <ViewHeader
-          icon={ImageIcon}
-          textKey={totalImages === 1 ? "gallery.imageCountOne" : "gallery.imageCount"}
-          textValues={{ count: totalImages.toLocaleString() }}
-          isLoading={!initialized}
-        />
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        {/* Image count: long label on desktop, icon + auto-hiding popup on mobile */}
+        <div className="hidden md:block">
+          <ViewHeader
+            icon={ImageIcon}
+            textKey={totalImages === 1 ? "gallery.imageCountOne" : "gallery.imageCount"}
+            textValues={{ count: totalImages.toLocaleString() }}
+            isLoading={!initialized}
+          />
+        </div>
 
-        {/* Right side: search and sort */}
-        <div className="flex items-center gap-2">
+        {/* Right side: search, info and sort (stacks vertically below md) */}
+        <div className="flex w-full items-center gap-2 md:w-auto">
           {/* Search input */}
-          <div className="relative">
+          <div className="relative min-w-0 flex-1 md:flex-none">
             <InputWithIcon
               type="text"
               value={searchInput}
               onChange={handleSearchChange}
               placeholder={t("gallery.search.placeholder")}
               leadingIcon={Search}
-              className="h-9 w-70 pr-8"
+              className="h-9 w-full pr-8 sm:w-70"
             />
             {searchInput && (
               <Button
@@ -216,17 +229,19 @@ export function GalleryAllImagesView({ onImageClick, onImageDownload, onImageDel
             )}
           </div>
 
-          {/* Sort button */}
+          {/* Info popover: mobile-only, placed before the sort control in the same row */}
+          <div className="md:hidden">
+            <InfoPopover text={countText} />
+          </div>
+
+          {/* Sort button: icon-only on mobile */}
           <Button
             type="button"
             variant="ghost"
             onClick={handleSortToggle}
             className="gap-2 px-3 py-2 text-muted-foreground hover:text-accent-foreground"
-            title={
-              sortOrder === "newest" ? t("gallery.sortNewest") :
-              sortOrder === "oldest" ? t("gallery.sortOldest") :
-              t("gallery.sortNone")
-            }
+            title={sortLabel}
+            aria-label={sortLabel}
           >
             {sortOrder === "newest" ? (
               <ArrowDown className="h-4 w-4" />
@@ -235,11 +250,7 @@ export function GalleryAllImagesView({ onImageClick, onImageDownload, onImageDel
             ) : (
               <List className="h-4 w-4" />
             )}
-            <span>
-              {sortOrder === "newest" ? t("gallery.sortNewest") :
-               sortOrder === "oldest" ? t("gallery.sortOldest") :
-               t("gallery.sortNone")}
-            </span>
+            <span className="hidden md:inline">{sortLabel}</span>
           </Button>
         </div>
       </div>

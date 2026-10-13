@@ -1,0 +1,17 @@
+scopes:
+  current:
+    design-system.info-label-collapse:
+      evidence:
+        - vitest::webapp/src/components/gallery/GalleryAllImagesView.test.tsx::GalleryAllImagesView > collapses the image count to an info icon on mobile
+    design-system.info-popup-reveal:
+      evidence:
+        - vitest::webapp/src/components/ui/info-popover.test.tsx::InfoPopover > reveals the full text in a popup when activated
+    design-system.info-popup-autohide:
+      evidence:
+        - vitest::webapp/src/components/ui/info-popover.test.tsx::InfoPopover > auto-hides the popup after three seconds
+    design-system.toolbar-stacks-vertically:
+      evidence:
+        - vitest::webapp/src/components/gallery/GalleryAllImagesView.test.tsx::GalleryAllImagesView > stacks the search and sort controls vertically on mobile
+    design-system.icon-first-actions:
+      evidence:
+        - vitest::webapp/src/components/layout/Header.test.tsx::Header > hides the logout text label below md while keeping the icon and accessible name

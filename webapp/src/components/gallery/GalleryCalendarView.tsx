@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import { fetchCalendarMonthInfo, fetchCalendarAllDates } from "@/api/endpoints"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ErrorBanner } from "@/components/ui/error-banner"
+import { Button } from "@/components/ui/button"
+import { InfoPopover } from "@/components/ui/info-popover"
 import { Calendar as CalendarIcon, ArrowDown, ArrowUp, Loader2 } from "lucide-react"
 import { useTranslation } from "@/i18n"
 import type { GalleryImageDTO, CalendarDateGroup, CalendarMonthInfo, TimelineDateMarker } from "@/types"
@@ -269,6 +271,13 @@ export function GalleryCalendarView({ onImageClick, onImageDownload, onImageDele
     }
   }
 
+  const countText = calendar.dateRange.totalWithDate > 0
+    ? calendar.dateRange.totalWithDate === 1
+      ? t("gallery.imageCountOne", { count: calendar.dateRange.totalWithDate.toLocaleString() })
+      : t("gallery.imageCount", { count: calendar.dateRange.totalWithDate.toLocaleString() })
+    : t("gallery.calendar.noDateInfo")
+  const sortLabel = calendar.sortOrder === "newest" ? t("gallery.sortNewest") : t("gallery.sortOldest")
+
   return (
     <div className="space-y-4" style={{ cursor: calendar.isLoading ? "wait" : "auto" }}>
       {/* Global loading overlay */}
@@ -287,36 +296,39 @@ export function GalleryCalendarView({ onImageClick, onImageDownload, onImageDele
         />
       )}
 
-      {/* Header with image count and sort toggle */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
+      {/* Header with image count and sort toggle (stacks vertically below md) */}
+      <div className="flex items-center justify-between gap-3">
+        {/* Count: long label on desktop, icon + auto-hiding popup on mobile */}
+        <div className="hidden items-center gap-2 md:flex">
           <CalendarIcon className="h-5 w-5 text-muted-foreground" />
           {!calendar.initialized ? (
             <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
           ) : (
-            <span className="text-sm text-muted-foreground">
-              {calendar.dateRange.totalWithDate > 0
-                ? calendar.dateRange.totalWithDate === 1
-                  ? t("gallery.imageCountOne", { count: calendar.dateRange.totalWithDate.toLocaleString() })
-                  : t("gallery.imageCount", { count: calendar.dateRange.totalWithDate.toLocaleString() })
-                : t("gallery.calendar.noDateInfo")
-              }
-            </span>
+            <span className="text-sm text-muted-foreground">{countText}</span>
           )}
         </div>
 
-        <button
-          onClick={handleSortToggle}
-          className="inline-flex items-center gap-2 rounded-md bg-transparent px-3 py-2 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-          title={calendar.sortOrder === "newest" ? t("gallery.sortNewest") : t("gallery.sortOldest")}
-        >
-          {calendar.sortOrder === "newest" ? (
-            <ArrowDown className="h-4 w-4" />
-          ) : (
-            <ArrowUp className="h-4 w-4" />
-          )}
-          <span>{calendar.sortOrder === "newest" ? t("gallery.sortNewest") : t("gallery.sortOldest")}</span>
-        </button>
+        {/* Mobile: info + sort in one row; desktop: sort alone, aligned right */}
+        <div className="ml-auto flex items-center gap-2">
+          <div className="md:hidden">
+            <InfoPopover text={countText} />
+          </div>
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={handleSortToggle}
+            className="gap-2 px-3 py-2 text-muted-foreground hover:text-accent-foreground"
+            title={sortLabel}
+            aria-label={sortLabel}
+          >
+            {calendar.sortOrder === "newest" ? (
+              <ArrowDown className="h-4 w-4" />
+            ) : (
+              <ArrowUp className="h-4 w-4" />
+            )}
+            <span className="hidden md:inline">{sortLabel}</span>
+          </Button>
+        </div>
       </div>
 
       {/* Horizontal Calendar Widget */}

@@ -347,9 +347,9 @@ export function SmartSearchTab() {
         </div>
       )}
 
-      {/* Search bar */}
-      <div className="relative flex items-center gap-2">
-        <div className="relative flex-1">
+      {/* Search bar (stacks vertically below sm) */}
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+        <div className="relative w-full sm:flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             value={inputValue}
@@ -366,7 +366,7 @@ export function SmartSearchTab() {
             </button>
           )}
         </div>
-        <div className="flex items-center gap-1.5 shrink-0">
+        <div className="flex items-center gap-1.5 sm:shrink-0">
           <span className="text-xs text-muted-foreground whitespace-nowrap">{t("smartSearch.limitLabel")}</span>
           <Input
             type="number"

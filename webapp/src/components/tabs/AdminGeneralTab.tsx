@@ -377,13 +377,13 @@ export function AdminGeneralTab() {
         <CardContent className="space-y-4">
           <ScanProgressBanner status={status} />
 
-          <div className="flex items-center justify-between gap-2">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <h3 className="text-sm font-medium text-muted-foreground">
               {folders.length === 1
                 ? t("settings.folderCountOne", { count: folders.length })
                 : t("settings.folderCount", { count: folders.length })}
             </h3>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <Button
                 variant="outline"
                 size="sm"
@@ -572,13 +572,13 @@ export function AdminGeneralTab() {
         <CardContent className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="trash-dir-input">{t("trash.dirLabel")}</Label>
-            <div className="flex gap-2">
+            <div className="flex flex-col gap-2 sm:flex-row">
               <Input
                 id="trash-dir-input"
                 placeholder={t("trash.dirPlaceholder")}
                 value={trashInput}
                 onChange={(e) => setTrashInput(e.target.value)}
-                className="flex-1"
+                className="w-full min-w-0 flex-1"
               />
               <Button
                 onClick={handleSaveTrashDir}
@@ -625,13 +625,13 @@ export function AdminGeneralTab() {
         <CardContent className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="exif-backup-dir-input">{t("exifBackup.dirLabel")}</Label>
-            <div className="flex gap-2">
+            <div className="flex flex-col gap-2 sm:flex-row">
               <Input
                 id="exif-backup-dir-input"
                 placeholder={t("exifBackup.dirPlaceholder")}
                 value={exifBackupInput}
                 onChange={(e) => setExifBackupInput(e.target.value)}
-                className="flex-1"
+                className="w-full min-w-0 flex-1"
               />
               <Button
                 onClick={handleSaveExifBackupDir}
@@ -712,13 +712,13 @@ export function AdminGeneralTab() {
             <Label htmlFor="thumbnail-cache-path">
               {t("adminPanel.thumbnailCache.pathLabel")}
             </Label>
-            <div className="flex gap-2">
+            <div className="flex flex-col gap-2 sm:flex-row">
               <Input
                 id="thumbnail-cache-path"
                 placeholder={t("adminPanel.thumbnailCache.pathPlaceholder")}
                 value={thumbnailCachePath}
                 onChange={(e) => setThumbnailCachePath(e.target.value)}
-                className="flex-1"
+                className="w-full min-w-0 flex-1"
               />
               <Button
                 onClick={handleSaveThumbnailCachePath}

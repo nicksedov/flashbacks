@@ -8,6 +8,7 @@
     "@focused-spec/runner-go": "^0.9.1",
     "@focused-spec/runner-pytest": "^0.9.1",
     "@focused-spec/runner-vitest": "^0.9.1",
+    "@types/node": "^26.6.5",
     "focused-spec": "^0.9.1",
     "jsdom": "^30.1.2",
     "vitest": "^4.1.11"

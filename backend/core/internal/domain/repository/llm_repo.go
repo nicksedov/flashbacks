@@ -84,6 +84,7 @@ func (r *gormLlmRepo) GetModelsByProviderID(providerID uint) ([]domain.LlmProvid
 	var models []domain.LlmProviderModel
 	err := r.db.Where("llm_provider_id = ?", providerID).
 		Preload("Capabilities").
+		Preload("Modalities").
 		Order("model_name ASC").
 		Find(&models).Error
 	return models, err

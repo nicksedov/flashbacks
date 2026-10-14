@@ -790,8 +790,11 @@ func (c *AlibabaClient) ListModels(ctx context.Context) ([]ModelInfo, error) {
 				if len(details.Capabilities) > 0 {
 					models[idx].Capabilities = details.Capabilities
 				}
-				if len(details.Modalities) > 0 {
-					models[idx].Modalities = details.Modalities
+				if len(details.InputModalities) > 0 {
+					models[idx].InputModalities = details.InputModalities
+				}
+				if len(details.OutputModalities) > 0 {
+					models[idx].OutputModalities = details.OutputModalities
 				}
 				if details.InputPricePerMTok > 0 {
 					models[idx].InputPricePerMTok = details.InputPricePerMTok
@@ -837,11 +840,12 @@ func alibabaEnrichedModelInfo(modelID, name string) *ModelInfo {
 	caps := inferAlibabaCapabilities(modelID)
 	input, output := inferModalities(caps)
 	info := &ModelInfo{
-		ID:            modelID,
-		Name:          name,
-		ContextLength: inferContextLength(modelID),
-		Capabilities:  caps,
-		Modalities:    mergeModalities(input, output),
+		ID:               modelID,
+		Name:             name,
+		ContextLength:    inferContextLength(modelID),
+		Capabilities:     caps,
+		InputModalities:  input,
+		OutputModalities: output,
 	}
 	if p, ok := lookupModelPricing(modelID); ok {
 		info.InputPricePerMTok = p.InputPerMTok
@@ -910,8 +914,9 @@ func alibabaCatalogModelToInfo(m alibabaCatalogModel) ModelInfo {
 	if m.ModelInfo.ContextWindow != nil && *m.ModelInfo.ContextWindow > 0 {
 		info.ContextLength = *m.ModelInfo.ContextWindow
 	}
-	info.Modalities = mergeModalities(m.InferenceMetadata.RequestModality, m.InferenceMetadata.ResponseModality)
-	info.Capabilities = capabilitiesFromModalities(info.Modalities)
+	info.InputModalities = mergeModalities(m.InferenceMetadata.RequestModality)
+	info.OutputModalities = mergeModalities(m.InferenceMetadata.ResponseModality)
+	info.Capabilities = capabilitiesFromModalities(info.InputModalities)
 	for _, cap := range normalizeCapabilities(m.Capabilities) {
 		info.Capabilities = appendUnique(info.Capabilities, cap)
 	}

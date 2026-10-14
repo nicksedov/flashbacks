@@ -8,10 +8,11 @@ import (
 )
 
 // TestGetModelsByProviderID_PreloadsModalities guards the frontend contract:
-// the model-details dialog renders `modalities`, which is only populated when
-// the repository preloads the association. Without Preload("Modalities") the
-// field is silently dropped for cached models (e.g. Alibaba Qwen), so the UI
-// shows no modality list even though the provider API returned one.
+// the model-details dialog renders input and output modalities separately, which
+// are only populated when the repository preloads the association and each row
+// retains its direction. Without Preload("Modalities") the field is silently
+// dropped for cached models (e.g. Alibaba Qwen), so the UI shows no modality list
+// even though the provider API returned one.
 func TestGetModelsByProviderID_PreloadsModalities(t *testing.T) {
 	db, cleanup := testutil.NewTestDB(t)
 	defer cleanup()
@@ -36,9 +37,10 @@ func TestGetModelsByProviderID_PreloadsModalities(t *testing.T) {
 				{Capability: "vision"},
 			},
 			Modalities: []domain.LlmModelModality{
-				{Modality: "Text"},
-				{Modality: "Image"},
-				{Modality: "Video"},
+				{Modality: "Text", Direction: domain.ModalityDirectionInput},
+				{Modality: "Image", Direction: domain.ModalityDirectionInput},
+				{Modality: "Video", Direction: domain.ModalityDirectionInput},
+				{Modality: "Text", Direction: domain.ModalityDirectionOutput},
 			},
 		},
 	}
@@ -54,21 +56,25 @@ func TestGetModelsByProviderID_PreloadsModalities(t *testing.T) {
 		t.Fatalf("expected 1 model, got %d", len(got))
 	}
 
-	modalities := make([]string, len(got[0].Modalities))
-	for i, m := range got[0].Modalities {
-		modalities[i] = m.Modality
+	inputMods := map[string]bool{}
+	outputMods := map[string]bool{}
+	for _, m := range got[0].Modalities {
+		switch m.Direction {
+		case domain.ModalityDirectionInput:
+			inputMods[m.Modality] = true
+		case domain.ModalityDirectionOutput:
+			outputMods[m.Modality] = true
+		default:
+			t.Errorf("unexpected modality direction %q for %q", m.Direction, m.Modality)
+		}
 	}
 	for _, want := range []string{"Text", "Image", "Video"} {
-		found := false
-		for _, m := range modalities {
-			if m == want {
-				found = true
-				break
-			}
+		if !inputMods[want] {
+			t.Errorf("expected input modality %q to be preloaded, got %v", want, inputMods)
 		}
-		if !found {
-			t.Errorf("expected modality %q to be preloaded, got %v", want, modalities)
-		}
+	}
+	if !outputMods["Text"] {
+		t.Errorf("expected output modality %q to be preloaded, got %v", "Text", outputMods)
 	}
 
 	if len(got[0].Capabilities) == 0 {

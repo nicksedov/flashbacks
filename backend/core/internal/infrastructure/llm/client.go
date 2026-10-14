@@ -30,7 +30,8 @@ type ModelInfo struct {
 	Size               int64    `json:"size,omitempty"`
 	ContextLength      int      `json:"contextLength,omitempty"`      // 0 = unknown
 	Capabilities       []string `json:"capabilities,omitempty"`       // e.g. ["chat","tool_calling","vision","embedding","image_edit"]
-	Modalities         []string `json:"modalities,omitempty"`         // e.g. ["text","image"]; empty = unknown
+	InputModalities    []string `json:"inputModalities,omitempty"`    // e.g. ["text","image"]; empty = unknown
+	OutputModalities   []string `json:"outputModalities,omitempty"`   // e.g. ["text"]; empty = unknown
 	InputPricePerMTok  float64  `json:"inputPricePerMTok,omitempty"`  // USD per 1M tokens; 0 = unknown
 	OutputPricePerMTok float64  `json:"outputPricePerMTok,omitempty"` // USD per 1M tokens; 0 = unknown
 }

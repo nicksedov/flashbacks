@@ -7,8 +7,8 @@ import (
 
 // TestLlmModelDTOMetadataFields verifies that the model DTO serializes the
 // extended metadata fields with their camelCase API keys, so the frontend
-// contract exposes modalities and per-1M-token pricing alongside the existing
-// context length and capabilities.
+// contract exposes input and output modalities and per-1M-token pricing
+// alongside the existing context length and capabilities.
 func TestLlmModelDTOMetadataFields(t *testing.T) {
 	m := LlmModelDTO{
 		ID:                 "deepseek-v4-pro",
@@ -16,7 +16,8 @@ func TestLlmModelDTOMetadataFields(t *testing.T) {
 		Size:               123,
 		ContextLength:      1048576,
 		Capabilities:       []string{"chat", "tool_calling"},
-		Modalities:         []string{"text"},
+		InputModalities:    []string{"text", "image"},
+		OutputModalities:   []string{"text"},
 		InputPricePerMTok:  0.5,
 		OutputPricePerMTok: 1.5,
 	}
@@ -31,9 +32,12 @@ func TestLlmModelDTOMetadataFields(t *testing.T) {
 		t.Fatalf("unmarshal failed: %v", err)
 	}
 
-	for _, key := range []string{"modalities", "inputPricePerMTok", "outputPricePerMTok", "contextLength", "capabilities"} {
+	for _, key := range []string{"inputModalities", "outputModalities", "inputPricePerMTok", "outputPricePerMTok", "contextLength", "capabilities"} {
 		if _, ok := got[key]; !ok {
 			t.Errorf("expected JSON key %q to be present in LlmModelDTO output, got %s", key, string(b))
 		}
+	}
+	if _, ok := got["modalities"]; ok {
+		t.Errorf("merged \"modalities\" key must not be present, got %s", string(b))
 	}
 }

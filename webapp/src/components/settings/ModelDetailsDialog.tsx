@@ -35,15 +35,17 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
 
 /**
  * Presentational dialog that shows the collected metadata of an LLM model:
- * context length, modalities, capabilities, and input/output token pricing.
+ * context length, input/output modalities, capabilities, and token pricing.
  */
 export function ModelDetailsDialog({ model, open, onOpenChange }: ModelDetailsDialogProps) {
   const { t } = useTranslation()
 
   if (!model) return null
 
-  const modalities =
-    model.modalities && model.modalities.length > 0 ? model.modalities.join(", ") : "—"
+  const inputModalities =
+    model.inputModalities && model.inputModalities.length > 0 ? model.inputModalities.join(", ") : "—"
+  const outputModalities =
+    model.outputModalities && model.outputModalities.length > 0 ? model.outputModalities.join(", ") : "—"
   const capabilities = model.capabilities ?? []
 
   return (
@@ -57,7 +59,8 @@ export function ModelDetailsDialog({ model, open, onOpenChange }: ModelDetailsDi
           <Row label={t("llm_model_details.contextLength")}>
             {formatContextLength(model.contextLength)}
           </Row>
-          <Row label={t("llm_model_details.modalities")}>{modalities}</Row>
+          <Row label={t("llm_model_details.inputModalities")}>{inputModalities}</Row>
+          <Row label={t("llm_model_details.outputModalities")}>{outputModalities}</Row>
           <Row label={t("llm_model_details.capabilities")}>
             {capabilities.length > 0 ? (
               <span className="flex flex-wrap justify-end gap-1">

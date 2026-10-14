@@ -225,7 +225,7 @@ func (c *OllamaClient) ListModels(ctx context.Context) ([]ModelInfo, error) {
 			defer wg.Done()
 			sem <- struct{}{}
 			defer func() { <-sem }()
-			ctxLen, caps, mods := c.fetchModelDetails(ctx, models[idx].Name)
+			ctxLen, caps, inputMods, outputMods := c.fetchModelDetails(ctx, models[idx].Name)
 			mu.Lock()
 			if ctxLen > 0 {
 				models[idx].ContextLength = ctxLen
@@ -233,8 +233,11 @@ func (c *OllamaClient) ListModels(ctx context.Context) ([]ModelInfo, error) {
 			if len(caps) > 0 {
 				models[idx].Capabilities = caps
 			}
-			if len(mods) > 0 {
-				models[idx].Modalities = mods
+			if len(inputMods) > 0 {
+				models[idx].InputModalities = inputMods
+			}
+			if len(outputMods) > 0 {
+				models[idx].OutputModalities = outputMods
 			}
 			mu.Unlock()
 		}(i)
@@ -245,8 +248,8 @@ func (c *OllamaClient) ListModels(ctx context.Context) ([]ModelInfo, error) {
 }
 
 // fetchModelDetails calls /api/show to extract context_length, capabilities, and
-// modalities for a model.
-func (c *OllamaClient) fetchModelDetails(ctx context.Context, modelName string) (int, []string, []string) {
+// input/output modalities for a model.
+func (c *OllamaClient) fetchModelDetails(ctx context.Context, modelName string) (int, []string, []string, []string) {
 	// Use a short-lived client with 30s timeout for this call
 	shortClient := newAPIClient(c.baseURL, 30*time.Second, c.headers)
 
@@ -257,7 +260,7 @@ func (c *OllamaClient) fetchModelDetails(ctx context.Context, modelName string) 
 	}
 	err := shortClient.doJSON(ctx, http.MethodPost, "/api/show", map[string]string{"name": modelName}, &showResp, nil)
 	if err != nil {
-		return 0, nil, nil
+		return 0, nil, nil, nil
 	}
 
 	// Extract context_length from model_info map using the architecture key.
@@ -294,7 +297,6 @@ func (c *OllamaClient) fetchModelDetails(ctx context.Context, modelName string) 
 		caps = inferCapabilitiesByID(modelName)
 	}
 	input, output := inferModalities(caps)
-	mods := mergeModalities(input, output)
 
-	return ctxLen, caps, mods
+	return ctxLen, caps, input, output
 }

@@ -82,12 +82,12 @@ func inferModalities(caps []string) (input []string, output []string) {
 	return input, output
 }
 
-// capabilitiesFromModalities builds standardized capabilities from modality
-// lists: an image input implies vision, and all other models are treated as
-// chat + tool_calling.
-func capabilitiesFromModalities(modalities []string) []string {
+// capabilitiesFromModalities builds standardized capabilities from a model's
+// input modality list: an image input implies vision, and all other models are
+// treated as chat + tool_calling.
+func capabilitiesFromModalities(inputModalities []string) []string {
 	caps := []string{"chat", "tool_calling"}
-	if containsFold(modalities, "image") {
+	if containsFold(inputModalities, "image") {
 		caps = appendUnique(caps, "vision")
 	}
 	return caps

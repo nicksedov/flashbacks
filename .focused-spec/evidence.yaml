@@ -153,3 +153,24 @@ scopes:
     llm-model-metadata.ollama-chat-vision-not-embedding:
       evidence:
         - go::./internal/infrastructure/llm::TestOllamaChatVisionModelIsNotEmbeddingCapable
+    gallery-browsing.scan-indexes-images:
+      evidence:
+        - vitest::tests/webapp/integration/gallery-browsing.test.ts::gallery browsing (core service integration) > lists images indexed from a scanned folder
+    gallery-browsing.gallery-paginated:
+      evidence:
+        - vitest::tests/webapp/integration/gallery-browsing.test.ts::gallery browsing (core service integration) > paginates the gallery listing
+    duplicate-detection.groups-identical-content:
+      evidence:
+        - vitest::tests/webapp/integration/duplicate-detection.test.ts::duplicate detection (core service integration) > groups files that share identical content
+    duplicate-detection.no-duplicates-empty:
+      evidence:
+        - vitest::tests/webapp/integration/duplicate-detection.test.ts::duplicate detection (core service integration) > returns an empty result when no two files are identical
+    duplicate-detection.resolve-removes-group:
+      evidence:
+        - vitest::tests/webapp/integration/duplicate-detection.test.ts::duplicate detection (core service integration) > removes the group once one duplicate is deleted
+    file-move.move-to-target-dir:
+      evidence:
+        - vitest::tests/webapp/integration/file-move.test.ts::file move (core service integration) > moves a file into the target directory
+    file-move.move-name-conflict:
+      evidence:
+        - vitest::tests/webapp/integration/file-move.test.ts::file move (core service integration) > resolves a name conflict without overwriting

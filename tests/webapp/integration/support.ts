@@ -176,6 +176,32 @@ export async function resetBootstrapState(config: IntegrationConfig): Promise<vo
   )
 }
 
+/**
+ * Truncates the media-library tables so a suite starts from a clean slate.
+ *
+ * `image_files` is global (not scoped per user) and survives the `users`
+ * truncation performed by `resetBootstrapState`, so rows left by a previous run
+ * would otherwise create phantom duplicates or gallery counts. Tables that do not
+ * exist yet (before the service has created the schema) are skipped.
+ */
+export async function resetLibraryState(config: IntegrationConfig): Promise<void> {
+  await withClient(
+    config,
+    { user: config.dbUser, password: config.dbPassword },
+    async (client) => {
+      for (const table of ["image_files", "gallery_folders", "trash_items"]) {
+        const { rows } = await client.query<{ present: boolean }>(
+          "SELECT to_regclass($1) IS NOT NULL AS present",
+          [`public.${table}`],
+        )
+        if (rows[0]?.present) {
+          await client.query(`TRUNCATE TABLE ${table} RESTART IDENTITY CASCADE`)
+        }
+      }
+    },
+  )
+}
+
 /** Compiles the `core` service binary. Throws with the build output on failure. */
 export function buildCoreService(binaryPath: string): void {
   try {
@@ -380,6 +406,79 @@ export interface AddFolderResult {
   scanStarted: boolean
 }
 
+/** Subset of gallery-image DTO fields the integration tests assert on. */
+export interface GalleryImageSummary {
+  id: number
+  path: string
+  fileName: string
+  dirPath: string
+  size: number
+  modTime: string
+}
+
+export interface GalleryImagesResult {
+  images: GalleryImageSummary[]
+  totalImages: number
+  currentPage: number
+  pageSize: number
+  totalPages: number
+  hasNextPage: boolean
+}
+
+export interface DuplicateFileSummary {
+  id: number
+  path: string
+  fileName: string
+  dirPath: string
+  modTime: string
+}
+
+export interface DuplicateGroupSummary {
+  index: number
+  hash: string
+  size: number
+  files: DuplicateFileSummary[]
+}
+
+export interface DuplicatesResult {
+  groups: DuplicateGroupSummary[]
+  totalFiles: number
+  pageFiles: number
+  totalGroups: number
+  currentPage: number
+  pageSize: number
+  totalPages: number
+  hasNextPage: boolean
+}
+
+/** Subset of application-settings DTO fields the integration tests assert on. */
+export interface AppSettings {
+  trashDir: string
+  exifBackupDir: string
+  syncDays: string
+  dailySyncHour: number
+  dailySyncMinute: number
+  syncTimezoneOffset: number
+}
+
+export interface ScanStatus {
+  scanning: boolean
+  progress: string
+  filesProcessed: number
+}
+
+export interface DeleteFilesResult {
+  success: number
+  failed: number
+  failedFiles?: string[]
+}
+
+export interface MoveFilesResult {
+  success: number
+  failed: number
+  failedFiles?: string[]
+}
+
 /** Thin wrapper around the core HTTP API used by the integration tests. */
 export interface CoreClient {
   getStatus(): Promise<Response>
@@ -394,6 +493,15 @@ export interface CoreClient {
   listFolders(token: string): Promise<Response>
   addFolder(token: string, path: string): Promise<Response>
   removeFolder(token: string, id: number): Promise<Response>
+  startScan(token: string): Promise<Response>
+  startFastScan(token: string): Promise<Response>
+  getScanStatus(token: string): Promise<Response>
+  getSettings(token: string): Promise<Response>
+  updateSettings(token: string, patch: Record<string, unknown>): Promise<Response>
+  getGalleryImages(token: string, query?: string): Promise<Response>
+  getDuplicates(token: string, query?: string): Promise<Response>
+  deleteFiles(token: string, filePaths: string[], trashDir: string): Promise<Response>
+  moveFiles(token: string, filePaths: string[], targetDir: string): Promise<Response>
 }
 
 export function createCoreClient(baseUrl: string): CoreClient {
@@ -451,5 +559,91 @@ export function createCoreClient(baseUrl: string): CoreClient {
       }),
     removeFolder: (token, id) =>
       fetch(`${baseUrl}/api/folders/${id}`, { method: "DELETE", headers: withAuth(token) }),
+    startScan: (token) =>
+      fetch(`${baseUrl}/api/scan`, { method: "POST", headers: withAuth(token) }),
+    startFastScan: (token) =>
+      fetch(`${baseUrl}/api/fast-scan`, { method: "POST", headers: withAuth(token) }),
+    getScanStatus: (token) => fetch(`${baseUrl}/api/status`, { headers: withAuth(token) }),
+    getSettings: (token) => fetch(`${baseUrl}/api/settings`, { headers: withAuth(token) }),
+    updateSettings: (token, patch) =>
+      fetch(`${baseUrl}/api/settings`, {
+        method: "PUT",
+        headers: { ...jsonHeaders, ...withAuth(token) },
+        body: JSON.stringify(patch),
+      }),
+    getGalleryImages: (token, query) =>
+      fetch(`${baseUrl}/api/gallery${query ? `?${query}` : ""}`, { headers: withAuth(token) }),
+    getDuplicates: (token, query) =>
+      fetch(`${baseUrl}/api/duplicates${query ? `?${query}` : ""}`, { headers: withAuth(token) }),
+    deleteFiles: (token, filePaths, trashDir) =>
+      fetch(`${baseUrl}/api/delete-files`, {
+        method: "POST",
+        headers: { ...jsonHeaders, ...withAuth(token) },
+        body: JSON.stringify({ filePaths, trashDir }),
+      }),
+    moveFiles: (token, filePaths, targetDir) =>
+      fetch(`${baseUrl}/api/move-files`, {
+        method: "POST",
+        headers: { ...jsonHeaders, ...withAuth(token) },
+        body: JSON.stringify({ filePaths, targetDir }),
+      }),
+  }
+}
+
+/**
+ * Polls `probe` until `isDone` reports true or the timeout elapses. Returns the
+ * last observed value either way so callers can assert on the outcome.
+ */
+export async function pollUntil<T>(
+  probe: () => Promise<T>,
+  isDone: (value: T) => boolean,
+  options: { timeoutMs?: number; intervalMs?: number } = {},
+): Promise<T> {
+  const timeoutMs = options.timeoutMs ?? 120_000
+  const intervalMs = options.intervalMs ?? 250
+  const deadline = Date.now() + timeoutMs
+
+  let last = await probe()
+  while (!isDone(last)) {
+    if (Date.now() >= deadline) return last
+    await delay(intervalMs)
+    last = await probe()
+  }
+  return last
+}
+
+/**
+ * Triggers a full gallery scan and resolves once the service stops reporting a
+ * running scan. A concurrent scan (HTTP 409) is accepted — the caller then waits
+ * for the in-flight scan to finish.
+ */
+export async function triggerScanAndWait(
+  client: CoreClient,
+  token: string,
+  timeoutMs = 120_000,
+): Promise<ScanStatus> {
+  const response = await client.startScan(token)
+  if (response.status !== 202 && response.status !== 409) {
+    throw new Error(`unexpected POST /api/scan response: HTTP ${response.status}`)
+  }
+  return pollUntil(
+    async () => (await client.getScanStatus(token)).json() as Promise<ScanStatus>,
+    (status) => status.scanning === false,
+    { timeoutMs },
+  )
+}
+
+/** Removes every configured gallery folder so a suite starts from a clean slate. */
+export async function clearGalleryFolders(client: CoreClient, token: string): Promise<void> {
+  const response = await client.listFolders(token)
+  if (response.status !== 200) {
+    throw new Error(`failed to list gallery folders: HTTP ${response.status}`)
+  }
+  const body = (await response.json()) as GalleryFoldersResult
+  for (const folder of body.folders) {
+    const removed = await client.removeFolder(token, folder.id)
+    if (removed.status !== 200) {
+      throw new Error(`failed to remove gallery folder ${folder.id}: HTTP ${removed.status}`)
+    }
   }
 }

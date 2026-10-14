@@ -19,7 +19,7 @@ evidence:
 runners:
   vitest:
     package: "@focused-spec/runner-vitest"
-    timeoutMs: 180000
+    timeoutMs: 600000
   go:
     package: "@focused-spec/runner-go"
     options:

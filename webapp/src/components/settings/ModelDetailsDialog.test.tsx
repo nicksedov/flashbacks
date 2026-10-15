@@ -12,18 +12,20 @@ const model: LlmModelDTO = {
   name: "Qwen3.8-Max",
   contextLength: 1000000,
   capabilities: ["chat", "tool_calling", "vision"],
-  modalities: ["text", "image"],
+  inputModalities: ["text", "image", "video"],
+  outputModalities: ["text"],
   inputPricePerMTok: 2,
   outputPricePerMTok: 6,
 }
 
 describe("ModelDetailsDialog", () => {
-  it("shows context length, modalities, capabilities and pricing", () => {
+  it("shows context length, input modalities, output modalities, capabilities and pricing", () => {
     render(<ModelDetailsDialog model={model} open onOpenChange={vi.fn()} />)
 
     expect(screen.getByText("Qwen3.8-Max")).toBeTruthy()
     expect(screen.getByText("1.0M")).toBeTruthy()
-    expect(screen.getByText("text, image")).toBeTruthy()
+    expect(screen.getByText("text, image, video")).toBeTruthy()
+    expect(screen.getByText("text")).toBeTruthy()
     expect(screen.getByText("vision")).toBeTruthy()
     expect(screen.getByText("$2.00")).toBeTruthy()
     expect(screen.getByText("$6.00")).toBeTruthy()

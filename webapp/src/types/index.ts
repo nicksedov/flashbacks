@@ -679,7 +679,8 @@ export interface LlmModelDTO {
   size?: number
   contextLength?: number
   capabilities?: string[]
-  modalities?: string[]
+  inputModalities?: string[]
+  outputModalities?: string[]
   inputPricePerMTok?: number
   outputPricePerMTok?: number
 }

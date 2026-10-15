@@ -21,7 +21,7 @@ func TestOllamaCapabilitiesNormalized(t *testing.T) {
 	defer server.Close()
 
 	c := NewOllamaClient(server.URL, "", "gemma4:31b", 3.6)
-	_, caps, _ := c.fetchModelDetails(context.Background(), "gemma4:31b")
+	_, caps, _, _ := c.fetchModelDetails(context.Background(), "gemma4:31b")
 
 	if !containsFold(caps, "chat") {
 		t.Errorf("expected normalized capability %q in %v", "chat", caps)
@@ -48,13 +48,19 @@ func TestOllamaVisionModality(t *testing.T) {
 	defer server.Close()
 
 	c := NewOllamaClient(server.URL, "", "gemma4:31b", 3.6)
-	_, caps, mods := c.fetchModelDetails(context.Background(), "gemma4:31b")
+	_, caps, inputMods, outputMods := c.fetchModelDetails(context.Background(), "gemma4:31b")
 
 	if !containsFold(caps, "vision") {
 		t.Errorf("expected vision capability, got %v", caps)
 	}
-	if !containsFold(mods, "image") {
-		t.Errorf("expected image input modality inferred from vision, got %v", mods)
+	if !containsFold(inputMods, "image") {
+		t.Errorf("expected image input modality inferred from vision, got %v", inputMods)
+	}
+	if !containsFold(outputMods, "text") {
+		t.Errorf("expected text output modality, got %v", outputMods)
+	}
+	if containsFold(outputMods, "image") {
+		t.Errorf("image must not be an output modality, got %v", outputMods)
 	}
 }
 
@@ -76,7 +82,7 @@ func TestOllamaChatVisionModelIsNotEmbeddingCapable(t *testing.T) {
 	defer server.Close()
 
 	c := NewOllamaClient(server.URL, "", "gemma4:31b", 3.6)
-	_, caps, _ := c.fetchModelDetails(context.Background(), "gemma4:31b")
+	_, caps, _, _ := c.fetchModelDetails(context.Background(), "gemma4:31b")
 
 	if containsFold(caps, "embedding") {
 		t.Errorf("chat/vision model must not be embedding capable, got %v", caps)

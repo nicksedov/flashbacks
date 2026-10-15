@@ -2148,7 +2148,8 @@ export interface components {
             size?: number;
             contextLength?: number;
             capabilities?: string[];
-            modalities?: string[];
+            inputModalities?: string[];
+            outputModalities?: string[];
             /** Format: double */
             inputPricePerMTok?: number;
             /** Format: double */

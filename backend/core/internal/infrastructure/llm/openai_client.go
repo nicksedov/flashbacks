@@ -406,8 +406,7 @@ func (c *OpenAIClient) ListModels(ctx context.Context) ([]ModelInfo, error) {
 			Name:         m.ID,
 			Capabilities: inferCapabilitiesByID(m.ID),
 		}
-		input, output := inferModalities(info.Capabilities)
-		info.Modalities = mergeModalities(input, output)
+		info.InputModalities, info.OutputModalities = inferModalities(info.Capabilities)
 		if p, ok := lookupModelPricing(m.ID); ok {
 			info.InputPricePerMTok = p.InputPerMTok
 			info.OutputPricePerMTok = p.OutputPerMTok

@@ -75,11 +75,17 @@ func TestAlibabaModalitiesParsed(t *testing.T) {
 	if len(models) != 1 {
 		t.Fatalf("expected 1 model, got %d", len(models))
 	}
-	if !containsFold(models[0].Modalities, "text") {
-		t.Errorf("expected text modality, got %v", models[0].Modalities)
+	if !containsFold(models[0].InputModalities, "text") {
+		t.Errorf("expected text input modality, got %v", models[0].InputModalities)
 	}
-	if !containsFold(models[0].Modalities, "image") {
-		t.Errorf("expected image modality, got %v", models[0].Modalities)
+	if !containsFold(models[0].InputModalities, "image") {
+		t.Errorf("expected image input modality, got %v", models[0].InputModalities)
+	}
+	if !containsFold(models[0].OutputModalities, "text") {
+		t.Errorf("expected text output modality, got %v", models[0].OutputModalities)
+	}
+	if containsFold(models[0].OutputModalities, "image") {
+		t.Errorf("image must not be an output modality, got %v", models[0].OutputModalities)
 	}
 }
 

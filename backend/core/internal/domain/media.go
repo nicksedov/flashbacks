@@ -238,11 +238,19 @@ func (LlmModelCapability) TableName() string {
 	return "llm_model_capabilities"
 }
 
+// Modality directions attribute a modality row to model input or model output.
+const (
+	ModalityDirectionInput  = "input"
+	ModalityDirectionOutput = "output"
+)
+
 // LlmModelModality stores an input or output modality for a model (e.g. "text", "image").
+// Direction is either ModalityDirectionInput or ModalityDirectionOutput.
 type LlmModelModality struct {
-	ID       uint   `gorm:"primaryKey" json:"id"`
-	ModelID  uint   `gorm:"not null;index" json:"modelId"`
-	Modality string `gorm:"size:50;not null" json:"modality"`
+	ID        uint   `gorm:"primaryKey" json:"id"`
+	ModelID   uint   `gorm:"not null;index" json:"modelId"`
+	Modality  string `gorm:"size:50;not null" json:"modality"`
+	Direction string `gorm:"size:10;not null;default:'input'" json:"direction"`
 }
 
 // TableName overrides the default GORM table name.

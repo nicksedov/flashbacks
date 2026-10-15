@@ -131,7 +131,7 @@ scopes:
         - go::./internal/infrastructure/llm::TestAlibabaModalitiesParsed
     llm-model-metadata.model-details-window:
       evidence:
-        - vitest::webapp/src/components/settings/ModelDetailsDialog.test.tsx::ModelDetailsDialog > shows context length, modalities, capabilities and pricing
+        - vitest::webapp/src/components/settings/ModelDetailsDialog.test.tsx::ModelDetailsDialog > shows context length, input modalities, output modalities, capabilities and pricing
     llm-settings.chat-filter:
       evidence:
         - vitest::webapp/src/lib/llm-model-filter.test.ts::filterModelsForInstrument > chat returns only chat-capable models

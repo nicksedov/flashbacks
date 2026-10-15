@@ -652,7 +652,8 @@ type LlmModelDTO struct {
 	Size               int64    `json:"size,omitempty"`
 	ContextLength      int      `json:"contextLength,omitempty"`
 	Capabilities       []string `json:"capabilities,omitempty"`
-	Modalities         []string `json:"modalities,omitempty"`
+	InputModalities    []string `json:"inputModalities,omitempty"`
+	OutputModalities   []string `json:"outputModalities,omitempty"`
 	InputPricePerMTok  float64  `json:"inputPricePerMTok,omitempty"`
 	OutputPricePerMTok float64  `json:"outputPricePerMTok,omitempty"`
 }

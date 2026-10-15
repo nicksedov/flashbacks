@@ -316,8 +316,7 @@ func (c *DeepSeekClient) ListModels(ctx context.Context) ([]ModelInfo, error) {
 			ContextLength: deepSeekKnownContext(m.ID),
 			Capabilities:  inferCapabilitiesByID(m.ID),
 		}
-		input, output := inferModalities(info.Capabilities)
-		info.Modalities = mergeModalities(input, output)
+		info.InputModalities, info.OutputModalities = inferModalities(info.Capabilities)
 		if p, ok := lookupModelPricing(m.ID); ok {
 			info.InputPricePerMTok = p.InputPerMTok
 			info.OutputPricePerMTok = p.OutputPerMTok
@@ -355,10 +354,11 @@ func (c *DeepSeekClient) listRichModels(ctx context.Context, client *apiClient) 
 			continue
 		}
 		info := ModelInfo{
-			ID:            m.ID,
-			Name:          m.Name,
-			ContextLength: m.ContextWindow,
-			Modalities:    mergeModalities(m.InputModalities, m.OutputModalities),
+			ID:               m.ID,
+			Name:             m.Name,
+			ContextLength:    m.ContextWindow,
+			InputModalities:  mergeModalities(m.InputModalities),
+			OutputModalities: mergeModalities(m.OutputModalities),
 		}
 		if info.Name == "" {
 			info.Name = m.ID
@@ -366,12 +366,11 @@ func (c *DeepSeekClient) listRichModels(ctx context.Context, client *apiClient) 
 		if info.ContextLength == 0 {
 			info.ContextLength = deepSeekKnownContext(m.ID)
 		}
-		if len(info.Modalities) == 0 {
+		if len(info.InputModalities) == 0 && len(info.OutputModalities) == 0 {
 			info.Capabilities = inferCapabilitiesByID(m.ID)
-			input, output := inferModalities(info.Capabilities)
-			info.Modalities = mergeModalities(input, output)
+			info.InputModalities, info.OutputModalities = inferModalities(info.Capabilities)
 		} else {
-			info.Capabilities = capabilitiesFromModalities(info.Modalities)
+			info.Capabilities = capabilitiesFromModalities(info.InputModalities)
 		}
 		if strings.Contains(strings.ToLower(m.ID), "embedding") {
 			info.Capabilities = []string{"embedding"}

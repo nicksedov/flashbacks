@@ -70,9 +70,13 @@ func domainModelsToDTOs(models []domain.LlmProviderModel) []dto.LlmModelDTO {
 		for j, c := range m.Capabilities {
 			caps[j] = c.Capability
 		}
-		mods := make([]string, len(m.Modalities))
-		for j, mod := range m.Modalities {
-			mods[j] = mod.Modality
+		var inputMods, outputMods []string
+		for _, mod := range m.Modalities {
+			if mod.Direction == domain.ModalityDirectionOutput {
+				outputMods = append(outputMods, mod.Modality)
+			} else {
+				inputMods = append(inputMods, mod.Modality)
+			}
 		}
 		dtos[i] = dto.LlmModelDTO{
 			ID:                 m.ModelID,
@@ -80,7 +84,8 @@ func domainModelsToDTOs(models []domain.LlmProviderModel) []dto.LlmModelDTO {
 			Size:               m.Size,
 			ContextLength:      m.ContextLength,
 			Capabilities:       caps,
-			Modalities:         mods,
+			InputModalities:    inputMods,
+			OutputModalities:   outputMods,
 			InputPricePerMTok:  m.InputPricePerMTok,
 			OutputPricePerMTok: m.OutputPricePerMTok,
 		}
@@ -634,7 +639,8 @@ func (s *Server) handleGetLlmModels(c *gin.Context) {
 			Size:               m.Size,
 			ContextLength:      m.ContextLength,
 			Capabilities:       m.Capabilities,
-			Modalities:         m.Modalities,
+			InputModalities:    m.InputModalities,
+			OutputModalities:   m.OutputModalities,
 			InputPricePerMTok:  m.InputPricePerMTok,
 			OutputPricePerMTok: m.OutputPricePerMTok,
 		}
@@ -652,11 +658,17 @@ func (s *Server) handleGetLlmModels(c *gin.Context) {
 				domainModels[i].Capabilities[j] = domain.LlmModelCapability{Capability: cap}
 			}
 		}
-		if len(m.Modalities) > 0 {
-			domainModels[i].Modalities = make([]domain.LlmModelModality, len(m.Modalities))
-			for j, mod := range m.Modalities {
-				domainModels[i].Modalities[j] = domain.LlmModelModality{Modality: mod}
-			}
+		for _, mod := range m.InputModalities {
+			domainModels[i].Modalities = append(domainModels[i].Modalities, domain.LlmModelModality{
+				Modality:  mod,
+				Direction: domain.ModalityDirectionInput,
+			})
+		}
+		for _, mod := range m.OutputModalities {
+			domainModels[i].Modalities = append(domainModels[i].Modalities, domain.LlmModelModality{
+				Modality:  mod,
+				Direction: domain.ModalityDirectionOutput,
+			})
 		}
 	}
 

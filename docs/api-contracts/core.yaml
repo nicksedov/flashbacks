@@ -2978,7 +2978,11 @@ components:
           type: array
           items:
             type: string
-        modalities:
+        inputModalities:
+          type: array
+          items:
+            type: string
+        outputModalities:
           type: array
           items:
             type: string

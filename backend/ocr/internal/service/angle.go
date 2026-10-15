@@ -40,23 +40,10 @@ func cannyEdgeDetection(smoothedGray *image.Gray, lowThreshold, highThreshold fl
 	bounds := smoothedGray.Bounds()
 	w, h := bounds.Dx(), bounds.Dy()
 
-	gx, gy := sobelGradients(smoothedGray)
-	// Gradient magnitude and direction
-	magnitude := make([][]float64, h)
-	direction := make([][]float64, h)
-	maxMag := 0.0
-	for y := 0; y < h; y++ {
-		magnitude[y] = make([]float64, w)
-		direction[y] = make([]float64, w)
-		for x := 0; x < w; x++ {
-			mag := math.Hypot(gx[y][x], gy[y][x])
-			magnitude[y][x] = mag
-			if mag > maxMag {
-				maxMag = mag
-			}
-			direction[y][x] = math.Atan2(gy[y][x], gx[y][x])
-		}
-	}
+	// The Sobel gradients are folded straight into magnitude/direction, so the
+	// separate gx/gy matrices are never materialised. All matrices are flat
+	// row-major buffers of size w*h, indexed by y*w+x.
+	magnitude, direction, maxMag := sobelMagnitudeDirection(smoothedGray, w, h)
 
 	// Scale thresholds relative to max magnitude
 	if maxMag > 0 {
@@ -68,19 +55,17 @@ func cannyEdgeDetection(smoothedGray *image.Gray, lowThreshold, highThreshold fl
 	return hysteresisThresholding(suppressed, w, h, lowThreshold, highThreshold)
 }
 
-// sobelGradients computes Sobel gradients in X and Y directions.
-func sobelGradients(gray *image.Gray) (gx, gy [][]float64) {
-	bounds := gray.Bounds()
-	w, h := bounds.Dx(), bounds.Dy()
-
-	gx = make([][]float64, h)
-	gy = make([][]float64, h)
-	for y := 0; y < h; y++ {
-		gx[y] = make([]float64, w)
-		gy[y] = make([]float64, w)
-	}
+// sobelMagnitudeDirection applies the Sobel operator and returns the gradient
+// magnitude and direction as flat row-major buffers of size w*h (index y*w+x)
+// plus the largest magnitude found. Border pixels have no gradient, so their
+// magnitude stays 0 and their direction stays atan2(0, 0) = 0 — exactly what the
+// previous two-pass form produced for the zero-filled border rows.
+func sobelMagnitudeDirection(gray *image.Gray, w, h int) (magnitude, direction []float64, maxMag float64) {
+	magnitude = make([]float64, w*h)
+	direction = make([]float64, w*h)
 
 	for y := 1; y < h-1; y++ {
+		row := y * w
 		for x := 1; x < w-1; x++ {
 			p00 := float64(gray.GrayAt(x-1, y-1).Y)
 			p10 := float64(gray.GrayAt(x, y-1).Y)
@@ -91,25 +76,34 @@ func sobelGradients(gray *image.Gray) (gx, gy [][]float64) {
 			p12 := float64(gray.GrayAt(x, y+1).Y)
 			p22 := float64(gray.GrayAt(x+1, y+1).Y)
 
-			gx[y][x] = -p00 + p20 - 2*p01 + 2*p21 - p02 + p22
-			gy[y][x] = -p00 - 2*p10 - p20 + p02 + 2*p12 + p22
+			gx := -p00 + p20 - 2*p01 + 2*p21 - p02 + p22
+			gy := -p00 - 2*p10 - p20 + p02 + 2*p12 + p22
+
+			i := row + x
+			mag := math.Hypot(gx, gy)
+			magnitude[i] = mag
+			if mag > maxMag {
+				maxMag = mag
+			}
+			direction[i] = math.Atan2(gy, gx)
 		}
 	}
 
-	return
+	return magnitude, direction, maxMag
 }
 
 // nonMaxSuppression suppresses non-maximum gradient values along edge direction.
-func nonMaxSuppression(magnitude, direction [][]float64, w, h int) [][]float64 {
-	result := make([][]float64, h)
-	for y := 0; y < h; y++ {
-		result[y] = make([]float64, w)
-	}
+// magnitude and direction are flat row-major buffers of size w*h (index y*w+x);
+// the returned buffer uses the same layout.
+func nonMaxSuppression(magnitude, direction []float64, w, h int) []float64 {
+	result := make([]float64, w*h)
 
 	for y := 1; y < h-1; y++ {
+		row := y * w
 		for x := 1; x < w-1; x++ {
-			mag := magnitude[y][x]
-			angleDeg := direction[y][x] * 180.0 / math.Pi
+			i := row + x
+			mag := magnitude[i]
+			angleDeg := direction[i] * 180.0 / math.Pi
 			if angleDeg < 0 {
 				angleDeg += 180
 			}
@@ -117,21 +111,21 @@ func nonMaxSuppression(magnitude, direction [][]float64, w, h int) [][]float64 {
 			var q, r float64
 			switch {
 			case angleDeg < 22.5 || angleDeg >= 157.5:
-				q = magnitude[y][x+1]
-				r = magnitude[y][x-1]
+				q = magnitude[i+1]
+				r = magnitude[i-1]
 			case angleDeg < 67.5:
-				q = magnitude[y-1][x+1]
-				r = magnitude[y+1][x-1]
+				q = magnitude[i-w+1]
+				r = magnitude[i+w-1]
 			case angleDeg < 112.5:
-				q = magnitude[y-1][x]
-				r = magnitude[y+1][x]
+				q = magnitude[i-w]
+				r = magnitude[i+w]
 			default:
-				q = magnitude[y-1][x-1]
-				r = magnitude[y+1][x+1]
+				q = magnitude[i-w-1]
+				r = magnitude[i+w+1]
 			}
 
 			if mag >= q && mag >= r {
-				result[y][x] = mag
+				result[i] = mag
 			}
 		}
 	}
@@ -140,7 +134,8 @@ func nonMaxSuppression(magnitude, direction [][]float64, w, h int) [][]float64 {
 }
 
 // hysteresisThresholding applies double thresholding and edge tracking by hysteresis.
-func hysteresisThresholding(suppressed [][]float64, w, h int, low, high float64) *image.Gray {
+// suppressed is a flat row-major buffer of size w*h (index y*w+x).
+func hysteresisThresholding(suppressed []float64, w, h int, low, high float64) *image.Gray {
 	edges := image.NewGray(image.Rect(0, 0, w, h))
 
 	const (
@@ -149,8 +144,9 @@ func hysteresisThresholding(suppressed [][]float64, w, h int, low, high float64)
 	)
 
 	for y := 0; y < h; y++ {
+		row := y * w
 		for x := 0; x < w; x++ {
-			val := suppressed[y][x]
+			val := suppressed[row+x]
 			if val >= high {
 				edges.SetGray(x, y, color.Gray{Y: strong})
 			} else if val >= low {

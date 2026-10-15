@@ -25,7 +25,7 @@ func benchBuildGalleryImageDTOs(b *testing.B, n int) {
 	b.ReportAllocs()
 	files := makeGalleryFiles(n)
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		sinkGalleryDTOs = BuildGalleryImageDTOs(files)
 	}
 }
@@ -49,7 +49,7 @@ func BenchmarkBuildGalleryImageDTOSingle(b *testing.B) {
 	b.ReportAllocs()
 	files := makeGalleryFiles(1)
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		sinkGalleryDTOs = []dto.GalleryImageDTO{BuildGalleryImageDTO(&files[0])}
 	}
 }
@@ -58,7 +58,7 @@ func BenchmarkBuildFileDTO(b *testing.B) {
 	b.ReportAllocs()
 	files := makeGalleryFiles(1)
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		sinkFileDTO = BuildFileDTO(&files[0])
 	}
 }
@@ -67,7 +67,7 @@ func BenchmarkFormatSize(b *testing.B) {
 	b.ReportAllocs()
 	sizes := []int64{512, 1536, 98304, 1048576, 4294967296}
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for i := 0; b.Loop(); i++ {
 		sinkFormatSize = FormatSize(sizes[i%len(sizes)])
 	}
 }

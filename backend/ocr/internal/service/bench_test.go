@@ -112,7 +112,7 @@ func BenchmarkCountTokens(b *testing.B) {
 		"привет мир",
 	}
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for i := 0; b.Loop(); i++ {
 		sinkInt = countTokens(inputs[i%len(inputs)])
 	}
 }
@@ -121,7 +121,7 @@ func BenchmarkConvertToGray1MP(b *testing.B) {
 	b.ReportAllocs()
 	src := benchOpaqueNRGBA(1024, 1024)
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		sinkGray = convertToGray(src, 224)
 	}
 }
@@ -130,7 +130,7 @@ func BenchmarkConvertToGray3MP(b *testing.B) {
 	b.ReportAllocs()
 	src := benchOpaqueNRGBA(2048, 1536)
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		sinkGray = convertToGray(src, 224)
 	}
 }
@@ -139,7 +139,7 @@ func BenchmarkConvertToGrayBlurPathRGBA3MP(b *testing.B) {
 	b.ReportAllocs()
 	src := benchOpaqueRGBA(2048, 1536)
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		sinkGray = convertToGray(src, 224)
 	}
 }
@@ -148,7 +148,7 @@ func BenchmarkPreprocessImage3MP(b *testing.B) {
 	b.ReportAllocs()
 	src := benchOpaqueNRGBA(2048, 1536)
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		sinkGray, _, _, _ = preprocessImage(src)
 	}
 }
@@ -157,7 +157,7 @@ func BenchmarkCannyEdgeDetection1MP(b *testing.B) {
 	b.ReportAllocs()
 	gray := benchStepEdgeGray(1024, 1024)
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		sinkEdges = cannyEdgeDetection(gray, 50, 150)
 	}
 }
@@ -166,7 +166,7 @@ func BenchmarkCannyEdgeDetection3MP(b *testing.B) {
 	b.ReportAllocs()
 	gray := benchStepEdgeGray(2048, 1536)
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		sinkEdges = cannyEdgeDetection(gray, 50, 150)
 	}
 }
@@ -176,7 +176,7 @@ func BenchmarkHoughLineTransform1MP(b *testing.B) {
 	gray := benchStepEdgeGray(1024, 1024)
 	edges := cannyEdgeDetection(gray, 50, 150)
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		sinkLines = houghLineTransform(edges, 64)
 	}
 }
@@ -185,7 +185,7 @@ func BenchmarkDetectSkewAngle1MP(b *testing.B) {
 	b.ReportAllocs()
 	gray := benchStepEdgeGray(1024, 1024)
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		sinkInts = detectSkewAngle(gray)
 	}
 }
@@ -193,7 +193,7 @@ func BenchmarkDetectSkewAngle1MP(b *testing.B) {
 func BenchmarkGenerateCandidateAngles(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for i := 0; b.Loop(); i++ {
 		sinkInts = generateCandidateAngles(float64(i%90) - 45)
 	}
 }
@@ -203,7 +203,7 @@ func BenchmarkFilterAndConvertBoxes(b *testing.B) {
 	boxes := benchOCRBoxes(200)
 	c := NewClassifier()
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		sinkBoxes, sinkInt = c.filterAndConvertBoxes(boxes)
 	}
 }
@@ -217,7 +217,7 @@ func BenchmarkCalculateConfidenceMetrics(b *testing.B) {
 		total += countTokens(box.Word)
 	}
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, sinkF64 = c.calculateConfidenceMetrics(boxes, total)
 	}
 }
@@ -230,7 +230,7 @@ func BenchmarkComputeDenseTextConfidence(b *testing.B) {
 		total += countTokens(box.Word)
 	}
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		sinkF64 = computeDenseTextConfidence(boxes, total)
 	}
 }
@@ -261,7 +261,7 @@ func BenchmarkHysteresisSeedOnly(b *testing.B) {
 	b.ReportAllocs()
 	buf := benchHysteresisInput(512, 512, 0)
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		sinkEdges = hysteresisThresholding(buf, 512, 512, 50, 150)
 	}
 }
@@ -270,7 +270,7 @@ func BenchmarkHysteresisWeakChain(b *testing.B) {
 	b.ReportAllocs()
 	buf := benchHysteresisInput(512, 512, 510)
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		sinkEdges = hysteresisThresholding(buf, 512, 512, 50, 150)
 	}
 }

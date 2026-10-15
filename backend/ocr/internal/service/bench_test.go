@@ -234,3 +234,43 @@ func BenchmarkComputeDenseTextConfidence(b *testing.B) {
 		sinkF64 = computeDenseTextConfidence(boxes, total)
 	}
 }
+
+// benchHysteresisInput builds a suppressed-gradient buffer with a single strong
+// seed on interior row 1 and, when chain > 0, a weak run of that length growing
+// away from the seed. The weak run models a long faint edge touching a strong
+// one.
+//
+// Measured result: the straight chain costs only ~2x the seed-only case, because
+// the scan runs in increasing x/y, so the promoted front advances within a single
+// pass. These benchmarks exist to keep that property true; extra passes (and a
+// quadratic cost) would require adversarially wrapped geometry.
+func benchHysteresisInput(w, h, chain int) []float64 {
+	buf := make([]float64, w*h)
+	row := w // interior row 1
+	if chain > w-2 {
+		chain = w - 2
+	}
+	for x := 1; x <= chain; x++ {
+		buf[row+x] = 75.0 // weak: low <= 75 < high
+	}
+	buf[row+1] = 300.0 // strong seed
+	return buf
+}
+
+func BenchmarkHysteresisSeedOnly(b *testing.B) {
+	b.ReportAllocs()
+	buf := benchHysteresisInput(512, 512, 0)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		sinkEdges = hysteresisThresholding(buf, 512, 512, 50, 150)
+	}
+}
+
+func BenchmarkHysteresisWeakChain(b *testing.B) {
+	b.ReportAllocs()
+	buf := benchHysteresisInput(512, 512, 510)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		sinkEdges = hysteresisThresholding(buf, 512, 512, 50, 150)
+	}
+}

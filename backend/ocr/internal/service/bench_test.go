@@ -48,9 +48,20 @@ func benchStepEdgeGray(w, h int) *image.Gray {
 	return img
 }
 
-// benchOpaqueNRGBA builds a uniform opaque image of the given size.
+// benchOpaqueNRGBA builds a uniform opaque image of the given size, matching the
+// layout produced by imaging.Resize (the no-blur preprocessing path).
 func benchOpaqueNRGBA(w, h int) *image.NRGBA {
 	img := image.NewNRGBA(image.Rect(0, 0, w, h))
+	for i := 0; i < len(img.Pix); i += 4 {
+		img.Pix[i], img.Pix[i+1], img.Pix[i+2], img.Pix[i+3] = 128, 128, 128, 255
+	}
+	return img
+}
+
+// benchOpaqueRGBA builds a uniform opaque image of the given size, matching the
+// layout produced by bild's median blur (the blur preprocessing path).
+func benchOpaqueRGBA(w, h int) *image.RGBA {
+	img := image.NewRGBA(image.Rect(0, 0, w, h))
 	for i := 0; i < len(img.Pix); i += 4 {
 		img.Pix[i], img.Pix[i+1], img.Pix[i+2], img.Pix[i+3] = 128, 128, 128, 255
 	}
@@ -118,6 +129,15 @@ func BenchmarkConvertToGray1MP(b *testing.B) {
 func BenchmarkConvertToGray3MP(b *testing.B) {
 	b.ReportAllocs()
 	src := benchOpaqueNRGBA(2048, 1536)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		sinkGray = convertToGray(src, 224)
+	}
+}
+
+func BenchmarkConvertToGrayBlurPathRGBA3MP(b *testing.B) {
+	b.ReportAllocs()
+	src := benchOpaqueRGBA(2048, 1536)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		sinkGray = convertToGray(src, 224)

@@ -1,8 +1,10 @@
 package service
 
 import (
+	"bytes"
 	"image"
 	"image/color"
+	"math/rand"
 	"testing"
 	"unicode"
 )
@@ -296,5 +298,106 @@ func TestGenerateCandidateAnglesCharacterization(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// referenceConvertToGray is the straightforward, interface-based implementation
+// of convertToGray. It is the source of truth the optimized implementation is
+// checked against.
+func referenceConvertToGray(img image.Image, threshold uint8) *image.Gray {
+	bounds := img.Bounds()
+	grayImg := image.NewGray(image.Rect(0, 0, bounds.Dx(), bounds.Dy()))
+
+	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
+		for x := bounds.Min.X; x < bounds.Max.X; x++ {
+			r, g, b, _ := img.At(x, y).RGBA()
+			lum := uint8((19595*r + 38470*g + 7471*b + 1<<15) >> 24)
+			if lum >= threshold {
+				lum = 0xff
+			}
+			grayImg.SetGray(x-bounds.Min.X, y-bounds.Min.Y, color.Gray{Y: lum})
+		}
+	}
+	return grayImg
+}
+
+// TestConvertToGrayMatchesGenericReference guards the optimized convertToGray:
+// every supported concrete layout, including alpha-carrying and sub-image
+// inputs, must produce byte-identical output to the generic implementation for
+// every threshold.
+func TestConvertToGrayMatchesGenericReference(t *testing.T) {
+	const w, h = 37, 19
+	rnd := rand.New(rand.NewSource(20261015))
+
+	nrgba := image.NewNRGBA(image.Rect(0, 0, w, h))
+	for i := 0; i < len(nrgba.Pix); i += 4 {
+		nrgba.Pix[i] = uint8(rnd.Intn(256))
+		nrgba.Pix[i+1] = uint8(rnd.Intn(256))
+		nrgba.Pix[i+2] = uint8(rnd.Intn(256))
+		// Deliberately include fully transparent and partially transparent
+		// pixels, since NRGBA premultiplies by alpha inside RGBA().
+		nrgba.Pix[i+3] = uint8(rnd.Intn(4) * 85)
+	}
+
+	rgba := image.NewRGBA(image.Rect(0, 0, w, h))
+	for i := 0; i < len(rgba.Pix); i++ {
+		rgba.Pix[i] = uint8(rnd.Intn(256))
+	}
+
+	gray := image.NewGray(image.Rect(0, 0, w, h))
+	for i := 0; i < len(gray.Pix); i++ {
+		gray.Pix[i] = uint8(rnd.Intn(256))
+	}
+
+	// YCbCr exercises the generic fallback branch.
+	ycbcr := image.NewYCbCr(image.Rect(0, 0, w, h), image.YCbCrSubsampleRatio420)
+	for i := range ycbcr.Y {
+		ycbcr.Y[i] = uint8(rnd.Intn(256))
+	}
+	for i := range ycbcr.Cb {
+		ycbcr.Cb[i] = uint8(rnd.Intn(256))
+		ycbcr.Cr[i] = uint8(rnd.Intn(256))
+	}
+
+	// A sub-image with a non-zero origin exercises the bounds-offset handling.
+	backing := image.NewNRGBA(image.Rect(0, 0, 2*w, 2*h))
+	for i := 0; i < len(backing.Pix); i++ {
+		backing.Pix[i] = uint8(rnd.Intn(256))
+	}
+	subImage := backing.SubImage(image.Rect(5, 7, 5+w, 7+h)).(*image.NRGBA)
+
+	cases := []struct {
+		name string
+		img  image.Image
+	}{
+		{"NRGBA", nrgba},
+		{"RGBA", rgba},
+		{"Gray", gray},
+		{"YCbCr420", ycbcr},
+		{"NRGBASubImage", subImage},
+	}
+
+	for _, threshold := range []uint8{0, 1, 100, 224, 255} {
+		for _, tc := range cases {
+			got := convertToGray(tc.img, threshold)
+			want := referenceConvertToGray(tc.img, threshold)
+
+			if got.Stride != want.Stride {
+				t.Errorf("convertToGray(%s, %d) stride = %d, want %d",
+					tc.name, threshold, got.Stride, want.Stride)
+			}
+			if len(got.Pix) != len(want.Pix) {
+				t.Fatalf("convertToGray(%s, %d) pix length = %d, want %d",
+					tc.name, threshold, len(got.Pix), len(want.Pix))
+			}
+			if !bytes.Equal(got.Pix, want.Pix) {
+				for i := range want.Pix {
+					if got.Pix[i] != want.Pix[i] {
+						t.Fatalf("convertToGray(%s, %d) differs at byte %d: got %d, want %d",
+							tc.name, threshold, i, got.Pix[i], want.Pix[i])
+					}
+				}
+			}
+		}
 	}
 }

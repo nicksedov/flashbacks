@@ -142,28 +142,85 @@ func calculateScaleDimensions(w, h, pixels int) (newW, newH int, scaleFactor flo
 }
 
 // convertToGray converts any image to *image.Gray.
-// Light gray shades (above threshold) are preserved as white pixels.
+// Light gray shades (at or above threshold) are preserved as white pixels.
+//
+// The preprocessing pipeline only ever produces the concrete layouts of the
+// imaging and bild libraries (NRGBA from Resize, RGBA from the median blur), so
+// those get direct Pix access and skip one color.Color interface box per pixel.
+// Any other layout takes the generic color.Color path. Every branch computes the
+// identical luminance and threshold, as asserted by
+// TestConvertToGrayMatchesGenericReference.
 func convertToGray(img image.Image, threshold uint8) *image.Gray {
 	bounds := img.Bounds()
 	w, h := bounds.Dx(), bounds.Dy()
 	grayImg := image.NewGray(image.Rect(0, 0, w, h))
 
-	// Light shades at or above the threshold are snapped to pure white; the
-	// rest keep their luminance. Writing into Pix directly avoids the per-pixel
-	// color.Gray heap allocation the previous *color.Gray pointer form caused.
-	const white uint8 = 0xff
-
-	for y := 0; y < h; y++ {
-		row := grayImg.Pix[y*grayImg.Stride : y*grayImg.Stride+w]
-		for x := 0; x < w; x++ {
-			r, g, b, _ := img.At(bounds.Min.X+x, bounds.Min.Y+y).RGBA()
-			// RGB to luminance formula
-			lum := uint8((19595*r + 38470*g + 7471*b + 1<<15) >> 24)
-			if lum >= threshold {
-				lum = white
+	switch src := img.(type) {
+	case *image.NRGBA:
+		for y := 0; y < h; y++ {
+			row := grayImg.Pix[y*grayImg.Stride : y*grayImg.Stride+w]
+			sp := src.PixOffset(bounds.Min.X, bounds.Min.Y+y)
+			for x := 0; x < w; x++ {
+				// Mirrors color.NRGBA.RGBA(): 8-bit channel -> 16-bit, then
+				// premultiplied by alpha.
+				a := uint32(src.Pix[sp+3])
+				r := uint32(src.Pix[sp])
+				r = (r | r<<8) * a / 0xff
+				g := uint32(src.Pix[sp+1])
+				g = (g | g<<8) * a / 0xff
+				b := uint32(src.Pix[sp+2])
+				b = (b | b<<8) * a / 0xff
+				row[x] = grayPixel(r, g, b, threshold)
+				sp += 4
 			}
-			row[x] = lum
+		}
+	case *image.RGBA:
+		for y := 0; y < h; y++ {
+			row := grayImg.Pix[y*grayImg.Stride : y*grayImg.Stride+w]
+			sp := src.PixOffset(bounds.Min.X, bounds.Min.Y+y)
+			for x := 0; x < w; x++ {
+				// RGBA is already alpha-premultiplied; mirrors color.RGBA.RGBA().
+				r := uint32(src.Pix[sp])
+				r |= r << 8
+				g := uint32(src.Pix[sp+1])
+				g |= g << 8
+				b := uint32(src.Pix[sp+2])
+				b |= b << 8
+				row[x] = grayPixel(r, g, b, threshold)
+				sp += 4
+			}
+		}
+	case *image.Gray:
+		for y := 0; y < h; y++ {
+			row := grayImg.Pix[y*grayImg.Stride : y*grayImg.Stride+w]
+			sp := src.PixOffset(bounds.Min.X, bounds.Min.Y+y)
+			for x := 0; x < w; x++ {
+				// Mirrors color.Gray.RGBA(): r = g = b = Y << 8 | Y.
+				v := uint32(src.Pix[sp])
+				v |= v << 8
+				row[x] = grayPixel(v, v, v, threshold)
+				sp++
+			}
+		}
+	default:
+		for y := 0; y < h; y++ {
+			row := grayImg.Pix[y*grayImg.Stride : y*grayImg.Stride+w]
+			for x := 0; x < w; x++ {
+				r, g, b, _ := img.At(bounds.Min.X+x, bounds.Min.Y+y).RGBA()
+				row[x] = grayPixel(r, g, b, threshold)
+			}
 		}
 	}
 	return grayImg
+}
+
+// grayPixel applies the RGB-to-luminance formula to 16-bit alpha-premultiplied
+// components (as returned by color.Color.RGBA) and snaps shades at or above
+// threshold to pure white.
+func grayPixel(r, g, b uint32, threshold uint8) uint8 {
+	lum := uint8((19595*r + 38470*g + 7471*b + 1<<15) >> 24)
+	if lum >= threshold {
+		return 0xff
+	}
+	return lum
 }

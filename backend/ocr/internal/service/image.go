@@ -145,21 +145,24 @@ func calculateScaleDimensions(w, h, pixels int) (newW, newH int, scaleFactor flo
 // Light gray shades (above threshold) are preserved as white pixels.
 func convertToGray(img image.Image, threshold uint8) *image.Gray {
 	bounds := img.Bounds()
-	grayImg := image.NewGray(image.Rect(0, 0, bounds.Dx(), bounds.Dy()))
-	var grayPixel *color.Gray
-	whitePixel := &color.Gray{Y: 0xff}
+	w, h := bounds.Dx(), bounds.Dy()
+	grayImg := image.NewGray(image.Rect(0, 0, w, h))
 
-	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
-		for x := bounds.Min.X; x < bounds.Max.X; x++ {
-			r, g, b, _ := img.At(x, y).RGBA()
+	// Light shades at or above the threshold are snapped to pure white; the
+	// rest keep their luminance. Writing into Pix directly avoids the per-pixel
+	// color.Gray heap allocation the previous *color.Gray pointer form caused.
+	const white uint8 = 0xff
+
+	for y := 0; y < h; y++ {
+		row := grayImg.Pix[y*grayImg.Stride : y*grayImg.Stride+w]
+		for x := 0; x < w; x++ {
+			r, g, b, _ := img.At(bounds.Min.X+x, bounds.Min.Y+y).RGBA()
 			// RGB to luminance formula
 			lum := uint8((19595*r + 38470*g + 7471*b + 1<<15) >> 24)
-			if lum < threshold {
-				grayPixel = &color.Gray{Y: lum}
-			} else {
-				grayPixel = whitePixel
+			if lum >= threshold {
+				lum = white
 			}
-			grayImg.SetGray(x-bounds.Min.X, y-bounds.Min.Y, *grayPixel)
+			row[x] = lum
 		}
 	}
 	return grayImg

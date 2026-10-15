@@ -138,12 +138,12 @@ test.env
 # ===========================
 # Dataset derived artifacts
 # ===========================
-dataset/**/__pycache__/
-dataset/**/.ipynb_checkpoints/
-dataset/**/*.log
-dataset/**/derived/
-dataset/**/generated/
-dataset/**/temp/
+tests/dataset/**/__pycache__/
+tests/dataset/**/.ipynb_checkpoints/
+tests/dataset/**/*.log
+tests/dataset/**/derived/
+tests/dataset/**/generated/
+tests/dataset/**/temp/
 
 # ===========================
 # Agent / tool caches

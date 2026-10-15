@@ -155,7 +155,7 @@ curl -X POST \
 ```bash
 curl -X POST \
   -H "Content-Type: image/jpeg" \
-  --data-binary @test/dataset/eng/lightbulb-scheme.jpg \
+  --data-binary @tests/dataset/eng/lightbulb-scheme.jpg \
   "http://localhost:5174/ocr/api/v1/classify?lang=eng&level=RIL_WORD&confidence_threshold=0.7&min_token_count=10"
 ```
 
@@ -164,6 +164,6 @@ curl -X POST \
 ```bash
 curl -X POST \
   -H "Content-Type: image/jpeg" \
-  --data-binary @test/dataset/eng/lightbulb-scheme.jpg \
+  --data-binary @tests/dataset/eng/lightbulb-scheme.jpg \
   http://localhost:5174/ocr/api/v1/classify
 ```

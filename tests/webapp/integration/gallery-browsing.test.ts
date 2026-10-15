@@ -41,7 +41,7 @@ import type {
 const config: IntegrationConfig = loadConfig()
 
 /** Small deterministic JPEG reused as the indexed image fixture. */
-const SOURCE_IMAGE = path.join(REPO_ROOT, "tests", "ocr", "dataset", "image", "dog.jpg")
+const SOURCE_IMAGE = path.join(REPO_ROOT, "tests", "dataset", "image", "dog.jpg")
 
 let workingDir: string
 let binaryPath: string

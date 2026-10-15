@@ -10,7 +10,7 @@
 //   GET /api/folders → POST /api/folders (add) → GET /api/folders → DELETE
 //
 // As root folders for the test it uses the four sibling subdirectories of
-// `tests/ocr/dataset` (eng, image, inscription, rus). They are passed as
+// `tests/dataset` (eng, image, inscription, rus). They are passed as
 // absolute paths so the Go process resolves them independently of its working
 // directory.
 //
@@ -43,9 +43,9 @@ import type {
 const config: IntegrationConfig = loadConfig()
 
 /** Parent of the four subdirectories reused as gallery root folders. */
-const DATASET_ROOT = path.join(REPO_ROOT, "tests", "ocr", "dataset")
+const DATASET_ROOT = path.join(REPO_ROOT, "tests", "dataset")
 
-/** Sibling subdirectories of `tests/ocr/dataset` used as gallery roots. */
+/** Sibling subdirectories of `tests/dataset` used as gallery roots. */
 const DATASET_SUBFOLDERS = ["eng", "image", "inscription", "rus"] as const
 
 /** Absolute paths of the dataset subfolders — the folders under test. */

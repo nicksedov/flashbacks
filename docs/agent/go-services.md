@@ -132,8 +132,9 @@ Make targets wrap the same commands: `make test-core`, `make test-exif`,
   `GET /health`.
 - **Frozen surface**: do not change the `/classify` signature without an explicit
   requirement; no breaking changes to the public API.
-- **Tests**: table-driven style; datasets under `tests/ocr/dataset/{image,inscription,rus}`
-  and `tests/ocr/dataset/README.md`; keep classification accuracy from regressing.
+- **Tests**: table-driven style; the dataset is shared and lives in
+  [`tests/dataset/`](../../tests/dataset/README.md) (`eng`, `image`, `inscription`,
+  `rus`); keep classification accuracy from regressing.
 - **Performance targets**: p95 latency for `/classify` < 5000 ms, memory < 100 MB
   per request.
 - **Coverage**: `go test -race -coverprofile=coverage.out ./...`; coverage must

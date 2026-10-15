@@ -31,8 +31,8 @@ import type { CoreClient, IntegrationConfig, MoveFilesResult, RunningCore } from
 
 const config: IntegrationConfig = loadConfig()
 
-const SOURCE_DOG = path.join(REPO_ROOT, "tests", "ocr", "dataset", "image", "dog.jpg")
-const SOURCE_LIGHT = path.join(REPO_ROOT, "tests", "ocr", "dataset", "image", "light-bulb.jpg")
+const SOURCE_DOG = path.join(REPO_ROOT, "tests", "dataset", "image", "dog.jpg")
+const SOURCE_LIGHT = path.join(REPO_ROOT, "tests", "dataset", "image", "light-bulb.jpg")
 
 let workingDir: string
 let binaryPath: string

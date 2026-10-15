@@ -55,6 +55,9 @@ def classify_url(api_url):
 
 @pytest.fixture(scope="session")
 def dataset_dir():
-    """Return the dataset directory path relative to project root."""
-    # When running tests from the project root
-    return os.path.join(os.path.dirname(os.path.dirname(__file__)), "dataset")
+    """Return the shared test dataset directory (`tests/dataset`)."""
+    # tests/ocr/integration/conftest.py -> tests/dataset
+    return os.path.join(
+        os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+        "dataset",
+    )

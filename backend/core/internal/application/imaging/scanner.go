@@ -638,16 +638,31 @@ func deleteImageFileCascade(db *gorm.DB, imageFileID uint) {
 	db.Where("id = ?", imageFileID).Delete(&domain.ImageFile{})
 }
 
+// cleanupBatchSize bounds how many records cleanupMissingFiles loads per query.
+// It is a variable (not a constant) so tests can shrink the page size and pin the
+// termination behaviour on a small table.
+var cleanupBatchSize = 10000
+
 // cleanupMissingFiles removes database entries for files that no longer exist.
-// Processes in batches of 10000 to avoid loading all rows into memory at once.
+// It walks the table with keyset pagination (id > lastID, ordered by id) so it
+// always makes forward progress and terminates even when the table is larger than
+// one batch and no records are deleted. Every examined record emits a progress
+// message, so the scan-status counter advances while the cleanup phase runs.
 // Returns a ScanBatchResult with the deleted file records.
 func cleanupMissingFiles(db *gorm.DB, progressChan chan<- string) (ScanBatchResult, error) {
 	batch := ScanBatchResult{}
-	const batchSize = 10000
+	batchSize := cleanupBatchSize
+	if batchSize <= 0 {
+		batchSize = 1
+	}
 
+	var lastID uint
 	for {
 		var files []domain.ImageFile
-		if err := db.Limit(batchSize).Find(&files).Error; err != nil {
+		if err := db.Where("id > ?", lastID).
+			Order("id").
+			Limit(batchSize).
+			Find(&files).Error; err != nil {
 			return batch, fmt.Errorf("cleanupMissingFiles: query failed: %w", err)
 		}
 		if len(files) == 0 {
@@ -655,10 +670,13 @@ func cleanupMissingFiles(db *gorm.DB, progressChan chan<- string) (ScanBatchResu
 		}
 
 		for _, f := range files {
+			lastID = f.ID
 			if _, err := os.Stat(f.Path); os.IsNotExist(err) {
 				progressChan <- fmt.Sprintf("Removing missing file from DB: %s", f.Path)
 				deleteImageFileCascade(db, f.ID)
 				batch.Deleted = append(batch.Deleted, f)
+			} else {
+				progressChan <- fmt.Sprintf("Checked (present): %s", f.Path)
 			}
 		}
 

@@ -26,10 +26,11 @@ const (
 //
 // Phase is a machine value (cleanup|scanning|complete) the frontend localizes;
 // Progress is a human-readable English string kept for compatibility. The
-// counters report real files (not progress messages): TotalFiles is the number
-// of image files discovered by a metadata-only pre-count, FilesProcessed counts
-// files examined (hashed or skipped as unchanged), and FilesAdded/FilesDeleted/
-// FilesUpdated count records created, deleted, and updated during the scan.
+// counters report real work items (not progress messages): TotalFiles is the
+// total the scan will process (existing records verified during cleanup plus
+// image files indexed during scanning), FilesProcessed counts items examined so
+// far across both phases, and FilesAdded/FilesDeleted/FilesUpdated count records
+// created, deleted, and updated during the scan.
 type ScanStatusResponse struct {
 	Scanning         bool   `json:"scanning"`
 	Phase            string `json:"phase"`
@@ -148,14 +149,17 @@ func (sm *ScanManager) startProgressReader(progressChan <-chan string) func() {
 	return wg.Wait
 }
 
-// isFileScannedMessage reports whether a progress message represents an image
-// file that the scanner examined (hashed or skipped as unchanged). Directory
-// headers and error lines are not counted, so FilesProcessed reflects files
-// rather than the number of progress messages.
+// isFileScannedMessage reports whether a progress message represents an item the
+// scanner examined: a file hashed, a file skipped as unchanged, or an indexed
+// record verified (or removed) during the cleanup phase. Directory headers,
+// aggregate lines and error lines are not counted, so FilesProcessed reflects
+// items rather than the number of progress messages.
 func isFileScannedMessage(msg string) bool {
 	return strings.HasPrefix(msg, "Processed: ") ||
 		strings.HasPrefix(msg, "Skipping (cached): ") ||
-		strings.HasPrefix(msg, "Skipped (unchanged): ")
+		strings.HasPrefix(msg, "Skipped (unchanged): ") ||
+		strings.HasPrefix(msg, "Checked (present): ") ||
+		strings.HasPrefix(msg, "Removing missing file from DB: ")
 }
 
 // countImageFiles returns the number of image files under dir using a
@@ -183,6 +187,16 @@ func countImageFilesInDirs(dirs []string) int {
 	return total
 }
 
+// countImageFileRecords returns the number of indexed image records in the
+// database. It is combined with the on-disk image-file count to report the total
+// work of a scan, because cleanup verifies every existing record while scanning
+// indexes every file on disk.
+func (sm *ScanManager) countImageFileRecords() int {
+	var count int64
+	sm.db.Model(&domain.ImageFile{}).Count(&count)
+	return int(count)
+}
+
 // StartScan launches an asynchronous scan of all gallery directories
 func (sm *ScanManager) StartScan() error {
 	sm.mu.Lock()
@@ -197,17 +211,28 @@ func (sm *ScanManager) StartScan() error {
 		progressChan := make(chan string, 200)
 		waitReader := sm.startProgressReader(progressChan)
 
+		// Read gallery dirs from DB at scan time and pre-count the whole scan's
+		// work before the first cleanup step: existing records to verify during
+		// the cleanup phase plus image files to index during the scanning phase.
+		// The record count is available immediately, so publish it right away to
+		// keep the progress bar determinate while the slower on-disk walk runs;
+		// the file count is added once that walk finishes. The complete total
+		// (records + files) is in place before cleanup starts and then stays
+		// constant for the whole scan, while filesProcessed grows monotonically.
+		scanDirs := sm.getGalleryDirs()
+		sm.mu.Lock()
+		sm.totalFiles = sm.countImageFileRecords()
+		sm.mu.Unlock()
+
+		sm.mu.Lock()
+		sm.totalFiles += countImageFilesInDirs(scanDirs)
+		sm.mu.Unlock()
+
 		// Cleanup missing files first
 		cleanupBatch, _ := cleanupMissingFiles(sm.db, progressChan)
 		sm.processBatchResult(cleanupBatch)
 
-		// Read gallery dirs from DB at scan time
-		scanDirs := sm.getGalleryDirs()
-
-		// Pre-count the total number of image files so the caller can show
-		// "scanned X of Y" while the scan runs.
 		sm.mu.Lock()
-		sm.totalFiles = countImageFilesInDirs(scanDirs)
 		sm.phase = ScanPhaseScanning
 		sm.mu.Unlock()
 
@@ -296,15 +321,23 @@ func (sm *ScanManager) FastScanGallery() FastScanResult {
 		progressChan := make(chan string, 200)
 		waitReader := sm.startProgressReader(progressChan)
 
+		// Read gallery dirs from DB at scan time and pre-count the whole scan's
+		// work before the first cleanup step (see StartScan): records first, then
+		// the image files found by the on-disk walk.
+		scanDirs := sm.getGalleryDirs()
+		sm.mu.Lock()
+		sm.totalFiles = sm.countImageFileRecords()
+		sm.mu.Unlock()
+
+		sm.mu.Lock()
+		sm.totalFiles += countImageFilesInDirs(scanDirs)
+		sm.mu.Unlock()
+
 		// Cleanup missing files first
 		cleanupBatch, _ := cleanupMissingFiles(sm.db, progressChan)
 		sm.processBatchResult(cleanupBatch)
 
-		// Read gallery dirs from DB at scan time
-		scanDirs := sm.getGalleryDirs()
-
 		sm.mu.Lock()
-		sm.totalFiles = countImageFilesInDirs(scanDirs)
 		sm.phase = ScanPhaseScanning
 		sm.mu.Unlock()
 

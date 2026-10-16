@@ -201,6 +201,9 @@ scopes:
     gallery-browsing.scan-status-files-processed:
       evidence:
         - go::./internal/application/imaging::TestScanManager_StatusFilesProcessed
+    gallery-browsing.scan-status-cleanup-completes:
+      evidence:
+        - go::./internal/application/imaging::TestCleanupMissingFiles_TerminatesPastBatchSize
     gallery-browsing.scan-result-equivalence:
       evidence:
         - go::./internal/application/imaging::TestFastScanGalleryDirectory_StateEquivalence

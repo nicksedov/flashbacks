@@ -30,9 +30,13 @@ The core service SHALL index image files found under configured gallery folders 
 
 `GET /api/status` SHALL report a structured scan phase (`cleanup`, `scanning`,
 or `complete`), the directory currently being scanned, a `totalFiles` count of
-the image files under the gallery folders, and real `filesProcessed`,
-`filesAdded`, `filesDeleted`, and `filesUpdated` counters that count files rather
-than progress messages.
+the work items the scan will process, and real `filesProcessed`, `filesAdded`,
+`filesDeleted`, and `filesUpdated` counters that count items rather than progress
+messages. A scan processes two kinds of item: existing records verified (and
+removed when missing) during the `cleanup` phase, and image files indexed during
+the `scanning` phase. `totalFiles` is reported before the cleanup phase starts and
+`filesProcessed` grows monotonically across both phases, so progress is
+determinate from the first poll.
 
 <!-- focused-spec:id=gallery-browsing.scan-status-phase -->
 #### Scenario: Running scan reports a machine phase value
@@ -41,10 +45,10 @@ than progress messages.
 - **THEN** the response's `phase` is `cleanup` or `scanning` (a machine value, not a free-form English sentence)
 
 <!-- focused-spec:id=gallery-browsing.scan-status-total-files -->
-#### Scenario: Status reports the total number of image files
+#### Scenario: Status reports the total work the scan will process
 
-- **WHEN** the gallery folders contain N image files and a scan runs
-- **THEN** `GET /api/status` reports `totalFiles` equal to N
+- **WHEN** a scan starts with D existing records and the gallery folders contain N image files
+- **THEN** `GET /api/status` reports `totalFiles` equal to D + N
 
 <!-- focused-spec:id=gallery-browsing.scan-status-file-counters -->
 #### Scenario: Status reports added and deleted file counts
@@ -53,10 +57,16 @@ than progress messages.
 - **THEN** `GET /api/status` reports `filesAdded` equal to A and `filesDeleted` equal to D
 
 <!-- focused-spec:id=gallery-browsing.scan-status-files-processed -->
-#### Scenario: Processed count reflects files, not progress messages
+#### Scenario: Processed count reflects items examined, not progress messages
 
-- **WHEN** a scan has processed P image files
-- **THEN** `GET /api/status` reports `filesProcessed` equal to P
+- **WHEN** a scan has examined the cleanup records and the image files
+- **THEN** `GET /api/status` reports `filesProcessed` equal to the number of items examined, not the number of progress messages
+
+<!-- focused-spec:id=gallery-browsing.scan-status-cleanup-completes -->
+#### Scenario: Cleanup phase completes for an index larger than one batch
+
+- **WHEN** the index holds more records than the cleanup batch size and their files still exist on disk
+- **THEN** the cleanup phase finishes without re-reading the same records and the scan advances past it
 
 ### Requirement: Scan result equivalence is preserved
 

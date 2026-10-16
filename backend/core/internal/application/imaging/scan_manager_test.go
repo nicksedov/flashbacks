@@ -1,6 +1,7 @@
 package imaging
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -146,14 +147,28 @@ func TestScanManager_StatusPhase(t *testing.T) {
 func TestScanManager_StatusTotalFiles(t *testing.T) {
 	sm, _ := setupScanManager(t)
 	tmpDir := fixtures.CreateTempDir(t)
-	fixtures.CreateMultipleTestJPEGs(t, tmpDir, 4)
+	paths := fixtures.CreateMultipleTestJPEGs(t, tmpDir, 3)
 	testutil.SeedGalleryFolderNoT(sm.db, tmpDir)
+
+	// Two records already index files that are still on disk, so the scan has
+	// both cleanup work and indexing work to report.
+	for _, p := range paths[:2] {
+		fi, err := os.Stat(p)
+		require.NoError(t, err)
+		require.NoError(t, sm.db.Create(&domain.ImageFile{
+			Path:    filepath.ToSlash(p),
+			Size:    fi.Size(),
+			Hash:    "seed",
+			ModTime: fi.ModTime(),
+		}).Error)
+	}
 
 	done := scanCompletionChan(sm)
 	require.NoError(t, sm.StartScan())
 	awaitCompletion(t, done)
 
-	assert.Equal(t, 4, sm.GetStatus().TotalFiles)
+	// totalFiles = existing records to verify (2) + image files to index (3)
+	assert.Equal(t, 5, sm.GetStatus().TotalFiles)
 }
 
 func TestScanManager_StatusFileCounters(t *testing.T) {
@@ -186,10 +201,20 @@ func TestScanManager_StatusFilesProcessed(t *testing.T) {
 	fixtures.CreateMultipleTestJPEGs(t, tmpDir, 3)
 	testutil.SeedGalleryFolderNoT(sm.db, tmpDir)
 
+	// One indexed record whose file is missing: cleanup must examine (and remove)
+	// it, so its work is counted in addition to the files indexed during scanning.
+	require.NoError(t, sm.db.Create(&domain.ImageFile{
+		Path:    filepath.ToSlash(filepath.Join(tmpDir, "ghost.jpg")),
+		Size:    1,
+		Hash:    "ghost",
+		ModTime: time.Now(),
+	}).Error)
+
 	done := scanCompletionChan(sm)
 	require.NoError(t, sm.StartScan())
 	awaitCompletion(t, done)
 
-	// FilesProcessed counts files examined, not the number of progress messages.
-	assert.Equal(t, 3, sm.GetStatus().FilesProcessed)
+	// FilesProcessed counts items examined across both phases (1 cleanup record
+	// + 3 image files), not the number of progress messages.
+	assert.Equal(t, 4, sm.GetStatus().FilesProcessed)
 }

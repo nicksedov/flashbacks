@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/flashbacks/core/internal/domain"
 	"github.com/flashbacks/core/internal/testutil"
@@ -352,6 +353,52 @@ func TestCleanupMissingFiles_RemovesDeleted(t *testing.T) {
 	var countAfter int64
 	db.Model(&domain.ImageFile{}).Count(&countAfter)
 	assert.Equal(t, int64(3), countAfter, "should have 3 records after cleanup")
+}
+
+// TestCleanupMissingFiles_TerminatesPastBatchSize guards against the previous
+// offset-less pagination, which re-read the same first batch forever once the
+// table held at least one batch worth of records and nothing was deleted.
+func TestCleanupMissingFiles_TerminatesPastBatchSize(t *testing.T) {
+	db, cleanup := testutil.NewTestDB(t)
+	defer cleanup()
+
+	tmpDir := fixtures.CreateTempDir(t)
+	paths := fixtures.CreateMultipleTestJPEGs(t, tmpDir, 3)
+
+	// Index records whose files still exist, so cleanup deletes nothing and the
+	// table never shrinks between passes.
+	for _, p := range paths {
+		fi, err := os.Stat(p)
+		require.NoError(t, err)
+		require.NoError(t, db.Create(&domain.ImageFile{
+			Path:    filepath.ToSlash(p),
+			Size:    fi.Size(),
+			Hash:    "seed",
+			ModTime: fi.ModTime(),
+		}).Error)
+	}
+
+	// Shrink the cleanup page so the 3-row table spans multiple batches.
+	previous := cleanupBatchSize
+	cleanupBatchSize = 2
+	defer func() { cleanupBatchSize = previous }()
+
+	progressChan := make(chan string, 100)
+	done := make(chan struct{})
+	go func() {
+		cleanupMissingFiles(db, progressChan)
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("cleanupMissingFiles did not terminate")
+	}
+
+	var count int64
+	db.Model(&domain.ImageFile{}).Count(&count)
+	assert.Equal(t, int64(3), count, "records for files that exist must be preserved")
 }
 
 func TestDeleteImageFileCascade_RemovesAllChildren(t *testing.T) {

@@ -68,7 +68,17 @@
       [`.focused-spec/evidence.yaml`](../../../.focused-spec/evidence.yaml);
       `focused-spec validate --scope current` reports no new issues (only
       pre-existing markers in `llm-model-metadata` / `llm-settings`).
-- [ ] 4.4 Run the controlled revert→FAIL→restore→PASS probe for each new
-      evidence reference.
-- [ ] 4.5 `openspec validate scan-sync-performance` and present the before/after
-      report.
+- [x] 4.4 Ran the controlled revert→FAIL→restore→PASS probe for every new
+      evidence reference. With the pre-optimisation `scanner.go` restored,
+      `TestScanDirectory_UpdateStatementsAreBatched`,
+      `TestCalculateFileHash_BoundedAllocations` and
+      `TestFastScanGalleryDirectory_StateEquivalence` all FAIL, and all PASS
+      again once restored. A deliberate digest corruption (hashing half of each
+      read chunk) makes `TestCalculateFileHash_Success` FAIL and PASS again when
+      restored. `TestCalculateFileHash_StableUnderConcurrency` passes in both
+      cases by design: it guards pool safety (inconsistent digests), not absolute
+      correctness, which the golden-digest test covers.
+- [x] 4.5 `openspec validate scan-sync-performance` reports "Change
+      'scan-sync-performance' is valid"; the before/after report was presented.
+      The focused-spec `run --scope current` for the five new scenarios reports
+      5 PASS, 0 FAIL, 0 SKIP, 0 ERROR.

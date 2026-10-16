@@ -43,10 +43,19 @@ export interface FastScanResponse {
   total: number
 }
 
+export type ScanPhase = "cleanup" | "scanning" | "complete"
+
 export interface ScanStatusResponse {
   scanning: boolean
+  /** Structured scan phase (localized in the UI); "" while idle. */
+  phase: ScanPhase | ""
   progress: string
+  currentDirectory: string
+  totalFiles: number
   filesProcessed: number
+  filesAdded: number
+  filesDeleted: number
+  filesUpdated: number
 }
 
 export interface ThumbnailResponse {

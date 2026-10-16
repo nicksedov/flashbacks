@@ -1981,15 +1981,24 @@ components:
     ScanStatus:
       type: object
       properties:
-        running:
+        scanning:
           type: boolean
+        phase:
+          type: string
+          enum: [cleanup, scanning, complete]
         progress:
-          type: number
+          type: string
+        currentDirectory:
+          type: string
         totalFiles:
           type: integer
-        processedFiles:
+        filesProcessed:
           type: integer
-        duplicatesFound:
+        filesAdded:
+          type: integer
+        filesDeleted:
+          type: integer
+        filesUpdated:
           type: integer
 
     DuplicatesResponse:

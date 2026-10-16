@@ -23,6 +23,9 @@ func TestCalculateFileHash_Success(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotEmpty(t, hash)
 	assert.Len(t, hash, 32) // MD5 produces 32 hex characters
+	// Golden digest: pins the exact value so buffer-reuse changes cannot alter
+	// the hash of unchanged content.
+	assert.Equal(t, "5eb63bbbe01eeed093cb22bb8f5acdc3", hash) // MD5("hello world")
 }
 
 func TestCalculateFileHash_FileNotFound(t *testing.T) {

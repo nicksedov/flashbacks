@@ -367,43 +367,41 @@ export function AdminGeneralTab() {
     <div className="space-y-6">
       {/* Gallery Folder Management */}
       <Card>
-        <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0">
-          <div>
-            <CardTitle>{t("settings.galleryFolders")}</CardTitle>
-            <CardDescription>{t("settings.galleryFoldersDescription")}</CardDescription>
-          </div>
-          <AddFolderForm onAdd={handleAdd} disabled={status.scanning} />
+        <CardHeader>
+          <CardTitle>{t("settings.galleryFolders")}</CardTitle>
+          <CardDescription>{t("settings.galleryFoldersDescription")}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <ScanProgressBanner status={status} />
 
-          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <h3 className="text-sm font-medium text-muted-foreground">
-              {folders.length === 1
-                ? t("settings.folderCountOne", { count: folders.length })
-                : t("settings.folderCount", { count: folders.length })}
-            </h3>
-            <div className="flex flex-wrap gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleFastRescanAll}
-                disabled={status.scanning || folders.length === 0}
-              >
-                <Zap className={`mr-1.5 h-3.5 w-3.5 ${status.scanning ? "animate-spin" : ""}`} />
-                {t("settings.fastScanChanges")}
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleRescanAll}
-                disabled={status.scanning || folders.length === 0}
-              >
-                <RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${status.scanning ? "animate-spin" : ""}`} />
-                {t("settings.rescanAll")}
-              </Button>
-            </div>
+          {/* Primary add action + secondary scan actions share one row. */}
+          <div className="flex flex-wrap items-center gap-2">
+            <AddFolderForm onAdd={handleAdd} disabled={status.scanning} />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleFastRescanAll}
+              disabled={status.scanning || folders.length === 0}
+            >
+              <Zap className={`mr-1.5 h-3.5 w-3.5 ${status.scanning ? "animate-spin" : ""}`} />
+              {t("settings.fastScanChanges")}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleRescanAll}
+              disabled={status.scanning || folders.length === 0}
+            >
+              <RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${status.scanning ? "animate-spin" : ""}`} />
+              {t("settings.rescanAll")}
+            </Button>
           </div>
+
+          <h3 className="text-sm font-medium text-muted-foreground">
+            {folders.length === 1
+              ? t("settings.folderCountOne", { count: folders.length })
+              : t("settings.folderCount", { count: folders.length })}
+          </h3>
 
           <FolderList
             folders={folders}

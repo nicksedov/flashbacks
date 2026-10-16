@@ -1686,11 +1686,16 @@ export interface components {
             message?: string;
         };
         ScanStatus: {
-            running?: boolean;
-            progress?: number;
+            scanning?: boolean;
+            /** @enum {string} */
+            phase?: "cleanup" | "scanning" | "complete";
+            progress?: string;
+            currentDirectory?: string;
             totalFiles?: number;
-            processedFiles?: number;
-            duplicatesFound?: number;
+            filesProcessed?: number;
+            filesAdded?: number;
+            filesDeleted?: number;
+            filesUpdated?: number;
         };
         DuplicatesResponse: {
             groups?: components["schemas"]["DuplicateGroupDTO"][];

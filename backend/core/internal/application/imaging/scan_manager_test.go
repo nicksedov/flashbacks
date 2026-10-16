@@ -1,9 +1,11 @@
 package imaging
 
 import (
+	"path/filepath"
 	"testing"
 	"time"
 
+	"github.com/flashbacks/core/internal/domain"
 	"github.com/flashbacks/core/internal/testutil"
 	"github.com/flashbacks/core/internal/testutil/fixtures"
 
@@ -105,4 +107,89 @@ func TestScanManager_OnScanComplete_Callback(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("callback was not called within timeout")
 	}
+}
+
+// scanCompletionChan installs an OnScanComplete callback that signals on the
+// returned channel, so a test can await scan completion deterministically.
+func scanCompletionChan(sm *ScanManager) <-chan struct{} {
+	done := make(chan struct{}, 1)
+	sm.OnScanComplete = func() { done <- struct{}{} }
+	return done
+}
+
+// awaitCompletion waits for a scan-completion signal or fails the test.
+func awaitCompletion(t *testing.T, done <-chan struct{}) {
+	t.Helper()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("scan did not complete within timeout")
+	}
+}
+
+func TestScanManager_StatusPhase(t *testing.T) {
+	sm, _ := setupScanManager(t)
+	tmpDir := fixtures.CreateTempDir(t)
+	fixtures.CreateMultipleTestJPEGs(t, tmpDir, 2)
+	testutil.SeedGalleryFolderNoT(sm.db, tmpDir)
+
+	done := scanCompletionChan(sm)
+	require.NoError(t, sm.StartScan())
+
+	// Phase is set synchronously before the scan goroutine runs.
+	assert.Equal(t, ScanPhaseCleanup, sm.GetStatus().Phase)
+
+	awaitCompletion(t, done)
+	assert.Equal(t, ScanPhaseComplete, sm.GetStatus().Phase)
+}
+
+func TestScanManager_StatusTotalFiles(t *testing.T) {
+	sm, _ := setupScanManager(t)
+	tmpDir := fixtures.CreateTempDir(t)
+	fixtures.CreateMultipleTestJPEGs(t, tmpDir, 4)
+	testutil.SeedGalleryFolderNoT(sm.db, tmpDir)
+
+	done := scanCompletionChan(sm)
+	require.NoError(t, sm.StartScan())
+	awaitCompletion(t, done)
+
+	assert.Equal(t, 4, sm.GetStatus().TotalFiles)
+}
+
+func TestScanManager_StatusFileCounters(t *testing.T) {
+	sm, _ := setupScanManager(t)
+	tmpDir := fixtures.CreateTempDir(t)
+	fixtures.CreateMultipleTestJPEGs(t, tmpDir, 3)
+	testutil.SeedGalleryFolderNoT(sm.db, tmpDir)
+
+	// A DB record whose file is missing on disk is removed during cleanup.
+	ghost := &domain.ImageFile{
+		Path:    filepath.ToSlash(filepath.Join(tmpDir, "ghost.jpg")),
+		Size:    123,
+		Hash:    "ghosthash",
+		ModTime: time.Now(),
+	}
+	require.NoError(t, sm.db.Create(ghost).Error)
+
+	done := scanCompletionChan(sm)
+	require.NoError(t, sm.StartScan())
+	awaitCompletion(t, done)
+
+	status := sm.GetStatus()
+	assert.Equal(t, 3, status.FilesAdded)
+	assert.Equal(t, 1, status.FilesDeleted)
+}
+
+func TestScanManager_StatusFilesProcessed(t *testing.T) {
+	sm, _ := setupScanManager(t)
+	tmpDir := fixtures.CreateTempDir(t)
+	fixtures.CreateMultipleTestJPEGs(t, tmpDir, 3)
+	testutil.SeedGalleryFolderNoT(sm.db, tmpDir)
+
+	done := scanCompletionChan(sm)
+	require.NoError(t, sm.StartScan())
+	awaitCompletion(t, done)
+
+	// FilesProcessed counts files examined, not the number of progress messages.
+	assert.Equal(t, 3, sm.GetStatus().FilesProcessed)
 }

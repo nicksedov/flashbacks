@@ -12,8 +12,14 @@ export function useScanStatus() {
 
   const defaultStatus: ScanStatusResponse = {
     scanning: false,
+    phase: "",
     progress: "",
+    currentDirectory: "",
+    totalFiles: 0,
     filesProcessed: 0,
+    filesAdded: 0,
+    filesDeleted: 0,
+    filesUpdated: 0,
   }
 
   return {

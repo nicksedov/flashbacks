@@ -310,6 +310,12 @@ export const translationsEn = {
   // Scan progress
   "scanProgress.scanning": "Scanning in progress...",
   "scanProgress.filesProcessed": "{count} files processed",
+  "scanProgress.phase.cleanup": "Cleaning up missing files…",
+  "scanProgress.phase.scanning": "Scanning…",
+  "scanProgress.phase.complete": "Scan complete",
+  "scanProgress.stats": "Scanned: {processed} of {total}",
+  "scanProgress.added": "+{count} added",
+  "scanProgress.deleted": "−{count} deleted",
 
   // Pagination
   "pagination.first": "First",

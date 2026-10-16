@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
+import { ProgressIndicator } from "@/components/ui/progress"
 import {
   fetchOCRStatus,
   startOcrClassification,
@@ -636,7 +637,7 @@ export function AdminAnalysisTab() {
                       )}
                     </div>
                   </div>
-                  {tagScanStatus.total > 0 && <div className="w-full h-2 bg-muted rounded-full overflow-hidden"><div className="h-full bg-primary transition-all duration-300" style={{ width: `${(tagScanStatus.scanned / tagScanStatus.total) * 100}%` }} /></div>}
+                  {tagScanStatus.total > 0 && <TagScanProgress status={tagScanStatus} />}
                   {tagScanStatus.currentImage && <p className="text-xs text-muted-foreground">{t("tagScan.currentImage")}: {tagScanStatus.currentImage}</p>}
                   {tagScanStatus.lastError && <p className="text-xs text-destructive">{t("tagScan.lastError")}: {tagScanStatus.lastError}</p>}
                 </div>
@@ -652,4 +653,16 @@ export function AdminAnalysisTab() {
       </Card>
     </div>
   )
+}
+
+/**
+ * Shared Automatic Image Tagging progress display. Renders through the common
+ * {@link ProgressIndicator} primitive so the scan and tagging bars stay in sync.
+ */
+export function TagScanProgress({ status }: { status: TagScanStatusResponse }) {
+  const { t } = useTranslation()
+  const value =
+    status.total > 0 ? Math.min(100, Math.round((status.scanned / status.total) * 100)) : undefined
+  const statsText = `${status.scanned} ${t("tagScan.of")} ${status.total} ${t("tagScan.images")}`
+  return <ProgressIndicator value={value} statsText={statsText} />
 }

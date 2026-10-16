@@ -1,7 +1,13 @@
-import { Progress } from "@/components/ui/progress"
+import { ProgressIndicator } from "@/components/ui/progress"
 import { useTranslation } from "@/i18n"
-import type { ScanStatusResponse } from "@/types"
-import { Loader2 } from "lucide-react"
+import type { TranslationKey } from "@/i18n"
+import type { ScanPhase, ScanStatusResponse } from "@/types"
+
+const PHASE_KEYS: Record<ScanPhase, TranslationKey> = {
+  cleanup: "scanProgress.phase.cleanup",
+  scanning: "scanProgress.phase.scanning",
+  complete: "scanProgress.phase.complete",
+}
 
 interface ScanProgressBannerProps {
   status: ScanStatusResponse
@@ -12,17 +18,31 @@ export function ScanProgressBanner({ status }: ScanProgressBannerProps) {
 
   if (!status.scanning) return null
 
+  const label = status.phase
+    ? t(PHASE_KEYS[status.phase])
+    : t("scanProgress.phase.scanning")
+
+  // Determinate once the pre-count has reported a total; indeterminate before.
+  const value =
+    status.totalFiles > 0
+      ? Math.min(100, Math.round((status.filesProcessed / status.totalFiles) * 100))
+      : undefined
+
+  const statsParts: string[] = [
+    status.totalFiles > 0
+      ? t("scanProgress.stats", { processed: status.filesProcessed, total: status.totalFiles })
+      : t("scanProgress.filesProcessed", { count: status.filesProcessed }),
+  ]
+  if (status.filesAdded > 0) statsParts.push(t("scanProgress.added", { count: status.filesAdded }))
+  if (status.filesDeleted > 0) statsParts.push(t("scanProgress.deleted", { count: status.filesDeleted }))
+
   return (
-    <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 space-y-2 dark:border-blue-800 dark:bg-blue-950">
-      <div className="flex items-center gap-2 text-sm font-medium text-blue-800 dark:text-blue-200">
-        <Loader2 className="h-4 w-4 animate-spin" />
-        {t("scanProgress.scanning")}
-      </div>
-      <Progress value={undefined} className="h-1.5" />
-      <div className="flex items-center justify-between text-xs text-blue-600 dark:text-blue-400">
-        <span className="truncate max-w-md">{status.progress}</span>
-        <span>{t("scanProgress.filesProcessed", { count: status.filesProcessed })}</span>
-      </div>
-    </div>
+    <ProgressIndicator
+      value={value}
+      label={label}
+      loading
+      statusText={status.currentDirectory || undefined}
+      statsText={statsParts.join(" · ")}
+    />
   )
 }

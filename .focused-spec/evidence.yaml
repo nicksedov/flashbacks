@@ -174,3 +174,46 @@ scopes:
     file-move.move-name-conflict:
       evidence:
         - vitest::tests/webapp/integration/file-move.test.ts::file move (core service integration) > resolves a name conflict without overwriting
+    design-system.progress-indicator-shared:
+      evidence:
+        - vitest::webapp/src/components/ui/progress.test.tsx::ProgressIndicator > renders the shared progress-indicator primitive for both scan displays
+    design-system.progress-indicator-indeterminate:
+      evidence:
+        - vitest::webapp/src/components/ui/progress.test.tsx::ProgressIndicator > renders an indeterminate bar when no total is known
+    design-system.progress-indicator-localized:
+      evidence:
+        - vitest::webapp/src/components/ui/progress.test.tsx::ProgressIndicator > shows the phase label in Russian for the ru locale
+    design-system.progress-indicator-token-based:
+      evidence:
+        - vitest::webapp/src/components/ui/progress.test.tsx::ProgressIndicator > uses semantic tokens and no raw palette literals
+    design-system.progress-indicator-inset-fill:
+      evidence:
+        - vitest::webapp/src/components/ui/progress.test.tsx::ProgressIndicator > renders as a borderless inset fill inside a card
+    gallery-browsing.scan-status-phase:
+      evidence:
+        - go::./internal/application/imaging::TestScanManager_StatusPhase
+    gallery-browsing.scan-status-total-files:
+      evidence:
+        - go::./internal/application/imaging::TestScanManager_StatusTotalFiles
+    gallery-browsing.scan-status-file-counters:
+      evidence:
+        - go::./internal/application/imaging::TestScanManager_StatusFileCounters
+    gallery-browsing.scan-status-files-processed:
+      evidence:
+        - go::./internal/application/imaging::TestScanManager_StatusFilesProcessed
+    gallery-browsing.scan-result-equivalence:
+      evidence:
+        - go::./internal/application/imaging::TestFastScanGalleryDirectory_StateEquivalence
+    gallery-browsing.scan-preserves-created-at:
+      evidence:
+        - go::./internal/application/imaging::TestFastScanGalleryDirectory_StateEquivalence
+    gallery-browsing.hash-digest-stable:
+      evidence:
+        - go::./internal/application/imaging::TestCalculateFileHash_StableUnderConcurrency
+        - go::./internal/application/imaging::TestCalculateFileHash_Success
+    gallery-browsing.scan-batched-writes:
+      evidence:
+        - go::./internal/application/imaging::TestScanDirectory_UpdateStatementsAreBatched
+    gallery-browsing.hash-bounded-allocations:
+      evidence:
+        - go::./internal/application/imaging::TestCalculateFileHash_BoundedAllocations

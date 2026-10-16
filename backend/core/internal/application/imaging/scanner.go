@@ -4,6 +4,7 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"fmt"
+	"hash"
 	"io"
 	"os"
 	"path/filepath"
@@ -15,6 +16,29 @@ import (
 	"gorm.io/gorm"
 )
 
+// hashScratch holds the reusable state for CalculateFileHash: the read buffer,
+// the digest, and the digest output array.
+//
+// Without it, hashing a file allocates a fresh 32 KiB buffer plus a new digest
+// every call; across a 100k-file scan that is gigabytes of transient garbage for
+// work that only ever needs one buffer per hashing worker. sync.Pool scales with
+// the worker count and is goroutine-safe by construction, so at most one buffer
+// per active worker is resident (32 KiB × 4 workers).
+type hashScratch struct {
+	buf []byte
+	h   hash.Hash
+	sum [md5.Size]byte
+}
+
+var hashScratchPool = sync.Pool{
+	New: func() any {
+		return &hashScratch{
+			buf: make([]byte, 32*1024),
+			h:   md5.New(),
+		}
+	},
+}
+
 // CalculateFileHash calculates MD5 hash of a file.
 func CalculateFileHash(path string) (string, error) {
 	file, err := os.Open(path)
@@ -23,12 +47,33 @@ func CalculateFileHash(path string) (string, error) {
 	}
 	defer file.Close()
 
-	hash := md5.New()
-	if _, err := io.Copy(hash, file); err != nil {
-		return "", err
+	scratch := hashScratchPool.Get().(*hashScratch)
+	defer hashScratchPool.Put(scratch)
+
+	scratch.h.Reset()
+	// Read with the pooled buffer directly. *os.File implements io.WriterTo, so
+	// io.Copy/io.CopyBuffer ignore the supplied buffer and allocate their own
+	// 32 KiB scratch buffer on every call.
+	for {
+		n, readErr := file.Read(scratch.buf)
+		if n > 0 {
+			_, _ = scratch.h.Write(scratch.buf[:n])
+		}
+		if readErr != nil {
+			if readErr == io.EOF {
+				break
+			}
+			return "", readErr
+		}
 	}
 
-	return hex.EncodeToString(hash.Sum(nil)), nil
+	// The digest lands in the pooled scratch array and the hex text in a stack
+	// array: the previous hash.Sum(nil) + hex.EncodeToString pair allocated two
+	// byte slices per call.
+	var encoded [md5.Size * 2]byte
+	hex.Encode(encoded[:], scratch.h.Sum(scratch.sum[:0]))
+
+	return string(encoded[:]), nil
 }
 
 // calculateFileHash is a deprecated alias for CalculateFileHash kept for
@@ -95,12 +140,17 @@ func flushBatch(db *gorm.DB, toCreate *[]domain.ImageFile, toUpdate *[]domain.Im
 			oldHashMap[row.ID] = row.Hash
 		}
 
+		// Persist the whole batch with a single upsert instead of one UPDATE
+		// statement per row. Saving a slice makes GORM emit one
+		// INSERT ... ON CONFLICT DO UPDATE per chunk, writing the same column
+		// values as the per-row Save it replaces.
+		db.Save(*toUpdate)
+
 		for _, f := range *toUpdate {
 			contentChanged := true
 			if f.Hash != "" {
 				contentChanged = oldHashMap[f.ID] != f.Hash
 			}
-			db.Save(&f)
 			result.Updated = append(result.Updated, updatedFile{File: f, ContentChanged: contentChanged})
 		}
 	}
@@ -229,7 +279,7 @@ func scanDirectory(db *gorm.DB, dirPath string, progressChan chan<- string, numW
 	}()
 
 	// Phase 5: Collect results and batch write to DB
-	const writeBatchSize = 50
+	const writeBatchSize = 500
 	var toCreate []domain.ImageFile
 	var toUpdate []domain.ImageFile
 	var batch ScanBatchResult
@@ -424,7 +474,7 @@ func fastScanGalleryDirectory(db *gorm.DB, dirPath string, progressChan chan<- s
 	}()
 
 	// Phase 5: Collect results and batch write to DB
-	const writeBatchSize = 50
+	const writeBatchSize = 500
 	var toCreate []domain.ImageFile
 	var toUpdate []domain.ImageFile
 

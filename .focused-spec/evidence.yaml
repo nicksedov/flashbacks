@@ -189,6 +189,9 @@ scopes:
     design-system.progress-indicator-inset-fill:
       evidence:
         - vitest::webapp/src/components/ui/progress.test.tsx::ProgressIndicator > renders as a borderless inset fill inside a card
+    design-system.page-width-no-tab-override:
+      evidence:
+        - vitest::webapp/src/components/auth/admin/AdminPanel.test.tsx::AdminPanel > inherits the shared page width instead of adding its own max-width or centring wrapper
     gallery-browsing.scan-status-phase:
       evidence:
         - go::./internal/application/imaging::TestScanManager_StatusPhase

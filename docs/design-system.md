@@ -22,6 +22,8 @@
 | 14 | Scan counter reports the progress-message count ("0 files processed") and a hardcoded English phase string | [`scan_manager.go`](../backend/core/internal/application/imaging/scan_manager.go) | Structured localized `phase` plus real `totalFiles`/`filesProcessed`/`filesAdded`/`filesDeleted` statistics | ☑ |
 | 15 | Automatic Image Tagging uses a hand-rolled progress bar | [`AdminAnalysisTab.tsx`](../webapp/src/components/tabs/AdminAnalysisTab.tsx) | Reuse the shared `ProgressIndicator` | ☑ |
 | 16 | "Add folder" (filled) sits in the card header while the outlined scan buttons sit in a separate row | [`AdminGeneralTab.tsx`](../webapp/src/components/tabs/AdminGeneralTab.tsx), [`AddFolderForm.tsx`](../webapp/src/components/settings/AddFolderForm.tsx) | One action row: primary add action plus outlined scan actions | ☑ |
+| 17 | Settings → Users wrapped its content in a per-tab `mx-auto max-w-6xl` page container, so its side gutters were wider than on every other screen | [`AdminPanel.tsx`](../webapp/src/components/auth/admin/AdminPanel.tsx) | Inherit the shell's single page width — no tab-level `max-w-*`/`mx-auto` page wrapper | ☑ |
+| 18 | Profile page still narrows its whole page to `max-w-2xl`, unlike every other tab | [`UserProfile.tsx`](../webapp/src/components/auth/UserProfile.tsx) | Inherit the shared page width, or record an explicit, justified exception | ☐ |
 
 ## Notes
 
@@ -31,6 +33,7 @@
 - **Auth language switcher (`add-auth-language-switcher`, 2026-10-07):** audited for drift — the login/registration language switcher reuses the shared `Select` primitive with semantic tokens, an accessible `aria-label`, Radix keyboard operation, and a 44px touch target. No new drift introduced.
 - **Gallery → Folders folder-name caption (2026-10-07):** the `FolderTile` label in [`GalleryFoldersView.tsx`](../webapp/src/components/gallery/GalleryFoldersView.tsx) was moved off the off-scale `text-[11px]` onto `text-sm` (larger and on the defined typography scale). Image-caption tiles ([`TileFrame.tsx`](../webapp/src/components/gallery/TileFrame.tsx), [`SmartSearchTile.tsx`](../webapp/src/components/gallery/SmartSearchTile.tsx)) still use `text-[11px]` and remain as typography-scale drift.
 - **Nested settings panels (`replace-nested-borders-with-inset-fill`, 2026-10-09):** bordered panels nested inside settings cards (Admin General/Analysis/LLM Providers and the provider config form) were converted to borderless `bg-muted` inset fills. The design system now limits grouping surfaces to one level of bordered container (the `Card`); see [`openspec/specs/design-system/spec.md`](../openspec/specs/design-system/spec.md).
+- **Single page width across screens (`admin-users-page-width`, 2026-10-17):** the design system now pins the page width (max width + horizontal padding, i.e. the side gutters) to the app shell in [`App.tsx`](../webapp/src/App.tsx). A tab or admin section MUST NOT add its own page-level `max-w-*`/`mx-auto` container; narrowing individual elements (dialogs, read-only value panels, text blocks) stays allowed. The Settings → Users screen dropped its `mx-auto max-w-6xl` wrapper, which had made its side gutters wider than every other screen. Requirement id `design-system.page-width-no-tab-override`, evidence [`AdminPanel.test.tsx`](../webapp/src/components/auth/admin/AdminPanel.test.tsx).
 
 ### Responsive
 

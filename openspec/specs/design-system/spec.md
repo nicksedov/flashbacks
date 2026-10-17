@@ -224,10 +224,18 @@ All interactive components SHALL expose a visible keyboard focus indicator (focu
 
 Text SHALL use the defined typography scale (`text-xs` through `text-2xl` with semantic weight helpers). Layout SHALL use the 4px-based spacing scale (Tailwind spacing utilities) and the shared radius tokens. Main content SHALL use one horizontal padding and max-width policy across tabs, with no per-tab special cases.
 
+The page width SHALL be owned by the app shell (`App.tsx`: one `max-w-*` container plus one horizontal padding). A tab, screen, or admin section MUST NOT wrap its main content in its own page-level `max-w-*` or `mx-auto` container, because that widens its side gutters relative to every other screen. Width MAY still be narrowed locally on individual elements (dialogs, read-only value panels, text blocks) — never on the screen's outermost content container.
+
 #### Scenario: Consistent page gutter across tabs
 
 - **WHEN** any tab renders its main content
 - **THEN** it uses the same horizontal padding and max-width policy as every other tab
+
+<!-- focused-spec:id=design-system.page-width-no-tab-override -->
+#### Scenario: Tab content adds no page-level width override
+
+- **WHEN** a tab renders its main content
+- **THEN** its outermost content container adds no tab-specific `max-w-*` or `mx-auto` page wrapper, so the content keeps the shared page width and side gutters
 
 ### Requirement: Design system is the authority for agents
 

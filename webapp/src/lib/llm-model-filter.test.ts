@@ -36,6 +36,16 @@ describe("filterModelsForInstrument", () => {
     expect(ids).toEqual(["embed-1"])
   })
 
+  it("chat excludes non-text models", () => {
+    const generators: LlmModelDTO[] = [
+      { id: "video-1", name: "Video", capabilities: ["video_generation"] },
+      { id: "tts-1", name: "TTS", capabilities: ["text_to_speech"] },
+      { id: "asr-1", name: "ASR", capabilities: ["speech_recognition"] },
+    ]
+    const ids = filterModelsForInstrument([...models, ...generators], "chat").map((m) => m.id)
+    expect(ids).toEqual(["chat-1", "vision-1", "edit-1"])
+  })
+
   it("embedding excludes a chat/vision model (e.g. Ollama gemma4)", () => {
     const gemma4: LlmModelDTO = {
       id: "gemma4:31b",

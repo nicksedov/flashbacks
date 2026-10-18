@@ -916,9 +916,18 @@ func alibabaCatalogModelToInfo(m alibabaCatalogModel) ModelInfo {
 	}
 	info.InputModalities = mergeModalities(m.InferenceMetadata.RequestModality)
 	info.OutputModalities = mergeModalities(m.InferenceMetadata.ResponseModality)
-	info.Capabilities = capabilitiesFromModalities(info.InputModalities)
-	for _, cap := range normalizeCapabilities(m.Capabilities) {
-		info.Capabilities = appendUnique(info.Capabilities, cap)
+
+	// Capabilities come from the provider's native codes. Modality derivation is
+	// only a fallback, so video, speech, and image generators never inherit
+	// chat/tool_calling from their input modalities.
+	info.Capabilities = normalizeCapabilities(m.Capabilities)
+	if len(info.Capabilities) == 0 {
+		info.Capabilities = capabilitiesFromModalities(info.InputModalities)
+	}
+	// An image input means vision only for models that also answer in text;
+	// pure generators (image, video) are not vision models.
+	if containsFold(info.InputModalities, "image") && containsFold(info.OutputModalities, "text") {
+		info.Capabilities = appendUnique(info.Capabilities, "vision")
 	}
 
 	lower := strings.ToLower(m.Model)

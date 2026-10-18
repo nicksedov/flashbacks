@@ -793,6 +793,18 @@ export const translationsRu = {
   "llm_model_details.capabilities": "Возможности",
   "llm_model_details.inputPrice": "Цена ввода (за 1M токенов)",
   "llm_model_details.outputPrice": "Цена вывода (за 1M токенов)",
+  "llm_capabilities.chat": "Чат",
+  "llm_capabilities.toolCalling": "Вызов инструментов",
+  "llm_capabilities.vision": "Понимание изображений",
+  "llm_capabilities.embedding": "Эмбеддинги",
+  "llm_capabilities.imageEdit": "Редактирование изображений",
+  "llm_capabilities.reasoning": "Рассуждение",
+  "llm_capabilities.videoGeneration": "Генерация видео",
+  "llm_capabilities.textToSpeech": "Синтез речи",
+  "llm_capabilities.speechRecognition": "Распознавание речи",
+  "llm_capabilities.realtime": "Реальное время",
+  "llm_capabilities.omni": "Омнимодальная модель",
+  "llm_capabilities.worldModel": "Мировая модель",
 
   // Чат / Агент
   "chat.title": "ИИ-ассистент",

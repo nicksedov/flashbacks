@@ -1,6 +1,7 @@
 import type { ReactNode } from "react"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
+import { capabilityLabelKey } from "@/lib/llm-capabilities"
 import { useTranslation } from "@/i18n"
 import type { LlmModelDTO } from "@/types"
 
@@ -64,11 +65,15 @@ export function ModelDetailsDialog({ model, open, onOpenChange }: ModelDetailsDi
           <Row label={t("llm_model_details.capabilities")}>
             {capabilities.length > 0 ? (
               <span className="flex flex-wrap justify-end gap-1">
-                {capabilities.map((cap) => (
-                  <Badge key={cap} variant="outline" className="h-4 px-1 py-0 text-[10px]">
-                    {cap}
-                  </Badge>
-                ))}
+                {capabilities.map((cap) => {
+                  const labelKey = capabilityLabelKey(cap)
+                  return (
+                    <Badge key={cap} variant="outline" className="h-4 px-1 py-0 text-[10px]">
+                      {/* Localized label, falling back to the raw value for unknown capabilities. */}
+                      {labelKey ? t(labelKey) : cap}
+                    </Badge>
+                  )
+                })}
               </span>
             ) : (
               "—"

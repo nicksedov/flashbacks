@@ -47,7 +47,7 @@ COPY exif/ ./exif/
 COPY ocr/ ./ocr/
 
 # ---------- Build all binaries ----------
-RUN cd core && CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -ldflags="-w -s" -o /build/bin/core ./cmd/server
+RUN cd core && CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /build/bin/core ./cmd/server
 RUN cd exif && CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /build/bin/exif ./cmd/server
 RUN cd ocr  && CGO_ENABLED=1 GOOS=linux go build -ldflags="-w -s" -o /build/bin/ocr ./cmd/server
 
@@ -63,7 +63,6 @@ RUN apk add --no-cache ca-certificates tzdata curl
 WORKDIR /app
 
 COPY --from=builder /build/bin/core ./core
-COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 
 EXPOSE 5170
 

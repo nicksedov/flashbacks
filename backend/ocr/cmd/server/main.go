@@ -12,11 +12,17 @@ import (
 
 	"github.com/flashbacks/ocr/internal/config"
 	"github.com/flashbacks/ocr/internal/handler"
+	"github.com/flashbacks/ocr/internal/infrastructure/registrybootstrap"
 )
 
 func main() {
 	// 1. Load configuration
 	cfg := config.Load()
+
+	bootstrap := registrybootstrap.FromEnv("ocr")
+	resolveCtx, cancelResolve := context.WithTimeout(context.Background(), 5*time.Second)
+	cfg.ApplyRegistry(bootstrap.ResolveConfig(resolveCtx, "ocr", cfg.RegistryDefaults()))
+	cancelResolve()
 
 	// 2. Initialize router
 	mux := http.NewServeMux()
@@ -28,6 +34,14 @@ func main() {
 	// Root API prefix: /ocr/api
 	mux.HandleFunc("/ocr/api/health", handler.HealthCheck)
 	mux.HandleFunc("/ocr/api/v1/classify", classifyHandler.Classify)
+
+	bootstrap.Register(context.Background(), "ocr", registrybootstrap.AdvertiseHost(),
+		registrybootstrap.PortInt(cfg.Port, 5174), "/ocr/api", "/ocr/api/health", registrybootstrap.Version())
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), registrybootstrap.ShutdownTimeout)
+		defer cancel()
+		bootstrap.Deregister(ctx)
+	}()
 
 	// 5. Create HTTP server
 	addr := fmt.Sprintf("%s:%s", cfg.Host, cfg.Port)

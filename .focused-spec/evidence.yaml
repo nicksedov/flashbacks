@@ -253,3 +253,33 @@ scopes:
     gallery-browsing.hash-bounded-allocations:
       evidence:
         - go::./internal/application/imaging::TestCalculateFileHash_BoundedAllocations
+    service-registry.config-roundtrip:
+      evidence:
+        - goregistry::./internal/httpapi::TestConfigCRUD
+    service-registry.config-watch:
+      evidence:
+        - goregistry::./internal/httpapi::TestConfigWatchNotifies
+    service-registry.register-discovery:
+      evidence:
+        - goregistry::./internal/httpapi::TestServiceRegistrationAndDiscovery
+    service-registry.lease-expiry:
+      evidence:
+        - goregistry::./internal/httpapi::TestServiceLeaseExpiry
+    service-registry.discovery-resolves-peer:
+      evidence:
+        - go::./internal/infrastructure/registrybootstrap::TestResolverUsesDiscovery
+    service-registry.bootstrap-fallback:
+      evidence:
+        - goregistry::./client::TestResolvePeerFallsBack
+    service-registry.bootstrap-only-env:
+      evidence:
+        - goregistry::./client::TestResolveConfigLayering
+    service-registry.secret-encrypted-at-rest:
+      evidence:
+        - goregistry::./internal/httpapi::TestSecretsEncryptedAtRest
+    service-registry.secret-roundtrip:
+      evidence:
+        - goregistry::./client::TestConfigAndSecretRoundTrip
+    service-registry.health-ready:
+      evidence:
+        - goregistry::./internal/httpapi::TestHealthReportsReady

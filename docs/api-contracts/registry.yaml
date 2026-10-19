@@ -1,0 +1,369 @@
+openapi: 3.0.3
+info:
+  title: Flashbacks Registry API
+  version: 1.0.0
+  description: |
+    Service discovery and configuration store for the Flashbacks platform.
+    The registry embeds a single-node etcd instance and exposes a REST facade
+    for configuration values, encrypted secrets, and service registration.
+
+    Configuration and registration values live under `/flashbacks/*` in etcd.
+    Secrets are encrypted with AES-256-GCM before they are persisted.
+servers:
+  - url: http://localhost:5176
+    description: Local development
+
+paths:
+  /registry/v1/health:
+    get:
+      operationId: getRegistryHealth
+      summary: Registry readiness
+      responses:
+        '200':
+          description: Embedded backend is reachable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+        '503':
+          description: Embedded backend is unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /registry/v1/config/{service}:
+    parameters:
+      - $ref: '#/components/parameters/Service'
+    get:
+      operationId: listConfig
+      summary: List all configuration values for a service
+      responses:
+        '200':
+          description: Configuration values keyed by name
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConfigValues'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /registry/v1/config/{service}/{key}:
+    parameters:
+      - $ref: '#/components/parameters/Service'
+      - $ref: '#/components/parameters/Key'
+    put:
+      operationId: putConfig
+      summary: Write one configuration value
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Value'
+      responses:
+        '200':
+          description: Value stored
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+    get:
+      operationId: getConfig
+      summary: Read one configuration value
+      responses:
+        '200':
+          description: Stored value
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Value'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      operationId: deleteConfig
+      summary: Delete one configuration value
+      responses:
+        '200':
+          description: Value deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+
+  /registry/v1/config/{service}/watch:
+    parameters:
+      - $ref: '#/components/parameters/Service'
+    get:
+      operationId: watchConfig
+      summary: Stream configuration changes for a service
+      description: |
+        Server-Sent Events stream. The first event has `type: ready`; subsequent
+        events are `put` or `delete` with the full key and value.
+      responses:
+        '200':
+          description: Event stream
+          content:
+            text/event-stream:
+              schema:
+                type: string
+
+  /registry/v1/secrets/{service}/{key}:
+    parameters:
+      - $ref: '#/components/parameters/Service'
+      - $ref: '#/components/parameters/Key'
+    put:
+      operationId: putSecret
+      summary: Store an encrypted secret value
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Value'
+      responses:
+        '200':
+          description: Secret stored
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+    get:
+      operationId: getSecret
+      summary: Read and decrypt a secret value
+      responses:
+        '200':
+          description: Plaintext secret value
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Value'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      operationId: deleteSecret
+      summary: Delete a secret value
+      responses:
+        '200':
+          description: Secret deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+
+  /registry/v1/services/{service}:
+    parameters:
+      - $ref: '#/components/parameters/Service'
+    get:
+      operationId: listInstances
+      summary: List live instances of a service
+      responses:
+        '200':
+          description: Registered instances
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InstanceList'
+
+  /registry/v1/services/{service}/{instance}:
+    parameters:
+      - $ref: '#/components/parameters/Service'
+      - $ref: '#/components/parameters/Instance'
+    put:
+      operationId: registerInstance
+      summary: Register a service instance with a TTL lease
+      parameters:
+        - name: ttl
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 15
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Instance'
+      responses:
+        '200':
+          description: Instance registered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Lease'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+    delete:
+      operationId: deregisterInstance
+      summary: Remove a service instance
+      responses:
+        '200':
+          description: Instance removed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+
+  /registry/v1/services/{service}/{instance}/heartbeat:
+    parameters:
+      - $ref: '#/components/parameters/Service'
+      - $ref: '#/components/parameters/Instance'
+    post:
+      operationId: heartbeatInstance
+      summary: Refresh a registration lease
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Heartbeat'
+      responses:
+        '200':
+          description: Lease refreshed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Lease'
+        '409':
+          description: Lease is no longer valid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /registry/v1/services/{service}/watch:
+    parameters:
+      - $ref: '#/components/parameters/Service'
+    get:
+      operationId: watchInstances
+      summary: Stream instance registration changes
+      description: |
+        Server-Sent Events stream. The first event has `type: ready`; subsequent
+        events are `put` or `delete` for registrations of this service.
+      responses:
+        '200':
+          description: Event stream
+          content:
+            text/event-stream:
+              schema:
+                type: string
+
+components:
+  parameters:
+    Service:
+      name: service
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Service name, for example `core`, `exif`, or `ocr`.
+    Key:
+      name: key
+      in: path
+      required: true
+      schema:
+        type: string
+    Instance:
+      name: instance
+      in: path
+      required: true
+      schema:
+        type: string
+
+  schemas:
+    Value:
+      type: object
+      required: [value]
+      properties:
+        value:
+          type: string
+    ConfigValues:
+      type: object
+      properties:
+        values:
+          type: object
+          additionalProperties:
+            type: string
+    Instance:
+      type: object
+      required: [host, port]
+      properties:
+        host:
+          type: string
+        port:
+          type: integer
+          minimum: 1
+          maximum: 65535
+        basePath:
+          type: string
+        healthPath:
+          type: string
+        version:
+          type: string
+    InstanceList:
+      type: object
+      properties:
+        instances:
+          type: array
+          items:
+            allOf:
+              - $ref: '#/components/schemas/Instance'
+              - type: object
+                properties:
+                  id:
+                    type: string
+    Lease:
+      type: object
+      properties:
+        leaseId:
+          type: integer
+          format: int64
+        ttl:
+          type: integer
+          format: int64
+    Heartbeat:
+      type: object
+      required: [leaseId]
+      properties:
+        leaseId:
+          type: integer
+          format: int64
+    Health:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          example: ok
+    Status:
+      type: object
+      properties:
+        status:
+          type: string
+          example: ok
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+
+  responses:
+    BadRequest:
+      description: Invalid request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Value not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'

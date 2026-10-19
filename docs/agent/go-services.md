@@ -13,6 +13,7 @@ and win over the root file whenever the two differ.
 | core | `backend/core/` | Core REST API: auth, scan, gallery, OCR orchestration, tags, chat, trash | 5170 | [`backend/core/README.md`](../../backend/core/README.md:1) |
 | exif | `backend/exif/` | EXIF read/write, GPS writing, MCP endpoint | 5172 | [`backend/exif/README.md`](../../backend/exif/README.md:1) |
 | ocr | `backend/ocr/` | Text detection / document classification via Tesseract | 5174 | [`backend/ocr/README.md`](../../backend/ocr/README.md:1) |
+| registry | `backend/registry/` | Service discovery + config KV store (embedded etcd, REST facade) | 5176 | — |
 | shared | `backend/shared/` | Shared domain types (`exif.go`, `ocr.go`) consumed by the services | — | — |
 | embeddings-builder | `tools/embeddings-builder/` | CLI that backfills `tag_embeddings` via pgvector | — | [`tools/embeddings-builder/README.md`](../../tools/embeddings-builder/README.md:1) |
 
@@ -62,6 +63,8 @@ humans.
   exactly — changing a tag is a frontend-breaking contract change.
 - REST is the only inter-service channel (core → exif/ocr); **no cross-service DB
   writes**.
+- Configuration and discovery go through the registry REST facade at
+  `/registry/v1/*`; services never talk to etcd directly.
 - OpenAPI: [`docs/api-contracts/`](../api-contracts/) (`core.yaml`, `exif.yaml`,
   `ocr.yaml`); MCP tool schemas: [`docs/mcp-contracts/`](../mcp-contracts/).
 - When `docs/api-contracts/core.yaml` changes, run `make generate-types` to
@@ -76,6 +79,7 @@ humans.
 | core | `cd backend/core && go test ./internal/application/... -count=1` | `cd backend/core && go vet ./...` | `go build ./...` |
 | exif | `cd backend/exif && go test ./... -count=1` | `cd backend/exif && go vet ./...` | `go build ./...` |
 | ocr | `. ./scripts/toolenv.sh && cd backend/ocr && go test -race -cover ./...` | `. ./scripts/toolenv.sh && cd backend/ocr && golangci-lint run` | `. ./scripts/toolenv.sh && go build -o ocr ./cmd/server` |
+| registry | `cd backend/registry && go test ./... -count=1` | `cd backend/registry && go vet ./...` | `cd backend/registry && go build ./...` |
 | shared | `go build ./...` in every consumer module | `go vet ./...` where consumed | — |
 | embeddings-builder | `cd tools/embeddings-builder && go test ./... -count=1` | `go vet ./...` | `go build -o embeddings-builder ./cmd/embeddings-builder/` |
 
@@ -146,13 +150,31 @@ Make targets wrap the same commands: `make test-core`, `make test-exif`,
 
 ## 6. shared — `backend/shared/`
 
+
 - Holds domain types shared between services (`domain/exif.go`, `domain/ocr.go`).
 - A change here is a **cross-service contract change**: update this module, then
   build and test *every* consumer (`core`, `exif`, `ocr`) and refresh any OpenAPI/
   MCP schema that mirrors the type.
 - No service-specific logic and no dependencies on Gin/GORM belong here.
 
-## 7. embeddings-builder — `tools/embeddings-builder/`
+## 7. registry — `backend/registry/`
+
+- **Stack**: Go 1.25, embedded etcd (`go.etcd.io/etcd/server/v3/embed`), `net/http`.
+- **Owns**: the `/flashbacks/{config,secrets,services}/*` namespace and the REST
+  facade on `:5176`.
+- **Rules**:
+  - Only the registry process speaks the etcd protocol; consumers use
+    `github.com/flashbacks/registry/client`.
+  - Secret values are AES-256-GCM ciphertext at rest; never log plaintext and
+    never return secrets from config endpoints.
+  - Registration uses a TTL lease; if heartbeats stop, the lease must expire and
+    the instance must disappear from discovery.
+  - Config precedence is explicit env override > registry value > built-in
+    default; an unreachable registry must degrade to defaults and bootstrap URLs.
+- **Required checks**: `cd backend/registry && go test ./... -count=1`,
+  `go vet ./...`, `go build ./...`.
+
+## 8. embeddings-builder — `tools/embeddings-builder/`
 
 - Standalone CLI: `cmd/embeddings-builder/{main,db,embedding,models}.go`.
 - Idempotent by design: tracks tag content changes via MD5 hashes and skips
@@ -165,7 +187,7 @@ Make targets wrap the same commands: `make test-core`, `make test-exif`,
 
 ---
 
-## 8. Definition of done for a Go change
+## 9. Definition of done for a Go change
 
 - [ ] `gofmt` clean, `go vet ./...` clean, no identifier redeclaration.
 - [ ] Errors handled explicitly; no `panic`; wrapped with `%w`.
@@ -177,7 +199,7 @@ Make targets wrap the same commands: `make test-core`, `make test-exif`,
       updated and `make generate-types` run when a contract changed.
 - [ ] Component-specific checks from §2 executed and reported.
 
-## 9. See also
+## 10. See also
 
 - [`docs/agent/webapp.md`](webapp.md) — the TypeScript/React counterpart.
 - [`docs/agent/sdd-workflow.md`](sdd-workflow.md) — SDD cycle and evidence gate.

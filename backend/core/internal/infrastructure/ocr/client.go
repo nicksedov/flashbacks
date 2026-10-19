@@ -49,20 +49,32 @@ func DefaultClassifyParams() *ClassifyParams {
 }
 
 type clientImpl struct {
-	baseURL    string
-	httpClient *http.Client
-	checker    *healthcheck.PeriodicChecker
+	urlProvider func() string
+	httpClient  *http.Client
+	checker     *healthcheck.PeriodicChecker
 }
 
-// NewClient creates a new OCR client with unified healthcheck.
+// NewClient creates a new OCR client with a static service URL.
 func NewClient(serviceURL string) Client {
-	baseURL := fmt.Sprintf("%s/ocr/api", strings.TrimRight(serviceURL, "/"))
+	return NewClientWithProvider(func() string { return serviceURL })
+}
+
+// NewClientWithProvider creates a client whose service URL can change at
+// runtime, for example as registry discovery updates peer locations.
+func NewClientWithProvider(provider func() string) Client {
+	if provider == nil {
+		provider = func() string { return "" }
+	}
 	c := &clientImpl{
-		baseURL:    baseURL,
-		httpClient: &http.Client{Timeout: 5 * time.Second},
+		urlProvider: provider,
+		httpClient:  &http.Client{Timeout: 5 * time.Second},
 	}
 	c.checker = healthcheck.NewPeriodicChecker(c, 30*time.Second, 2*time.Second)
 	return c
+}
+
+func (c *clientImpl) base() string {
+	return fmt.Sprintf("%s/ocr/api", strings.TrimRight(c.urlProvider(), "/"))
 }
 
 // Check implements healthcheck.Checker by delegating to CheckHealth.
@@ -72,7 +84,7 @@ func (c *clientImpl) Check(ctx context.Context) error {
 
 // CheckHealth checks if OCR service is available.
 func (c *clientImpl) CheckHealth(ctx context.Context) error {
-	url := fmt.Sprintf("%s/health", c.baseURL)
+	url := fmt.Sprintf("%s/health", c.base())
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
@@ -153,7 +165,7 @@ func (c *clientImpl) Classify(ctx context.Context, image io.Reader, contentType 
 		queryParams.Set("lang", defaults.Lang)
 	}
 
-	classifyURL := fmt.Sprintf("%s/v1/classify?%s", c.baseURL, queryParams.Encode())
+	classifyURL := fmt.Sprintf("%s/v1/classify?%s", c.base(), queryParams.Encode())
 
 	cfg := retry.Config{
 		MaxAttempts: 3,

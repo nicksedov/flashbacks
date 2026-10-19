@@ -2,6 +2,7 @@
 package di
 
 import (
+	"context"
 	"log"
 	"time"
 
@@ -18,6 +19,7 @@ import (
 	"github.com/flashbacks/core/internal/infrastructure/geocoder"
 	"github.com/flashbacks/core/internal/infrastructure/mcpserver"
 	"github.com/flashbacks/core/internal/infrastructure/ocr"
+	"github.com/flashbacks/core/internal/infrastructure/registrybootstrap"
 	"github.com/flashbacks/core/internal/interfaces/handler"
 	"github.com/flashbacks/core/internal/interfaces/handler/helpers"
 	"github.com/flashbacks/core/internal/interfaces/i18n"
@@ -33,6 +35,7 @@ import (
 
 // CoreSet groups fundamental infrastructure providers.
 var CoreSet = wire.NewSet(
+	ProvideRegistryBootstrap,
 	ProvideConfig,
 	ProvideDB,
 	ProvideI18nService,
@@ -55,9 +58,23 @@ var CoreSet = wire.NewSet(
 	ProvideSyncHistoryRepo,
 )
 
-// ProvideConfig loads application configuration from environment variables.
-func ProvideConfig() *config.AppConfig {
-	return config.LoadConfig()
+// ProvideRegistryBootstrap creates the optional registry client for core.
+func ProvideRegistryBootstrap() *registrybootstrap.Bootstrap {
+	return registrybootstrap.FromEnv("core")
+}
+
+// ProvideConfig loads configuration, overlaying registry values and secrets.
+func ProvideConfig(bootstrap *registrybootstrap.Bootstrap) *config.AppConfig {
+	cfg := config.LoadConfig()
+	if bootstrap.Enabled() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		cfg.ApplyRegistry(bootstrap.ResolveConfig(ctx, "core", cfg.RegistryDefaults()))
+		if secret, ok := bootstrap.Secret(ctx, "core", "db_password"); ok {
+			cfg.DBPassword = secret
+		}
+	}
+	return cfg
 }
 
 // ProvideDB initializes the database connection and runs auto-migration.
@@ -70,9 +87,10 @@ func ProvideI18nService() (*i18n.Service, error) {
 	return i18n.NewService()
 }
 
-// ProvideExifClient creates the EXIF service HTTP client.
-func ProvideExifClient(cfg *config.AppConfig) imaging.ExifClient {
-	return exifclient.NewHTTPExifClient(cfg.ExifServiceURL)
+// ProvideExifClient creates the EXIF service HTTP client with discovery.
+func ProvideExifClient(cfg *config.AppConfig, bootstrap *registrybootstrap.Bootstrap) imaging.ExifClient {
+	resolver := bootstrap.NewResolver("exif", cfg.ExifServiceURL)
+	return exifclient.NewHTTPExifClientWithProvider(resolver.URL)
 }
 
 // ProvideNominatimClient creates the Nominatim geocoding client.
@@ -86,9 +104,10 @@ func ProvideGeolocationService(db *gorm.DB, nominatim *geocoder.NominatimClient)
 }
 
 // ProvideOcrClient creates the OCR classifier client (nil if OCR is disabled).
-func ProvideOcrClient(cfg *config.AppConfig) ocr.Client {
+func ProvideOcrClient(cfg *config.AppConfig, bootstrap *registrybootstrap.Bootstrap) ocr.Client {
 	if cfg.OCREnabled {
-		return ocr.NewClient(cfg.OCRServiceURL)
+		resolver := bootstrap.NewResolver("ocr", cfg.OCRServiceURL)
+		return ocr.NewClientWithProvider(resolver.URL)
 	}
 	return nil
 }
@@ -311,14 +330,24 @@ func ProvideBootstrapService(db *gorm.DB, cfg *config.AppConfig) *auth.Bootstrap
 	return auth.NewBootstrapService(db, cfg.BootstrapLogin, cfg.BootstrapPassword)
 }
 
+// LoginLimiter and RegisterLimiter are distinct Wire types for the two rate
+// limiters that share the *auth.LoginRateLimiter implementation.
+type LoginLimiter struct {
+	*auth.LoginRateLimiter
+}
+
+type RegisterLimiter struct {
+	*auth.LoginRateLimiter
+}
+
 // ProvideLoginRateLimiter creates the login rate limiter.
-func ProvideLoginRateLimiter() *auth.LoginRateLimiter {
-	return auth.NewLoginRateLimiter(10, 15*time.Minute, 30*time.Minute)
+func ProvideLoginRateLimiter() LoginLimiter {
+	return LoginLimiter{auth.NewLoginRateLimiter(10, 15*time.Minute, 30*time.Minute)}
 }
 
 // ProvideRegisterRateLimiter creates the registration rate limiter (per IP).
-func ProvideRegisterRateLimiter() *auth.LoginRateLimiter {
-	return auth.NewLoginRateLimiter(10, 15*time.Minute, 30*time.Minute)
+func ProvideRegisterRateLimiter() RegisterLimiter {
+	return RegisterLimiter{auth.NewLoginRateLimiter(10, 15*time.Minute, 30*time.Minute)}
 }
 
 // ProvideAuthService creates the authentication service.
@@ -326,11 +355,11 @@ func ProvideAuthService(
 	db *gorm.DB,
 	bootstrap *auth.BootstrapService,
 	sessionRepo *auth.SessionRepository,
-	loginLimiter *auth.LoginRateLimiter,
-	registerLimiter *auth.LoginRateLimiter,
+	loginLimiter LoginLimiter,
+	registerLimiter RegisterLimiter,
 	cfg *config.AppConfig,
 ) *auth.AuthService {
-	return auth.NewAuthService(db, bootstrap, sessionRepo, loginLimiter, registerLimiter, cfg.AccountCreationMode)
+	return auth.NewAuthService(db, bootstrap, sessionRepo, loginLimiter.LoginRateLimiter, registerLimiter.LoginRateLimiter, cfg.AccountCreationMode)
 }
 
 // ProvideUserService creates the user service.
@@ -392,9 +421,10 @@ func ProvideExifBackupDir(db *gorm.DB) string {
 	return ""
 }
 
-// ProvideExifAgent creates the EXIF sub-agent.
-func ProvideExifAgent(cfg *config.AppConfig, backupDir string) *agent.ExifAgent {
-	return agent.NewExifAgent(cfg.ExifServiceURL, backupDir)
+// ProvideExifAgent creates the EXIF sub-agent with discovery-resolved URL.
+func ProvideExifAgent(cfg *config.AppConfig, backupDir string, bootstrap *registrybootstrap.Bootstrap) *agent.ExifAgent {
+	resolver := bootstrap.NewResolver("exif", cfg.ExifServiceURL)
+	return agent.NewExifAgent(resolver.URL(), backupDir)
 }
 
 // ProvideMCPServer creates the MCP server with all registered tools.

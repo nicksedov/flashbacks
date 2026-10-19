@@ -34,7 +34,7 @@ integration/.venv/bin/python -m pytest integration/
 integration/.venv/bin/python -m pytest integration/ --base-url http://localhost:5174
 
 # С указанием URL (переменная окружения)
-OCR_CLASSIFIER_URL=http://localhost:5174 integration/.venv/bin/python -m pytest integration/
+OCR_SERVICE_URL=http://localhost:5174 integration/.venv/bin/python -m pytest integration/
 
 # Только конкретный тест-класс
 integration/.venv/bin/python -m pytest integration/ -k "TestHealthEndpoint"

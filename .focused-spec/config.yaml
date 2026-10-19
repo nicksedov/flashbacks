@@ -25,3 +25,8 @@ runners:
     options:
       commandArgs: ["-C", "backend/core"]
     timeoutMs: 180000
+  goregistry:
+    package: "@focused-spec/runner-go"
+    options:
+      commandArgs: ["-C", "backend/registry"]
+    timeoutMs: 180000

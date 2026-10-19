@@ -10,6 +10,7 @@ A microservice-based application for finding and managing duplicate images.
 | **core** | [flashbacks/core-service](https://github.com/flashbacks/core) | Core API (auth, scan, gallery, OCR, tags) | 5170 |
 | **exif** | [flashbacks/exif](https://github.com/flashbacks/exif) | EXIF metadata extraction & GPS writing | 5172 |
 | **ocr** | [flashbacks/ocr](https://github.com/flashbacks/ocr) | OCR text detection (Tesseract) | 5174 |
+| **registry** | in-repo [`backend/registry`](backend/registry) | Service discovery + config KV store (embedded etcd) | 5176 |
 
 ## Quick Start
 
@@ -36,15 +37,15 @@ make doctor   # verify the toolchain and database reachability
 
 ### Run All Services
 ```bash
-make up       # start core (5170), exif (5172), ocr (5174), webapp (5180)
+make up       # start registry (5176), core (5170), exif (5172), ocr (5174), webapp (5180)
 make status   # show PIDs and URLs
 make logs     # tail service logs
 make down     # stop everything
 ```
 
 Open http://localhost:5180 in your browser. To run a single service in the
-foreground, use `make dev-core`, `make dev-exif`, `make dev-ocr` or
-`make dev-webapp`.
+foreground, use `make dev-registry`, `make dev-core`, `make dev-exif`,
+`make dev-ocr` or `make dev-webapp`.
 
 ### Testing
 ```bash
@@ -68,6 +69,7 @@ See [docs/architecture.md](docs/architecture.md).
 - [core OpenAPI](docs/api-contracts/core.yaml)
 - [exif OpenAPI](docs/api-contracts/exif.yaml)
 - [ocr OpenAPI](docs/api-contracts/ocr.yaml)
+- [registry OpenAPI](docs/api-contracts/registry.yaml)
 
 ## Migration from Monorepo
 This project was migrated from the `image-toolkit` monorepo to a microservice architecture.

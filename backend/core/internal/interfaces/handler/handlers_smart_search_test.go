@@ -76,3 +76,24 @@ func TestHandleSmartSearch_NotConfigured(t *testing.T) {
 		t.Errorf("expected a human-readable configuration hint, got %q", msg)
 	}
 }
+
+func TestHandleSmartSearch_QueryRequired(t *testing.T) {
+	srv := newSmartSearchTestServer(t)
+
+	w := serveHandler(srv.handleSmartSearch, http.MethodGet, "/api/gallery/smart-search", nil)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
+	}
+
+	msg := decodeErrorMessage(t, w.Body.Bytes())
+	if msg == "" {
+		t.Fatal("expected an error message in the response body")
+	}
+	if msg == string(i18n.MsgSmartQueryRequired) {
+		t.Errorf("error message was not translated: %q", msg)
+	}
+	if !strings.Contains(strings.ToLower(msg), "query") {
+		t.Errorf("expected a human-readable query hint, got %q", msg)
+	}
+}

@@ -650,3 +650,33 @@ scopes:
       evidence:
         - go::./internal/application/imaging::TestSearchByEmbedding_NotConfigured
         - go::./internal/interfaces/handler::TestHandleSmartSearch_NotConfigured
+    smart-search.query-required:
+      evidence:
+        - go::./internal/interfaces/handler::TestHandleSmartSearch_QueryRequired
+    smart-search.exact-tag-normalized:
+      evidence:
+        - go::./internal/application/imaging::TestSearchByExactTag_NormalizesCaseAndWhitespace
+    smart-search.exact-tag-no-match:
+      evidence:
+        - go::./internal/application/imaging::TestSearchByExactTag_NoMatch
+    smart-search.ranked-merge:
+      evidence:
+        - go::./internal/application/imaging::TestMergeAndRankResults_AllThreeGroupsPresent
+    smart-search.short-query-ignored:
+      evidence:
+        - vitest::webapp/src/hooks/useSmartSearch.test.tsx::useSmartSearch > ignores queries shorter than the minimum length
+    smart-search.previous-request-aborted:
+      evidence:
+        - vitest::webapp/src/hooks/useSmartSearch.test.tsx::useSmartSearch > aborts the previous request when a new search starts
+    smart-search.results-rendered:
+      evidence:
+        - vitest::webapp/src/components/tabs/SmartSearchTab.test.tsx::SmartSearchTab > renders the result count and a tile per result
+    smart-search.empty-state:
+      evidence:
+        - vitest::webapp/src/components/tabs/SmartSearchTab.test.tsx::SmartSearchTab > shows the empty state after a search with no results
+    smart-search.error-shown:
+      evidence:
+        - vitest::webapp/src/components/tabs/SmartSearchTab.test.tsx::SmartSearchTab > shows the backend error message when the search fails
+    smart-search.no-embeddings-hint:
+      evidence:
+        - vitest::webapp/src/components/tabs/SmartSearchTab.test.tsx::SmartSearchTab > shows the no-embeddings hint when no embeddings exist

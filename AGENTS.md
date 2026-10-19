@@ -18,7 +18,8 @@ or done directly.
   earlier task never authorizes skipping the question.
 - A prompt that asks for code, fixes, or a new artifact is still an unanswered
   mode question — surface it before touching files.
-- SDD mode means the full cycle (branch → propose → apply → sync → archive) under
+- SDD mode means the full cycle (branch → propose → apply → validate → sync →
+  archive) under
   [`docs/agent/sdd-workflow.md`](docs/agent/sdd-workflow.md); direct mode means
   editing the files in place without a change proposal.
 

@@ -10,6 +10,7 @@ branching step, and the scenario-authoring/evidence contract owned by
 | Lifecycle stages (propose → apply → sync → archive) | `.roo/skills/openspec-*` |
 | Branch creation before planning | `.roo/skills/feature-branch` |
 | Scenario contract + executable evidence | `.roo/skills/focused-spec` |
+| Code validation of the apply result | this document, §7 |
 | Project artifact rules & guidance | `openspec/config.yaml` |
 
 ---
@@ -48,11 +49,16 @@ branching step, and the scenario-authoring/evidence contract owned by
    └───────────┬───────────┘
                ▼
    ┌───────────────────────┐
-   │ 3. SYNC   (merge)     │  openspec-sync-specs → delta specs merged into main specs
+   │ 3. VALIDATE (review)  │  this document §7 → audit the diff, findings report
+   │                       │  PASS → continue; CHANGES REQUIRED → back to apply
    └───────────┬───────────┘
                ▼
    ┌───────────────────────┐
-   │ 4. ARCHIVE (close)    │  openspec-archive-change → changes/archive/YYYY-MM-DD-<name>/
+   │ 4. SYNC   (merge)     │  openspec-sync-specs → delta specs merged into main specs
+   └───────────┬───────────┘
+               ▼
+   ┌───────────────────────┐
+   │ 5. ARCHIVE (close)    │  openspec-archive-change → changes/archive/YYYY-MM-DD-<name>/
    └───────────────────────┘
 
    side paths: openspec-explore (think, before/within a change)
@@ -63,6 +69,7 @@ branching step, and the scenario-authoring/evidence contract owned by
 |---|---|---|---|
 | propose | `feature-branch`, `openspec-propose`, `focused-spec` | `openspec/changes/<name>/**` | project code |
 | apply | `openspec-apply-change`, `focused-spec` | project code, `tasks.md` checkboxes | main specs, change artifacts beyond tasks |
+| validate | none — this document §7 | the findings report only | project code, change artifacts, main specs |
 | sync | `openspec-sync-specs` | `openspec/specs/**` | change artifacts |
 | archive | `openspec-archive-change` | moves `changeRoot` into `changes/archive/` | deleting implementation |
 
@@ -282,7 +289,195 @@ the work exceeds what the spec and tasks describe, or when a blocker appears.
 
 ---
 
-## 7. Stage 3 — sync (merge delta into main specs)
+---
+
+## 7. Stage 3 — validate (code review of the diff)
+
+Apply proves the scenarios run; validate inspects the diff that made them run. It
+is a read-only, evidence-consuming review: the output is a findings report, not a
+patch, and a blocking finding returns the change to apply.
+
+### 7.1 Inputs and boundaries
+
+Required inputs, read from disk:
+
+- the branch diff against `main` — `git diff --stat origin/main...HEAD`, then the
+  per-file diff for every changed path;
+- the change's delta `spec.md` (scenarios) and `tasks.md`;
+- the apply report: executed component checks (§6.1) and per-scope evidence results
+  including the mutation-check pairs (§6.2).
+
+The stage itself must not:
+
+- **re-run the apply gates as a substitute for reading the diff.** Component
+  checks belong to §6.1 and the evidence gate to §6.2. Re-run only what the diff
+  changed *after* the apply report was written; a missing or stale report is the
+  blocking finding, not something validation repairs.
+- **write anything.** No code edits, no spec rewrites, no artifact updates. A
+  blocking finding reopens apply; if it shows the *spec* is wrong, suggest
+  `openspec-update-change`.
+- **restate component rules.** Their authority is
+  [`docs/agent/go-services.md`](go-services.md) and
+  [`docs/agent/webapp.md`](webapp.md); §7 defines how a diff is audited against
+  them and which deviations block.
+
+How §7 relates to the other stages:
+
+| Instruction | Lives in | Relation to validate |
+|---|---|---|
+| Service checks (tests, lint, build, type generation) | `go-services.md` §2, `webapp.md` §8, §6.1 | consume the reported results; never duplicate them |
+| Scenario contract and executable evidence | §5, §6.2 | verify the diff matches the scenarios; never re-author or re-run evidence |
+| Minimal, scoped changes | §6.1, §6.3 | reject scope creep instead of absorbing or re-planning it |
+| Component rules and definitions of done | `go-services.md` §9, `webapp.md` §9 | applied as a checklist, never restated here |
+
+If the diff touches both a Go service and the webapp, run both audits (§7.3, §7.4).
+
+### 7.2 Diff hygiene (all components)
+
+- Every hunk traces to a task in `tasks.md`; every task with user-visible behavior
+  has a scenario and an executed evidence entry. Untasked changes are blocking
+  scope creep (see §6.3).
+- No dead or debug residue: `fmt.Print*`/`console.log`, commented-out blocks,
+  skipped tests (`.skip`, `t.Skip`, `@pytest.mark.skip`), disabled lint rules, or
+  `TODO` without a tracked issue.
+- No secrets, credentials, tokens, or machine-specific absolute paths; no
+  environment-specific values baked into code.
+- Generated artifacts that the diff invalidates are regenerated and committed
+  (`wire_gen.go` after a DI change, `webapp/src/types/api.ts` after an OpenAPI
+  change, migrations alongside the model they serve).
+- Public API changes are additive or explicitly requested; a breaking change
+  without a requirement and a coordinated consumer update is blocking.
+
+### 7.3 Backend audit (Go services)
+
+`go-services.md` §1–§9 is the rule source. Beyond those rules, a backend diff is
+audited for the following failure modes.
+
+**Service boundaries and resilience**
+
+- No cross-service database access in either direction — *reads included*. A GORM
+  query from `core` against exif-owned tables (`image_metadata`,
+  `geolocation_caches`), or from `exif` against core-owned tables, is blocking
+  even when read-only; cross-service joins are forbidden.
+- Cross-service traffic goes through the typed client, never `http.Get` or ad-hoc
+  `net/http` calls from application code.
+- Every outbound call carries a `context` timeout and propagates cancellation; a
+  slow or unavailable downstream degrades (fallback, partial data, explicit error)
+  instead of hanging the request.
+- Retries are bounded with backoff; new or changed mutating endpoints and client
+  calls are idempotent or deduplicated.
+- A multi-step cross-service operation defines its failure mode and compensating
+  action, and a retry can resume rather than corrupt state.
+- Schema ownership stays with the owning service: migrations and models do not
+  leak across services, and shared domain types live in `backend/shared/domain/`.
+
+**Concurrency and lifecycle**
+
+- Every goroutine and background job has an owner and stops on context
+  cancellation; no leaked timers, pollers, or sends after shutdown.
+- Shared maps, slices, and caches are synchronized; upstream cancellation reaches
+  downstream calls.
+- Transaction boundaries cover the whole operation; an error path leaves no
+  partial write.
+
+**Security**
+
+- Auth, CSRF, and login rate limiting are not weakened; protected endpoints still
+  validate the session.
+- Input is validated at the handler boundary; file paths and external tool input
+  (`exiftool`, Tesseract) cannot be driven by unsanitized values.
+- Secrets are never logged or hardcoded; client-facing errors stay structured and
+  use the i18n layer.
+
+**Observability**
+
+- `slog` entries carry request/correlation context and no sensitive data.
+- Trace IDs propagate across service boundaries; health checks report real
+  dependency state rather than a constant.
+
+Advisory, never blocking on their own: smaller functions, naming, duplication,
+query micro-optimizations, extra logging context, documented future improvement.
+
+### 7.4 Webapp audit (TypeScript/React)
+
+`webapp.md` §3–§7 is the rule source. Beyond those rules:
+
+- **Effects and lifecycle:** dependency arrays are complete; subscriptions,
+  intervals, and listeners are cleaned up on unmount; callbacks that outlive a
+  render do not close over stale state.
+- **Data flow:** shared state stays in the existing providers; no prop drilling
+  through three or more levels; business logic lives in hooks, not JSX.
+- **Contracts:** DTO field names match the Go JSON tags exactly; typed API helpers
+  are used; API errors are translated before display; an expired session routes to
+  login instead of failing silently.
+- **Async states:** loading, error, and empty states are handled as deliberately
+  as the success state; no unhandled promise rejections.
+- **Performance:** maps, lightboxes, viewers, and other heavy components are
+  lazy-loaded; lists and grids render thumbnails rather than full-size images; no
+  new dependency without justification and no unbounded re-render loop.
+- **Design system:** UI changes follow
+  [`openspec/specs/design-system/spec.md`](../../openspec/specs/design-system/spec.md)
+  with theme tokens; dark/light and keyboard accessibility are not regressed.
+
+Advisory, never blocking on their own: extracting a smaller component, clearer
+prop names, memoization where a re-render is measurable, stricter narrowing.
+
+### 7.5 Blocking vs advisory findings
+
+Blocking — the change returns to apply before sync:
+
+- a component definition-of-done item is unmet (`go-services.md` §9,
+  `webapp.md` §9);
+- the apply report is missing, stale, or claims a check that does not pass;
+- implemented behavior has no scenario, or a scenario has no matching diff;
+- contract drift: JSON tag ↔ TS field, OpenAPI/MCP schema, or generated types out
+  of sync with the code;
+- a service-boundary, concurrency, security, or timeout rule above is violated;
+- untasked scope creep, dead/debug residue, or a committed secret;
+- a breaking public API change without an explicit requirement.
+
+Advisory — recorded in the report, never a gate:
+
+- readability, naming, duplication, function size;
+- micro-optimizations without a measured problem;
+- additional observability or comments;
+- anything that is a preference rather than a rule in `go-services.md`,
+  `webapp.md`, `openspec/config.yaml`, or the change's spec.
+
+Validation never introduces new requirements. A "would be nicer" observation with
+no rule or scenario behind it stays advisory, and no blocking finding may rest on
+taste alone.
+
+### 7.6 Report and conclusion
+
+Report inline, in the same style as the apply summary: reviewed scope (paths and
+hunks), one line per audit area, then each finding as
+
+```
+<blocking|advisory> — <file>:<line> — <rule or scenario violated> — <why it matters> — <concrete fix>
+```
+
+Conclude with exactly one verdict:
+
+- **PASS** — no blocking finding open; proceed to sync (§8).
+- **CHANGES REQUIRED** — at least one blocking finding; return to apply, fix, and
+  re-validate the *new* diff. Never hand an open blocking finding to sync or
+  archive as a known issue.
+
+### 7.7 Heuristics
+
+- Would this still behave correctly with partial, stale, or missing data?
+- Would it survive a slow or unavailable downstream service?
+- Would it survive two concurrent requests or an unmount mid-operation?
+- Does the test prove behavior, or only execute code? (§6.2 is the proof.)
+- Is the error path as deliberate as the success path?
+- Is every renamed field consistent across Go tag, TS type, and OpenAPI?
+- Would this be understandable in six months without the conversation that
+  produced it?
+
+---
+
+## 8. Stage 4 — sync (merge delta into main specs)
 
 `openspec-sync-specs` is an **agent-driven intelligent merge**, not a copy:
 
@@ -304,7 +499,7 @@ sync did not succeed — report it.
 
 ---
 
-## 8. Stage 4 — archive (close the change)
+## 9. Stage 5 — archive (close the change)
 
 ```bash
 openspec instructions archive --change "<name>" --json   # advisory only, never blocking
@@ -324,7 +519,7 @@ and any warning.
 
 ---
 
-## 9. Definition of done
+## 10. Definition of done
 
 A change is done only when all of the following hold:
 
@@ -334,13 +529,14 @@ A change is done only when all of the following hold:
 - [ ] `focused-spec validate --scope <name>` passes for every scenario scope.
 - [ ] `focused-spec run --scope <name>` passes for every scenario scope.
 - [ ] New/changed EVIDENCE survived the mutation check (fails when reverted, passes when restored).
+- [ ] Validate stage (§7) run on the final diff with verdict **PASS** and no open blocking finding.
 - [ ] All tasks are `- [x]`; service tests and linters are green.
 - [ ] `openspec validate --specs` passes after sync.
 - [ ] Delta specs are merged into main specs before the change is archived.
 
 ---
 
-## 10. Anti-patterns
+## 11. Anti-patterns
 
 | Anti-pattern | Why it is wrong |
 |---|---|
@@ -351,13 +547,17 @@ A change is done only when all of the following hold:
 | Passing tests accepted without a mutation check | A test that cannot fail proves nothing. |
 | Mutating implementation instead of the behavior for the mutation check | The revert must be a reversible behavior diff, not a change to the evidence. |
 | Declaring "implemented" before running the EVIDENCE CLI | Violates the completion gate in §6.2. |
+| Skipping §7 validate because "the tests are green" | Tests prove scenarios; they do not prove that the diff respects boundary, concurrency, and contract rules. |
+| Re-running the apply gates during validate instead of reading the diff | Duplicates §6.1/§6.2 work and masks a missing apply report, which is itself blocking. |
+| Blocking a change on a style preference with no rule or scenario behind it | Turns review into taste; such observations are advisory only. |
+| Starting sync or archive with an open blocking finding | Ships a change that never passed its own gate. |
 | Editing code during `propose`/`explore`/`update-change` | Violates the stage boundary; the prompt authorized planning only. |
 | Copying a delta spec verbatim into a main spec | Leaves delta headers in a main spec; breaks `validate --specs`. |
 | Archiving with an in-flight spec sync | The archived change is never reflected in the main specs. |
 
 ---
 
-## 11. Command cheat sheet
+## 12. Command cheat sheet
 
 ```bash
 # branch (feature-branch skill)
@@ -380,6 +580,10 @@ openspec instructions apply --change "<name>" --json
 npx --no-install focused-spec validate --scope <name>
 focused-spec run --scope <name>
 
+# validate (read-only review of the diff, §7)
+git diff --stat origin/main...HEAD
+git diff origin/main...HEAD -- <path>
+
 # sync
 openspec instructions specs --change "<name>" --json
 openspec validate --specs
@@ -394,5 +598,6 @@ openspec list --json
 - `openspec/config.yaml` — project context, artifact rules, apply/archive guidance.
 - `openspec/specs/**/spec.md` — main capability specs (post-sync truth).
 - `openspec/changes/<name>/` — active change; `openspec/changes/archive/` — closed changes.
-- `.roo/skills/` — the stage skills and `focused-spec` loader referenced above.
+- `.roo/skills/` — the stage skills and `focused-spec` loader referenced above;
+  code review is a workflow stage (§7), not a skill.
 - `AGENTS.md` — shared coding standards that every apply task must satisfy.

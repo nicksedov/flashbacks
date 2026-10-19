@@ -13,8 +13,9 @@ cluster-ready later). It provides:
   AES-256-GCM (etcd has no native encryption at rest).
 
 Execution mode: **SDD cycle**
-(`feature-branch` → `openspec-propose` → `openspec-apply-change` →
-`openspec-sync-specs` → `openspec-archive-change`), confirmed with the user.
+(branch step §4.1 of [`docs/agent/sdd-workflow.md`](docs/agent/sdd-workflow.md:87)
+→ `openspec-propose` → `openspec-apply-change` → `openspec-sync-specs` →
+`openspec-archive-change`), confirmed with the user.
 
 ## Current state (findings)
 

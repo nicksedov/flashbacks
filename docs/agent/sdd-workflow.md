@@ -8,7 +8,7 @@ branching step, and the scenario-authoring/evidence contract owned by
 | Concern | Owner |
 |---|---|
 | Lifecycle stages (propose → apply → sync → archive) | `.roo/skills/openspec-*` |
-| Branch creation before planning | `.roo/skills/feature-branch` |
+| Branch creation before planning | this document, §4.1 |
 | Scenario contract + executable evidence | `.roo/skills/focused-spec` |
 | Code validation of the apply result | this document, §7 |
 | Project artifact rules & guidance | `openspec/config.yaml` |
@@ -38,7 +38,7 @@ branching step, and the scenario-authoring/evidence contract owned by
                 │
                 ▼
    ┌───────────────────────┐
-   │ 1. PROPOSE  (plan)    │  feature-branch  → branch off main FIRST
+   │ 1. PROPOSE  (plan)    │  §4.1 branch     → branch off main FIRST
    │                       │  openspec-propose → proposal/specs/design/tasks
    │                       │  focused-spec     → scenario contract (planned:)
    └───────────┬───────────┘
@@ -67,7 +67,7 @@ branching step, and the scenario-authoring/evidence contract owned by
 
 | Stage | Skill | May write | Must not |
 |---|---|---|---|
-| propose | `feature-branch`, `openspec-propose`, `focused-spec` | `openspec/changes/<name>/**` | project code |
+| propose | §4.1 branch step, `openspec-propose`, `focused-spec` | `openspec/changes/<name>/**` | project code |
 | apply | `openspec-apply-change`, `focused-spec` | project code, `tasks.md` checkboxes | main specs, change artifacts beyond tasks |
 | validate | none — this document §7 | the findings report only | project code, change artifacts, main specs |
 | sync | `openspec-sync-specs` | `openspec/specs/**` | change artifacts |
@@ -89,19 +89,38 @@ Otherwise the commands act on the nearest local `openspec/` root.
 ### 4.1 Branch first — mandatory
 
 **Before the propose step, a feature branch MUST already exist.** Creating it is
-delegated to the `feature-branch` skill, never done ad hoc:
+part of this document — there is no separate branch skill — and is never done ad
+hoc:
 
-1. Derive a `short_description` from the intent (lowercase kebab-case, Latin +
-   digits + hyphens, ≤ 30 characters, filler words stripped).
-2. `git status --porcelain` — abort if the working tree is dirty (commit/stash first).
+1. **Name the branch from the intent.** Derive a `short_description` from the
+   user's description of the feature (lowercase kebab-case, Latin letters + digits
+   + hyphens only, ≤ 30 characters, filler words stripped, still meaningful and
+   recognizable). If the prompt does not describe an actual feature, ask the user
+   for a short description — do not invent a branch name and do not proceed.
+2. `git status --porcelain` — abort if the working tree is dirty; ask the user to
+   commit or stash, and never discard their work.
 3. If the current branch is not `main`: `git checkout main`, `git pull origin main`,
    `git merge <current> --no-ff`, `git push origin main`. On conflicts:
    `git merge --abort`, report, stop. Do not create the branch until `main` is pushed.
 4. `git checkout -b feature/<short_description>`
 5. `git push -u origin feature/<short_description>`
 
-Never force-push `main`, never bypass hooks. Planning artifacts, implementation,
-and evidence all land on this branch.
+Branch step error handling, beyond the merge rules above:
+
+- **`main` push fails** — report and stop; the new branch is not created.
+- **`feature/<short_description>` already exists on `origin`** — stop and ask the
+  user to pick a different name; force-push that branch only on an explicit request.
+- **Publishing the new branch fails** — report and stop; do not start `propose` on
+  an unpublished branch.
+- **Any other step fails** — stop and report; never continue silently.
+
+The branch step runs `git` in the workspace shell; do not route these operations
+through the GitHub MCP server. Never force-push `main`, never use `--no-verify` or
+otherwise bypass hooks unless the user explicitly asks. Planning artifacts,
+implementation, and evidence all land on this branch.
+
+Close the step with a short report: branch name, base (`main`, merged from
+`<previous_branch>`), and the published ref `origin/feature/<short_description>`.
 
 ### 4.2 Scaffold the change
 
@@ -560,7 +579,7 @@ A change is done only when all of the following hold:
 ## 12. Command cheat sheet
 
 ```bash
-# branch (feature-branch skill)
+# branch (§4.1)
 git branch --show-current
 git checkout main && git pull origin main
 git merge <current> --no-ff -m "Merge branch '<current>' into main" && git push origin main

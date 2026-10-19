@@ -26,24 +26,21 @@ RUN apk update && apk add --no-cache \
     tesseract-ocr-dev \
     leptonica-dev
 
-# ---------- Copy shared module ----------
-# Must be at /build/shared/ so that `replace ../shared` works for all services
+# ---------- Copy all module manifests first ----------
+# core, exif and ocr all `replace ../shared` and `replace ../registry`, so every
+# replaced module directory must contain its go.mod before any `go mod download`
+# runs. Copying all manifests up front keeps the dependency layers cacheable.
+# shared/ is copied in full because it must be at /build/shared/ for the replace.
 COPY shared/ /build/shared/
-
-# ---------- core dependencies ----------
-COPY core/go.mod core/go.sum ./core/
-RUN cd core && go mod download
-
-# ---------- exif dependencies ----------
-COPY exif/go.mod exif/go.sum ./exif/
-RUN cd exif && go mod download
-
-# ---------- ocr dependencies ----------
-COPY ocr/go.mod ocr/go.sum ./ocr/
-RUN cd ocr && go mod download
-
-# ---------- registry dependencies ----------
 COPY registry/go.mod registry/go.sum ./registry/
+COPY core/go.mod core/go.sum ./core/
+COPY exif/go.mod exif/go.sum ./exif/
+COPY ocr/go.mod ocr/go.sum ./ocr/
+
+# ---------- Download dependencies per module ----------
+RUN cd core && go mod download
+RUN cd exif && go mod download
+RUN cd ocr && go mod download
 RUN cd registry && go mod download
 
 # ---------- Copy all source code ----------

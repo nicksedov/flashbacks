@@ -391,6 +391,29 @@ scopes:
     account-registration.wrong-password-hides-status:
       evidence:
         - go::./internal/application/auth::TestAuthService_Login_PendingUser_WrongPassword
+    account-registration.user-dto-status-fields:
+      evidence:
+        - go::./internal/interfaces/dto::TestUserDTOAccountStatusFields
+        - go::./internal/interfaces/dto::TestUserDTOAccountStatusFieldsEmpty
+    account-registration.audit-entries-recorded:
+      evidence:
+        - go::./internal/interfaces/handler::TestHandleRegister_RecordsAuditEntry
+        - go::./internal/interfaces/handler::TestHandleApproveUser_RecordsAuditEntry
+        - go::./internal/interfaces/handler::TestHandleRejectUser_RecordsAuditEntry
+    account-registration.admin-queue-pending:
+      evidence:
+        - vitest::webapp/src/components/auth/admin/ApprovalQueue.test.tsx::ApprovalQueue > lists pending requests with login, display name, request date and both actions
+        - vitest::webapp/src/components/auth/admin/ApprovalQueue.test.tsx::ApprovalQueue > dispatches approve and reject for the clicked request
+    account-registration.admin-queue-reject-dialog:
+      evidence:
+        - vitest::webapp/src/components/auth/admin/ApprovalQueue.test.tsx::RejectUserDialog > prompts for a reason before confirming the rejection
+        - vitest::webapp/src/components/auth/admin/ApprovalQueue.test.tsx::RejectUserDialog > refuses to confirm without a reason
+    account-registration.admin-queue-status-badges:
+      evidence:
+        - vitest::webapp/src/components/auth/admin/ApprovalQueue.test.tsx::AccountStatusBadge > shows the active status label
+        - vitest::webapp/src/components/auth/admin/ApprovalQueue.test.tsx::AccountStatusBadge > shows the pending status label
+        - vitest::webapp/src/components/auth/admin/ApprovalQueue.test.tsx::AccountStatusBadge > shows the rejected status label
+        - vitest::webapp/src/components/auth/admin/ApprovalQueue.test.tsx::UserCard > renders the active/enabled state only once for an approved active account
     auth-localization.default-russian-locale:
       evidence:
         - vitest::webapp/src/i18n/language.test.ts::resolveSystemLanguage > selects Russian for Russian locales
@@ -435,6 +458,18 @@ scopes:
     auth-localization.placeholder-parity:
       evidence:
         - vitest::webapp/src/i18n/translations.test.ts::i18n placeholder consistency > EN and RU should have the same placeholders for each key
+    auth-localization.switcher-shown:
+      evidence:
+        - vitest::webapp/src/components/auth/LoginScreen.test.tsx::LoginScreen language switcher > shows a language switcher on the login screen
+    auth-localization.switcher-registration-mode:
+      evidence:
+        - vitest::webapp/src/components/auth/LoginScreen.test.tsx::LoginScreen language switcher > keeps the switcher available in registration mode and reflecting the choice
+    auth-localization.switcher-rerender:
+      evidence:
+        - vitest::webapp/src/components/auth/LoginScreen.test.tsx::LoginScreen language switcher > re-renders the screen in the selected language without a reload
+    auth-localization.switcher-accessible:
+      evidence:
+        - vitest::webapp/src/components/auth/LoginScreen.test.tsx::LoginScreen language switcher > exposes an accessible name and is keyboard operable
     trash.file-moved-recorded:
       evidence:
         - go::./internal/interfaces/handler/helpers::TestMoveToTrashOrDeleteRecordsTrashItem
@@ -511,3 +546,99 @@ scopes:
     llm-settings.unknown-instrument-fails-closed:
       evidence:
         - vitest::webapp/src/lib/llm-model-filter.test.ts::filterModelsForInstrument > fails closed for an unrecognized instrument type
+    ocr-lightbox.image-fits-with-text:
+      evidence:
+        - vitest::webapp/src/components/gallery/lightbox/OcrImagePanel.test.tsx::OcrImagePanel > fits an image with recognized text entirely within the visible area
+    ocr-lightbox.image-fits-without-text:
+      evidence:
+        - vitest::webapp/src/components/gallery/lightbox/OcrImagePanel.test.tsx::OcrImagePanel > fits an image without recognized text entirely within the visible area
+    ocr-lightbox.rotated-image-fits:
+      evidence:
+        - vitest::webapp/src/components/gallery/lightbox/OcrImagePanel.test.tsx::OcrImagePanel > fits a rotated image entirely within the visible area
+    ocr-lightbox.boxes-aligned:
+      evidence:
+        - vitest::webapp/src/components/gallery/lightbox/OcrImagePanel.test.tsx::OcrImagePanel > keeps the bounding boxes aligned with the scaled image
+    ocr-lightbox.alignment-after-resize:
+      evidence:
+        - vitest::webapp/src/components/gallery/lightbox/OcrImagePanel.test.tsx::OcrImagePanel > keeps the bounding boxes aligned after a resize
+    branding.auth-logo:
+      evidence:
+        - vitest::webapp/src/components/auth/LoginScreen.test.tsx::LoginScreen language switcher > shows the branded welcome logo proportionally at the top of the card
+    branding.auth-logo-all-modes:
+      evidence:
+        - vitest::webapp/src/components/auth/LoginScreen.test.tsx::LoginScreen language switcher > keeps the switcher available in registration mode and reflecting the choice
+    branding.auth-logo-proportional:
+      evidence:
+        - vitest::webapp/src/components/auth/LoginScreen.test.tsx::LoginScreen language switcher > shows the branded welcome logo proportionally at the top of the card
+    branding.sidebar-logo:
+      evidence:
+        - vitest::webapp/src/components/layout/Sidebar.test.tsx::Sidebar branding > shows the base logo in the expanded header without growing its height
+    branding.sidebar-collapsed-mark:
+      evidence:
+        - vitest::webapp/src/components/layout/Sidebar.test.tsx::Sidebar branding > keeps a compact logo mark instead of the wordmark when collapsed
+    branding.logo-accessible:
+      evidence:
+        - vitest::webapp/src/components/layout/Sidebar.test.tsx::Sidebar branding > labels the logo for screen readers
+    branding.favicon:
+      evidence:
+        - vitest::webapp/src/branding.test.ts::branding assets > serves the branded favicon referenced from the HTML head
+    branding.favicon-precached:
+      evidence:
+        - vitest::webapp/src/branding.test.ts::branding assets > precaches the favicon in the service worker
+    branding.pwa-icons:
+      evidence:
+        - vitest::webapp/src/branding.test.ts::branding assets > lists every PWA icon size in the manifest with matching files
+    branding.maskable-safe-zone:
+      evidence:
+        - vitest::webapp/src/branding.test.ts::branding assets > declares maskable icons and keeps the mark inside the safe zone
+    branding.manifest-icons:
+      evidence:
+        - vitest::webapp/src/branding.test.ts::branding assets > lists every PWA icon size in the manifest with matching files
+    third-party.combined-list:
+      evidence:
+        - vitest::webapp/src/components/tabs/AboutTab.test.tsx::AboutTab third-party components > renders a single combined list with every component name and license
+    third-party.backend-attributed:
+      evidence:
+        - vitest::webapp/src/components/tabs/AboutTab.test.tsx::AboutTab third-party components > attributes the backend Go frameworks
+    third-party.own-modules-excluded:
+      evidence:
+        - vitest::webapp/src/components/tabs/AboutTab.test.tsx::AboutTab third-party components > excludes modules owned by the Flashbacks project
+    third-party.license-links:
+      evidence:
+        - vitest::webapp/src/components/tabs/AboutTab.test.tsx::AboutTab third-party components > renders a single combined list with every component name and license
+    third-party.backend-license-links:
+      evidence:
+        - vitest::webapp/src/components/tabs/AboutTab.test.tsx::AboutTab third-party components > attributes the backend Go frameworks
+    third-party.frontend-preserved:
+      evidence:
+        - vitest::webapp/src/components/tabs/AboutTab.test.tsx::AboutTab third-party components > keeps the frontend attributions in the combined list
+    third-party.locale-consistent:
+      evidence:
+        - vitest::webapp/src/components/tabs/AboutTab.test.tsx::AboutTab third-party components > shows the same components and licenses in both locales
+    trash.cursor-pagination:
+      evidence:
+        - go::./internal/interfaces/handler::TestHandleGetTrash_CursorPaginationAcrossDateGroups
+    trash.empty-response:
+      evidence:
+        - go::./internal/interfaces/handler::TestHandleGetTrash_EmptyResponse
+    trash.thumbnails:
+      evidence:
+        - go::./internal/interfaces/handler::TestHandleGetTrash_IncludesThumbnails
+        - vitest::webapp/src/components/trash/TrashTile.test.tsx::TrashTile > renders the image thumbnail when the server generated one
+        - vitest::webapp/src/components/trash/TrashTile.test.tsx::TrashTile > renders the shared placeholder when the thumbnail is empty
+    trash.grid-uniform:
+      evidence:
+        - vitest::webapp/src/components/trash/TrashTile.test.tsx::TrashTileGrid > groups tiles by deletion date with the label and item count
+        - vitest::webapp/src/components/trash/TrashTile.test.tsx::TrashTileGrid > uses the same responsive grid breakpoints as the gallery
+    trash.overlay-two-buttons:
+      evidence:
+        - vitest::webapp/src/components/trash/TrashTile.test.tsx::TrashTile > shows exactly the View and Restore actions in the hover overlay
+        - vitest::webapp/src/components/trash/TrashTile.test.tsx::TrashTile > opens the lightbox through the View action without restoring
+    trash.restore-from-tile:
+      evidence:
+        - vitest::webapp/src/components/trash/TrashTile.test.tsx::TrashTile > restores the file through the Restore action without opening the lightbox
+    trash.localization:
+      evidence:
+        - vitest::webapp/src/i18n/translations.test.ts::i18n translation parity > EN and RU should have identical key sets
+        - vitest::webapp/src/i18n/translations.test.ts::i18n translation parity > every EN key should exist in RU
+        - vitest::webapp/src/i18n/translations.test.ts::i18n translation parity > every RU key should exist in EN

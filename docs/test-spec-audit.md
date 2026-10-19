@@ -6,56 +6,106 @@ and the master specifications in `openspec/specs/**/spec.md`.
 
 ## Summary
 
-- Enumerated **556** executable test cases: Go `Test*`/`Benchmark*`, Vitest
-  `it`/`test`, and pytest `test_*`.
+- Enumerated **608** executable test cases: Go `Test*`/`Benchmark*`, Vitest
+  `it`/`test`, and pytest `test_*` (52 added by this pass).
 - A test counts as *mentioned* only when its exact selector is registered in the
   evidence registry (and therefore bound to a `focused-spec:id` in a master
   specification).
-- **All Vitest tests are now registered**, including every webapp component,
-  i18n, theme, library, and HTTP-integration test.
+- **All Vitest tests are registered**, including every webapp component, i18n,
+  theme, library, and HTTP-integration test.
 - **372 tests remain unregistered**; all are Go unit, characterization, or
   benchmark tests of internal packages that no master specification describes.
   They are listed by area below and are intentionally outside spec scope.
-- Six master specifications previously had **zero** focused-spec bindings:
-  account-registration, auth-localization, branding, ocr-lightbox,
-  third-party-components, trash. Four of them had executable tests and are now
-  bound; branding, ocr-lightbox, and third-party-components have no tests at all.
+- Every previously uncovered master specification that had executable evidence
+  gaps now has bound scenarios: auth-localization, account-registration,
+  ocr-lightbox, branding, third-party-components, and trash.
 
 ## Changes made
 
 | Specification | Focused items before | Focused items after | Notes |
 |---|---:|---:|---|
-| account-registration | 0 | 24 | Bootstrap setup, lifecycle, registration modes, validation, approval queue API, admin-created accounts |
-| auth-localization | 0 | 11 | Locale defaults, pre-auth persistence, active-language rendering, en/ru parity |
-| design-system | 42 | 49 | Mobile tabs, admin action row, theme selection, determinate progress, info trigger, consistent lightbox stage; extra evidence on mobile toolbar/lightbox rules |
-| gallery-browsing | 12 | 18 | New requirement: gallery folder configuration (add/list/remove/validation) |
-| llm-settings | 7 | 8 | Unknown instrument type fails closed |
-| service-registry | 14 | 17 | Registry client registration, heartbeat, configuration watch |
-| trash | 0 | 10 | Record on delete, grouping, restore, permanent delete, clean, image serving |
-| **Total** | **98** | **160** | 184 unique evidence targets |
+| account-registration | 24 | 29 | `UserDTO` status serialization, audit entries, pending queue, reject dialog, status badges |
+| auth-localization | 11 | 15 | Auth language switcher presence, registration mode, immediate re-render, accessibility |
+| branding | 0 | 11 | Auth/sidebar logos, logo accessibility, favicon + precache, PWA icons, maskable safe zone, manifest |
+| ocr-lightbox | 0 | 5 | Fit-to-visible (text/no-text/rotated) and bounding-box alignment/resize |
+| third-party-components | 0 | 7 | Combined list, backend attribution, own-module exclusion, license links, locale consistency |
+| trash | 10 | 17 | Cursor pagination, empty response, thumbnails, grid uniformity, tile actions, localization |
+| **Total** | **160** | **199** | 229 unique evidence targets |
 
 Validation and execution:
 
 ```text
 focused-spec validate --scope current --syntax-only   # structurally valid
-focused-spec validate --scope current --strict        # 160 items, 184 targets
-focused-spec run --scope current                      # 160 PASS, 0 FAIL/SKIP/ERROR
+focused-spec validate --scope current --strict        # 199 items, 229 targets
+focused-spec run --scope current                      # 199 PASS, 0 FAIL/SKIP/ERROR
 ```
 
-Sensitivity was verified with controlled product regressions for representative
-new bindings (each failed on the regression and passed after restore):
+Component checks:
 
-- `auth-localization.default-unsupported-fallback` — changed the unsupported
-  locale fallback in `language.ts`; the test failed on the behavior assertion.
-- `design-system.admin-settings-tabs-wrap` — removed `flex-wrap` from the admin
-  tab list; the test failed.
-- `trash.file-moved-recorded` — wrote an empty `OriginalPath` in the trash
-  mover; the test failed.
+```text
+backend/core: gofmt + go test ./... -count=1          # PASS
+webapp:       npm run lint && npx tsc -b               # PASS
+```
 
-A per-reference mutation sweep of all 62 newly registered items was not
-performed; the remaining references bind pre-existing, already passing tests and
-should be mutation-checked incrementally when the corresponding product code is
-next changed.
+Sensitivity was verified with controlled product regressions. Every probe was
+reverted and the full scope re-ran green afterwards:
+
+- `auth-localization.switcher-*` — removed the switcher's accessible name
+  (three scenarios failed); made `onValueChange` a no-op (`switcher-rerender`
+  failed).
+- `branding.auth-logo*` — changed the welcome-logo `src` (all three auth-logo
+  scenarios failed).
+- `branding.sidebar-*` / `branding.logo-accessible` — changed the base-logo
+  `alt`, then the collapsed rail width (`sidebar-logo`, `logo-accessible`,
+  `sidebar-collapsed-mark` failed).
+- `account-registration.admin-queue-*` — swapped the Approve/Reject labels,
+  disabled the empty-reason guard, and remapped the pending badge
+  (queue, reject-dialog, and status-badge scenarios failed).
+- `ocr-lightbox.*` — dropped `max-w-full` from the image and broke the
+  bounding-box scale factor (all five scenarios failed).
+- `trash.overlay-two-buttons` / `trash.restore-from-tile` / `trash.thumbnails` /
+  `trash.grid-uniform` — relabelled the Restore action, inverted the thumbnail
+  branch, and removed a grid breakpoint (all four scenarios failed).
+- `branding.favicon*` / `branding.pwa-icons` / `branding.maskable-safe-zone` /
+  `branding.manifest-icons` — changed the favicon link and precache entry,
+  removed the 384px icon, and changed the maskable purpose (all five scenarios
+  failed).
+- `third-party.*` — removed the React and GORM entries, redirected the Gin
+  license link, changed the component link target, and injected a
+  Flashbacks-owned module (combined-list, backend-attributed,
+  backend-license-links, frontend-preserved, license-links, and
+  own-modules-excluded failed).
+- `trash.cursor-pagination` — reverted the date-group overflow query to
+  `id < ?` (scenario failed); `trash.empty-response` — returned a nil group
+  slice (failed); `trash.thumbnails` — dropped the generated thumbnail
+  assignment (failed).
+- `account-registration.user-dto-status-fields` — changed the `accountStatus`
+  JSON tag (failed); `account-registration.audit-entries-recorded` — rewrote
+  the three audit actions (failed).
+- `trash.localization` — removed `trashTab.restore` from the Russian locale
+  (parity scenarios failed).
+
+Not mutation-checked: `third-party.locale-consistent`, because the component
+list is static data and the component renders the same entries for both locales,
+so there is no product behaviour to regress. `branding.auth-logo-all-modes`
+covers registration mode only; the bootstrap setup path renders the same logo
+but is not separately asserted. `ocr-lightbox.*` assertions are component-level
+(fit classes and computed overlay geometry) rather than real browser layout
+measurements.
+
+## Product issues found while adding coverage
+
+- **Trash cursor pagination duplicated a boundary date group** when `trash_items`
+  ids did not descend together with `deleted_at` (for example rows backfilled in
+  arbitrary order). `handleGetTrash` selected same-day overflow rows by `id` only;
+  it now continues after the ordering key `(deleted_at, id)`. Covered by
+  `trash.cursor-pagination`.
+- **Re-approving a rejected account is not supported**, although the
+  specification's admin-approval-queue requirement lists it. `ApproveUser`
+  returns `auth.user_not_pending` for anything that is not `pending`, and the
+  user card has no approve action. The queue tests therefore cover the pending
+  queue, reject dialog, and status badges only; the re-approve scenario remains
+  an open product gap.
 
 ## Remaining specification gaps (behaviour without tests)
 
@@ -66,44 +116,37 @@ bound. They are coverage gaps in the test suite, not missing specification text.
 
 - `ACCOUNT_CREATION_MODE` default (`admin_only`) and invalid-value startup
   rejection.
-- `UserDTO` camelCase status fields (`accountStatus`, `statusChangedAt`,
-  `rejectionReason`) serialization.
-- Audit entries (`register_user`, `approve_user`, `reject_user`).
 - Migration compatibility (existing users become `active`, `lower(login)` unique
   index).
 - Mode-switching semantics for existing accounts.
 - Frontend registration flow (auto-login, pending screen, admin-only hiding).
-- Admin approval queue UI (pending queue, reject dialog, status badges,
-  re-approve).
+- Re-approving a rejected account (product support missing, see above).
 - Specific localized account/approval strings.
 
 ### auth-localization
 
-- Language switcher on the login and registration screens (presence, re-render,
-  keyboard accessibility, absence on bootstrap setup).
 - "Pre-authentication choice does not overwrite the account" end-to-end.
 
 ### branding
 
-- All 11 scenarios (auth/sidebar logos, favicon, PWA icons, manifest) have no
-  automated test. Logo rendering is verified manually or through the build.
+- Bootstrap setup mode is not separately asserted for the logo (the shared auth
+  card renders it unconditionally).
 
 ### ocr-lightbox
 
-- All 5 scenarios (image fits the visible area, bounding boxes stay aligned,
-  resize behaviour) have no dedicated test. The generic lightbox image-stage
-  consistency is covered, but fit-to-visible and overlay alignment are not.
+- No remaining scenario gaps; residual risk is that fit and alignment are
+  asserted through component classes and computed geometry rather than a real
+  browser layout pass.
 
 ### third-party-components
 
-- All 7 scenarios (combined list, backend attribution, license links, locale
-  consistency) have no automated test.
+- No remaining scenario gaps; the locale scenario is asserted at the rendered
+  list level rather than by switching a live authenticated locale.
 
 ### trash
 
-- Cursor pagination across date groups, empty-trash response, thumbnails, grid
-  uniformity with the gallery, two-button tile overlay, lightbox metadata,
-  restore-from-tile, infinite scroll, empty state, localization.
+- Infinite scroll (intersection observer) and the shared empty state.
+- Lightbox metadata display (original location and deletion date).
 
 ### design-system
 
@@ -138,11 +181,15 @@ already registered under `gallery-browsing`.
 
 ## Follow-up recommendations
 
-1. Add component tests for the auth language switcher and the admin approval
-   queue; those are the largest remaining user-facing spec gaps.
-2. Add OCR-lightbox tests for fit-to-visible and bounding-box alignment.
-3. Add trash tests for cursor pagination, thumbnails, and tile overlay actions.
-4. Add a persistence/DTO test for the account status fields and audit entries.
-5. Keep branding and third-party-components as review/asset checks; if
-   regression protection is required, add a manifest/asset test and a
-   component-list snapshot test.
+1. Implement re-approval of `rejected` accounts (service guard, admin action, and
+   the corresponding component/integration test) so the admin approval queue
+   requirement is fully satisfied.
+2. Add an end-to-end test for "pre-authentication choice does not overwrite the
+   account" once a browser-level harness is available.
+3. Add Trash tests for infinite scroll, the shared empty state, and lightbox
+   metadata (original location and deletion date).
+4. Add frontend registration-flow tests (auto-login, pending screen, admin-only
+   hiding) to close the remaining account-registration UI gap.
+5. Keep the brand/third-party asset and snapshot checks green when dependencies
+   or brand assets change; update the AboutTab snapshot deliberately in the same
+   commit as the dependency change.

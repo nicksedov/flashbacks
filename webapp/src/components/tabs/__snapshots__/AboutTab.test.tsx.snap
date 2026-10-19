@@ -1,0 +1,36 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`AboutTab third-party components > matches the reviewed component list 1`] = `
+[
+  "Radix UI PrimitivesMIT",
+  "ReactMIT",
+  "react-leafletHippocratic License 2.1",
+  "LeafletBSD-2-Clause",
+  "lucide-reactISC",
+  "react-markdownMIT",
+  "remark-gfmMIT",
+  "sonnerMIT",
+  "class-variance-authorityApache-2.0",
+  "clsxMIT",
+  "tailwind-mergeMIT",
+  "BildMIT",
+  "go-exiftoolGPL-3.0",
+  "webpMIT",
+  "ImagingMIT",
+  "Gin CORSMIT",
+  "GinMIT",
+  "glebarez/sqliteMIT",
+  "GoClusterMIT",
+  "MCP Go SDKApache-2.0",
+  "openai-goApache-2.0",
+  "gosseractMIT",
+  "testifyMIT",
+  "Google UUIDBSD-3-Clause",
+  "WireApache-2.0",
+  "godotenvMIT",
+  "x/cryptoBSD-3-Clause",
+  "x/imageBSD-3-Clause",
+  "GORMMIT",
+  "GORM Postgres driverMIT",
+]
+`;

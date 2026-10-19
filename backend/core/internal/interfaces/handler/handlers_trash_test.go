@@ -3,14 +3,17 @@ package handler
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/flashbacks/core/internal/application/thumbnail"
 	"github.com/flashbacks/core/internal/domain"
 	"github.com/flashbacks/core/internal/interfaces/dto"
 	"github.com/flashbacks/core/internal/interfaces/handler/helpers"
@@ -21,8 +24,39 @@ import (
 	"gorm.io/gorm"
 )
 
+// fakeThumbnailProvider returns a deterministic data URL per file and fails for
+// paths containing failSuffix, modelling an image whose thumbnail cannot be generated.
+type fakeThumbnailProvider struct {
+	failSuffix string
+}
+
+func (f *fakeThumbnailProvider) Start() error { return nil }
+
+func (f *fakeThumbnailProvider) GetOrGenerate(filePath string) (string, error) {
+	if f.failSuffix != "" && strings.Contains(filePath, f.failSuffix) {
+		return "", errors.New("thumbnail generation failed")
+	}
+	return "data:image/webp;base64," + filepath.Base(filePath), nil
+}
+
+func (f *fakeThumbnailProvider) HasThumbnail(string) bool            { return true }
+func (f *fakeThumbnailProvider) Invalidate(string) error             { return nil }
+func (f *fakeThumbnailProvider) InvalidateAll() error                { return nil }
+func (f *fakeThumbnailProvider) Warmup([]string) error               { return nil }
+func (f *fakeThumbnailProvider) GetStats() (*thumbnail.Stats, error) { return &thumbnail.Stats{}, nil }
+func (f *fakeThumbnailProvider) Enable()                             {}
+func (f *fakeThumbnailProvider) Disable()                            {}
+func (f *fakeThumbnailProvider) IsEnabled() bool                     { return true }
+func (f *fakeThumbnailProvider) UpdateCachePath(string) error        { return nil }
+
 // newTrashTestServer builds a minimal Server wired for trash handler tests.
 func newTrashTestServer(t *testing.T, trashDir string) (*Server, *gorm.DB, func()) {
+	t.Helper()
+	return newTrashTestServerWithProvider(t, trashDir, nil)
+}
+
+// newTrashTestServerWithProvider is newTrashTestServer with explicit thumbnail generation.
+func newTrashTestServerWithProvider(t *testing.T, trashDir string, provider thumbnail.ThumbnailProvider) (*Server, *gorm.DB, func()) {
 	t.Helper()
 	db, cleanup := testutil.NewTestDB(t)
 
@@ -34,7 +68,7 @@ func newTrashTestServer(t *testing.T, trashDir string) (*Server, *gorm.DB, func(
 	svc := &Server{
 		db:             db,
 		settingsLoader: helpers.NewSettingsLoader(db),
-		thumbnailBatch: helpers.NewThumbnailBatch(nil),
+		thumbnailBatch: helpers.NewThumbnailBatch(provider),
 	}
 	return svc, db, cleanup
 }
@@ -278,5 +312,135 @@ func TestHandleServeTrashImage_InsideTrashServed(t *testing.T) {
 	}
 	if w.Body.String() != "data" {
 		t.Errorf("expected file contents, got %q", w.Body.String())
+	}
+}
+
+func TestHandleGetTrash_CursorPaginationAcrossDateGroups(t *testing.T) {
+	trashDir := fixtures.CreateTempDir(t)
+	svc, db, cleanup := newTrashTestServer(t, trashDir)
+	defer cleanup()
+
+	now := time.Now()
+	newestDay := time.Date(now.Year(), now.Month(), now.Day(), 12, 0, 0, 0, now.Location())
+	olderDay := newestDay.AddDate(0, 0, -1)
+
+	// Three items share the newest day, one item lives on the older day. With a
+	// page size of two the boundary-day overflow rule must keep the day group whole.
+	items := []domain.TrashItem{
+		makeTrashItem(t, db, "a3.jpg", filepath.ToSlash(filepath.Join(trashDir, "a3.jpg")), "/gallery/a3.jpg", 30, newestDay),
+		makeTrashItem(t, db, "a2.jpg", filepath.ToSlash(filepath.Join(trashDir, "a2.jpg")), "/gallery/a2.jpg", 20, newestDay.Add(-time.Hour)),
+		makeTrashItem(t, db, "a1.jpg", filepath.ToSlash(filepath.Join(trashDir, "a1.jpg")), "/gallery/a1.jpg", 10, newestDay.Add(-2*time.Hour)),
+		makeTrashItem(t, db, "b1.jpg", filepath.ToSlash(filepath.Join(trashDir, "b1.jpg")), "/gallery/b1.jpg", 10, olderDay),
+	}
+	for _, item := range items {
+		fixtures.CreateTestFile(t, filepath.Dir(item.TrashPath), filepath.Base(item.TrashPath), []byte("x"))
+	}
+
+	first := serveHandler(svc.handleGetTrash, http.MethodGet, "/api/trash?pageSize=2", nil)
+	if first.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", first.Code, first.Body.String())
+	}
+
+	var firstPage dto.TrashListResponse
+	if err := json.Unmarshal(first.Body.Bytes(), &firstPage); err != nil {
+		t.Fatalf("failed to unmarshal first page: %v", err)
+	}
+	if firstPage.NextCursor == nil || !firstPage.HasMore {
+		t.Fatalf("expected more pages, got nextCursor=%v hasMore=%v", firstPage.NextCursor, firstPage.HasMore)
+	}
+	if len(firstPage.Groups) != 1 {
+		t.Fatalf("expected the boundary day to stay whole on page 1, got %d groups: %+v", len(firstPage.Groups), firstPage.Groups)
+	}
+	if firstPage.Groups[0].ItemCount != 3 {
+		t.Errorf("boundary day ItemCount = %d, want 3", firstPage.Groups[0].ItemCount)
+	}
+
+	second := serveHandler(svc.handleGetTrash, http.MethodGet, "/api/trash?pageSize=2&cursor="+url.QueryEscape(*firstPage.NextCursor), nil)
+	if second.Code != http.StatusOK {
+		t.Fatalf("expected 200 for second page, got %d: %s", second.Code, second.Body.String())
+	}
+
+	var secondPage dto.TrashListResponse
+	if err := json.Unmarshal(second.Body.Bytes(), &secondPage); err != nil {
+		t.Fatalf("failed to unmarshal second page: %v", err)
+	}
+	if len(secondPage.Groups) != 1 || secondPage.Groups[0].Date != olderDay.Format(helpers.DateOnlyFormat) {
+		t.Fatalf("expected only the older date group on page 2, got %+v", secondPage.Groups)
+	}
+	if secondPage.Groups[0].Items[0].ID != items[3].ID {
+		t.Errorf("expected the older item on page 2, got %+v", secondPage.Groups[0].Items)
+	}
+	if secondPage.HasMore || secondPage.NextCursor != nil {
+		t.Errorf("expected the last page, got hasMore=%v nextCursor=%v", secondPage.HasMore, secondPage.NextCursor)
+	}
+
+	// No date group may be duplicated across pages.
+	if firstPage.Groups[0].Date == secondPage.Groups[0].Date {
+		t.Errorf("boundary date %q duplicated across pages", firstPage.Groups[0].Date)
+	}
+}
+
+func TestHandleGetTrash_EmptyResponse(t *testing.T) {
+	trashDir := fixtures.CreateTempDir(t)
+	svc, _, cleanup := newTrashTestServer(t, trashDir)
+	defer cleanup()
+
+	w := serveHandler(svc.handleGetTrash, http.MethodGet, "/api/trash", nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp dto.TrashListResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
+	if resp.Groups == nil || len(resp.Groups) != 0 {
+		t.Errorf("Groups = %+v, want an empty array", resp.Groups)
+	}
+	if resp.TotalItems != 0 || resp.TotalGroups != 0 {
+		t.Errorf("expected empty totals, got totalItems=%d totalGroups=%d", resp.TotalItems, resp.TotalGroups)
+	}
+	if resp.HasMore || resp.NextCursor != nil {
+		t.Errorf("expected no pagination, got hasMore=%v nextCursor=%v", resp.HasMore, resp.NextCursor)
+	}
+}
+
+func TestHandleGetTrash_IncludesThumbnails(t *testing.T) {
+	trashDir := fixtures.CreateTempDir(t)
+	provider := &fakeThumbnailProvider{failSuffix: "broken.jpg"}
+	svc, db, cleanup := newTrashTestServerWithProvider(t, trashDir, provider)
+	defer cleanup()
+
+	deletedAt := time.Now()
+	ok := makeTrashItem(t, db, "ok.jpg", filepath.ToSlash(filepath.Join(trashDir, "ok.jpg")), "/gallery/ok.jpg", 10, deletedAt)
+	broken := makeTrashItem(t, db, "broken.jpg", filepath.ToSlash(filepath.Join(trashDir, "broken.jpg")), "/gallery/broken.jpg", 10, deletedAt.Add(-time.Minute))
+	fixtures.CreateTestFile(t, filepath.Dir(ok.TrashPath), filepath.Base(ok.TrashPath), []byte("x"))
+	fixtures.CreateTestFile(t, filepath.Dir(broken.TrashPath), filepath.Base(broken.TrashPath), []byte("x"))
+
+	w := serveHandler(svc.handleGetTrash, http.MethodGet, "/api/trash", nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp dto.TrashListResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
+	if len(resp.Groups) != 1 || len(resp.Groups[0].Items) != 2 {
+		t.Fatalf("expected both items in one group, got %+v", resp.Groups)
+	}
+
+	byName := make(map[string]dto.TrashItemDTO)
+	for _, item := range resp.Groups[0].Items {
+		byName[item.FileName] = item
+	}
+	if got := byName["ok.jpg"].Thumbnail; !strings.HasPrefix(got, "data:image/webp;base64,") {
+		t.Errorf("expected a data-URL thumbnail for ok.jpg, got %q", got)
+	}
+	if got := byName["broken.jpg"].Thumbnail; got != "" {
+		t.Errorf("expected an empty thumbnail when generation fails, got %q", got)
+	}
+	if _, ok := byName["broken.jpg"]; !ok {
+		t.Error("an item whose thumbnail cannot be generated must still be listed")
 	}
 }

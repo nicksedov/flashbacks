@@ -194,6 +194,7 @@ The system SHALL support an optional `status` query parameter on `GET /api/admin
 
 The `UserDTO` returned by user-related endpoints SHALL include `accountStatus`, `statusChangedAt`, and `rejectionReason` (camelCase JSON fields), aligned with the Go JSON tags and webapp TypeScript types.
 
+<!-- focused-spec:id=account-registration.user-dto-status-fields -->
 #### Scenario: User DTO includes status fields
 
 - **WHEN** a user object is serialized in an API response
@@ -228,6 +229,7 @@ The system MUST reveal `pending`/`rejected`/`deactivated` login failure reasons 
 
 The system SHALL record audit entries for `register_user`, `approve_user`, and `reject_user` actions.
 
+<!-- focused-spec:id=account-registration.audit-entries-recorded -->
 #### Scenario: Audit entries recorded
 
 - **WHEN** a registration, approval, or rejection action occurs
@@ -279,16 +281,19 @@ The frontend SHALL show registration UI only when `accountCreationMode` is not `
 
 The admin panel SHALL display a queue of `pending` registration requests with login, display name, request date, and Approve/Reject actions, SHALL show a status badge (`active`/`pending`/`rejected`) per user, SHALL allow rejecting with an optional reason, and SHALL allow re-approving a `rejected` account.
 
+<!-- focused-spec:id=account-registration.admin-queue-pending -->
 #### Scenario: Admin sees pending queue
 
 - **WHEN** an admin opens the admin panel with pending requests
 - **THEN** the pending requests are listed with Approve and Reject actions
 
+<!-- focused-spec:id=account-registration.admin-queue-reject-dialog -->
 #### Scenario: Reject with reason
 
 - **WHEN** an admin rejects a request
 - **THEN** a dialog prompts for an optional reason before confirming
 
+<!-- focused-spec:id=account-registration.admin-queue-status-badges -->
 #### Scenario: Status badges
 
 - **WHEN** the user list is displayed

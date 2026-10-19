@@ -793,6 +793,18 @@ export const translationsEn = {
   "llm_model_details.capabilities": "Capabilities",
   "llm_model_details.inputPrice": "Input price (per 1M tokens)",
   "llm_model_details.outputPrice": "Output price (per 1M tokens)",
+  "llm_capabilities.chat": "Chat",
+  "llm_capabilities.toolCalling": "Tool calling",
+  "llm_capabilities.vision": "Vision",
+  "llm_capabilities.embedding": "Embedding",
+  "llm_capabilities.imageEdit": "Image editing",
+  "llm_capabilities.reasoning": "Reasoning",
+  "llm_capabilities.videoGeneration": "Video generation",
+  "llm_capabilities.textToSpeech": "Text to speech",
+  "llm_capabilities.speechRecognition": "Speech recognition",
+  "llm_capabilities.realtime": "Realtime",
+  "llm_capabilities.omni": "Omni",
+  "llm_capabilities.worldModel": "World model",
 
   // Chat / Agent
   "chat.title": "AI Assistant",

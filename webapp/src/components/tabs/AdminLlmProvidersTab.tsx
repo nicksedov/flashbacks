@@ -29,6 +29,7 @@ import {
 } from "lucide-react"
 import { useTranslation } from "@/i18n"
 import { ModelDetailsDialog } from "@/components/settings/ModelDetailsDialog"
+import { isLlmCapability, type LlmCapability } from "@/lib/llm-capabilities"
 import type { LlmSettingsResponse, LlmProviderDTO, LlmModelDTO, LlmProviderType, LlmInstrumentType } from "@/types"
 
 // Provider type display labels
@@ -42,14 +43,22 @@ const PROVIDER_LABELS: Record<LlmProviderType, string> = {
 
 const ALLOWED_PROVIDER_TYPES: LlmProviderType[] = ["ollama", "ollama_cloud", "openai", "deepseek", "alibaba"]
 
-// Capability labels
-type ModelCapability = "chat" | "tool_calling" | "vision" | "embedding"
+// Capability labels — the union mirrors the backend's standardized vocabulary.
+type ModelCapability = LlmCapability
 
 const CAPABILITY_LABELS: Record<ModelCapability, string> = {
   chat: "Chat",
   tool_calling: "Tools",
   vision: "Vision",
   embedding: "Embedding",
+  image_edit: "ImageEdit",
+  reasoning: "Reasoning",
+  video_generation: "Video",
+  text_to_speech: "TTS",
+  speech_recognition: "ASR",
+  realtime: "Realtime",
+  omni: "Omni",
+  world_model: "World",
 }
 
 // Instrument labels for usage badges
@@ -70,12 +79,7 @@ function inferCapabilities(
 ): ModelCapability[] {
   // If the backend provided actual capabilities, use them directly
   if (apiCapabilities && apiCapabilities.length > 0) {
-    const caps: ModelCapability[] = []
-    for (const c of apiCapabilities) {
-      if (c === "chat" || c === "tool_calling" || c === "vision" || c === "embedding") {
-        caps.push(c as ModelCapability)
-      }
-    }
+    const caps = apiCapabilities.filter(isLlmCapability)
     if (caps.length > 0) return caps
   }
 

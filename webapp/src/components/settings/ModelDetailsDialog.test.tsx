@@ -26,8 +26,24 @@ describe("ModelDetailsDialog", () => {
     expect(screen.getByText("1.0M")).toBeTruthy()
     expect(screen.getByText("text, image, video")).toBeTruthy()
     expect(screen.getByText("text")).toBeTruthy()
-    expect(screen.getByText("vision")).toBeTruthy()
+    // Capabilities render their localized label key (the test i18n returns keys).
+    expect(screen.getByText("llm_capabilities.vision")).toBeTruthy()
     expect(screen.getByText("$2.00")).toBeTruthy()
     expect(screen.getByText("$6.00")).toBeTruthy()
+  })
+
+  it("labels a new capability", () => {
+    render(
+      <ModelDetailsDialog
+        model={{ ...model, capabilities: ["chat", "video_generation"] }}
+        open
+        onOpenChange={vi.fn()}
+      />,
+    )
+
+    // A standardized capability added after the original vocabulary is shown
+    // with its localized label, never the raw value.
+    expect(screen.getByText("llm_capabilities.videoGeneration")).toBeTruthy()
+    expect(screen.queryByText("video_generation")).toBeNull()
   })
 })

@@ -46,26 +46,82 @@ func lookupModelPricing(modelID string) (ModelPricing, bool) {
 	return best, found
 }
 
+// capabilityCodeMap maps a lower-cased provider-native capability code to every
+// standardized capability it implies. One native code may yield several values
+// (for example "World-Model" implies both world_model and video_generation).
+var capabilityCodeMap = map[string][]string{
+	"completion":        {"chat"},
+	"chat":              {"chat"},
+	"tg":                {"chat"},
+	"text":              {"chat"},
+	"realtime-chatting": {"chat"},
+
+	"tools":            {"tool_calling"},
+	"tool_calling":     {"tool_calling"},
+	"function-calling": {"tool_calling"},
+	"functions":        {"tool_calling"},
+
+	"vision": {"vision"},
+	"visual": {"vision"},
+	"vu":     {"vision"},
+	"image":  {"vision"},
+
+	"embedding":  {"embedding"},
+	"embeddings": {"embedding"},
+
+	// Alibaba ModelStudio reports image-generation models with the "IG" code.
+	// Qwen-Image models unify generation and editing, so IG is treated as
+	// image-edit capable for instrument filtering.
+	"image_edit":       {"image_edit"},
+	"image-edit":       {"image_edit"},
+	"image_generation": {"image_edit"},
+	"image-generation": {"image_edit"},
+	"ig":               {"image_edit"},
+
+	"reasoning": {"reasoning"},
+
+	"vg":               {"video_generation"},
+	"video_generation": {"video_generation"},
+	"video-generation": {"video_generation"},
+	"world-model":      {"video_generation", "world_model"},
+	"world_model":      {"world_model"},
+
+	"tts":                     {"text_to_speech"},
+	"text_to_speech":          {"text_to_speech"},
+	"text-to-speech":          {"text_to_speech"},
+	"realtime-text-to-speech": {"text_to_speech"},
+
+	"asr":                {"speech_recognition"},
+	"speech_recognition": {"speech_recognition"},
+	"speech-recognition": {"speech_recognition"},
+	"realtime-asr":       {"speech_recognition"},
+
+	"omni":            {"omni"},
+	"multimodal-omni": {"omni", "chat"},
+	"realtime-omni":   {"omni"},
+}
+
+// realtimeCodePrefix marks the provider's streaming family; every such code also
+// implies the standardized realtime capability.
+const realtimeCodePrefix = "realtime-"
+
 // normalizeCapabilities converts provider-specific capability names into the
-// standardized capability set: chat, tool_calling, vision, embedding, image_edit.
-// Names that do not map to an instrument-relevant capability are dropped.
+// standardized capability vocabulary: chat, tool_calling, vision, embedding,
+// image_edit, reasoning, video_generation, text_to_speech, speech_recognition,
+// realtime, omni, and world_model. Names that do not map to a standardized
+// capability are dropped.
 func normalizeCapabilities(raw []string) []string {
 	var out []string
 	for _, r := range raw {
-		switch strings.ToLower(strings.TrimSpace(r)) {
-		case "completion", "chat", "tg", "text":
-			out = appendUnique(out, "chat")
-		case "tools", "tool_calling", "function-calling", "functions":
-			out = appendUnique(out, "tool_calling")
-		case "vision", "visual", "vu", "image":
-			out = appendUnique(out, "vision")
-		case "embedding", "embeddings":
-			out = appendUnique(out, "embedding")
-		case "image_edit", "image-edit", "image_generation", "image-generation", "ig":
-			// Alibaba ModelStudio reports image-generation models with the "IG"
-			// capability code. Qwen-Image models unify generation and editing, so
-			// IG is treated as image-edit capable for instrument filtering.
-			out = appendUnique(out, "image_edit")
+		code := strings.ToLower(strings.TrimSpace(r))
+		if code == "" {
+			continue
+		}
+		for _, capability := range capabilityCodeMap[code] {
+			out = appendUnique(out, capability)
+		}
+		if strings.HasPrefix(code, realtimeCodePrefix) {
+			out = appendUnique(out, "realtime")
 		}
 	}
 	return out

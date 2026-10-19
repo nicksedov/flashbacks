@@ -129,12 +129,42 @@ scopes:
     llm-model-metadata.alibaba-modalities-parsed:
       evidence:
         - go::./internal/infrastructure/llm::TestAlibabaModalitiesParsed
+    llm-model-metadata.alibaba-image-generation:
+      evidence:
+        - go::./internal/infrastructure/llm::TestAlibabaImageGenerationModelIsImageEditCapable
+    llm-model-metadata.alibaba-video-generation:
+      evidence:
+        - go::./internal/infrastructure/llm::TestAlibabaVideoGenerationCapability
+    llm-model-metadata.alibaba-world-model:
+      evidence:
+        - go::./internal/infrastructure/llm::TestAlibabaWorldModelCapability
+    llm-model-metadata.alibaba-text-to-speech:
+      evidence:
+        - go::./internal/infrastructure/llm::TestAlibabaTextToSpeechCapability
+    llm-model-metadata.alibaba-speech-recognition:
+      evidence:
+        - go::./internal/infrastructure/llm::TestAlibabaSpeechRecognitionCapability
+    llm-model-metadata.alibaba-realtime:
+      evidence:
+        - go::./internal/infrastructure/llm::TestAlibabaRealtimeAsrCapability
+    llm-model-metadata.alibaba-omni:
+      evidence:
+        - go::./internal/infrastructure/llm::TestAlibabaOmniCapability
+    llm-model-metadata.alibaba-reasoning:
+      evidence:
+        - go::./internal/infrastructure/llm::TestAlibabaReasoningCapability
     llm-model-metadata.model-details-window:
       evidence:
         - vitest::webapp/src/components/settings/ModelDetailsDialog.test.tsx::ModelDetailsDialog > shows context length, input modalities, output modalities, capabilities and pricing
+    llm-model-metadata.model-details-new-capability-label:
+      evidence:
+        - vitest::webapp/src/components/settings/ModelDetailsDialog.test.tsx::ModelDetailsDialog > labels a new capability
     llm-settings.chat-filter:
       evidence:
         - vitest::webapp/src/lib/llm-model-filter.test.ts::filterModelsForInstrument > chat returns only chat-capable models
+    llm-settings.chat-excludes-non-text:
+      evidence:
+        - vitest::webapp/src/lib/llm-model-filter.test.ts::filterModelsForInstrument > chat excludes non-text models
     llm-settings.vl-filter:
       evidence:
         - vitest::webapp/src/lib/llm-model-filter.test.ts::filterModelsForInstrument > vl returns only vision-capable models
@@ -189,6 +219,9 @@ scopes:
     design-system.progress-indicator-inset-fill:
       evidence:
         - vitest::webapp/src/components/ui/progress.test.tsx::ProgressIndicator > renders as a borderless inset fill inside a card
+    design-system.page-width-no-tab-override:
+      evidence:
+        - vitest::webapp/src/components/auth/admin/AdminPanel.test.tsx::AdminPanel > inherits the shared page width instead of adding its own max-width or centring wrapper
     gallery-browsing.scan-status-phase:
       evidence:
         - go::./internal/application/imaging::TestScanManager_StatusPhase

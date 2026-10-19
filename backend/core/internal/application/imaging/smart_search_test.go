@@ -98,6 +98,24 @@ func TestSearchByExactTag_WhitespaceCollapse(t *testing.T) {
 	assert.Equal(t, img.ID, results[0].ImageFileID)
 }
 
+func TestSearchByExactTag_NormalizesCaseAndWhitespace(t *testing.T) {
+	db, cleanup := setupSmartSearchTest(t)
+	defer cleanup()
+
+	img := testutil.SeedImageFile(t, db, "/photos/mountain-view.jpg", "abc", 1000)
+	db.Create(&domain.ImageTag{ImageFileID: img.ID, Tag: "Mountain View"})
+
+	// Case differences and runs of internal whitespace must not prevent the
+	// exact-tag match; trimming is part of the same normalization.
+	results, err := SearchByExactTag(db, "  mountain   view  ")
+
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+	assert.Equal(t, img.ID, results[0].ImageFileID)
+	assert.Equal(t, 1.0, results[0].Similarity)
+	assert.Equal(t, MatchExact, results[0].MatchType)
+}
+
 func TestSearchByExactTag_TrimWhitespace(t *testing.T) {
 	db, cleanup := setupSmartSearchTest(t)
 	defer cleanup()

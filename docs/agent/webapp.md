@@ -130,7 +130,8 @@ npm run build           # tsc -b && vite build — must succeed
 - `make lint-webapp` additionally type-checks the integration suite
   (`npx tsc -p ../tests/webapp`).
 - `make test-webapp-integration` runs `tests/webapp` against the test DB
-  (`test.env`, never `.env`).
+  (`.env` base plus the `test.env` overlay that switches `DB_NAME` to
+  `flashbacks-test`; the production database is never used).
 - PWA: `public/manifest.json`, `public/sw.js` and the icon set are regenerated
   with `webapp/scripts/generate-pwa-icons.js`; keep icon sizes consistent when
   touching branding.

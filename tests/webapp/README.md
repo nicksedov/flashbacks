@@ -42,13 +42,17 @@ cd webapp && npx vitest run --config vitest.integration.config.ts account-creati
 
 ## Configuration
 
-Values are read from the process environment first, then from the git-ignored
-`test.env` profile at the repository root, then from the defaults below. That
-profile is not committed — create it once from `.env.example`:
+Values are read from the process environment first, then from the `.env` base
+profile, then from the tracked `test.env` overlay, then from the defaults below.
+Shared configuration lives in exactly one place:
 
-```bash
-cp .env.example test.env   # then set DB_NAME=flashbacks-test and the DB_* credentials
 ```
+.env        # base profile, git-ignored, created with `make env`
+test.env    # tracked overlay, only the test-specific overrides
+```
+
+`test.env` currently overrides a single value (`DB_NAME=flashbacks-test`) — it
+must never be a copy of `.env`.
 
 | Variable | Default | Purpose |
 |---|---|---|

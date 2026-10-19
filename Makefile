@@ -25,8 +25,8 @@ SERVICE     ?= core
 ENVFILE     := .env
 TESTENVFILE := test.env
 DEV         := scripts/dev.sh
-# Test targets run against the integration profile (test.env), never the
-# developer .env — dev.sh honours FLASHBACKS_ENV_FILE.
+# Test targets layer test.env (integration overrides) on top of .env — dev.sh
+# honours FLASHBACKS_ENV_FILE as an overlay, so shared config stays in .env.
 DEV_TEST    := FLASHBACKS_ENV_FILE=$(TESTENVFILE) $(DEV)
 BOOTSTRAP := scripts/bootstrap.sh
 
@@ -37,8 +37,8 @@ PY          := $(PYTEST_VENV)/bin/python
 # Load .env into the current shell (prefix for recipes that need DB creds)
 LOAD_ENV = set -a; [ -f $(ENVFILE) ] && . ./$(ENVFILE); set +a;
 
-# Integration tests use their own git-ignored profile — never .env
-LOAD_TEST_ENV = set -a; [ -f $(TESTENVFILE) ] && . ./$(TESTENVFILE); set +a;
+# Integration tests load the .env base, then the test.env overlay (overrides only)
+LOAD_TEST_ENV = set -a; [ -f $(ENVFILE) ] && . ./$(ENVFILE); [ -f $(TESTENVFILE) ] && . ./$(TESTENVFILE); set +a;
 
 # Colours for output
 GREEN  := \033[0;32m

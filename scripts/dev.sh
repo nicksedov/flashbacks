@@ -3,10 +3,10 @@
 # dev.sh — host-native process manager for the Flashbacks development stack.
 #
 # Runs core / exif / ocr (Go binaries) and webapp (Vite) directly inside the
-# IDE container — no Docker, no docker-compose. Configuration is read from the
-# repository-level .env file (see .env.example) and exported to every service.
-# Set FLASHBACKS_ENV_FILE to load a different profile (the test targets point it
-# at test.env); relative paths are resolved from the repository root.
+# IDE container — no Docker, no docker-compose. Configuration is layered: the
+# repository `.env` base profile (see .env.example) is loaded first, then the
+# optional FLASHBACKS_ENV_FILE overlay (the test targets point it at test.env).
+# Relative paths are resolved from the repository root.
 #
 # Usage:
 #   scripts/dev.sh build   [service ...]   # compile core/exif/ocr binaries
@@ -26,12 +26,17 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 RUN_DIR="$ROOT_DIR/.run"
 BIN_DIR="$RUN_DIR/bin"
 LOG_DIR="$RUN_DIR/logs"
-# Environment profile exported to every service. Defaults to the repository
-# .env; FLASHBACKS_ENV_FILE overrides it so integration-test targets can run
-# against test.env without a developer .env being present.
-ENV_FILE="${FLASHBACKS_ENV_FILE:-$ROOT_DIR/.env}"
-# Accept relative overrides regardless of the caller's working directory.
-[[ "$ENV_FILE" = /* ]] || ENV_FILE="$ROOT_DIR/$ENV_FILE"
+# Base profile exported to every service: the repository `.env` is the single
+# source of shared configuration. FLASHBACKS_ENV_FILE adds an optional overlay
+# loaded afterwards (the integration-test targets point it at test.env, which
+# only carries the values that differ from `.env`).
+BASE_ENV_FILE="${FLASHBACKS_BASE_ENV_FILE:-$ROOT_DIR/.env}"
+OVERLAY_ENV_FILE="${FLASHBACKS_ENV_FILE:-}"
+# Accept relative paths regardless of the caller's working directory.
+[[ "$BASE_ENV_FILE" = /* ]] || BASE_ENV_FILE="$ROOT_DIR/$BASE_ENV_FILE"
+if [[ -n "$OVERLAY_ENV_FILE" && "$OVERLAY_ENV_FILE" != /* ]]; then
+  OVERLAY_ENV_FILE="$ROOT_DIR/$OVERLAY_ENV_FILE"
+fi
 
 ALL_SERVICES=(registry core exif ocr webapp)
 
@@ -46,20 +51,29 @@ usage() {
 }
 
 # ─── Environment ─────────────────────────────────────────────────────────────
+# Source one env file and export every variable it defines.
+load_profile() {
+  local file="$1" label="$2"
+  [[ -f "$file" ]] || return 1
+  set -a
+  # shellcheck disable=SC1090
+  . "$file"
+  set +a
+  info "Loaded $label environment from ${file#"$ROOT_DIR"/}"
+  return 0
+}
+
 load_env() {
-  if [[ -f "$ENV_FILE" ]]; then
-    set -a
-    # shellcheck disable=SC1090
-    . "$ENV_FILE"
-    set +a
-    info "Loaded environment from ${ENV_FILE#"$ROOT_DIR"/}"
-  elif [[ -n "${FLASHBACKS_ENV_FILE:-}" ]]; then
+  # Base profile first, then the optional test overlay on top of it. Layering
+  # keeps `.env` the single source of truth: test.env only carries differences.
+  if ! load_profile "$BASE_ENV_FILE" "base"; then
+    warn "No .env found — run 'cp .env.example .env' and set DB credentials"
+  fi
+  if [[ -n "$OVERLAY_ENV_FILE" ]] && ! load_profile "$OVERLAY_ENV_FILE" "overlay"; then
     # An explicit profile was requested — fail loudly instead of silently
     # falling back to defaults.
-    err "Environment profile not found: $ENV_FILE"
+    err "Environment profile not found: $OVERLAY_ENV_FILE"
     exit 1
-  else
-    warn "No .env found — run 'cp .env.example .env' and set DB credentials"
   fi
 
   # Expose project-local tools bootstrapped into .tools/ (exiftool, tesseract)

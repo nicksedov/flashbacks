@@ -120,10 +120,9 @@ Desktop.ini
 # ===========================
 # Environment
 # ===========================
-# Local development profile (Makefile, scripts/dev.sh)
+# Local development profile (Makefile, scripts/dev.sh). The integration-test
+# overlay (test.env) is tracked: it only carries non-secret test overrides.
 .env
-# Integration-test profile (loaded by tests/webapp)
-test.env
 
 # ===========================
 # Generated files

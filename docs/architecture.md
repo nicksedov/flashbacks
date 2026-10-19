@@ -173,10 +173,10 @@ For local development a single repository-level `.env` (created from
 every service. It now carries the registry bootstrap variables plus fallback
 values.
 
-The HTTP integration suites in `tests/` do not read `.env`. They load their own
-git-ignored `test.env` profile (created from `.env.example` the same way) and
-take the database from `DB_NAME`, defaulting to the throwaway `flashbacks-test`
-database.
+The HTTP integration suites in `tests/` load the same `.env` base profile and
+then apply the tracked `test.env` overlay, which only overrides `DB_NAME` to the
+throwaway `flashbacks-test` database (the default when no overlay exists).
+Shared configuration therefore stays in `.env`; `test.env` must not duplicate it.
 
 ## Local Development
 

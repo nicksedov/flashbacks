@@ -13,7 +13,7 @@
 // Run with:  make test-webapp-integration
 //            (or, from the webapp directory: npm run test:integration)
 //
-// The database name comes from `DB_NAME` in the git-ignored `test.env` profile
+// The database name comes from the `test.env` overlay applied on top of `.env`
 // (default `flashbacks-test`); the production database is never touched.
 
 import { mkdtempSync, rmSync } from "node:fs"

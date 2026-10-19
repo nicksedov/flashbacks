@@ -15,12 +15,21 @@ import (
 	"exif/internal/application"
 	"exif/internal/infrastructure/config"
 	"exif/internal/infrastructure/database"
+	"exif/internal/infrastructure/registrybootstrap"
 	"exif/internal/interfaces/handler"
 	exifmcp "exif/mcp"
 )
 
 func main() {
 	cfg := config.Load()
+
+	bootstrap := registrybootstrap.FromEnv("exif")
+	resolveCtx, cancelResolve := context.WithTimeout(context.Background(), 5*time.Second)
+	cfg.ApplyRegistry(bootstrap.ResolveConfig(resolveCtx, "exif", cfg.RegistryDefaults()))
+	if secret, ok := bootstrap.Secret(resolveCtx, "exif", "db_password"); ok {
+		cfg.DBPassword = secret
+	}
+	cancelResolve()
 
 	fmt.Println("EXIF Microservice")
 	fmt.Println("==================")
@@ -34,6 +43,14 @@ func main() {
 	sqlDB, _ := db.DB()
 	defer sqlDB.Close()
 	fmt.Println("Database connected successfully!")
+
+	bootstrap.Register(context.Background(), "exif", registrybootstrap.AdvertiseHost(),
+		registrybootstrap.PortInt(cfg.ServerPort, 5172), "/exif", "/exif/health", registrybootstrap.Version())
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), registrybootstrap.ShutdownTimeout)
+		defer cancel()
+		bootstrap.Deregister(ctx)
+	}()
 
 	// Initialize MetadataRepo
 	metadataRepo := application.NewMetadataRepo(db)

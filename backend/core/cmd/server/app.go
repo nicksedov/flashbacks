@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"strings"
@@ -11,6 +12,8 @@ import (
 	"github.com/flashbacks/core/internal/application/thumbnail"
 	"github.com/flashbacks/core/internal/domain"
 	"github.com/flashbacks/core/internal/infrastructure/config"
+	"github.com/flashbacks/core/internal/infrastructure/di"
+	"github.com/flashbacks/core/internal/infrastructure/registrybootstrap"
 	"github.com/flashbacks/core/internal/interfaces/handler"
 	"github.com/flashbacks/core/internal/interfaces/middleware"
 
@@ -31,8 +34,9 @@ type App struct {
 	TagScanManager    *imaging.TagScanManager
 	EmbeddingBackfill *imaging.EmbeddingBackfillManager
 	ThumbnailService  thumbnail.ThumbnailProvider
-	LoginLimiter      *auth.LoginRateLimiter
+	LoginLimiter      di.LoginLimiter
 	SessionCleanup    *auth.SessionCleanupJob
+	Registry          *registrybootstrap.Bootstrap
 
 	// HTTP layer — injected by Wire via AuthSet providers.
 	AuthMiddleware *middleware.AuthMiddleware
@@ -136,6 +140,12 @@ func (app *App) Init() {
 
 	// Start session cleanup
 	app.SessionCleanup.Start()
+
+	// Advertise this instance once the database is ready.
+	if app.Registry != nil && app.Registry.Enabled() {
+		app.Registry.Register(context.Background(), "core", registrybootstrap.AdvertiseHost(),
+			registrybootstrap.PortInt(app.Config.ServerPort, 5170), "/api", "/api/auth/status", registrybootstrap.Version())
+	}
 }
 
 // PrintBanner prints the startup banner with configuration summary.
@@ -183,11 +193,17 @@ func (app *App) Shutdown() {
 	if app.TagScanManager != nil {
 		app.TagScanManager.Stop()
 	}
-	if app.LoginLimiter != nil {
+	if app.LoginLimiter.LoginRateLimiter != nil {
 		app.LoginLimiter.Stop()
 	}
 	if app.SessionCleanup != nil {
 		app.SessionCleanup.Stop()
+	}
+	if app.Registry != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), registrybootstrap.ShutdownTimeout)
+		app.Registry.Deregister(ctx)
+		cancel()
+		app.Registry.Close()
 	}
 	if app.DB != nil {
 		if sqlDB, err := app.DB.DB(); err == nil {

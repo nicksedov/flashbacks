@@ -33,7 +33,7 @@ ENV_FILE="${FLASHBACKS_ENV_FILE:-$ROOT_DIR/.env}"
 # Accept relative overrides regardless of the caller's working directory.
 [[ "$ENV_FILE" = /* ]] || ENV_FILE="$ROOT_DIR/$ENV_FILE"
 
-ALL_SERVICES=(core exif ocr webapp)
+ALL_SERVICES=(registry core exif ocr webapp)
 
 # ─── Colours / logging ───────────────────────────────────────────────────────
 GREEN='\033[0;32m'; YELLOW='\033[1;33m'; RED='\033[0;31m'; NC='\033[0m'
@@ -85,46 +85,59 @@ load_env() {
   : "${EXIF_PORT:=5172}"
   : "${OCR_HOST:=0.0.0.0}"
   : "${OCR_PORT:=5174}"
+  : "${REGISTRY_DATA_DIR:=$ROOT_DIR/.run/registry-data}"
+  : "${REGISTRY_CLIENT_URL:=http://127.0.0.1:2379}"
+  : "${REGISTRY_PEER_URL:=http://127.0.0.1:2380}"
+  : "${REGISTRY_HTTP_PORT:=5176}"
+  : "${REGISTRY_HTTP_ADDR:=:${REGISTRY_HTTP_PORT}}"
+  : "${REGISTRY_MASTER_KEY:=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=}"
+  : "${REGISTRY_URL:=http://localhost:${REGISTRY_HTTP_PORT}}"
 
   export DB_HOST DB_PORT DB_USER DB_PASSWORD DB_NAME DB_SSLMODE
   export SERVER_HOST SERVER_PORT CORS_ORIGINS BOOTSTRAP_LOGIN BOOTSTRAP_PASSWORD
   export EXIF_SERVICE_URL OCR_SERVICE_URL
   export EXIF_HOST EXIF_PORT OCR_HOST OCR_PORT
+  export REGISTRY_DATA_DIR REGISTRY_CLIENT_URL REGISTRY_PEER_URL
+  export REGISTRY_HTTP_PORT REGISTRY_HTTP_ADDR REGISTRY_MASTER_KEY REGISTRY_URL
 }
 
 # ─── Service metadata ────────────────────────────────────────────────────────
 svc_dir() {
   case "$1" in
     core|exif|ocr) echo "backend/$1" ;;
+    registry)      echo "backend/registry" ;;
     webapp)        echo "webapp" ;;
   esac
 }
 
 svc_port() {
   case "$1" in
-    core)   echo "${SERVER_PORT}" ;;
-    exif)   echo "${EXIF_PORT}" ;;
-    ocr)    echo "${OCR_PORT}" ;;
-    webapp) echo "5180" ;;
+    core)     echo "${SERVER_PORT}" ;;
+    exif)     echo "${EXIF_PORT}" ;;
+    ocr)      echo "${OCR_PORT}" ;;
+    registry) echo "${REGISTRY_HTTP_PORT}" ;;
+    webapp)   echo "5180" ;;
   esac
 }
 
 svc_health_path() {
   case "$1" in
-    core)   echo "/api/auth/status" ;;
-    exif)   echo "/exif/health" ;;
-    ocr)    echo "/ocr/api/health" ;;
-    webapp) echo "/" ;;
+    core)     echo "/api/auth/status" ;;
+    exif)     echo "/exif/health" ;;
+    ocr)      echo "/ocr/api/health" ;;
+    registry) echo "/registry/v1/health" ;;
+    webapp)   echo "/" ;;
   esac
 }
 
 # Human-facing base URL (with the service API prefix where applicable).
 svc_public_url() {
   case "$1" in
-    core)   echo "http://localhost:$(svc_port core)/api" ;;
-    exif)   echo "http://localhost:$(svc_port exif)/exif" ;;
-    ocr)    echo "http://localhost:$(svc_port ocr)/ocr/api" ;;
-    webapp) echo "http://localhost:$(svc_port webapp)" ;;
+    core)     echo "http://localhost:$(svc_port core)/api" ;;
+    exif)     echo "http://localhost:$(svc_port exif)/exif" ;;
+    ocr)      echo "http://localhost:$(svc_port ocr)/ocr/api" ;;
+    registry) echo "http://localhost:$(svc_port registry)/registry/v1" ;;
+    webapp)   echo "http://localhost:$(svc_port webapp)" ;;
   esac
 }
 
@@ -148,8 +161,8 @@ build_bin() {
 
 build_service() {
   case "$1" in
-    core|exif|ocr) build_bin "$1" "$(svc_dir "$1")" ;;
-    webapp)        info "webapp is served by the Vite dev server (no build step)" ;;
+    core|exif|ocr|registry) build_bin "$1" "$(svc_dir "$1")" ;;
+    webapp)                 info "webapp is served by the Vite dev server (no build step)" ;;
   esac
 }
 
@@ -170,7 +183,11 @@ start_one() {
   case "$svc" in
     core|exif|ocr)
       build_bin "$svc" "$dir"
-      cmd=( "$BIN_DIR/$svc" )
+      cmd=( env "SERVICE_NAME=$svc" "SERVICE_ID=$svc-dev" "$BIN_DIR/$svc" )
+      ;;
+    registry)
+      build_bin "$svc" "$dir"
+      cmd=( "$BIN_DIR/registry" )
       ;;
     webapp)
       if [[ ! -d "$ROOT_DIR/webapp/node_modules" ]]; then
@@ -270,11 +287,14 @@ run_foreground() {
   local svc="$1" dir
   dir="$(svc_dir "$svc")"
   case "$svc" in
-    core|exif|ocr)
+    core|exif|ocr|registry)
       build_bin "$svc" "$dir"
       info "Running $svc in the foreground (Ctrl-C to stop)"
       cd "$ROOT_DIR/$dir"
-      exec "$BIN_DIR/$svc"
+      if [[ "$svc" == registry ]]; then
+        exec "$BIN_DIR/registry"
+      fi
+      exec env "SERVICE_NAME=$svc" "SERVICE_ID=$svc-dev" "$BIN_DIR/$svc"
       ;;
     webapp)
       info "Running webapp in the foreground (Ctrl-C to stop)"
@@ -318,8 +338,18 @@ main() {
     start|up)
       load_env
       parse_targets "$@"
-      for s in "${TARGETS[@]}"; do start_one "$s"; done
-      for s in "${TARGETS[@]}"; do wait_ready "$s" || true; done
+      if printf '%s\n' "${TARGETS[@]}" | grep -qx registry; then
+        start_one registry
+        wait_ready registry || true
+      fi
+      for s in "${TARGETS[@]}"; do
+        [[ "$s" == registry ]] && continue
+        start_one "$s"
+      done
+      for s in "${TARGETS[@]}"; do
+        [[ "$s" == registry ]] && continue
+        wait_ready "$s" || true
+      done
       ;;
     stop|down)
       load_env
@@ -330,8 +360,18 @@ main() {
       load_env
       parse_targets "$@"
       for s in "${TARGETS[@]}"; do stop_one "$s"; done
-      for s in "${TARGETS[@]}"; do start_one "$s"; done
-      for s in "${TARGETS[@]}"; do wait_ready "$s" || true; done
+      if printf '%s\n' "${TARGETS[@]}" | grep -qx registry; then
+        start_one registry
+        wait_ready registry || true
+      fi
+      for s in "${TARGETS[@]}"; do
+        [[ "$s" == registry ]] && continue
+        start_one "$s"
+      done
+      for s in "${TARGETS[@]}"; do
+        [[ "$s" == registry ]] && continue
+        wait_ready "$s" || true
+      done
       ;;
     status|ps)
       load_env

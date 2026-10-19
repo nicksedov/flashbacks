@@ -17,25 +17,39 @@ import (
 
 // HTTPExifClient implements ExifClient by calling the EXIF microservice over HTTP.
 type HTTPExifClient struct {
-	baseURL    string
-	httpClient *http.Client
+	urlProvider func() string
+	httpClient  *http.Client
 }
 
-// NewHTTPExifClient creates a new HTTP-based EXIF client.
+// NewHTTPExifClient creates a new HTTP-based EXIF client with a static URL.
 func NewHTTPExifClient(serviceURL string) *HTTPExifClient {
+	return NewHTTPExifClientWithProvider(func() string { return serviceURL })
+}
+
+// NewHTTPExifClientWithProvider creates a client whose base URL can change at
+// runtime, for example as registry discovery updates peer locations.
+func NewHTTPExifClientWithProvider(provider func() string) *HTTPExifClient {
+	if provider == nil {
+		provider = func() string { return "" }
+	}
 	return &HTTPExifClient{
-		baseURL: strings.TrimRight(serviceURL, "/"),
+		urlProvider: provider,
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
 		},
 	}
 }
 
+// base returns the current base URL without a trailing slash.
+func (c *HTTPExifClient) base() string {
+	return strings.TrimRight(c.urlProvider(), "/")
+}
+
 // --- Existing methods ---
 
 // ExtractMetadata reads EXIF metadata from an image file via the EXIF service.
 func (c *HTTPExifClient) ExtractMetadata(ctx context.Context, filePath string) (*domain.ImageMetadata, error) {
-	u := fmt.Sprintf("%s/exif/metadata?path=%s", c.baseURL, url.PathEscape(filePath))
+	u := fmt.Sprintf("%s/exif/metadata?path=%s", c.base(), url.PathEscape(filePath))
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
@@ -97,7 +111,7 @@ func (c *HTTPExifClient) ExtractMetadata(ctx context.Context, filePath string) (
 
 // ExtractGPS reads GPS coordinates from an image file's EXIF via the EXIF service.
 func (c *HTTPExifClient) ExtractGPS(ctx context.Context, filePath string) (lat, lng float64, ok bool, err error) {
-	u := fmt.Sprintf("%s/exif/metadata?path=%s", c.baseURL, url.PathEscape(filePath))
+	u := fmt.Sprintf("%s/exif/metadata?path=%s", c.base(), url.PathEscape(filePath))
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
@@ -132,7 +146,7 @@ func (c *HTTPExifClient) ExtractGPS(ctx context.Context, filePath string) (lat, 
 
 // WriteGPS writes GPS coordinates to an image file's EXIF via the EXIF service.
 func (c *HTTPExifClient) WriteGPS(ctx context.Context, filePath string, lat, lng float64, backupDir string, meta *domain.ImageMetadata) error {
-	u := fmt.Sprintf("%s/exif/gps", c.baseURL)
+	u := fmt.Sprintf("%s/exif/gps", c.base())
 
 	reqBody := struct {
 		Path      string  `json:"path"`
@@ -225,7 +239,7 @@ func (c *HTTPExifClient) EnrichMissingMetadata(ctx context.Context, filePath str
 
 // Health checks the EXIF service health status.
 func (c *HTTPExifClient) Health(ctx context.Context) (*domain.ExifHealthStatus, error) {
-	u := fmt.Sprintf("%s/exif/health", c.baseURL)
+	u := fmt.Sprintf("%s/exif/health", c.base())
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
@@ -254,7 +268,7 @@ func (c *HTTPExifClient) Health(ctx context.Context) (*domain.ExifHealthStatus, 
 
 // GetMetadataByImageID retrieves metadata from the EXIF service by image file ID.
 func (c *HTTPExifClient) GetMetadataByImageID(ctx context.Context, imageFileID uint) (*domain.ImageMetadata, error) {
-	u := fmt.Sprintf("%s/exif/metadata?imageFileId=%d", c.baseURL, imageFileID)
+	u := fmt.Sprintf("%s/exif/metadata?imageFileId=%d", c.base(), imageFileID)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
@@ -317,7 +331,7 @@ func (c *HTTPExifClient) GetMetadataByImageID(ctx context.Context, imageFileID u
 
 // UpsertMetadata creates or updates metadata via the EXIF service.
 func (c *HTTPExifClient) UpsertMetadata(ctx context.Context, meta *domain.ImageMetadata) (*domain.ImageMetadata, error) {
-	u := fmt.Sprintf("%s/exif/metadata", c.baseURL)
+	u := fmt.Sprintf("%s/exif/metadata", c.base())
 
 	var dateTakenStr *string
 	if meta.DateTaken != nil {
@@ -398,7 +412,7 @@ func (c *HTTPExifClient) UpsertMetadata(ctx context.Context, meta *domain.ImageM
 
 // DeleteMetadata deletes metadata for an image via the EXIF service.
 func (c *HTTPExifClient) DeleteMetadata(ctx context.Context, imageFileID uint) error {
-	u := fmt.Sprintf("%s/exif/metadata/%d", c.baseURL, imageFileID)
+	u := fmt.Sprintf("%s/exif/metadata/%d", c.base(), imageFileID)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, u, nil)
 	if err != nil {
@@ -429,7 +443,7 @@ func (c *HTTPExifClient) GetMetadataBatch(ctx context.Context, imageFileIDs []ui
 	for i, id := range imageFileIDs {
 		idStrs[i] = strconv.FormatUint(uint64(id), 10)
 	}
-	u := fmt.Sprintf("%s/exif/metadata/batch?ids=%s", c.baseURL, strings.Join(idStrs, ","))
+	u := fmt.Sprintf("%s/exif/metadata/batch?ids=%s", c.base(), strings.Join(idStrs, ","))
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
@@ -496,7 +510,7 @@ func (c *HTTPExifClient) GetMetadataBatch(ctx context.Context, imageFileIDs []ui
 
 // GetCalendarItems fetches calendar gallery items via the EXIF service.
 func (c *HTTPExifClient) GetCalendarItems(ctx context.Context, params domain.CalendarParams) (*domain.CalendarResult, error) {
-	u, _ := url.Parse(fmt.Sprintf("%s/exif/metadata/calendar", c.baseURL))
+	u, _ := url.Parse(fmt.Sprintf("%s/exif/metadata/calendar", c.base()))
 	q := u.Query()
 	if params.StartDate != nil {
 		q.Set("startDate", params.StartDate.Format("2006-01-02"))
@@ -570,7 +584,7 @@ func (c *HTTPExifClient) GetCalendarItems(ctx context.Context, params domain.Cal
 
 // GetGeoPoints fetches GPS points for clustering via the EXIF service.
 func (c *HTTPExifClient) GetGeoPoints(ctx context.Context, bounds domain.GeoBounds) ([]domain.GeoPoint, error) {
-	u, _ := url.Parse(fmt.Sprintf("%s/exif/metadata/geo-points", c.baseURL))
+	u, _ := url.Parse(fmt.Sprintf("%s/exif/metadata/geo-points", c.base()))
 	q := u.Query()
 	if bounds.MinLat != 0 || bounds.MaxLat != 0 {
 		q.Set("minLat", fmt.Sprintf("%f", bounds.MinLat))
@@ -624,7 +638,7 @@ func (c *HTTPExifClient) GetGeoPoints(ctx context.Context, bounds domain.GeoBoun
 
 // GetMissingImages fetches images missing EXIF data via the EXIF service.
 func (c *HTTPExifClient) GetMissingImages(ctx context.Context, page, pageSize int) (*domain.MissingImagesResult, error) {
-	u := fmt.Sprintf("%s/exif/missing?page=%d&pageSize=%d", c.baseURL, page, pageSize)
+	u := fmt.Sprintf("%s/exif/missing?page=%d&pageSize=%d", c.base(), page, pageSize)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
@@ -675,7 +689,7 @@ func (c *HTTPExifClient) GetMissingImages(ctx context.Context, page, pageSize in
 
 // GetLocationCandidates fetches location candidates via the EXIF service.
 func (c *HTTPExifClient) GetLocationCandidates(ctx context.Context, date string) ([]domain.LocationCandidate, error) {
-	u := fmt.Sprintf("%s/exif/location-candidates?date=%s", c.baseURL, url.QueryEscape(date))
+	u := fmt.Sprintf("%s/exif/location-candidates?date=%s", c.base(), url.QueryEscape(date))
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
@@ -721,7 +735,7 @@ func (c *HTTPExifClient) GetLocationCandidates(ctx context.Context, date string)
 
 // ResolveGeolocation resolves GPS coordinates to location names via the EXIF service.
 func (c *HTTPExifClient) ResolveGeolocation(ctx context.Context, lat, lng float64) (*domain.GeolocationCache, error) {
-	u := fmt.Sprintf("%s/exif/geolocation?lat=%f&lng=%f", c.baseURL, lat, lng)
+	u := fmt.Sprintf("%s/exif/geolocation?lat=%f&lng=%f", c.base(), lat, lng)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
@@ -763,7 +777,7 @@ func (c *HTTPExifClient) ResolveGeolocation(ctx context.Context, lat, lng float6
 // via the EXIF service. Used as a fallback when Go's image.Decode cannot
 // handle large/panoramic JPEGs. Returns raw JPEG bytes.
 func (c *HTTPExifClient) ExtractPreview(ctx context.Context, filePath string) ([]byte, error) {
-	u := fmt.Sprintf("%s/exif/preview?path=%s", c.baseURL, url.PathEscape(filePath))
+	u := fmt.Sprintf("%s/exif/preview?path=%s", c.base(), url.PathEscape(filePath))
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
@@ -787,7 +801,7 @@ func (c *HTTPExifClient) ExtractPreview(ctx context.Context, filePath string) ([
 // CopyExif copies all EXIF metadata (including GPS coordinates) from source file
 // to target file via the EXIF microservice. Only JPEG/TIFF formats are supported.
 func (c *HTTPExifClient) CopyExif(ctx context.Context, sourcePath, targetPath string) error {
-	u := fmt.Sprintf("%s/exif/copy-exif", c.baseURL)
+	u := fmt.Sprintf("%s/exif/copy-exif", c.base())
 
 	reqBody := struct {
 		SourcePath string `json:"sourcePath"`

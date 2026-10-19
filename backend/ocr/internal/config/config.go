@@ -33,3 +33,21 @@ func Load() *Config {
 		Port: port,
 	}
 }
+
+// RegistryDefaults returns the bootstrap values the registry may override.
+func (c *Config) RegistryDefaults() map[string]string {
+	return map[string]string{
+		"OCR_HOST": c.Host,
+		"OCR_PORT": c.Port,
+	}
+}
+
+// ApplyRegistry overwrites fields present in a resolved registry map.
+func (c *Config) ApplyRegistry(values map[string]string) {
+	if value, ok := values["OCR_HOST"]; ok {
+		c.Host = value
+	}
+	if value, ok := values["OCR_PORT"]; ok {
+		c.Port = value
+	}
+}

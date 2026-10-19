@@ -47,12 +47,12 @@ RED    := \033[0;31m
 NC     := \033[0m
 
 .PHONY: help all doctor env setup setup-env setup-webapp setup-pytest deps tools tools-exiftool tools-tesseract \
-        build build-core build-exif build-ocr \
+        build build-core build-exif build-ocr build-registry \
         up start down stop restart status logs \
-        run-core run-exif run-ocr run-webapp \
-        dev-core dev-exif dev-ocr dev-webapp \
-        test test-all test-go test-core test-exif test-ocr test-webapp test-webapp-integration test-ocr-integration test-pytest \
-        lint lint-all lint-core lint-exif lint-ocr lint-webapp \
+        run-core run-exif run-ocr run-registry run-webapp \
+        dev-core dev-exif dev-ocr dev-registry dev-webapp \
+        test test-all test-go test-core test-exif test-ocr test-registry test-webapp test-webapp-integration test-ocr-integration test-pytest \
+        lint lint-all lint-core lint-exif lint-ocr lint-registry lint-webapp \
         db-migrate db-shell generate-types generate-go clean clean-tools
 
 ##@ General
@@ -121,8 +121,8 @@ tools-tesseract: ## Install Tesseract OCR (libs + eng/rus) locally into .tools/ 
 
 ##@ Build
 
-build: ## Compile core, exif and ocr binaries into .run/bin
-	@$(DEV) build core exif ocr
+build: ## Compile core, exif, ocr and registry binaries into .run/bin
+	@$(DEV) build core exif ocr registry
 
 build-core: ## Compile the core binary
 	@$(DEV) build core
@@ -132,6 +132,9 @@ build-exif: ## Compile the exif binary
 
 build-ocr: ## Compile the ocr binary
 	@$(DEV) build ocr
+
+build-registry: ## Compile the registry binary
+	@$(DEV) build registry
 
 ##@ Run (background)
 
@@ -163,6 +166,9 @@ run-exif: ## Start exif in the background
 run-ocr: ## Start ocr in the background
 	@$(DEV) start ocr
 
+run-registry: ## Start registry in the background
+	@$(DEV) start registry
+
 run-webapp: ## Start the webapp dev server in the background
 	@$(DEV) start webapp
 
@@ -177,6 +183,9 @@ dev-exif: ## Run exif in the foreground
 dev-ocr: ## Run ocr in the foreground
 	@$(DEV) run ocr
 
+dev-registry: ## Run registry in the foreground
+	@$(DEV) run registry
+
 dev-webapp: ## Run the webapp dev server in the foreground
 	@$(DEV) run webapp
 
@@ -189,6 +198,8 @@ else ifeq ($(SERVICE),exif)
 	@$(MAKE) --no-print-directory test-exif
 else ifeq ($(SERVICE),ocr)
 	@$(MAKE) --no-print-directory test-ocr
+else ifeq ($(SERVICE),registry)
+	@$(MAKE) --no-print-directory test-registry
 else ifeq ($(SERVICE),webapp)
 	@$(MAKE) --no-print-directory test-webapp
 else ifeq ($(SERVICE),ocr-integration)
@@ -209,6 +220,10 @@ test-ocr: ## Run ocr Go unit tests
 	@echo "${GREEN}Testing ocr…${NC}"
 	@. ./scripts/toolenv.sh && cd backend/ocr && go test ./... -count=1
 
+test-registry: ## Run registry Go unit tests
+	@echo "${GREEN}Testing registry…${NC}"
+	@cd backend/registry && go test ./... -count=1
+
 test-webapp: ## Run webapp unit tests (Vitest)
 	@echo "${GREEN}Testing webapp…${NC}"
 	@cd webapp && npm test
@@ -221,6 +236,7 @@ test-go: ## Run all Go unit tests
 	@$(MAKE) --no-print-directory test-core
 	@$(MAKE) --no-print-directory test-exif
 	@$(MAKE) --no-print-directory test-ocr
+	@$(MAKE) --no-print-directory test-registry
 
 test-ocr-integration: ## Run OCR HTTP integration tests (pytest) against the running service
 	@if [ ! -x "$(PY)" ]; then \
@@ -245,6 +261,8 @@ else ifeq ($(SERVICE),exif)
 	@$(MAKE) --no-print-directory lint-exif
 else ifeq ($(SERVICE),ocr)
 	@$(MAKE) --no-print-directory lint-ocr
+else ifeq ($(SERVICE),registry)
+	@$(MAKE) --no-print-directory lint-registry
 else ifeq ($(SERVICE),webapp)
 	@$(MAKE) --no-print-directory lint-webapp
 else
@@ -260,6 +278,9 @@ lint-exif: ## Vet exif
 lint-ocr: ## Vet ocr
 	@. ./scripts/toolenv.sh && cd backend/ocr && go vet ./...
 
+lint-registry: ## Vet registry
+	@cd backend/registry && go vet ./...
+
 lint-webapp: ## Lint + type-check webapp and its integration tests
 	@cd webapp && npm run lint && npx tsc -b && npx tsc -p ../tests/webapp
 
@@ -267,6 +288,7 @@ lint-all: ## Lint every service
 	@$(MAKE) --no-print-directory lint-core
 	@$(MAKE) --no-print-directory lint-exif
 	@$(MAKE) --no-print-directory lint-ocr
+	@$(MAKE) --no-print-directory lint-registry
 	@$(MAKE) --no-print-directory lint-webapp
 
 ##@ Database

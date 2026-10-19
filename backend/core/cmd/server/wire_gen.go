@@ -16,20 +16,21 @@ import (
 // InitializeApp builds the complete application dependency graph using Wire.
 // The implementation is generated into wire_gen.go.
 func InitializeApp() (*App, error) {
-	appConfig := di.ProvideConfig()
+	bootstrap := di.ProvideRegistryBootstrap()
+	appConfig := di.ProvideConfig(bootstrap)
 	db, err := di.ProvideDB(appConfig)
 	if err != nil {
 		return nil, err
 	}
 	scanManager := di.ProvideScanManager(db, appConfig)
-	client := di.ProvideOcrClient(appConfig)
+	client := di.ProvideOcrClient(appConfig, bootstrap)
 	ocrManager := di.ProvideOcrManager(db, client, appConfig)
 	llmOcrService := di.ProvideLlmOcrService(db)
 	config := di.ProvideThumbnailConfig(db, appConfig)
 	thumbnailProvider := di.ProvideThumbnailProvider(config)
 	nominatimClient := di.ProvideNominatimClient()
 	geolocationService := di.ProvideGeolocationService(db, nominatimClient)
-	exifClient := di.ProvideExifClient(appConfig)
+	exifClient := di.ProvideExifClient(appConfig, bootstrap)
 	backgroundSyncManager := di.ProvideBackgroundSyncManager(db, thumbnailProvider, geolocationService, exifClient)
 	float64_2 := di.ProvideMaxMegapixels(appConfig)
 	tagScanManager := di.ProvideTagScanManager(db, llmOcrService, float64_2)
@@ -40,28 +41,25 @@ func InitializeApp() (*App, error) {
 	settingsLoader := di.ProvideSettingsLoader(db)
 	llmFactory := di.ProvideLLMFactory(db, float64_2)
 	fileMover := di.ProvideFileMover(db)
-	i18nService, err := di.ProvideI18nService()
+	service, err := di.ProvideI18nService()
 	if err != nil {
 		return nil, err
 	}
 	string2 := di.ProvideExifBackupDir(db)
-	exifAgent := di.ProvideExifAgent(appConfig, string2)
+	exifAgent := di.ProvideExifAgent(appConfig, string2, bootstrap)
 	flashbacksMCPServer := di.ProvideMCPServer(db, llmFactory, llmOcrService, float64_2, embeddingBackfillManager, exifAgent)
 	conversationService := di.ProvideConversationService(db)
 	agentConfig := di.ProvideAgentConfig(appConfig)
 	agent := di.ProvideAgent(conversationService, flashbacksMCPServer, agentConfig)
-
-	// Repositories
-	imageFileRepo := di.ProvideImageFileRepo(db)
-	galleryFolderRepo := di.ProvideGalleryFolderRepo(db)
-	llmRepo := di.ProvideLlmRepo(db)
-	metadataRepo := di.ProvideMetadataRepo(db)
-	ocrRepo := di.ProvideOcrRepo(db)
-	imageTagRepo := di.ProvideImageTagRepo(db)
-	appSettingsRepo := di.ProvideAppSettingsRepo(db)
-	userSettingsRepo := di.ProvideUserSettingsRepo(db)
-	syncHistoryRepo := di.ProvideSyncHistoryRepo(db)
-
+	imageFileRepository := di.ProvideImageFileRepo(db)
+	galleryFolderRepository := di.ProvideGalleryFolderRepo(db)
+	llmRepository := di.ProvideLlmRepo(db)
+	metadataRepository := di.ProvideMetadataRepo(db)
+	ocrRepository := di.ProvideOcrRepo(db)
+	imageTagRepository := di.ProvideImageTagRepo(db)
+	appSettingsRepository := di.ProvideAppSettingsRepo(db)
+	userSettingsRepository := di.ProvideUserSettingsRepo(db)
+	syncHistoryRepository := di.ProvideSyncHistoryRepo(db)
 	serverDeps := handler.ServerDeps{
 		DB:                  db,
 		Config:              appConfig,
@@ -79,7 +77,7 @@ func InitializeApp() (*App, error) {
 		SettingsLoader:      settingsLoader,
 		LlmFactory:          llmFactory,
 		FileMover:           fileMover,
-		I18n:                i18nService,
+		I18n:                service,
 		GeolocationService:  geolocationService,
 		Nominatim:           nominatimClient,
 		McpServer:           flashbacksMCPServer,
@@ -87,28 +85,28 @@ func InitializeApp() (*App, error) {
 		AgentConfig:         agentConfig,
 		ConversationService: conversationService,
 		ExifClient:          exifClient,
-		ImageFileRepo:       imageFileRepo,
-		GalleryFolderRepo:   galleryFolderRepo,
-		LlmRepo:             llmRepo,
-		MetadataRepo:        metadataRepo,
-		OcrRepo:             ocrRepo,
-		ImageTagRepo:        imageTagRepo,
-		AppSettingsRepo:     appSettingsRepo,
-		UserSettingsRepo:    userSettingsRepo,
-		SyncHistoryRepo:     syncHistoryRepo,
+		ImageFileRepo:       imageFileRepository,
+		GalleryFolderRepo:   galleryFolderRepository,
+		LlmRepo:             llmRepository,
+		MetadataRepo:        metadataRepository,
+		OcrRepo:             ocrRepository,
+		ImageTagRepo:        imageTagRepository,
+		AppSettingsRepo:     appSettingsRepository,
+		UserSettingsRepo:    userSettingsRepository,
+		SyncHistoryRepo:     syncHistoryRepository,
 	}
 	server := di.ProvideServer(serverDeps)
-	loginRateLimiter := di.ProvideLoginRateLimiter()
-	registerRateLimiter := di.ProvideRegisterRateLimiter()
+	loginLimiter := di.ProvideLoginRateLimiter()
 	sessionConfig := di.ProvideSessionConfig(appConfig)
 	sessionRepository := di.ProvideSessionRepository(db, sessionConfig)
 	sessionCleanupJob := di.ProvideSessionCleanupJob(sessionRepository)
 	bootstrapService := di.ProvideBootstrapService(db, appConfig)
-	authService := di.ProvideAuthService(db, bootstrapService, sessionRepository, loginRateLimiter, registerRateLimiter, appConfig)
-	authMiddleware := di.ProvideAuthMiddleware(sessionRepository, authService, i18nService)
-	csrfProtection := di.ProvideCSRFProtection(i18nService)
+	registerLimiter := di.ProvideRegisterRateLimiter()
+	authService := di.ProvideAuthService(db, bootstrapService, sessionRepository, loginLimiter, registerLimiter, appConfig)
+	authMiddleware := di.ProvideAuthMiddleware(sessionRepository, authService, service)
+	csrfProtection := di.ProvideCSRFProtection(service)
 	userService := di.ProvideUserService(db, sessionRepository)
-	authHandlers := di.ProvideAuthHandlers(authService, bootstrapService, userService, sessionRepository, db, i18nService)
+	authHandlers := di.ProvideAuthHandlers(authService, bootstrapService, userService, sessionRepository, db, service)
 	app := &App{
 		DB:                db,
 		Config:            appConfig,
@@ -120,8 +118,9 @@ func InitializeApp() (*App, error) {
 		TagScanManager:    tagScanManager,
 		EmbeddingBackfill: embeddingBackfillManager,
 		ThumbnailService:  thumbnailProvider,
-		LoginLimiter:      loginRateLimiter,
+		LoginLimiter:      loginLimiter,
 		SessionCleanup:    sessionCleanupJob,
+		Registry:          bootstrap,
 		AuthMiddleware:    authMiddleware,
 		CSRFProtection:    csrfProtection,
 		AuthHandlers:      authHandlers,

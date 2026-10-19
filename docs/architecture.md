@@ -12,6 +12,7 @@ Flashbacks is a microservices-based image management platform with AI-powered se
 | **core** | 5170 | Main backend API | Go 1.25+, Gin, PostgreSQL 16+ |
 | **exif** | 5172 | EXIF metadata extraction | Go 1.25+ |
 | **ocr** | 5174 | Text recognition in images | Go 1.25+ |
+| **registry** | 5176 | Service discovery + configuration KV store | Go 1.25+, embedded etcd |
 | **postgres** | 5432 | Database (multiple logical DBs) | PostgreSQL 16 with pgvector |
 
 ## Project Structure
@@ -22,7 +23,8 @@ flashbacks/
 ├── backend/                  # Backend microservices
 │   ├── core/          # Core Go API service
 │   ├── exif/                 # EXIF metadata service
-│   └── ocr/                  # OCR text detection service
+│   ├── ocr/                  # OCR text detection service
+│   └── registry/             # Service discovery + config registry (embedded etcd)
 ├── tools/                    # Utilities (embeddings-builder)
 ├── docs/                     # Shared documentation
 │   ├── api-contracts/        # API contracts (OpenAPI specs)
@@ -73,6 +75,9 @@ flashbacks/
 │ extraction    │   │ & classification│ │  (pgvector)   │
 └───────────────┘   └───────────────┘   └───────────────┘
 ```
+
+All Go services (`core`, `exif`, `ocr`) register with the **registry** (`:5176`,
+embedded etcd) and read their configuration, secrets, and peer locations from it.
 
 ## Data Flow
 
@@ -141,31 +146,32 @@ All services communicate via HTTP REST:
 | From | To | Purpose |
 |------|-----|---------|
 | webui | core | All user operations |
-| core | exif | EXIF extraction |
-| core | ocr | Text recognition |
+| core/exif/ocr | registry | Registration, configuration, secrets |
+| core | exif | EXIF extraction (URL resolved from discovery) |
+| core | ocr | Text recognition (URL resolved from discovery) |
 | embeddings-builder | core DB | Populate embeddings |
 
 ## Configuration Management
 
-Each service uses environment variables (12-factor app). For local development
-a single repository-level `.env` (created from `.env.example`) is loaded by the
-Makefile and `scripts/dev.sh` and exported to every service:
+The **registry** service (`backend/registry`, port `5176`) is the single source
+of truth for service configuration and discovery. It embeds a single-node etcd
+instance and exposes a REST facade:
 
-```
-# .env
-DB_HOST=postgreshost
-DB_PORT=5432
-DB_NAME=flashbacks
-DB_USER=flashbacks
-DB_PASSWORD=…
-DB_SSLMODE=disable
-SERVER_PORT=5170
-CORS_ORIGINS=http://localhost:5180
-BOOTSTRAP_LOGIN=admin
-BOOTSTRAP_PASSWORD=admin
-OCR_SERVICE_URL=http://localhost:5174
-EXIF_SERVICE_URL=http://localhost:5172
-```
+- `/registry/v1/config/<service>/<key>` — plaintext configuration values
+- `/registry/v1/secrets/<service>/<key>` — AES-256-GCM encrypted secrets
+- `/registry/v1/services/<service>/<instance>` — TTL-leased registrations
+
+Each service requires only bootstrap environment variables: `REGISTRY_URL`,
+`REGISTRY_TOKEN` (optional), `SERVICE_NAME`, `SERVICE_ID`, and `SERVICE_HOST`.
+All other values are read from the registry with an
+env-override > registry > built-in-default precedence. When `REGISTRY_URL` is
+empty, a service falls back to its local environment and defaults, so a registry
+outage degrades rather than blocks startup.
+
+For local development a single repository-level `.env` (created from
+`.env.example`) is loaded by the Makefile and `scripts/dev.sh` and exported to
+every service. It now carries the registry bootstrap variables plus fallback
+values.
 
 The HTTP integration suites in `tests/` do not read `.env`. They load their own
 git-ignored `test.env` profile (created from `.env.example` the same way) and
@@ -180,7 +186,7 @@ external, shared service configured through `.env` (see `.env.example`).
 ```bash
 make env      # create .env, then set the DB credentials
 make setup    # install host prerequisites (Go deps, npm, pytest venv, exiftool)
-make up       # start core, exif, ocr and webapp in the background
+make up       # start registry first, then core, exif, ocr and webapp
 make status   # show PIDs and URLs
 make down     # stop everything
 ```
@@ -188,6 +194,7 @@ make down     # stop everything
 Run a single service in the foreground:
 
 ```bash
+make dev-registry # registry :5176
 make dev-core    # core   :5170
 make dev-exif    # exif   :5172
 make dev-ocr     # ocr    :5174
@@ -205,10 +212,11 @@ cd tools/embeddings-builder && go run ./cmd/embeddings-builder
 Each service is deployed independently:
 
 1. **webui**: Static assets served by nginx or CDN
-2. **core**: Containerized, exposed on port 5170
-3. **exif**: Containerized, internal network only
-4. **ocr**: Containerized, internal network only
-5. **postgres**: External PostgreSQL 17 with pgvector (shared by all services)
+2. **registry**: Containerized embedded etcd + REST facade on 5176, internal network only
+3. **core**: Containerized, exposed on port 5170
+4. **exif**: Containerized, internal network only
+5. **ocr**: Containerized, internal network only
+6. **postgres**: External PostgreSQL 17 with pgvector (shared by all services)
 
 ## Future Enhancements
 

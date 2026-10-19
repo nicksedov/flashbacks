@@ -105,3 +105,39 @@ The registry SHALL expose a health endpoint that reports readiness of its embedd
 
 - **WHEN** the registry is running with its embedded key-value backend initialized
 - **THEN** its health endpoint returns a success status
+
+### Requirement: Configuration precedence
+
+When resolving configuration values, a service SHALL apply explicit environment overrides over registry values, and registry values over built-in defaults, so a local debugging override does not require changing the shared registry.
+
+<!-- focused-spec:id=service-registry.config-precedence -->
+#### Scenario: Environment override wins over the registry value
+
+- **WHEN** a configuration key has a built-in default, a registry value, and an explicit environment override
+- **THEN** the resolved value is the environment override
+
+<!-- focused-spec:id=service-registry.config-registry-over-default -->
+#### Scenario: Registry value wins over the built-in default
+
+- **WHEN** a configuration key has a built-in default and a registry value but no environment override
+- **THEN** the resolved value is the registry value
+
+### Requirement: Configuration fallback when the registry is unreachable
+
+A service SHALL resolve a configuration key from its environment override or built-in default when the registry cannot serve the stored values, so a registry outage degrades configuration instead of blocking startup.
+
+<!-- focused-spec:id=service-registry.config-fallback -->
+#### Scenario: Unavailable registry falls back to the built-in default
+
+- **WHEN** the registry is unreachable while a service resolves a configuration key that has a built-in default
+- **THEN** the resolved value is the built-in default instead of a startup failure
+
+### Requirement: Instance-change watch notifications
+
+The registry SHALL notify a subscribed consumer when an instance of a service registers or deregisters, so peer discovery updates without the consumer restarting.
+
+<!-- focused-spec:id=service-registry.instance-watch -->
+#### Scenario: Registration notifies an instance watcher
+
+- **WHEN** a consumer watches a service's instance registrations and another instance registers itself
+- **THEN** the registry delivers that registration event to the watcher

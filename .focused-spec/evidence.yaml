@@ -283,3 +283,15 @@ scopes:
     service-registry.health-ready:
       evidence:
         - goregistry::./internal/httpapi::TestHealthReportsReady
+    service-registry.config-precedence:
+      evidence:
+        - goregistry::./client::TestResolveConfigLayering
+    service-registry.config-registry-over-default:
+      evidence:
+        - goregistry::./client::TestResolveConfigLayering
+    service-registry.config-fallback:
+      evidence:
+        - goregistry::./client::TestResolveConfigFallsBackWhenRegistryUnavailable
+    service-registry.instance-watch:
+      evidence:
+        - goregistry::./client::TestWatchInstancesDeliversUpdates

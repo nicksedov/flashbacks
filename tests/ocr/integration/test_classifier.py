@@ -6,8 +6,8 @@ Covers the same scenarios as the original Go unit tests but against a live servi
 
 Usage:
     pytest integration/ --base-url http://localhost:5174
-    OCR_CLASSIFIER_URL=http://localhost:5174 pytest integration/
-    pytest integration/   # uses default http://ocr:5174
+    OCR_SERVICE_URL=http://localhost:5174 pytest integration/
+    pytest integration/   # uses default http://localhost:5174
 """
 
 import os

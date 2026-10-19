@@ -244,7 +244,7 @@ test-ocr-integration: ## Run OCR HTTP integration tests (pytest) against the run
 	fi
 	@$(DEV_TEST) status ocr | grep -q running || { echo "${YELLOW}Starting OCR service…${NC}"; $(DEV_TEST) start ocr; }
 	@$(LOAD_TEST_ENV) $(PY) -m pytest tests/ocr/integration \
-	  --base-url "$${OCR_CLASSIFIER_URL:-http://localhost:5174}" -v
+	  --base-url "$${OCR_SERVICE_URL:-http://localhost:5174}" -v
 
 test-pytest: test-ocr-integration ## Alias for 'test-ocr-integration'
 

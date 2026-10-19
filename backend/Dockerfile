@@ -58,18 +58,26 @@ RUN cd ocr  && CGO_ENABLED=1 GOOS=linux go build -ldflags="-w -s" -o /build/bin/
 # --- core runtime ---
 FROM alpine:3.24 AS core
 
+ARG SERVER_PORT=5170
+
 RUN apk add --no-cache ca-certificates tzdata curl
 
 WORKDIR /app
 
 COPY --from=builder /build/bin/core ./core
 
-EXPOSE 5170
+ENV SERVER_PORT=${SERVER_PORT}
+EXPOSE ${SERVER_PORT}
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+  CMD wget -q --spider "http://localhost:${SERVER_PORT}/api/auth/status" || exit 1
 
 CMD ["./core"]
 
 # --- exif runtime ---
 FROM alpine:3.24 AS exif
+
+ARG EXIF_PORT=5172
 
 RUN apk add --no-cache perl exiftool ca-certificates tzdata
 
@@ -77,7 +85,11 @@ WORKDIR /app
 
 COPY --from=builder /build/bin/exif ./exif
 
-EXPOSE 5172
+ENV EXIF_PORT=${EXIF_PORT}
+EXPOSE ${EXIF_PORT}
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD wget -q --spider "http://localhost:${EXIF_PORT}/exif/health" || exit 1
 
 CMD ["./exif"]
 

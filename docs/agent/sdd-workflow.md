@@ -33,36 +33,48 @@ branching step, and the scenario-authoring/evidence contract owned by
 
 ## 2. The cycle
 
-```
-        user prompt (intent)
-                │
-                ▼
-   ┌───────────────────────┐
-   │ 1. PROPOSE  (plan)    │  §4.1 branch     → branch off main FIRST
-   │                       │  openspec-propose → proposal/specs/design/tasks
-   │                       │  focused-spec     → scenario contract (planned:)
-   └───────────┬───────────┘
-               ▼
-   ┌───────────────────────┐
-   │ 2. APPLY  (build)     │  openspec-apply-change → implement tasks
-   │                       │  focused-spec → validate + run EVIDENCE (mutation check)
-   └───────────┬───────────┘
-               ▼
-   ┌───────────────────────┐
-   │ 3. VALIDATE (review)  │  this document §7 → audit the diff, findings report
-   │                       │  PASS → continue; CHANGES REQUIRED → back to apply
-   └───────────┬───────────┘
-               ▼
-   ┌───────────────────────┐
-   │ 4. SYNC   (merge)     │  openspec-sync-specs → delta specs merged into main specs
-   └───────────┬───────────┘
-               ▼
-   ┌───────────────────────┐
-   │ 5. ARCHIVE (close)    │  openspec-archive-change → changes/archive/YYYY-MM-DD-<name>/
-   └───────────────────────┘
+```mermaid
+flowchart TD
+    intent["user prompt (intent)"]
 
-   side paths: openspec-explore (think, before/within a change)
-               openspec-update-change (revise plan; never edits code)
+    subgraph propose["1 · PROPOSE — plan"]
+        direction TB
+        branch["§4.1 branch → branch off main FIRST"]
+        proposeSkill["openspec-propose → proposal / specs / design / tasks"]
+        specContract["focused-spec → scenario contract (planned:)"]
+    end
+
+    subgraph apply["2 · APPLY — build"]
+        direction TB
+        applySkill["openspec-apply-change → implement tasks"]
+        evidence["focused-spec → validate + run EVIDENCE (mutation check)"]
+    end
+
+    subgraph validate["3 · VALIDATE — review"]
+        direction TB
+        review["this document §7 → audit the diff, findings report"]
+        verdict{"verdict"}
+    end
+
+    subgraph sync["4 · SYNC — merge"]
+        syncSkill["openspec-sync-specs → delta specs merged into main specs"]
+    end
+
+    subgraph archive["5 · ARCHIVE — close"]
+        archiveSkill["openspec-archive-change → changes/archive/YYYY-MM-DD-&#60;name&#62;/"]
+    end
+
+    explore["side path — openspec-explore<br/>think, before or within a change"]
+    updateChange["side path — openspec-update-change<br/>revise plan, never edits code"]
+
+    intent --> branch
+    branch --> proposeSkill --> specContract
+    specContract --> applySkill --> evidence --> review --> verdict
+    verdict -->|"PASS → continue"| syncSkill
+    verdict -->|"CHANGES REQUIRED → back to apply"| applySkill
+    syncSkill --> archiveSkill
+    explore -.-> proposeSkill
+    updateChange -.-> proposeSkill
 ```
 
 | Stage | Skill | May write | Must not |

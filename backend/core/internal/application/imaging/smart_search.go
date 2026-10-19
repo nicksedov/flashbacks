@@ -2,6 +2,7 @@ package imaging
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -12,6 +13,15 @@ import (
 	"github.com/flashbacks/core/internal/infrastructure/llm"
 
 	"gorm.io/gorm"
+)
+
+var (
+	// ErrEmbeddingNotConfigured indicates that no embedding model is configured,
+	// so semantic search cannot run until an embedding instrument is set up.
+	ErrEmbeddingNotConfigured = errors.New("embedding instrument not configured")
+	// ErrEmbeddingsNotIndexed indicates that image embeddings have not been
+	// generated yet, so semantic search cannot run until the library is indexed.
+	ErrEmbeddingsNotIndexed = errors.New("image embeddings are not indexed")
 )
 
 // MatchType indicates how a search result was matched.
@@ -50,12 +60,32 @@ func SearchByEmbedding(db *gorm.DB, query string, limit int) (SmartSearchRespons
 	// Load embedding provider from instrument settings
 	var embInstrument domain.LlmInstrumentSettings
 	if err := db.Where("type = ?", domain.InstrumentEmbedding).Preload("Provider").First(&embInstrument).Error; err != nil {
-		return SmartSearchResponse{}, fmt.Errorf("embedding instrument not configured")
+		return SmartSearchResponse{}, fmt.Errorf("%w: %v", ErrEmbeddingNotConfigured, err)
 	}
 	provider := embInstrument.Provider
 	modelName := embInstrument.Model
 	if modelName == "" {
 		modelName = "qwen3-embedding:4b"
+	}
+
+	// Determine the per-model child table (safely quoted)
+	childTable, err := database.QuotedEmbeddingTableName(modelName)
+	if err != nil {
+		return SmartSearchResponse{}, fmt.Errorf("invalid embedding table name: %w", err)
+	}
+
+	// Semantic search cannot work before the embeddings index exists and has
+	// rows. Check it before embedding the query so a missing index is reported
+	// as "not indexed" instead of a provider/network failure.
+	if !database.EmbeddingTableExists(db, modelName) {
+		return SmartSearchResponse{}, ErrEmbeddingsNotIndexed
+	}
+	var hasRows bool
+	if err := db.Raw(fmt.Sprintf("SELECT EXISTS (SELECT 1 FROM %s)", childTable)).Scan(&hasRows).Error; err != nil {
+		return SmartSearchResponse{}, fmt.Errorf("failed to inspect embedding table: %w", err)
+	}
+	if !hasRows {
+		return SmartSearchResponse{}, ErrEmbeddingsNotIndexed
 	}
 
 	embeddingClient, err := llm.NewEmbeddingClient(provider.Name, provider.ApiUrl, provider.ApiKey, modelName)
@@ -74,21 +104,6 @@ func SearchByEmbedding(db *gorm.DB, query string, limit int) (SmartSearchRespons
 
 	// Convert to pgvector format for the SQL query
 	vecStr := llm.Float32SliceToPgVector(queryEmbeddings[0])
-
-	// Determine the per-model child table (safely quoted)
-	childTable, err := database.QuotedEmbeddingTableName(modelName)
-	if err != nil {
-		return SmartSearchResponse{}, fmt.Errorf("invalid embedding table name: %w", err)
-	}
-
-	// Check if the child table exists; if not, return empty results
-	if !database.EmbeddingTableExists(db, modelName) {
-		return SmartSearchResponse{
-			Images: []SmartSearchResult{},
-			Total:  0,
-			Query:  query,
-		}, nil
-	}
 
 	// HNSW-friendly nearest-neighbor search: ORDER BY distance ASC LIMIT ?
 	// Using the <=> (cosine distance) operator with ORDER BY + LIMIT enables

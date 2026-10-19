@@ -219,6 +219,14 @@
     "conversation_deleted": "Conversation deleted"
   },
 
+  "description_smart": "Smart search messages",
+  "smart": {
+    "search_failed": "Smart search failed. Please try again later.",
+    "query_required": "Search query is required",
+    "not_indexed": "Smart search is unavailable: images have not been indexed yet. Generate embeddings for your images first, then try the search again.",
+    "not_configured": "Smart search is unavailable: the embedding model is not configured. Configure an embedding model in Admin Settings and generate embeddings first."
+  },
+
   "description_embedding": "Embedding messages",
   "embedding": {
     "manager_not_available": "Embedding backfill manager not available",

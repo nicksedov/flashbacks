@@ -642,3 +642,11 @@ scopes:
         - vitest::webapp/src/i18n/translations.test.ts::i18n translation parity > EN and RU should have identical key sets
         - vitest::webapp/src/i18n/translations.test.ts::i18n translation parity > every EN key should exist in RU
         - vitest::webapp/src/i18n/translations.test.ts::i18n translation parity > every RU key should exist in EN
+    smart-search.not-indexed:
+      evidence:
+        - go::./internal/application/imaging::TestSearchByEmbedding_NotIndexed
+        - go::./internal/interfaces/handler::TestHandleSmartSearch_NotIndexed
+    smart-search.not-configured:
+      evidence:
+        - go::./internal/application/imaging::TestSearchByEmbedding_NotConfigured
+        - go::./internal/interfaces/handler::TestHandleSmartSearch_NotConfigured

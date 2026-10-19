@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"errors"
 	"net/http"
 	"path/filepath"
 	"strconv"
@@ -69,7 +70,14 @@ func (s *Server) handleSmartSearch(c *gin.Context) {
 	})
 
 	if err := g.Wait(); err != nil {
-		s.respondError(c, http.StatusServiceUnavailable, i18n.MsgSmartSearchFailed)
+		switch {
+		case errors.Is(err, imaging.ErrEmbeddingNotConfigured):
+			s.respondError(c, http.StatusConflict, i18n.MsgSmartSearchNotConfigured)
+		case errors.Is(err, imaging.ErrEmbeddingsNotIndexed):
+			s.respondError(c, http.StatusConflict, i18n.MsgSmartSearchNotIndexed)
+		default:
+			s.respondError(c, http.StatusServiceUnavailable, i18n.MsgSmartSearchFailed)
+		}
 		return
 	}
 

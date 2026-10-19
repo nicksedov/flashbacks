@@ -26,6 +26,12 @@ The registry SHALL notify subscribed services when a configuration value under t
 - **WHEN** a service watches its configuration prefix and another actor updates a key under that prefix
 - **THEN** the registry delivers the updated key and value to the watcher
 
+<!-- focused-spec:id=service-registry.client-config-watch -->
+#### Scenario: Client watcher receives configuration updates
+
+- **WHEN** a service client subscribes to configuration updates and a value under its prefix changes
+- **THEN** the client receives the updated value without polling
+
 ### Requirement: Service self-registration with a lease
 
 Each service instance SHALL register itself under a time-to-live lease and refresh that lease while it runs, so discovery only returns live instances.
@@ -35,6 +41,18 @@ Each service instance SHALL register itself under a time-to-live lease and refre
 
 - **WHEN** a service instance registers itself with a TTL lease
 - **THEN** discovery for that service name returns the instance address
+
+<!-- focused-spec:id=service-registry.client-registration -->
+#### Scenario: Client registration is discoverable
+
+- **WHEN** a service uses the registry client to register itself
+- **THEN** a discovery request through the same client returns the registered instance
+
+<!-- focused-spec:id=service-registry.client-heartbeat -->
+#### Scenario: Client heartbeat keeps the registration alive
+
+- **WHEN** a registered client continues to send lease heartbeats
+- **THEN** its registration remains present in discovery instead of expiring
 
 ### Requirement: Expired registration removal
 

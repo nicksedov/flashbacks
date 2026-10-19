@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Defines how a configured gallery folder is scanned and how its indexed images are browsed through the paginated gallery endpoint, so the base "scan then browse" journey is specified and regression-tested.
+Defines how gallery folders are configured, how a configured gallery folder is scanned, and how its indexed images are browsed through the paginated gallery endpoint, so the base "configure, scan, then browse" journey is specified and regression-tested.
 
 ## Requirements
 
@@ -15,6 +15,46 @@ The core service SHALL index image files found under configured gallery folders 
 
 - **WHEN** a gallery folder containing image files is configured and a scan is triggered and completes
 - **THEN** `GET /api/gallery` lists the indexed images of that folder
+
+### Requirement: Gallery folder configuration
+
+`GET /api/folders` SHALL list the configured gallery root folders, `POST /api/folders` SHALL add an existing directory on disk as a gallery root, and `DELETE /api/folders/:id` SHALL remove a configured root. Adding a folder SHALL reject a path that does not exist and a path that is already configured.
+
+<!-- focused-spec:id=gallery-browsing.folders-initially-empty -->
+#### Scenario: No folders are configured initially
+
+- **WHEN** no gallery root folder has been added
+- **THEN** `GET /api/folders` reports `totalFolders: 0` and an empty `folders` array
+
+<!-- focused-spec:id=gallery-browsing.folder-add -->
+#### Scenario: Adding an existing directory configures a gallery root
+
+- **WHEN** an admin posts an existing directory path to `POST /api/folders`
+- **THEN** the response is HTTP 200 with message `folder.added`, a folder record whose `path` equals the submitted path, and a boolean `scanStarted`
+
+<!-- focused-spec:id=gallery-browsing.folder-list -->
+#### Scenario: Configured folders are listed with metadata
+
+- **WHEN** `GET /api/folders` is called after adding folders
+- **THEN** `totalFolders` equals the number of configured roots and each folder carries its `path`, `fileCount`, and `createdAt`
+
+<!-- focused-spec:id=gallery-browsing.folder-invalid-path -->
+#### Scenario: A missing directory is rejected
+
+- **WHEN** an admin posts a path that does not exist on disk to `POST /api/folders`
+- **THEN** the response is HTTP 400 with error `folder.invalid_path` and no folder is created
+
+<!-- focused-spec:id=gallery-browsing.folder-duplicate -->
+#### Scenario: A duplicate folder is rejected
+
+- **WHEN** an admin posts a path that is already configured
+- **THEN** the response is HTTP 409 with error `folder.already_in_gallery`
+
+<!-- focused-spec:id=gallery-browsing.folder-remove -->
+#### Scenario: Removing a folder drops it from the listing
+
+- **WHEN** an admin deletes a configured folder by id
+- **THEN** the response is HTTP 200 with message `folder.removed` and `GET /api/folders` no longer contains that path
 
 ### Requirement: Paginated gallery listing
 

@@ -20,25 +20,63 @@ The system SHALL support three account-creation modes configured via the `ACCOUN
 - **WHEN** `ACCOUNT_CREATION_MODE` is set to an unsupported value
 - **THEN** the service fails to start with an error identifying the invalid value
 
+### Requirement: Bootstrap administrator setup
+
+While no users exist the system SHALL operate in bootstrap mode, authenticate the configured bootstrap credentials, and let the operator create the initial administrator account with a new password. After setup the bootstrap credentials SHALL no longer authenticate and normal login SHALL use the new password.
+
+<!-- focused-spec:id=account-registration.bootstrap-mode-while-empty -->
+#### Scenario: Bootstrap mode while no users exist
+
+- **WHEN** the service starts with an empty user table
+- **THEN** `GET /api/auth/status` reports `isAuthenticated: false` and `isBootstrapMode: true`
+
+<!-- focused-spec:id=account-registration.bootstrap-invalid-credentials -->
+#### Scenario: Invalid bootstrap credentials are rejected
+
+- **WHEN** a login request supplies the bootstrap login with an incorrect bootstrap password
+- **THEN** the response is HTTP 401
+
+<!-- focused-spec:id=account-registration.bootstrap-login -->
+#### Scenario: Bootstrap login issues a bootstrap session
+
+- **WHEN** a login request supplies the correct bootstrap credentials
+- **THEN** the response is HTTP 200 with `isBootstrap: true` and a `bootstrap` session cookie
+
+<!-- focused-spec:id=account-registration.bootstrap-setup -->
+#### Scenario: Bootstrap setup creates the initial administrator
+
+- **WHEN** the operator completes bootstrap setup with a new password and display name
+- **THEN** the response is HTTP 200 with the administrator user DTO and a real (non-bootstrap) session cookie that authenticates `/api/auth/me`
+
+<!-- focused-spec:id=account-registration.bootstrap-password-rotated -->
+#### Scenario: Bootstrap credentials stop working after setup
+
+- **WHEN** bootstrap setup has completed
+- **THEN** `isBootstrapMode` becomes `false`, the old bootstrap password is rejected, and the new password authenticates the administrator
+
 ### Requirement: Account approval lifecycle
 
 A user account SHALL have an `accountStatus` field with values `active`, `pending`, and `rejected`, and an `isActive` boolean switch. Access to the application SHALL be granted only when `isActive` is `true` AND `accountStatus` is `active`.
 
+<!-- focused-spec:id=account-registration.pending-login-blocked -->
 #### Scenario: Pending account cannot log in
 
 - **WHEN** a user with `accountStatus` `pending` attempts to log in with valid credentials
 - **THEN** login is refused with HTTP 403 and `accountStatus` stays `pending`
 
+<!-- focused-spec:id=account-registration.rejected-login-blocked -->
 #### Scenario: Rejected account cannot log in
 
 - **WHEN** a user with `accountStatus` `rejected` attempts to log in with valid credentials
 - **THEN** login is refused with HTTP 403
 
+<!-- focused-spec:id=account-registration.deactivated-login-blocked -->
 #### Scenario: Deactivated account cannot log in
 
 - **WHEN** a user with `isActive` `false` attempts to log in with valid credentials
 - **THEN** login is refused with HTTP 401
 
+<!-- focused-spec:id=account-registration.active-login-allowed -->
 #### Scenario: Access requires active and enabled
 
 - **WHEN** a user with `accountStatus` `active` and `isActive` `true` attempts to log in
@@ -48,21 +86,25 @@ A user account SHALL have an `accountStatus` field with values `active`, `pendin
 
 The system SHALL expose a public `POST /api/auth/register` endpoint that accepts `login`, `displayName`, and `password` and always creates accounts with role `user`. The response MUST depend on the active creation mode.
 
+<!-- focused-spec:id=account-registration.self-service-registration -->
 #### Scenario: Registration in self_service mode
 
 - **WHEN** `ACCOUNT_CREATION_MODE` is `self_service` and a valid registration request is posted
 - **THEN** the account is created with `accountStatus` `active`, an authenticated session is established (session cookie set), and the response is HTTP 201 with the user DTO
 
+<!-- focused-spec:id=account-registration.approval-registration -->
 #### Scenario: Registration in self_service_with_approval mode
 
 - **WHEN** `ACCOUNT_CREATION_MODE` is `self_service_with_approval` and a valid registration request is posted
 - **THEN** the account is created with `accountStatus` `pending`, no session is established, and the response is HTTP 201 with a `pending` flag and message
 
+<!-- focused-spec:id=account-registration.admin-only-registration -->
 #### Scenario: Registration in admin_only mode
 
 - **WHEN** `ACCOUNT_CREATION_MODE` is `admin_only` and a registration request is posted
 - **THEN** no account is created and the response is HTTP 403 with error `auth.registration_disabled`
 
+<!-- focused-spec:id=account-registration.bootstrap-registration-blocked -->
 #### Scenario: Registration during bootstrap
 
 - **WHEN** no users exist in the database (bootstrap mode) and a registration request is posted
@@ -72,16 +114,19 @@ The system SHALL expose a public `POST /api/auth/register` endpoint that accepts
 
 Self-service registration SHALL hash the password with bcrypt, SHALL always assign role `user` regardless of any role value in the request, SHALL normalize the login by trimming and lowercasing it, SHALL enforce a case-insensitive unique login, and SHALL be rate-limited per IP address.
 
+<!-- focused-spec:id=account-registration.duplicate-login-rejected -->
 #### Scenario: Duplicate login rejected
 
 - **WHEN** a registration request uses a login that already exists case-insensitively
 - **THEN** the response is HTTP 400 with error `user_service.user_exists`
 
+<!-- focused-spec:id=account-registration.short-password-rejected -->
 #### Scenario: Short password rejected
 
 - **WHEN** a registration request uses a password shorter than the minimum length
 - **THEN** the response is HTTP 400 with error `auth.password_length`
 
+<!-- focused-spec:id=account-registration.registration-rate-limited -->
 #### Scenario: Registration rate limited
 
 - **WHEN** too many registration attempts come from the same IP address
@@ -91,6 +136,7 @@ Self-service registration SHALL hash the password with bcrypt, SHALL always assi
 
 The system SHALL include `accountCreationMode` in the `GET /api/auth/status` response so the frontend can decide whether to show registration.
 
+<!-- focused-spec:id=account-registration.status-creation-mode -->
 #### Scenario: Status returns creation mode
 
 - **WHEN** `GET /api/auth/status` is called
@@ -100,30 +146,45 @@ The system SHALL include `accountCreationMode` in the `GET /api/auth/status` res
 
 The system SHALL expose admin-only `POST /api/admin/users/:id/approve` and `POST /api/admin/users/:id/reject` endpoints, protected by admin authorization and CSRF. Approval and rejection MUST apply only to `pending` accounts.
 
+<!-- focused-spec:id=account-registration.approve-pending -->
 #### Scenario: Approve a pending account
 
 - **WHEN** an admin approves a `pending` user
 - **THEN** the account becomes `active` and the response contains the updated user DTO
 
+<!-- focused-spec:id=account-registration.reject-with-reason -->
 #### Scenario: Reject a pending account with reason
 
 - **WHEN** an admin rejects a `pending` user with a body `{ "reason": "..." }`
 - **THEN** the account becomes `rejected` with `rejectionReason` set and the response contains the updated user DTO
 
+<!-- focused-spec:id=account-registration.non-pending-guard -->
 #### Scenario: Approve or reject a non-pending account
 
 - **WHEN** an admin attempts to approve or reject a user whose `accountStatus` is not `pending`
 - **THEN** the response is HTTP 409 with error `auth.user_not_pending`
 
+<!-- focused-spec:id=account-registration.reject-without-reason -->
 #### Scenario: Reject without reason
 
 - **WHEN** an admin rejects a `pending` user without a `reason`
 - **THEN** the response is HTTP 400 with error `auth.invalid_request_format`
 
+### Requirement: Admin-created accounts
+
+An administrator SHALL be able to create an account directly with `POST /api/admin/users`. The created account SHALL have `accountStatus` `active` and SHALL be able to authenticate with the supplied password.
+
+<!-- focused-spec:id=account-registration.admin-created-active -->
+#### Scenario: Admin-created account can log in
+
+- **WHEN** an admin creates a user account with a login and password
+- **THEN** the account is created with `accountStatus` `active` and a subsequent login with those credentials succeeds
+
 ### Requirement: Admin user list status filter
 
 The system SHALL support an optional `status` query parameter on `GET /api/admin/users` to filter users by `accountStatus`.
 
+<!-- focused-spec:id=account-registration.status-filter -->
 #### Scenario: Filter pending users
 
 - **WHEN** an admin calls `GET /api/admin/users?status=pending`
@@ -157,6 +218,7 @@ The system MUST reveal `pending`/`rejected`/`deactivated` login failure reasons 
 - **WHEN** a deactivated (`isActive` `false`) user submits correct credentials
 - **THEN** the response is HTTP 401 with error `auth.account_deactivated`
 
+<!-- focused-spec:id=account-registration.wrong-password-hides-status -->
 #### Scenario: Wrong password hides status
 
 - **WHEN** a user submits an incorrect password

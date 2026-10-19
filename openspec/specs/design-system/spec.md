@@ -93,6 +93,12 @@ The primary creation action ("add") for a collection SHALL appear in one consist
 - **WHEN** the user adds an item on two different list screens (for example, folders and users)
 - **THEN** the add control appears in the same region (top-right action area) on both screens
 
+<!-- focused-spec:id=design-system.admin-actions-single-row -->
+#### Scenario: Related collection actions share one wrapping row
+
+- **WHEN** an admin screen shows the add action together with scan actions for the same collection
+- **THEN** those controls are grouped into a single row that wraps instead of scattering across separate rows
+
 ### Requirement: Consistent settings manipulation pattern
 
 Settings and configuration screens SHALL follow one pattern: controls grouped into cards or sections with a visible label above each control, and an explicit primary "Save" action. Nested sub-areas within a card SHALL use a borderless inset fill or a labeled section, never a nested border. The save action SHALL be disabled while nothing has changed and during an in-flight save. Inline per-field edit/confirm flows SHALL be used only for singular rename-style edits and SHALL reuse the same button variants.
@@ -163,6 +169,12 @@ The layout SHALL adapt to viewport width using defined breakpoints. On mobile th
 - **WHEN** the viewport narrows to a phone width
 - **THEN** image grids reduce columns and toolbars wrap without horizontal page overflow
 
+<!-- focused-spec:id=design-system.admin-settings-tabs-wrap -->
+#### Scenario: Settings tab list wraps on mobile
+
+- **WHEN** a settings screen shows a tab list with multiple tabs below the `md` breakpoint
+- **THEN** the tab list wraps instead of overflowing horizontally
+
 <!-- focused-spec:id=design-system.toolbar-stacks-vertically -->
 #### Scenario: Toolbar stacks vertically on mobile
 
@@ -206,6 +218,18 @@ The webapp SHALL support light and dark themes per accent hue via a theme class 
 - **WHEN** the user switches between light and dark themes
 - **THEN** every component re-renders with correct contrast using only token-derived styles
 
+<!-- focused-spec:id=design-system.theme-account-selected -->
+#### Scenario: Authenticated UI uses the account theme
+
+- **WHEN** an authenticated user has a saved theme preference
+- **THEN** the application applies that account theme to the rendered tree
+
+<!-- focused-spec:id=design-system.theme-default-unauthenticated -->
+#### Scenario: Unauthenticated UI uses the default theme
+
+- **WHEN** no user is authenticated
+- **THEN** the application applies the default theme regardless of any stored account theme
+
 ### Requirement: Keyboard focus and accessibility semantics
 
 All interactive components SHALL expose a visible keyboard focus indicator (focus ring) and correct ARIA semantics. Dialogs, tabs, and selects SHALL provide the accessibility behavior from their Radix primitives. Icon-only buttons SHALL expose an accessible name via `aria-label` or `title`. Text SHALL NOT be the only channel for conveying state (for example, errors SHALL use an icon or border in addition to color).
@@ -214,6 +238,12 @@ All interactive components SHALL expose a visible keyboard focus indicator (focu
 
 - **WHEN** an icon-only button is rendered
 - **THEN** it exposes an accessible name via `aria-label` or `title`
+
+<!-- focused-spec:id=design-system.info-trigger-accessible -->
+#### Scenario: Informational icon trigger has an accessible name
+
+- **WHEN** an informational label is collapsed to an icon-only trigger
+- **THEN** the trigger exposes an accessible name so assistive technology can identify the hidden information
 
 #### Scenario: Error state is not color-only
 
@@ -463,6 +493,16 @@ On a viewport below the `md` breakpoint the lightbox chrome — its mode tab bar
 - **WHEN** the enhancement compare-slider view is shown below the `md` breakpoint with its action controls (replace, save copy, reject)
 - **THEN** each action hides its text label, keeps its icon and accessible name, and presents a touch target of at least 44×44 CSS pixels
 
+### Requirement: Lightbox image stage is consistent across modes
+
+Every lightbox mode SHALL render the image on the same full-area dark stage, so switching between the AI, EXIF, OCR, and tags views does not change the image surface or introduce a different background.
+
+<!-- focused-spec:id=design-system.lightbox-image-stage-consistent -->
+#### Scenario: Image stage classes match in every mode
+
+- **WHEN** the lightbox is opened in each of its modes
+- **THEN** every mode renders the image inside the same flexible, centered, dark stage without a mode-specific background utility
+
 ### Requirement: Lightbox exposes a single close control
 
 A lightbox SHALL render exactly one close control at every viewport width, and that control SHALL be drawn above the lightbox detail panel whenever the panel is shown.
@@ -523,6 +563,12 @@ a localized phase label together with an optional statistics line.
 
 - **WHEN** the progress indicator is rendered without a known total
 - **THEN** its progress bar is indeterminate
+
+<!-- focused-spec:id=design-system.progress-indicator-determinate -->
+#### Scenario: Known total renders a determinate bar
+
+- **WHEN** the progress indicator is rendered with a known current value and total
+- **THEN** its progress bar reflects the known proportion instead of being indeterminate
 
 <!-- focused-spec:id=design-system.progress-indicator-localized -->
 #### Scenario: Phase label follows the interface language

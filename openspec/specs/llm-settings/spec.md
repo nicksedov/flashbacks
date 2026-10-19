@@ -127,3 +127,9 @@ The Analysis tab instrument model dropdowns SHALL list only models whose capabil
 
 - **WHEN** an admin opens the model dropdown for the embedding instrument for a provider whose model is capable of `chat`, `tool_calling`, and `vision` but not `embedding`
 - **THEN** that model is not listed
+
+<!-- focused-spec:id=llm-settings.unknown-instrument-fails-closed -->
+#### Scenario: Unknown instrument type lists no models
+
+- **WHEN** the model filter receives an instrument type it does not recognize
+- **THEN** it fails closed and returns no models instead of listing unfiltered models

@@ -19,16 +19,19 @@ The core SHALL persist a `TrashItem` record for every file moved to the trash di
 
 The JSON representation SHALL use camelCase field names exactly: `id`, `fileName`, `trashPath`, `originalPath`, `size`, `sizeHuman`, `deletedAt`.
 
+<!-- focused-spec:id=trash.file-moved-recorded -->
 #### Scenario: File moved to trash is recorded
 
 - **WHEN** a file is moved to the trash directory via any delete flow (Gallery, Smart Search, duplicates, batch dedup)
 - **THEN** a `TrashItem` row is created with `originalPath` equal to the file's path before deletion and `deletedAt` set to the current time
 
+<!-- focused-spec:id=trash.restored-unrecorded -->
 #### Scenario: Restored file is unrecorded
 
 - **WHEN** a trashed file is restored
 - **THEN** its `TrashItem` row is deleted
 
+<!-- focused-spec:id=trash.permanent-unrecorded -->
 #### Scenario: Permanently deleted file is unrecorded
 
 - **WHEN** a trashed file is permanently deleted
@@ -68,6 +71,7 @@ The response SHALL be:
 }
 ```
 
+<!-- focused-spec:id=trash.groups-ordered -->
 #### Scenario: Latest deletion date appears first
 
 - **WHEN** the trash contains files deleted on different days
@@ -96,11 +100,13 @@ The trash list endpoint SHALL include a server-generated thumbnail (data URL) fo
 
 `POST /api/trash-restore` SHALL accept `{ "id": number }` and restore the identified file to its `originalPath`, recreating the directory if needed and handling name conflicts by suffixing. On success it SHALL delete the `TrashItem` row and return `{ "success": true, "restoredPath": "..." }`.
 
+<!-- focused-spec:id=trash.restore-original -->
 #### Scenario: Restore returns file to pre-deletion path
 
 - **WHEN** a user restores a trashed file that had `originalPath` `/gallery/2024/photo.jpg`
 - **THEN** the file is moved back to `/gallery/2024/photo.jpg` and the `TrashItem` row is removed
 
+<!-- focused-spec:id=trash.restore-unknown-path -->
 #### Scenario: Restore with unknown original path
 
 - **WHEN** a trashed file has an empty `originalPath` (legacy entry)
@@ -110,6 +116,7 @@ The trash list endpoint SHALL include a server-generated thumbnail (data URL) fo
 
 `POST /api/trash-delete` SHALL accept `{ "id": number }`, permanently remove the identified file from the trash directory, and delete its `TrashItem` row.
 
+<!-- focused-spec:id=trash.permanent-delete -->
 #### Scenario: Permanent delete removes file and record
 
 - **WHEN** a user permanently deletes a trashed file
@@ -119,6 +126,7 @@ The trash list endpoint SHALL include a server-generated thumbnail (data URL) fo
 
 `POST /api/trash-clean` SHALL remove all files from the trash directory and delete all `TrashItem` rows, returning `{ "deleted": n, "failed": m }`.
 
+<!-- focused-spec:id=trash.clean-all -->
 #### Scenario: Clean trash removes everything
 
 - **WHEN** a user empties the trash
@@ -128,11 +136,13 @@ The trash list endpoint SHALL include a server-generated thumbnail (data URL) fo
 
 `GET /api/trash/image` SHALL serve the full-size image for a trashed file. The endpoint SHALL verify that the requested path resolves inside the configured trash directory and is not outside it (mirroring gallery access verification), and SHALL reject paths outside the trash directory.
 
+<!-- focused-spec:id=trash.image-served -->
 #### Scenario: View opens full-size trashed image
 
 - **WHEN** a user opens a trashed file in the lightbox
 - **THEN** the full-size image is served from the trash directory
 
+<!-- focused-spec:id=trash.image-outside-rejected -->
 #### Scenario: Path outside trash is rejected
 
 - **WHEN** `GET /api/trash/image` is called with a path outside the configured trash directory

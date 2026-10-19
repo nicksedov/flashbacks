@@ -12,18 +12,25 @@ scopes:
     design-system.toolbar-stacks-vertically:
       evidence:
         - vitest::webapp/src/components/gallery/GalleryAllImagesView.test.tsx::GalleryAllImagesView > stacks the search and sort controls vertically on mobile
+        - vitest::webapp/src/components/gallery/GalleryAllImagesView.test.tsx::GalleryAllImagesView > fits the search field, info and sort controls in one non-overflowing row on mobile
+        - vitest::webapp/src/components/tabs/SmartSearchTab.test.tsx::SmartSearchTab > stacks the search input and limit control vertically on mobile
     design-system.icon-first-actions:
       evidence:
         - vitest::webapp/src/components/layout/Header.test.tsx::Header > hides the logout text label below md while keeping the icon and accessible name
+        - vitest::webapp/src/components/layout/Header.test.tsx::Header > hides the profile name and role below md while keeping an accessible name
     design-system.mobile-lightbox-image-first:
       evidence:
         - vitest::webapp/src/components/gallery/lightbox/MobileDetailPanel.test.tsx::MobileDetailPanel > overlays the panel without adding a side column below md
+        - vitest::webapp/src/components/gallery/UnifiedLightbox.test.tsx::UnifiedLightbox > keeps the compare-slider branch full-area with no side column below md
     design-system.mobile-lightbox-panel-collapsed:
       evidence:
         - vitest::webapp/src/components/gallery/lightbox/MobileDetailPanel.test.tsx::MobileDetailPanel > starts collapsed below md
+        - vitest::webapp/src/components/gallery/UnifiedLightbox.test.tsx::UnifiedLightbox > renders the detail panel collapsed by default and toggles it open and closed
+        - vitest::webapp/src/components/trash/TrashLightbox.test.tsx::TrashLightbox > shows the image with the metadata panel collapsed on mobile and expands via the toggle
     design-system.mobile-lightbox-panel-toggle:
       evidence:
         - vitest::webapp/src/components/gallery/lightbox/MobileDetailPanel.test.tsx::MobileDetailPanel > expands the panel when the toggle is activated
+        - vitest::webapp/src/components/gallery/UnifiedLightbox.test.tsx::UnifiedLightbox > renders the detail panel collapsed by default and toggles it open and closed
     design-system.mobile-lightbox-panel-collapse:
       evidence:
         - vitest::webapp/src/components/gallery/lightbox/MobileDetailPanel.test.tsx::MobileDetailPanel > collapses the panel when the toggle is activated again
@@ -132,6 +139,7 @@ scopes:
     llm-model-metadata.alibaba-image-generation:
       evidence:
         - go::./internal/infrastructure/llm::TestAlibabaImageGenerationModelIsImageEditCapable
+        - go::./internal/infrastructure/llm::TestNormalizeCapabilitiesImageGeneration
     llm-model-metadata.alibaba-video-generation:
       evidence:
         - go::./internal/infrastructure/llm::TestAlibabaVideoGenerationCapability
@@ -295,3 +303,211 @@ scopes:
     service-registry.instance-watch:
       evidence:
         - goregistry::./client::TestWatchInstancesDeliversUpdates
+    service-registry.client-registration:
+      evidence:
+        - goregistry::./client::TestRegisterAndDiscover
+    service-registry.client-heartbeat:
+      evidence:
+        - goregistry::./client::TestRegisterHeartbeatKeepsRegistration
+    service-registry.client-config-watch:
+      evidence:
+        - goregistry::./client::TestWatchConfigDeliversUpdates
+    account-registration.bootstrap-mode-while-empty:
+      evidence:
+        - vitest::tests/webapp/integration/bootstrap-login.test.ts::bootstrap login (core service integration) > starts in bootstrap mode while no users exist
+    account-registration.bootstrap-invalid-credentials:
+      evidence:
+        - vitest::tests/webapp/integration/bootstrap-login.test.ts::bootstrap login (core service integration) > rejects invalid bootstrap credentials
+    account-registration.bootstrap-login:
+      evidence:
+        - vitest::tests/webapp/integration/bootstrap-login.test.ts::bootstrap login (core service integration) > accepts the bootstrap admin and issues the bootstrap cookie
+    account-registration.bootstrap-setup:
+      evidence:
+        - vitest::tests/webapp/integration/bootstrap-login.test.ts::bootstrap login (core service integration) > completes bootstrap and creates a usable admin session
+    account-registration.bootstrap-password-rotated:
+      evidence:
+        - vitest::tests/webapp/integration/bootstrap-login.test.ts::bootstrap login (core service integration) > leaves bootstrap mode and only accepts the new password
+    account-registration.pending-login-blocked:
+      evidence:
+        - go::./internal/application/auth::TestAuthService_Login_PendingUser
+    account-registration.rejected-login-blocked:
+      evidence:
+        - go::./internal/application/auth::TestAuthService_Login_RejectedUser
+    account-registration.deactivated-login-blocked:
+      evidence:
+        - go::./internal/application/auth::TestAuthService_Login_DeactivatedUser
+    account-registration.active-login-allowed:
+      evidence:
+        - go::./internal/application/auth::TestAuthService_Login_Success
+    account-registration.self-service-registration:
+      evidence:
+        - vitest::tests/webapp/integration/account-creation.test.ts::self_service mode > activates a self-registered account and signs it in immediately
+    account-registration.approval-registration:
+      evidence:
+        - vitest::tests/webapp/integration/account-creation.test.ts::self_service_with_approval mode > creates a pending account without a session and blocks its login
+    account-registration.admin-only-registration:
+      evidence:
+        - vitest::tests/webapp/integration/account-creation.test.ts::admin_only mode > exposes the active creation mode and disables self-registration
+    account-registration.bootstrap-registration-blocked:
+      evidence:
+        - 'vitest::tests/webapp/integration/account-creation.test.ts::self_service: registration is blocked during bootstrap > refuses registration until the first admin is created'
+    account-registration.duplicate-login-rejected:
+      evidence:
+        - go::./internal/application/auth::TestAuthService_RegisterUser_DuplicateLoginCaseInsensitive
+        - vitest::tests/webapp/integration/account-creation.test.ts::self_service mode > rejects a duplicate login case-insensitively
+    account-registration.short-password-rejected:
+      evidence:
+        - go::./internal/application/auth::TestAuthService_RegisterUser_ShortPassword
+        - vitest::tests/webapp/integration/account-creation.test.ts::self_service mode > rejects a password that is too short
+    account-registration.registration-rate-limited:
+      evidence:
+        - go::./internal/application/auth::TestRateLimiter_Ban_AfterMaxFailures
+    account-registration.status-creation-mode:
+      evidence:
+        - vitest::tests/webapp/integration/account-creation.test.ts::self_service mode > exposes the active creation mode in the status response
+        - vitest::tests/webapp/integration/account-creation.test.ts::self_service_with_approval mode > exposes the active creation mode in the status response
+    account-registration.approve-pending:
+      evidence:
+        - go::./internal/application/auth::TestUserService_ApproveUser_Success
+        - vitest::tests/webapp/integration/account-creation.test.ts::self_service_with_approval mode > activates a pending account when an admin approves it
+    account-registration.reject-with-reason:
+      evidence:
+        - go::./internal/application/auth::TestUserService_RejectUser_Success
+        - vitest::tests/webapp/integration/account-creation.test.ts::self_service_with_approval mode > rejects a pending account with a reason and blocks its login
+    account-registration.non-pending-guard:
+      evidence:
+        - go::./internal/application/auth::TestUserService_ApproveUser_NotPending
+        - vitest::tests/webapp/integration/account-creation.test.ts::self_service_with_approval mode > refuses to approve an account that is not pending
+    account-registration.reject-without-reason:
+      evidence:
+        - vitest::tests/webapp/integration/account-creation.test.ts::self_service_with_approval mode > rejects a pending account with a reason and blocks its login
+    account-registration.status-filter:
+      evidence:
+        - go::./internal/application/auth::TestUserService_ListUsers_ByStatus
+        - vitest::tests/webapp/integration/account-creation.test.ts::self_service_with_approval mode > lists only pending accounts for the approval queue
+    account-registration.admin-created-active:
+      evidence:
+        - vitest::tests/webapp/integration/account-creation.test.ts::admin_only mode > lets the admin create an active account that can log in
+    account-registration.wrong-password-hides-status:
+      evidence:
+        - go::./internal/application/auth::TestAuthService_Login_PendingUser_WrongPassword
+    auth-localization.default-russian-locale:
+      evidence:
+        - vitest::webapp/src/i18n/language.test.ts::resolveSystemLanguage > selects Russian for Russian locales
+    auth-localization.default-english-locale:
+      evidence:
+        - vitest::webapp/src/i18n/language.test.ts::resolveSystemLanguage > selects English for English locales
+    auth-localization.default-unsupported-fallback:
+      evidence:
+        - vitest::webapp/src/i18n/language.test.ts::resolveSystemLanguage > falls back to English for unsupported locales
+        - vitest::webapp/src/i18n/language.test.ts::resolveSystemLanguage > falls back to English when no locale is available
+    auth-localization.no-account-setting-before-login:
+      evidence:
+        - vitest::webapp/src/i18n/language.test.ts::selectActiveLanguage > uses the pre-authentication language when unauthenticated
+        - vitest::webapp/src/i18n/activeLanguage.test.ts::active language selection drives rendering > renders the pre-authentication language for an unauthenticated tree
+    auth-localization.authenticated-follows-account:
+      evidence:
+        - vitest::webapp/src/i18n/language.test.ts::selectActiveLanguage > uses the account language when authenticated
+        - vitest::webapp/src/i18n/activeLanguage.test.ts::active language selection drives rendering > renders the account language for an authenticated tree
+    auth-localization.choice-persists-reloads:
+      evidence:
+        - vitest::webapp/src/i18n/language.test.ts::stored pre-authentication language > writes and reads back a supported language
+    auth-localization.remembered-overrides-default:
+      evidence:
+        - vitest::webapp/src/i18n/language.test.ts::resolveInitialAuthLanguage > prefers a remembered supported value over the system default
+        - vitest::webapp/src/i18n/language.test.ts::resolveInitialAuthLanguage > uses the system default when nothing valid is stored
+    auth-localization.unsupported-remembered-ignored:
+      evidence:
+        - vitest::webapp/src/i18n/language.test.ts::stored pre-authentication language > ignores an unsupported stored value
+        - vitest::webapp/src/i18n/language.test.ts::stored pre-authentication language > returns null when nothing is stored
+        - vitest::webapp/src/i18n/language.test.ts::resolveInitialAuthLanguage > ignores an unsupported stored value
+    auth-localization.storage-failure-resilient:
+      evidence:
+        - vitest::webapp/src/i18n/language.test.ts::stored pre-authentication language > is resilient when storage throws
+    auth-localization.en-ru-parity:
+      evidence:
+        - vitest::webapp/src/i18n/translations.test.ts::i18n translation parity > EN and RU should have identical key sets
+        - vitest::webapp/src/i18n/translations.test.ts::i18n translation parity > should have the same number of keys in EN and RU
+        - vitest::webapp/src/i18n/translations.test.ts::i18n translation parity > every EN key should exist in RU
+        - vitest::webapp/src/i18n/translations.test.ts::i18n translation parity > every RU key should exist in EN
+        - vitest::webapp/src/i18n/translations.test.ts::i18n translation parity > no EN translation value should be empty
+        - vitest::webapp/src/i18n/translations.test.ts::i18n translation parity > no RU translation value should be empty
+    auth-localization.placeholder-parity:
+      evidence:
+        - vitest::webapp/src/i18n/translations.test.ts::i18n placeholder consistency > EN and RU should have the same placeholders for each key
+    trash.file-moved-recorded:
+      evidence:
+        - go::./internal/interfaces/handler/helpers::TestMoveToTrashOrDeleteRecordsTrashItem
+    trash.restored-unrecorded:
+      evidence:
+        - go::./internal/interfaces/handler::TestHandleRestoreTrashFile_RestoresToOriginalPath
+    trash.permanent-unrecorded:
+      evidence:
+        - go::./internal/interfaces/handler::TestHandleDeleteTrashFile_PermanentDelete
+        - go::./internal/interfaces/handler/helpers::TestMoveToTrashOrDeletePermanentDeleteRecordsNothing
+    trash.groups-ordered:
+      evidence:
+        - go::./internal/interfaces/handler::TestHandleGetTrash_GroupingAndOrder
+    trash.restore-original:
+      evidence:
+        - go::./internal/interfaces/handler::TestHandleRestoreTrashFile_RestoresToOriginalPath
+    trash.restore-unknown-path:
+      evidence:
+        - go::./internal/interfaces/handler::TestHandleRestoreTrashFile_UnknownOriginalPath
+    trash.permanent-delete:
+      evidence:
+        - go::./internal/interfaces/handler::TestHandleDeleteTrashFile_PermanentDelete
+    trash.clean-all:
+      evidence:
+        - go::./internal/interfaces/handler::TestHandleCleanTrash_ClearsFilesAndMetadata
+    trash.image-served:
+      evidence:
+        - go::./internal/interfaces/handler::TestHandleServeTrashImage_InsideTrashServed
+    trash.image-outside-rejected:
+      evidence:
+        - go::./internal/interfaces/handler::TestHandleServeTrashImage_OutsideTrashRejected
+    gallery-browsing.folders-initially-empty:
+      evidence:
+        - vitest::tests/webapp/integration/gallery-folders.test.ts::gallery folders settings (core service integration) > starts with no configured folders
+    gallery-browsing.folder-add:
+      evidence:
+        - vitest::tests/webapp/integration/gallery-folders.test.ts::gallery folders settings (core service integration) > adds the four OCR dataset folders as gallery roots
+    gallery-browsing.folder-list:
+      evidence:
+        - vitest::tests/webapp/integration/gallery-folders.test.ts::gallery folders settings (core service integration) > returns all four folders from the folders endpoint
+    gallery-browsing.folder-invalid-path:
+      evidence:
+        - vitest::tests/webapp/integration/gallery-folders.test.ts::gallery folders settings (core service integration) > rejects a folder that does not exist on disk
+    gallery-browsing.folder-duplicate:
+      evidence:
+        - vitest::tests/webapp/integration/gallery-folders.test.ts::gallery folders settings (core service integration) > rejects a folder that is already configured
+    gallery-browsing.folder-remove:
+      evidence:
+        - vitest::tests/webapp/integration/gallery-folders.test.ts::gallery folders settings (core service integration) > removes a folder and drops it from the listing
+    design-system.admin-actions-single-row:
+      evidence:
+        - vitest::webapp/src/components/tabs/AdminGeneralTab.test.tsx::AdminGeneralTab gallery folders > groups the add and scan actions into a single row
+    design-system.admin-settings-tabs-wrap:
+      evidence:
+        - vitest::webapp/src/components/tabs/AdminSettingsTab.test.tsx::AdminSettingsTab > wraps the settings tab list instead of overflowing on mobile
+    design-system.info-trigger-accessible:
+      evidence:
+        - vitest::webapp/src/components/ui/info-popover.test.tsx::InfoPopover > renders an icon-only trigger with an accessible name
+    design-system.theme-account-selected:
+      evidence:
+        - vitest::webapp/src/theme/theme.test.ts::selectActiveTheme > uses the account theme when authenticated
+        - vitest::webapp/src/theme/theme.test.ts::active theme selection drives rendering > renders the account theme for an authenticated tree
+    design-system.theme-default-unauthenticated:
+      evidence:
+        - vitest::webapp/src/theme/theme.test.ts::selectActiveTheme > falls back to the default theme when unauthenticated
+        - vitest::webapp/src/theme/theme.test.ts::selectActiveTheme > keeps the default theme when no account theme differs
+        - vitest::webapp/src/theme/theme.test.ts::active theme selection drives rendering > renders the default theme for an unauthenticated tree
+    design-system.progress-indicator-determinate:
+      evidence:
+        - vitest::webapp/src/components/ui/progress.test.tsx::ProgressIndicator > renders a determinate bar when a value is known
+    design-system.lightbox-image-stage-consistent:
+      evidence:
+        - vitest::webapp/src/components/gallery/UnifiedLightbox.test.tsx::UnifiedLightbox > renders the image stage consistently across all lightbox modes
+    llm-settings.unknown-instrument-fails-closed:
+      evidence:
+        - vitest::webapp/src/lib/llm-model-filter.test.ts::filterModelsForInstrument > fails closed for an unrecognized instrument type

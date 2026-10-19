@@ -374,3 +374,30 @@ func TestSortBySimilarity_SingleElement(t *testing.T) {
 	sortBySimilarity(results)
 	assert.Equal(t, 0.5, results[0].Similarity)
 }
+
+// --- SearchByEmbedding tests ---
+
+func TestSearchByEmbedding_NotIndexed(t *testing.T) {
+	db, cleanup := setupSmartSearchTest(t)
+	defer cleanup()
+
+	// The test database seeds an embedding instrument but never creates the
+	// per-model embedding tables, so the index is not built.
+	_, err := SearchByEmbedding(db, "sunset", 10)
+
+	require.Error(t, err)
+	assert.ErrorIs(t, err, ErrEmbeddingsNotIndexed)
+}
+
+func TestSearchByEmbedding_NotConfigured(t *testing.T) {
+	db, cleanup := setupSmartSearchTest(t)
+	defer cleanup()
+
+	require.NoError(t, db.Where("type = ?", domain.InstrumentEmbedding).
+		Delete(&domain.LlmInstrumentSettings{}).Error)
+
+	_, err := SearchByEmbedding(db, "sunset", 10)
+
+	require.Error(t, err)
+	assert.ErrorIs(t, err, ErrEmbeddingNotConfigured)
+}

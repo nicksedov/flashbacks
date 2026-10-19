@@ -175,8 +175,10 @@ const (
 	MsgBatchGpsNoPaths       MessageKey = "batch_gps.no_paths"
 
 	// Smart search messages
-	MsgSmartSearchFailed  MessageKey = "smart.search_failed"
-	MsgSmartQueryRequired MessageKey = "smart.query_required"
+	MsgSmartSearchFailed        MessageKey = "smart.search_failed"
+	MsgSmartQueryRequired       MessageKey = "smart.query_required"
+	MsgSmartSearchNotIndexed    MessageKey = "smart.not_indexed"
+	MsgSmartSearchNotConfigured MessageKey = "smart.not_configured"
 
 	// Chat messages
 	MsgChatInvalidRequest        MessageKey = "chat.invalid_request"

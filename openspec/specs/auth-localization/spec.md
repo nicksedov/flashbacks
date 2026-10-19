@@ -10,21 +10,25 @@ Defines how the webapp chooses and lets users change the display language before
 
 While no user is authenticated, the webapp SHALL display a language switcher on the login/registration authentication screen that offers English and Русский and applies the selected language immediately. The switcher SHALL be available in both the login and the registration mode of that screen, and is not required on the bootstrap admin setup screen.
 
+<!-- focused-spec:id=auth-localization.switcher-shown -->
 #### Scenario: Switcher shown on the login screen
 
 - **WHEN** an unauthenticated user opens the webapp
 - **THEN** the authentication screen shows a language switcher offering English and Русский
 
+<!-- focused-spec:id=auth-localization.switcher-registration-mode -->
 #### Scenario: Switcher available in registration mode
 
 - **WHEN** the user switches the authentication screen from login to registration mode
 - **THEN** the language switcher remains available and reflects the currently selected language
 
+<!-- focused-spec:id=auth-localization.switcher-rerender -->
 #### Scenario: Selecting a language re-renders the screen
 
 - **WHEN** the user selects Русский in the language switcher
 - **THEN** the authentication screen text is shown in Russian immediately, without a page reload
 
+<!-- focused-spec:id=auth-localization.switcher-accessible -->
 #### Scenario: Switcher is accessible
 
 - **WHEN** the language switcher is rendered

@@ -15,6 +15,7 @@ section. It SHALL render a single combined list of the third-party frameworks
 and libraries used by the product, and each entry SHALL display the component
 name together with its license identifier.
 
+<!-- focused-spec:id=third-party.combined-list -->
 #### Scenario: Viewing the third-party components list
 
 - **WHEN** a user opens the About section and selects the "Third-party
@@ -29,12 +30,14 @@ used by the backend services (core, exif, ocr, shared, and
 embeddings-builder). Modules owned by the Flashbacks project SHALL NOT be
 listed.
 
+<!-- focused-spec:id=third-party.backend-attributed -->
 #### Scenario: Backend frameworks appear in the list
 
 - **WHEN** the third-party components list is rendered
 - **THEN** it contains the third-party Go frameworks and libraries used by each
   backend service
 
+<!-- focused-spec:id=third-party.own-modules-excluded -->
 #### Scenario: Own modules are excluded
 
 - **WHEN** the third-party components list is rendered
@@ -47,11 +50,13 @@ license. Backend component links SHALL target the dependency's license text,
 or its canonical license page when no single license file exists. Every link
 SHALL open in a new browser tab.
 
+<!-- focused-spec:id=third-party.license-links -->
 #### Scenario: Opening a component license link
 
 - **WHEN** a user activates a component's link
 - **THEN** the component's license information opens in a new browser tab
 
+<!-- focused-spec:id=third-party.backend-license-links -->
 #### Scenario: Backend link targets license information
 
 - **WHEN** a backend component entry is inspected
@@ -63,6 +68,7 @@ SHALL open in a new browser tab.
 The change SHALL NOT remove or alter the existing frontend component
 attributions. Backend entries SHALL be added to the same combined list.
 
+<!-- focused-spec:id=third-party.frontend-preserved -->
 #### Scenario: Existing entries remain after the change
 
 - **WHEN** the third-party components list is rendered after the change
@@ -73,6 +79,7 @@ attributions. Backend entries SHALL be added to the same combined list.
 Component names and license identifiers SHALL be identical in the English and
 Russian locales; only the surrounding descriptive text is localized.
 
+<!-- focused-spec:id=third-party.locale-consistent -->
 #### Scenario: Switching locale preserves the list
 
 - **WHEN** the user switches the interface language between English and Russian

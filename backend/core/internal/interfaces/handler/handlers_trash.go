@@ -168,8 +168,14 @@ func (s *Server) handleGetTrash(c *gin.Context) {
 
 			if sameCalendarDay(overflowItem.DeletedAt, lastKept.DeletedAt) {
 				var extra []domain.TrashItem
+				// Continue the same calendar day after the ordering key (deleted_at, id),
+				// not merely after the id: backfilled rows do not guarantee that ids
+				// descend together with deleted_at.
 				s.db.Model(&domain.TrashItem{}).
-					Where("DATE(deleted_at) = DATE(?) AND id < ?", lastKept.DeletedAt, lastKept.ID).
+					Where(
+						"DATE(deleted_at) = DATE(?) AND ((deleted_at < ?) OR (deleted_at = ? AND id < ?))",
+						lastKept.DeletedAt, lastKept.DeletedAt, lastKept.DeletedAt, lastKept.ID,
+					).
 					Order(orderClause).Find(&extra)
 				rows = append(rows[:pageSize], extra...)
 				lastResult := rows[len(rows)-1]
@@ -191,8 +197,14 @@ func (s *Server) handleGetTrash(c *gin.Context) {
 
 			if sameCalendarDay(overflowItem.DeletedAt, lastKept.DeletedAt) {
 				var extra []domain.TrashItem
+				// Continue the same calendar day after the ordering key (deleted_at, id),
+				// not merely after the id: backfilled rows do not guarantee that ids
+				// descend together with deleted_at.
 				s.db.Model(&domain.TrashItem{}).
-					Where("DATE(deleted_at) = DATE(?) AND id < ?", lastKept.DeletedAt, lastKept.ID).
+					Where(
+						"DATE(deleted_at) = DATE(?) AND ((deleted_at < ?) OR (deleted_at = ? AND id < ?))",
+						lastKept.DeletedAt, lastKept.DeletedAt, lastKept.DeletedAt, lastKept.ID,
+					).
 					Order(orderClause).Find(&extra)
 				rows = append(rows[:pageSize], extra...)
 				lastResult := rows[len(rows)-1]

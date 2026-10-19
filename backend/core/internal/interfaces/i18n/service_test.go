@@ -22,6 +22,10 @@ func TestNewService(t *testing.T) {
 		{MsgScanStarted, "ru", "Сканирование начато"},
 		{MsgFolderAdded, "en", "Folder added to gallery"},
 		{MsgFolderAdded, "ru", "Папка добавлена в галерею"},
+		{MsgSmartSearchFailed, "en", "Smart search failed. Please try again later."},
+		{MsgSmartSearchNotIndexed, "en", "Smart search is unavailable: images have not been indexed yet. Generate embeddings for your images first, then try the search again."},
+		{MsgSmartSearchNotIndexed, "ru", "Умный поиск недоступен: изображения ещё не проиндексированы. Сначала сгенерируйте эмбеддинги для изображений, затем повторите поиск."},
+		{MsgSmartSearchNotConfigured, "en", "Smart search is unavailable: the embedding model is not configured. Configure an embedding model in Admin Settings and generate embeddings first."},
 		{Success, "en", "Success"},
 		{Success, "ru", "Успех"},
 	}

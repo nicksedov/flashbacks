@@ -77,11 +77,13 @@ The response SHALL be:
 - **WHEN** the trash contains files deleted on different days
 - **THEN** the response groups are ordered from the most recent deletion date to the oldest, and each group's items are ordered by deletion time descending
 
+<!-- focused-spec:id=trash.cursor-pagination -->
 #### Scenario: Cursor pagination over date groups
 
 - **WHEN** there are more groups than fit in one page
 - **THEN** the response includes a non-null `nextCursor` and `hasMore: true`; passing the cursor to the next request returns the following date groups without duplicating the boundary date
 
+<!-- focused-spec:id=trash.empty-response -->
 #### Scenario: Empty trash
 
 - **WHEN** the trash is empty
@@ -91,6 +93,7 @@ The response SHALL be:
 
 The trash list endpoint SHALL include a server-generated thumbnail (data URL) for each item, generated from the file's current trash path, matching the gallery thumbnail approach. Items whose thumbnail cannot be generated SHALL have an empty `thumbnail` and still be listed.
 
+<!-- focused-spec:id=trash.thumbnails -->
 #### Scenario: Trash grid shows image thumbnails
 
 - **WHEN** the Trash view renders
@@ -152,6 +155,7 @@ The trash list endpoint SHALL include a server-generated thumbnail (data URL) fo
 
 The frontend Trash view SHALL render a responsive thumbnail grid that follows the gallery layout: date-group headers with a human-readable label and item count, followed by a responsive grid of image tiles. Each tile SHALL use the shared gallery tile primitives (`TileFrame`, `TileThumbnail`, `TileOverlay`).
 
+<!-- focused-spec:id=trash.grid-uniform -->
 #### Scenario: Trash renders a thumbnail grid
 
 - **WHEN** the Trash tab is opened
@@ -164,6 +168,7 @@ The hover overlay on each trash tile SHALL contain exactly two buttons:
 - **View** — opens a lightbox showing the full image with the original location before deletion and the deletion date.
 - **Restore** — restores the file to its original location.
 
+<!-- focused-spec:id=trash.overlay-two-buttons -->
 #### Scenario: Overlay shows two buttons
 
 - **WHEN** the user hovers over a trash tile
@@ -174,6 +179,7 @@ The hover overlay on each trash tile SHALL contain exactly two buttons:
 - **WHEN** the user clicks View
 - **THEN** a lightbox opens showing the image, the original location (pre-deletion path), and the deletion date
 
+<!-- focused-spec:id=trash.restore-from-tile -->
 #### Scenario: Restore returns the file
 
 - **WHEN** the user clicks Restore
@@ -201,6 +207,7 @@ The Trash view SHALL use the shared `EmptyState` primitive when empty and the sh
 
 All new user-facing text (view, restore, original location, deletion date, empty state, error toasts) SHALL be defined in both English (`translations.en.ts`) and Russian (`translations.ru.ts`) under strict `TranslationKey` typing, and backend error messages SHALL use `Msg*` constants with matching en/ru locale entries.
 
+<!-- focused-spec:id=trash.localization -->
 #### Scenario: English and Russian strings in sync
 
 - **WHEN** the Trash view renders in English or Russian

@@ -10,16 +10,19 @@ Defines how the image is displayed on the OCR tab of the unified lightbox: the i
 
 The OCR tab of the unified lightbox SHALL display the image scaled to fit entirely within the visible image area. This SHALL hold in all states, independently of whether the image has recognized text or bounding boxes, and independently of whether the image is displayed rotated relative to the original.
 
+<!-- focused-spec:id=ocr-lightbox.image-fits-with-text -->
 #### Scenario: Image with recognized text fits
 
 - **WHEN** a user opens the OCR tab for an image classified as a text document with bounding boxes
 - **THEN** the image is scaled so that it fits entirely within the visible area, with no part of the image extending beyond the viewport
 
+<!-- focused-spec:id=ocr-lightbox.image-fits-without-text -->
 #### Scenario: Image without recognized text fits
 
 - **WHEN** a user opens the OCR tab for an image with no recognized text or an empty set of bounding boxes
 - **THEN** the image is scaled so that it fits entirely within the visible area, with no part of the image extending beyond the viewport
 
+<!-- focused-spec:id=ocr-lightbox.rotated-image-fits -->
 #### Scenario: Rotated image fits
 
 - **WHEN** a user opens the OCR tab for an image that is displayed rotated relative to the original
@@ -29,11 +32,13 @@ The OCR tab of the unified lightbox SHALL display the image scaled to fit entire
 
 When a text document is displayed on the OCR tab, the bounding-box overlay SHALL remain aligned with the underlying image after the image is scaled to fit the visible area.
 
+<!-- focused-spec:id=ocr-lightbox.boxes-aligned -->
 #### Scenario: Boxes cover the same text regions
 
 - **WHEN** a text document with bounding boxes is displayed and the image is scaled to fit the visible area
 - **THEN** each bounding box covers the same text region it covered before the image was scaled to fit
 
+<!-- focused-spec:id=ocr-lightbox.alignment-after-resize -->
 #### Scenario: Alignment is preserved after resize
 
 - **WHEN** a user resizes the lightbox while a text document with bounding boxes is displayed

@@ -1,6 +1,7 @@
 import { Loader2 } from "lucide-react"
 import { useTranslation } from "@/i18n"
 import type { TranslationKey } from "@/i18n"
+import { cn } from "@/lib/utils"
 import type { OcrDataResponse } from "@/types"
 
 interface OcrImagePanelProps {
@@ -50,7 +51,9 @@ export function OcrImagePanel({
     : null
 
   return (
-    <div className={className ?? "w-[50%] flex items-center justify-center relative h-full"}>
+    // The image stage matches the other lightbox modes (AI, Details, Tags),
+    // which render their image area on the dark stage.
+    <div className={cn("bg-black", className ?? "w-[50%] flex items-center justify-center relative h-full")}>
       {imageUrl ? (
         <img
           ref={imageRef}

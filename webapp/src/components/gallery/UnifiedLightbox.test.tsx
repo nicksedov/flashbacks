@@ -106,6 +106,8 @@ function enhancementMessage(): MockMessage {
 describe("UnifiedLightbox", () => {
   beforeEach(() => {
     chatState.messages = []
+    // jsdom does not implement scrollIntoView, which ChatPanel calls on mount.
+    Element.prototype.scrollIntoView = vi.fn()
   })
 
   it("renders the detail panel collapsed by default and toggles it open and closed", () => {
@@ -136,6 +138,32 @@ describe("UnifiedLightbox", () => {
     expect(hasClass(branch, "flex-1")).toBe(true)
     // …and the detail panel is an overlay below md, so it adds no side column.
     expect(hasClass(screen.getByTestId("mobile-detail-panel"), "absolute")).toBe(true)
+  })
+
+  it("renders the image stage consistently across all lightbox modes", () => {
+    const modes = ["ai", "exif", "ocr", "tags"] as const
+    // Surface and layout classes every image-stage branch must share.
+    const stageClasses = ["flex-1", "items-center", "justify-center", "bg-black", "relative", "h-full", "min-w-0"]
+
+    const stages = modes.map((mode) => {
+      const { unmount } = render(<UnifiedLightbox imagePath="a.jpg" initialMode={mode} onClose={vi.fn()} />)
+      const stage = screen.getByAltText("lightbox.alt").parentElement
+      expect(stage).not.toBeNull()
+      const classes = stage!.className
+      unmount()
+      return { mode, classes }
+    })
+
+    for (const { mode, classes } of stages) {
+      // Every mode renders the image on the same dark, flexible stage.
+      expect(classes.split(/\s+/), `image stage of mode "${mode}"`).toEqual(
+        expect.arrayContaining(stageClasses)
+      )
+    }
+
+    // No branch may introduce its own background utility.
+    const backgrounds = stages.map(({ classes }) => classes.split(/\s+/).filter((c) => c.startsWith("bg-")))
+    expect(backgrounds.every((bg) => bg.length === 1 && bg[0] === "bg-black")).toBe(true)
   })
 
   it("collapses compare-slider actions to icons below md", async () => {

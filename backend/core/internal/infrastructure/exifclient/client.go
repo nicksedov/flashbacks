@@ -45,6 +45,12 @@ func (c *HTTPExifClient) base() string {
 	return strings.TrimRight(c.urlProvider(), "/")
 }
 
+// ServiceURL returns the base URL currently used to reach the EXIF service,
+// which reflects registry discovery rather than the static configuration.
+func (c *HTTPExifClient) ServiceURL() string {
+	return c.base()
+}
+
 // --- Existing methods ---
 
 // ExtractMetadata reads EXIF metadata from an image file via the EXIF service.

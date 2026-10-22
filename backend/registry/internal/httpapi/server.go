@@ -286,7 +286,31 @@ func (s *Server) deregisterService(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	if err := s.store.Delete(r.Context(), store.ServiceKey(service, instance)); err != nil {
+	key := store.ServiceKey(service, instance)
+	// An optional leaseId scopes the removal to the process that owns it, so a
+	// stopping instance cannot delete the registration of its replacement.
+	if raw := r.URL.Query().Get("leaseId"); raw != "" {
+		leaseID, err := strconv.ParseInt(raw, 10, 64)
+		if err != nil || leaseID <= 0 {
+			writeError(w, http.StatusBadRequest, "leaseId must be a positive integer")
+			return
+		}
+		current, found, err := s.store.LeaseOf(r.Context(), key)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		if !found {
+			// Already gone: deregistration is idempotent.
+			writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+			return
+		}
+		if current != 0 && current != leaseID {
+			writeError(w, http.StatusConflict, "instance is owned by another lease")
+			return
+		}
+	}
+	if err := s.store.Delete(r.Context(), key); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}

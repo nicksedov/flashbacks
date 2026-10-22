@@ -28,11 +28,13 @@ func (s *Server) handleGetOCRStatus(c *gin.Context) {
 	status := s.ocrClient.GetStatus()
 	c.JSON(http.StatusOK, dto.OCRStatusResponse{
 		Status: dto.OCRStatus{
-			Enabled:    true,
-			Health:     string(status.Status),
-			LastCheck:  status.LastCheck.Format(helpers.DateTimeFormat),
-			Error:      status.Error,
-			ServiceURL: s.config.OCRServiceURL,
+			Enabled:   true,
+			Health:    string(status.Status),
+			LastCheck: status.LastCheck.Format(helpers.DateTimeFormat),
+			Error:     status.Error,
+			// The effective peer URL (registry discovery), not the configured
+			// bootstrap value, so an undiscovered instance is visible as such.
+			ServiceURL: s.ocrClient.ServiceURL(),
 		},
 	})
 }
@@ -57,7 +59,7 @@ func (s *Server) handleGetExifStatus(c *gin.Context) {
 			"health":     "unhealthy",
 			"lastCheck":  time.Now().Format(helpers.DateTimeFormat),
 			"error":      err.Error(),
-			"serviceURL": s.config.ExifServiceURL,
+			"serviceURL": s.exifClient.ServiceURL(),
 		})
 		return
 	}
@@ -67,7 +69,7 @@ func (s *Server) handleGetExifStatus(c *gin.Context) {
 		"health":     health.Status,
 		"lastCheck":  time.Now().Format(helpers.DateTimeFormat),
 		"error":      "",
-		"serviceURL": s.config.ExifServiceURL,
+		"serviceURL": s.exifClient.ServiceURL(),
 	})
 }
 

@@ -17,6 +17,13 @@ import (
 // ShutdownTimeout bounds best-effort deregistration.
 const ShutdownTimeout = 3 * time.Second
 
+// peerResyncInterval bounds how long a stale peer URL can be served when a
+// registry watch event is missed, for example after the facade restarts.
+const peerResyncInterval = 30 * time.Second
+
+// resolverRetryDelay is the pause before reopening an interrupted watch stream.
+const resolverRetryDelay = time.Second
+
 // Bootstrap carries the optional registry client for this process.
 type Bootstrap struct {
 	client *registryclient.Client
@@ -131,27 +138,56 @@ func (r *Resolver) set(url string) {
 }
 
 // NewResolver resolves a peer once and keeps it updated while the service runs.
+// The watch stream is reopened after it ends, and a slow periodic resync covers
+// events lost while the stream was down.
 func (b *Bootstrap) NewResolver(service, bootstrapURL string) *Resolver {
 	resolver := &Resolver{url: bootstrapURL}
 	if !b.Enabled() {
 		return resolver
 	}
 
-	resolveCtx, cancel := context.WithTimeout(b.ctx, 3*time.Second)
-	resolver.set(b.client.ResolvePeer(resolveCtx, service, bootstrapURL))
-	cancel()
+	refresh := func() {
+		refreshCtx, refreshCancel := context.WithTimeout(b.ctx, 3*time.Second)
+		defer refreshCancel()
+		resolver.set(b.client.ResolvePeer(refreshCtx, service, bootstrapURL))
+	}
+
+	refresh()
 
 	go func() {
-		err := b.client.WatchInstances(b.ctx, service, func(event registryclient.Event) {
-			if event.Type != "put" && event.Type != "delete" {
+		for {
+			err := b.client.WatchInstances(b.ctx, service, func(event registryclient.Event) {
+				// "ready" is emitted when a (re)opened stream is established:
+				// resyncing there recovers events missed while it was down.
+				if event.Type != "put" && event.Type != "delete" && event.Type != "ready" {
+					return
+				}
+				refresh()
+			})
+			if b.ctx.Err() != nil {
 				return
 			}
-			refreshCtx, refreshCancel := context.WithTimeout(b.ctx, 3*time.Second)
-			resolver.set(b.client.ResolvePeer(refreshCtx, service, bootstrapURL))
-			refreshCancel()
-		})
-		if err != nil && b.ctx.Err() == nil {
-			slog.Warn("registry instance watch stopped", "service", service, "error", err)
+			if err != nil {
+				slog.Warn("registry instance watch interrupted", "service", service, "error", err)
+			}
+			select {
+			case <-b.ctx.Done():
+				return
+			case <-time.After(resolverRetryDelay):
+			}
+		}
+	}()
+
+	go func() {
+		ticker := time.NewTicker(peerResyncInterval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-b.ctx.Done():
+				return
+			case <-ticker.C:
+				refresh()
+			}
 		}
 	}()
 

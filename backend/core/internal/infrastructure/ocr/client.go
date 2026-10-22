@@ -22,6 +22,8 @@ type Client interface {
 	CheckHealth(ctx context.Context) error
 	// GetStatus returns the current OCR health status
 	GetStatus() healthcheck.HealthStatus
+	// ServiceURL returns the peer base URL this client currently targets.
+	ServiceURL() string
 	// StartHealthCheck starts the periodic health check in background
 	StartHealthCheck(intervalSeconds int)
 	// StopHealthCheck stops the periodic health check
@@ -75,6 +77,12 @@ func NewClientWithProvider(provider func() string) Client {
 
 func (c *clientImpl) base() string {
 	return fmt.Sprintf("%s/ocr/api", strings.TrimRight(c.urlProvider(), "/"))
+}
+
+// ServiceURL returns the base URL currently used to reach the OCR service,
+// which reflects registry discovery rather than the static configuration.
+func (c *clientImpl) ServiceURL() string {
+	return strings.TrimRight(c.urlProvider(), "/")
 }
 
 // Check implements healthcheck.Checker by delegating to CheckHealth.

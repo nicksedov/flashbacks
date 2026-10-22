@@ -41,6 +41,13 @@ type Config struct {
 	HTTPClient  *http.Client
 	TTLSeconds  int64
 	Logger      *slog.Logger
+	// RetryBackoff and MaxRetryBackoff bound the exponential backoff applied
+	// while the facade is unreachable (defaults: 500ms and 15s).
+	RetryBackoff    time.Duration
+	MaxRetryBackoff time.Duration
+	// RegisterTimeout bounds how long Register blocks before deferring the
+	// remaining attempts to a background goroutine (default: 10s).
+	RegisterTimeout time.Duration
 }
 
 // Client talks to the registry facade.
@@ -53,10 +60,27 @@ type Client struct {
 	ttl         int64
 	logger      *slog.Logger
 
+	retryBackoff    time.Duration
+	maxRetryBackoff time.Duration
+	registerTimeout time.Duration
+
 	mu            sync.Mutex
 	leaseID       int64
+	instance      Instance
 	stopHeartbeat chan struct{}
 }
+
+// Default backoff values for registration retries.
+const (
+	defaultRetryBackoff    = 500 * time.Millisecond
+	defaultMaxRetryBackoff = 15 * time.Second
+	// maxHeartbeatFailures is how many consecutive keep-alive failures are
+	// tolerated before the instance is registered again with a fresh lease.
+	maxHeartbeatFailures = 2
+	// defaultRegisterTimeout bounds how long Register blocks the caller before
+	// handing the remaining retries to a background goroutine.
+	defaultRegisterTimeout = 10 * time.Second
+)
 
 // New creates a registry client.
 func New(cfg Config) (*Client, error) {
@@ -79,14 +103,29 @@ func New(cfg Config) (*Client, error) {
 	if logger == nil {
 		logger = slog.Default()
 	}
+	backoff := cfg.RetryBackoff
+	if backoff <= 0 {
+		backoff = defaultRetryBackoff
+	}
+	maxBackoff := cfg.MaxRetryBackoff
+	if maxBackoff < backoff {
+		maxBackoff = defaultMaxRetryBackoff
+	}
+	registerTimeout := cfg.RegisterTimeout
+	if registerTimeout <= 0 {
+		registerTimeout = defaultRegisterTimeout
+	}
 	return &Client{
-		baseURL:     endpoint,
-		serviceName: cfg.ServiceName,
-		instanceID:  cfg.InstanceID,
-		token:       cfg.Token,
-		httpClient:  httpClient,
-		ttl:         ttl,
-		logger:      logger,
+		baseURL:         endpoint,
+		serviceName:     cfg.ServiceName,
+		instanceID:      cfg.InstanceID,
+		token:           cfg.Token,
+		httpClient:      httpClient,
+		ttl:             ttl,
+		logger:          logger,
+		retryBackoff:    backoff,
+		maxRetryBackoff: maxBackoff,
+		registerTimeout: registerTimeout,
 	}, nil
 }
 
@@ -141,42 +180,115 @@ func (c *Client) GetSecret(ctx context.Context, service, key string) (string, er
 	return resp.Value, nil
 }
 
-// Register registers this client's service instance and starts its heartbeat.
+// Register publishes this client's service instance and keeps the lease alive.
+//
+// It retries with exponential backoff for a bounded window so a facade that is
+// still starting (services and the registry come up together, for example after
+// a Docker daemon restart) does not fail the call. If the window expires the
+// retries continue in the background, so the instance joins discovery as soon as
+// the facade answers without requiring a process restart; the returned error
+// lets the caller log the current state.
 func (c *Client) Register(ctx context.Context, instance Instance) error {
 	if c.serviceName == "" || c.instanceID == "" {
 		return fmt.Errorf("service name and instance id are required for registration")
 	}
+	backoff := c.retryBackoff
+	deadline := time.Now().Add(c.registerTimeout)
+	var lastErr error
+	for {
+		if _, err := c.registerOnce(ctx, instance); err == nil {
+			c.startSupervisor(instance)
+			return nil
+		} else {
+			lastErr = err
+		}
+		if ctx.Err() != nil || time.Now().After(deadline) {
+			break
+		}
+		c.logger.Warn("registry registration failed; retrying",
+			"service", c.serviceName, "instance", c.instanceID, "retryIn", backoff.String(), "error", lastErr)
+		select {
+		case <-ctx.Done():
+		case <-time.After(backoff):
+		}
+		backoff = nextBackoff(backoff, c.maxRetryBackoff)
+	}
+
+	c.logger.Warn("registry registration deferred to background retries",
+		"service", c.serviceName, "instance", c.instanceID, "error", lastErr)
+	go c.retryRegister(ctx, instance, backoff)
+	return fmt.Errorf("register %q: %w", c.instanceID, lastErr)
+}
+
+// retryRegister keeps trying until the instance is registered or ctx is done.
+func (c *Client) retryRegister(ctx context.Context, instance Instance, backoff time.Duration) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(backoff):
+		}
+		if _, err := c.registerOnce(ctx, instance); err == nil {
+			c.logger.Info("registry registration recovered in background",
+				"service", c.serviceName, "instance", c.instanceID)
+			c.startSupervisor(instance)
+			return
+		} else {
+			c.logger.Warn("registry registration still failing",
+				"service", c.serviceName, "instance", c.instanceID, "retryIn", backoff.String(), "error", err)
+		}
+		backoff = nextBackoff(backoff, c.maxRetryBackoff)
+	}
+}
+
+// registerOnce performs a single registration and stores the granted lease.
+func (c *Client) registerOnce(ctx context.Context, instance Instance) (int64, error) {
 	var resp struct {
 		LeaseID int64 `json:"leaseId"`
 		TTL     int64 `json:"ttl"`
 	}
 	path := fmt.Sprintf("/registry/v1/services/%s/%s?ttl=%d", escape(c.serviceName), escape(c.instanceID), c.ttl)
 	if err := c.do(ctx, http.MethodPut, path, instance, &resp); err != nil {
-		return err
+		return 0, err
 	}
+	c.mu.Lock()
+	c.leaseID = resp.LeaseID
+	c.instance = instance
+	c.mu.Unlock()
+	return resp.LeaseID, nil
+}
 
+// startSupervisor restarts the lease keep-alive loop for the given instance.
+func (c *Client) startSupervisor(instance Instance) {
 	c.mu.Lock()
 	if c.stopHeartbeat != nil {
 		close(c.stopHeartbeat)
 	}
 	stop := make(chan struct{})
 	c.stopHeartbeat = stop
-	c.leaseID = resp.LeaseID
 	c.mu.Unlock()
 
-	go c.heartbeat(stop, resp.LeaseID)
-	return nil
+	go c.supervise(stop, instance)
 }
 
-// Deregister stops the heartbeat and removes the registration.
+// Deregister stops the heartbeat and removes the registration owned by this
+// client. The lease is sent along so a shutting-down process can never delete
+// the registration of a newer instance that reused the same instance ID.
 func (c *Client) Deregister(ctx context.Context) error {
 	c.mu.Lock()
 	if c.stopHeartbeat != nil {
 		close(c.stopHeartbeat)
 		c.stopHeartbeat = nil
 	}
+	leaseID := c.leaseID
+	c.leaseID = 0
 	c.mu.Unlock()
-	return c.do(ctx, http.MethodDelete, fmt.Sprintf("/registry/v1/services/%s/%s", escape(c.serviceName), escape(c.instanceID)), nil, nil)
+	if leaseID == 0 {
+		// Never registered: there is nothing this client owns to remove.
+		return nil
+	}
+	path := fmt.Sprintf("/registry/v1/services/%s/%s?leaseId=%d", escape(c.serviceName), escape(c.instanceID), leaseID)
+	return c.do(ctx, http.MethodDelete, path, nil, nil)
 }
 
 // Discover returns the live instances of a service.
@@ -205,6 +317,8 @@ func (c *Client) ResolvePeer(ctx context.Context, service, bootstrap string) str
 		return bootstrap
 	}
 	if len(instances) == 0 {
+		c.logger.Warn("no live instances discovered; using bootstrap URL",
+			"service", service, "bootstrap", bootstrap)
 		return bootstrap
 	}
 	host := instances[0].Host
@@ -288,26 +402,71 @@ func (c *Client) watch(ctx context.Context, path string, fn func(Event)) error {
 	return nil
 }
 
-func (c *Client) heartbeat(stop <-chan struct{}, leaseID int64) {
+// supervise renews the registration lease and re-registers the instance when
+// the lease is lost, so a registry outage or restart cannot silently remove a
+// running service from discovery.
+func (c *Client) supervise(stop <-chan struct{}, instance Instance) {
 	interval := time.Duration(c.ttl) * time.Second / 3
 	if interval < time.Second {
 		interval = time.Second
 	}
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
+
+	failures := 0
 	for {
 		select {
 		case <-stop:
 			return
 		case <-ticker.C:
+			leaseID := c.currentLease()
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			err := c.do(ctx, http.MethodPost, fmt.Sprintf("/registry/v1/services/%s/%s/heartbeat", escape(c.serviceName), escape(c.instanceID)), map[string]int64{"leaseId": leaseID}, nil)
+			err := c.do(ctx, http.MethodPost,
+				fmt.Sprintf("/registry/v1/services/%s/%s/heartbeat", escape(c.serviceName), escape(c.instanceID)),
+				map[string]int64{"leaseId": leaseID}, nil)
 			cancel()
-			if err != nil {
-				c.logger.Warn("registry heartbeat failed", "service", c.serviceName, "error", err)
+			if err == nil {
+				failures = 0
+				continue
 			}
+			failures++
+			c.logger.Warn("registry heartbeat failed",
+				"service", c.serviceName, "instance", c.instanceID, "failures", failures, "error", err)
+			if failures < maxHeartbeatFailures {
+				continue
+			}
+			c.reRegister(instance)
+			failures = 0
 		}
 	}
+}
+
+// reRegister publishes the instance again with a fresh lease.
+func (c *Client) reRegister(instance Instance) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if _, err := c.registerOnce(ctx, instance); err != nil {
+		c.logger.Warn("registry re-registration failed",
+			"service", c.serviceName, "instance", c.instanceID, "error", err)
+		return
+	}
+	c.logger.Info("registry instance re-registered",
+		"service", c.serviceName, "instance", c.instanceID)
+}
+
+func (c *Client) currentLease() int64 {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.leaseID
+}
+
+// nextBackoff doubles the current delay up to max.
+func nextBackoff(current, max time.Duration) time.Duration {
+	next := current * 2
+	if next > max {
+		return max
+	}
+	return next
 }
 
 func (c *Client) do(ctx context.Context, method, path string, body any, out any) error {

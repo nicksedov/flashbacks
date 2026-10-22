@@ -9,6 +9,8 @@ import (
 // ExifClient abstracts EXIF operations for dependency injection.
 // Two implementations: HTTPExifClient (production) and MockExifClient (tests).
 type ExifClient interface {
+	// ServiceURL returns the peer base URL this client currently targets.
+	ServiceURL() string
 	ExtractMetadata(ctx context.Context, filePath string) (*domain.ImageMetadata, error)
 	ExtractGPS(ctx context.Context, filePath string) (lat, lng float64, ok bool, err error)
 	WriteGPS(ctx context.Context, filePath string, lat, lng float64, backupDir string, meta *domain.ImageMetadata) error

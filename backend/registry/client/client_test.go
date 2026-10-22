@@ -1,15 +1,32 @@
 package client_test
 
 import (
+	"bytes"
 	"context"
+	"fmt"
+	"io"
+	"log/slog"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/flashbacks/registry/client"
 	"github.com/flashbacks/registry/internal/testutil"
 )
+
+// quietLogger discards client logs so tests stay readable.
+func quietLogger() *slog.Logger {
+	return slog.New(slog.NewTextHandler(io.Discard, nil))
+}
+
+func writeJSONBody(w http.ResponseWriter, body string) {
+	w.Header().Set("Content-Type", "application/json")
+	_, _ = w.Write([]byte(body))
+}
 
 func TestConfigAndSecretRoundTrip(t *testing.T) {
 	stack := testutil.Start(t)
@@ -224,5 +241,252 @@ func TestRegisterHeartbeatKeepsRegistration(t *testing.T) {
 	}
 	if len(instances) != 1 {
 		t.Fatalf("registration expired despite heartbeats: %+v", instances)
+	}
+}
+
+// TestRegisterRetriesUntilFacadeIsReady covers services that start together
+// with the registry (for example after a Docker daemon restart): a facade that
+// is not ready yet must not leave the instance undiscoverable forever.
+func TestRegisterRetriesUntilFacadeIsReady(t *testing.T) {
+	var attempts atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPut && strings.HasPrefix(r.URL.Path, "/registry/v1/services/") {
+			if attempts.Add(1) < 3 {
+				w.WriteHeader(http.StatusServiceUnavailable)
+				return
+			}
+			writeJSONBody(w, `{"leaseId":42,"ttl":15}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer server.Close()
+
+	c, err := client.New(client.Config{
+		Endpoint:        server.URL,
+		ServiceName:     "ocr",
+		InstanceID:      "ocr",
+		TTLSeconds:      15,
+		RetryBackoff:    5 * time.Millisecond,
+		MaxRetryBackoff: 20 * time.Millisecond,
+		Logger:          quietLogger(),
+	})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := c.Register(ctx, client.Instance{Host: "flashbacks-ocr", Port: 5174}); err != nil {
+		t.Fatalf("Register() error = %v", err)
+	}
+	defer func() { _ = c.Deregister(context.Background()) }()
+
+	if got, want := attempts.Load(), int32(3); got != want {
+		t.Fatalf("registration attempts = %d, want %d", got, want)
+	}
+}
+
+// TestRegisterContinuesInBackgroundAfterTimeout covers a facade that stays down
+// past the synchronous window: Register reports the error but the instance still
+// joins discovery later, without requiring a process restart.
+func TestRegisterContinuesInBackgroundAfterTimeout(t *testing.T) {
+	var ready atomic.Bool
+	var succeeded atomic.Int32
+	var attempts atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPut && strings.HasPrefix(r.URL.Path, "/registry/v1/services/"):
+			attempts.Add(1)
+			if !ready.Load() {
+				w.WriteHeader(http.StatusServiceUnavailable)
+				return
+			}
+			succeeded.Add(1)
+			writeJSONBody(w, `{"leaseId":11,"ttl":15}`)
+		case r.Method == http.MethodDelete:
+			writeJSONBody(w, `{"status":"ok"}`)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	c, err := client.New(client.Config{
+		Endpoint:        server.URL,
+		ServiceName:     "ocr",
+		InstanceID:      "ocr",
+		TTLSeconds:      15,
+		RetryBackoff:    5 * time.Millisecond,
+		MaxRetryBackoff: 10 * time.Millisecond,
+		RegisterTimeout: 20 * time.Millisecond,
+		Logger:          quietLogger(),
+	})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	if err := c.Register(ctx, client.Instance{Host: "flashbacks-ocr", Port: 5174}); err == nil {
+		t.Fatal("Register() = nil, want the deferred registration error")
+	}
+	defer func() { _ = c.Deregister(context.Background()) }()
+
+	// The facade becomes reachable only after the synchronous window expired.
+	ready.Store(true)
+
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		if succeeded.Load() >= 1 {
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatalf("successful registrations = %d after %d attempts, want a background retry to succeed",
+		succeeded.Load(), attempts.Load())
+}
+
+// TestHeartbeatReRegistersAfterLeaseLoss verifies a lost lease is recovered
+// instead of silently dropping the instance from discovery.
+func TestHeartbeatReRegistersAfterLeaseLoss(t *testing.T) {
+	var registers atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPut:
+			writeJSONBody(w, fmt.Sprintf(`{"leaseId":%d,"ttl":1}`, registers.Add(1)))
+		case strings.HasSuffix(r.URL.Path, "/heartbeat"):
+			w.WriteHeader(http.StatusConflict)
+		case r.Method == http.MethodDelete:
+			writeJSONBody(w, `{"status":"ok"}`)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	c, err := client.New(client.Config{
+		Endpoint:    server.URL,
+		ServiceName: "ocr",
+		InstanceID:  "ocr",
+		TTLSeconds:  1,
+		Logger:      quietLogger(),
+	})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	if err := c.Register(context.Background(), client.Instance{Host: "flashbacks-ocr", Port: 5174}); err != nil {
+		t.Fatalf("Register() error = %v", err)
+	}
+	defer func() { _ = c.Deregister(context.Background()) }()
+
+	deadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		if registers.Load() >= 2 {
+			return
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	t.Fatalf("registrations = %d, want a re-registration after heartbeat failures", registers.Load())
+}
+
+// TestDeregisterSendsLeaseID guards against a stopping instance deleting the
+// registration of a replacement that reused the same instance ID.
+func TestDeregisterSendsLeaseID(t *testing.T) {
+	var deleteQuery atomic.Value
+	var deletes atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPut:
+			writeJSONBody(w, `{"leaseId":7,"ttl":15}`)
+		case r.Method == http.MethodDelete:
+			deletes.Add(1)
+			deleteQuery.Store(r.URL.RawQuery)
+			writeJSONBody(w, `{"status":"ok"}`)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	c, err := client.New(client.Config{
+		Endpoint:    server.URL,
+		ServiceName: "ocr",
+		InstanceID:  "ocr",
+		TTLSeconds:  15,
+		Logger:      quietLogger(),
+	})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	if err := c.Register(context.Background(), client.Instance{Host: "flashbacks-ocr", Port: 5174}); err != nil {
+		t.Fatalf("Register() error = %v", err)
+	}
+	if err := c.Deregister(context.Background()); err != nil {
+		t.Fatalf("Deregister() error = %v", err)
+	}
+
+	if got, want := deleteQuery.Load(), "leaseId=7"; got != want {
+		t.Fatalf("delete query = %v, want %q", got, want)
+	}
+	if got := deletes.Load(); got != 1 {
+		t.Fatalf("delete requests = %d, want 1", got)
+	}
+}
+
+// TestDeregisterWithoutRegistrationIsNoOp makes sure a process that never
+// registered cannot remove somebody else's registration.
+func TestDeregisterWithoutRegistrationIsNoOp(t *testing.T) {
+	var requests atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests.Add(1)
+		http.NotFound(w, r)
+	}))
+	defer server.Close()
+
+	c, err := client.New(client.Config{
+		Endpoint:    server.URL,
+		ServiceName: "ocr",
+		InstanceID:  "ocr",
+		Logger:      quietLogger(),
+	})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	if err := c.Deregister(context.Background()); err != nil {
+		t.Fatalf("Deregister() error = %v", err)
+	}
+	if got := requests.Load(); got != 0 {
+		t.Fatalf("registry requests = %d, want 0", got)
+	}
+}
+
+func TestResolvePeerWarnsWhenNothingDiscovered(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/registry/v1/services/ocr" {
+			http.NotFound(w, r)
+			return
+		}
+		writeJSONBody(w, `{"instances":[]}`)
+	}))
+	defer server.Close()
+
+	var logs bytes.Buffer
+	c, err := client.New(client.Config{
+		Endpoint:    server.URL,
+		ServiceName: "core",
+		InstanceID:  "core",
+		Logger:      slog.New(slog.NewTextHandler(&logs, nil)),
+	})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	got := c.ResolvePeer(context.Background(), "ocr", "http://localhost:5174")
+	if want := "http://localhost:5174"; got != want {
+		t.Fatalf("ResolvePeer() = %q, want %q", got, want)
+	}
+	if !strings.Contains(logs.String(), "no live instances discovered") {
+		t.Fatalf("expected an undiscovered-peer warning, got %q", logs.String())
 	}
 }

@@ -205,6 +205,42 @@ func TestHealthReportsReady(t *testing.T) {
 	}
 }
 
+// TestDeregisterRequiresMatchingLease ensures a shutting-down instance cannot
+// delete the registration of a replacement that reused the same instance ID.
+func TestDeregisterRequiresMatchingLease(t *testing.T) {
+	stack := testutil.Start(t)
+	base := stack.Server.URL
+
+	resp := doRequest(t, http.MethodPut, base+"/registry/v1/services/ocr/ocr?ttl=60", `{"host":"flashbacks-ocr","port":5174}`)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("register status = %d", resp.StatusCode)
+	}
+	registered := readJSON[struct {
+		LeaseID int64 `json:"leaseId"`
+	}](t, resp)
+	if registered.LeaseID == 0 {
+		t.Fatal("register response carried no leaseId")
+	}
+
+	stale := doRequest(t, http.MethodDelete, fmt.Sprintf("%s/registry/v1/services/ocr/ocr?leaseId=%d", base, registered.LeaseID+1), "")
+	if stale.StatusCode != http.StatusConflict {
+		t.Fatalf("deregistration with a foreign lease status = %d, want 409", stale.StatusCode)
+	}
+	stale.Body.Close()
+	if got := listInstances(t, base, "ocr"); len(got) != 1 {
+		t.Fatalf("instance removed by a foreign lease: %+v", got)
+	}
+
+	owner := doRequest(t, http.MethodDelete, fmt.Sprintf("%s/registry/v1/services/ocr/ocr?leaseId=%d", base, registered.LeaseID), "")
+	if owner.StatusCode != http.StatusOK {
+		t.Fatalf("deregistration by the owning lease status = %d", owner.StatusCode)
+	}
+	owner.Body.Close()
+	if got := listInstances(t, base, "ocr"); len(got) != 0 {
+		t.Fatalf("instance still listed after owner deregistration: %+v", got)
+	}
+}
+
 type instanceJSON struct {
 	ID         string `json:"id"`
 	Host       string `json:"host"`

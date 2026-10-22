@@ -36,6 +36,8 @@ type MockExifClient struct {
 	MissingErr       error
 	LocCandidatesErr error
 	GeolocationErr   error
+	// ServiceURLValue is reported by ServiceURL.
+	ServiceURLValue string
 	// Call tracking
 	ExtractCalls    int
 	WriteCalls      int
@@ -81,6 +83,11 @@ func NewMockExifClient() *MockExifClient {
 			Uptime:            "1h0m",
 		},
 	}
+}
+
+// ServiceURL reports the peer URL configured for this mock.
+func (m *MockExifClient) ServiceURL() string {
+	return m.ServiceURLValue
 }
 
 func (m *MockExifClient) ExtractMetadata(ctx context.Context, filePath string) (*domain.ImageMetadata, error) {

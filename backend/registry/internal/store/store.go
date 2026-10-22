@@ -33,6 +33,9 @@ type Store interface {
 	List(ctx context.Context, prefix string) (map[string]string, error)
 	PutWithLease(ctx context.Context, key, value string, ttlSeconds int64) (int64, error)
 	KeepAliveOnce(ctx context.Context, leaseID int64) (int64, error)
+	// LeaseOf returns the lease attached to a key and whether the key exists.
+	// A key stored without a lease reports 0.
+	LeaseOf(ctx context.Context, key string) (int64, bool, error)
 	Watch(ctx context.Context, prefix string) (<-chan Event, error)
 }
 

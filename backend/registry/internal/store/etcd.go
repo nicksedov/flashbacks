@@ -75,6 +75,18 @@ func (s *EtcdStore) PutWithLease(ctx context.Context, key, value string, ttlSeco
 	return int64(lease.ID), nil
 }
 
+// LeaseOf returns the lease attached to a key and whether the key exists.
+func (s *EtcdStore) LeaseOf(ctx context.Context, key string) (int64, bool, error) {
+	resp, err := s.client.Get(ctx, key)
+	if err != nil {
+		return 0, false, fmt.Errorf("get lease of %q: %w", key, err)
+	}
+	if len(resp.Kvs) == 0 {
+		return 0, false, nil
+	}
+	return resp.Kvs[0].Lease, true, nil
+}
+
 // KeepAliveOnce refreshes a lease and returns its new TTL.
 func (s *EtcdStore) KeepAliveOnce(ctx context.Context, leaseID int64) (int64, error) {
 	resp, err := s.client.KeepAliveOnce(ctx, clientv3.LeaseID(leaseID))

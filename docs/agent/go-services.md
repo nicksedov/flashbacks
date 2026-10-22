@@ -169,8 +169,19 @@ Make targets wrap the same commands: `make test-core`, `make test-exif`,
     never return secrets from config endpoints.
   - Registration uses a TTL lease; if heartbeats stop, the lease must expire and
     the instance must disappear from discovery.
+  - Registration must be **self-healing**: services start together with the
+    registry (for example after a Docker daemon restart), so the client retries
+    with backoff until registration succeeds and re-registers with a fresh lease
+    after repeated heartbeat failures. A one-shot registration attempt is a bug.
+  - Deregistration is lease-scoped: the client sends the lease it owns
+    (`DELETE ...?leaseId=`) and the facade rejects a mismatched lease with `409`,
+    so a stopping instance can never delete its replacement's registration.
   - Config precedence is explicit env override > registry value > built-in
     default; an unreachable registry must degrade to defaults and bootstrap URLs.
+  - Peer resolution must never be silently stale: an empty discovery result is
+    logged, watch streams are reopened after they end, events seen on a reopened
+    stream trigger a resync, and the resolved peer URL is reported in place of
+    the static bootstrap URL in status payloads.
 - **Required checks**: `cd backend/registry && go test ./... -count=1`,
   `go vet ./...`, `go build ./...`.
 

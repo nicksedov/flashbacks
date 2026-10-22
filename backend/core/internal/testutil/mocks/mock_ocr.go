@@ -14,6 +14,7 @@ type MockOcrClient struct {
 	ClassifyFunc    func(ctx context.Context, image io.Reader, contentType string, params *ocr.ClassifyParams) (*shareddomain.ClassifyResponse, error)
 	HealthFunc      func(ctx context.Context) error
 	GetStatusFunc   func() healthcheck.HealthStatus
+	ServiceURLValue string
 	StartHealthFunc func(intervalSeconds int)
 	StopHealthFunc  func()
 
@@ -37,6 +38,11 @@ func (m *MockOcrClient) GetStatus() healthcheck.HealthStatus {
 		return m.GetStatusFunc()
 	}
 	return healthcheck.HealthStatus{Status: healthcheck.StatusHealthy}
+}
+
+// ServiceURL implements ocr.Client.
+func (m *MockOcrClient) ServiceURL() string {
+	return m.ServiceURLValue
 }
 
 // StartHealthCheck implements ocr.Client.

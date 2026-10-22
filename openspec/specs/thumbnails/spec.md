@@ -11,28 +11,30 @@ consistent with the source photos.
 ### Requirement: Thumbnails honor EXIF orientation rotation
 
 When generating a thumbnail from an image file, the core service SHALL apply the
-rotation indicated by the file's EXIF `Orientation` value before resizing, so the
-thumbnail depicts the photo at its correct upright angle: `6` rotates 90° clockwise,
-`8` rotates 270° clockwise, and `3` rotates 180°. Orientation `1` or an absent
-orientation SHALL produce a thumbnail from the image exactly as decoded.
+same EXIF `Orientation` transform a browser applies when it displays the original
+file in the lightbox, before resizing, so the thumbnail depicts the photo at the
+angle the user sees: `6` rotates the stored pixels 90° clockwise, `8` rotates them
+270° clockwise, `3` rotates them 180°, `2` and `4` mirror them horizontally and
+vertically, and `5` and `7` transpose and transverse them. Orientation `1` or an
+absent orientation SHALL produce a thumbnail from the image exactly as decoded.
 
 <!-- focused-spec:id=thumbnails.orientation-6-rotated -->
-#### Scenario: Orientation 6 swaps thumbnail dimensions
+#### Scenario: Orientation 6 turns the thumbnail a quarter turn clockwise
 
 - **WHEN** a source image carries EXIF Orientation `6`
-- **THEN** the generated thumbnail has its width and height swapped relative to the same image decoded without rotation
+- **THEN** the stored bottom-left corner appears at the thumbnail's top-left corner and the stored top-left corner appears at its top-right corner
 
 <!-- focused-spec:id=thumbnails.orientation-8-rotated -->
-#### Scenario: Orientation 8 swaps thumbnail dimensions
+#### Scenario: Orientation 8 turns the thumbnail a quarter turn counter-clockwise
 
 - **WHEN** a source image carries EXIF Orientation `8`
-- **THEN** the generated thumbnail has its width and height swapped relative to the same image decoded without rotation
+- **THEN** the stored top-right corner appears at the thumbnail's top-left corner and the stored top-left corner appears at its bottom-left corner
 
 <!-- focused-spec:id=thumbnails.orientation-3-rotated -->
 #### Scenario: Orientation 3 rotates the thumbnail by 180 degrees
 
 - **WHEN** a source image carries EXIF Orientation `3`
-- **THEN** the generated thumbnail shows the source rotated by 180° while keeping its width and height
+- **THEN** the stored top-left corner appears at the thumbnail's bottom-right corner while the thumbnail keeps its width and height
 
 <!-- focused-spec:id=thumbnails.orientation-1-unrotated -->
 #### Scenario: Orientation 1 leaves the thumbnail unrotated
@@ -43,7 +45,9 @@ orientation SHALL produce a thumbnail from the image exactly as decoded.
 ### Requirement: Startup backfill corrects cached thumbnails for rotated photos
 
 After the core service starts, it SHALL regenerate the cached thumbnail of every
-indexed gallery file whose EXIF `Orientation` is `3`, `6` or `8`.
+indexed gallery file whose EXIF `Orientation` transforms the stored pixels, that is
+any value from `2` to `8` (`3`, `6` and `8` for pure rotations, `2`, `4`, `5` and `7`
+for mirrored variants).
 
 <!-- focused-spec:id=thumbnails.startup-backfill-rotated -->
 #### Scenario: Startup regenerates thumbnails for rotated photos

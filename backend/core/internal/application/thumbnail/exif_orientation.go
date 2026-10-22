@@ -196,17 +196,35 @@ func parseTIFFOrientation(tiff []byte) int {
 	return 0
 }
 
-// applyOrientation returns the image rotated to its upright angle according to
-// the EXIF Orientation value. Mirrored orientations (2, 4, 5, 7) and unknown
-// values are returned unchanged.
+// applyOrientation returns the image transformed to the upright result a browser
+// produces when it renders the same file, following the standard EXIF
+// Orientation mapping: `3` rotates 180°, `6` rotates 90° clockwise, `8` rotates
+// 270° clockwise, and the mirrored values (`2` horizontal, `4` vertical, `5`
+// transpose, `7` transverse) are flipped as well. Unknown values are returned
+// unchanged.
+//
+// The imaging helpers rotate counter-clockwise, so the clockwise 90° required by
+// orientation 6 is imaging.Rotate270, and the clockwise 270° required by
+// orientation 8 is imaging.Rotate90. Using them the other way round flips the
+// result by 180°.
 func applyOrientation(img image.Image, orientation int) image.Image {
 	switch orientation {
+	case 2:
+		return imaging.FlipH(img)
 	case 3:
 		return imaging.Rotate180(img)
+	case 4:
+		return imaging.FlipV(img)
+	case 5:
+		// Transpose: reflect across the main diagonal.
+		return imaging.FlipH(imaging.Rotate270(img))
 	case 6:
-		return imaging.Rotate90(img)
-	case 8:
 		return imaging.Rotate270(img)
+	case 7:
+		// Transverse: reflect across the anti-diagonal.
+		return imaging.FlipH(imaging.Rotate90(img))
+	case 8:
+		return imaging.Rotate90(img)
 	default:
 		return img
 	}

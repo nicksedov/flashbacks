@@ -106,14 +106,19 @@ go test ./... -coverprofile=coverage.out
 ## Thumbnail Cache
 
 Thumbnails are generated on demand and cached on disk (WebP by default). Before
-resizing, generation applies the EXIF `Orientation` rotation (`3`, `6`, `8`) read
-locally from the source file, so portrait or rotated photos appear upright.
+resizing, generation applies the EXIF `Orientation` transform read locally from
+the source file, using the same mapping the browser applies when it displays the
+original: `6` rotates 90° clockwise, `8` rotates 270° clockwise, `3` rotates 180°,
+and the mirrored values `2`, `4`, `5`, `7` are flipped as well. Note that
+`imaging.Rotate90`/`Rotate270` rotate counter-clockwise, so those helpers must be
+paired with the values in reverse.
 
 On startup the service runs a one-time orientation backfill: it scans indexed
-image files and regenerates cached thumbnails for photos whose orientation is `3`,
-`6` or `8`. Completion is recorded as `.orientation-backfill.v1` in the cache
-directory; delete that file to force another pass (for example after restoring a
-cache from a backup).
+image files and regenerates cached thumbnails for photos whose orientation is not
+`1`. Completion is recorded as `.orientation-backfill.v2` in the cache directory;
+delete that file, or bump the marker name, to force another pass (the marker is
+bumped whenever the rotation mapping changes, since only a new marker name
+re-processes an already corrected cache).
 
 ## API Documentation
 

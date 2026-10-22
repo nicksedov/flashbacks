@@ -11,7 +11,12 @@ import (
 
 // backfillMarkerName is written into the active cache directory once the
 // orientation backfill completes, so later starts skip the work.
-const backfillMarkerName = ".orientation-backfill.v1"
+//
+// The version suffix is the contract for a corrected pass: bumping it re-runs
+// the backfill over an already processed cache, which is required whenever the
+// rotation mapping changes. Version 2 fixes the clockwise/counter-clockwise mix
+// up that left orientations 6 and 8 upside down.
+const backfillMarkerName = ".orientation-backfill.v2"
 
 // ImageFileLister lists indexed image files for the orientation backfill.
 type ImageFileLister interface {
@@ -93,7 +98,8 @@ func (b *RotationBackfill) Run(ctx context.Context) error {
 }
 
 // needsOrientationBackfill reports whether the file carries an EXIF orientation
-// that requires the thumbnail to be regenerated (3, 6 or 8).
+// that requires the thumbnail to be regenerated: every value that transforms the
+// stored pixels (3, 6, 8 and the mirrored 2, 4, 5, 7).
 func needsOrientationBackfill(path string) bool {
 	file, err := os.Open(path)
 	if err != nil {
@@ -102,7 +108,7 @@ func needsOrientationBackfill(path string) bool {
 	defer file.Close()
 
 	switch readExifOrientation(file) {
-	case 3, 6, 8:
+	case 2, 3, 4, 5, 6, 7, 8:
 		return true
 	default:
 		return false

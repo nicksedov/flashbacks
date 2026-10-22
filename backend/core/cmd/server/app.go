@@ -34,9 +34,12 @@ type App struct {
 	TagScanManager    *imaging.TagScanManager
 	EmbeddingBackfill *imaging.EmbeddingBackfillManager
 	ThumbnailService  thumbnail.ThumbnailProvider
+	RotationBackfill  *thumbnail.RotationBackfill
 	LoginLimiter      di.LoginLimiter
 	SessionCleanup    *auth.SessionCleanupJob
 	Registry          *registrybootstrap.Bootstrap
+
+	backfillCancel context.CancelFunc `wire:"-"`
 
 	// HTTP layer — injected by Wire via AuthSet providers.
 	AuthMiddleware *middleware.AuthMiddleware
@@ -114,6 +117,17 @@ func (app *App) Init() {
 		}
 	}
 
+	// Correct thumbnails cached before orientation-aware generation.
+	if app.RotationBackfill != nil {
+		ctx, cancel := context.WithCancel(context.Background())
+		app.backfillCancel = cancel
+		go func() {
+			if err := app.RotationBackfill.Run(ctx); err != nil && ctx.Err() == nil {
+				log.Printf("Orientation backfill failed: %v", err)
+			}
+		}()
+	}
+
 	// Read tag scan schedule from new TagScanSettings table
 	tagScanEnabled := true
 	tagScanStartHour := 22
@@ -181,6 +195,9 @@ func (app *App) Run() error {
 
 // Shutdown gracefully stops all background tasks and releases resources.
 func (app *App) Shutdown() {
+	if app.backfillCancel != nil {
+		app.backfillCancel()
+	}
 	if app.Server != nil {
 		app.Server.StopOCRHealthCheck()
 	}

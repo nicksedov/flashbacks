@@ -103,6 +103,18 @@ go test ./... -coverprofile=coverage.out
 | `OCR_SERVICE_URL` | OCR service URL | - |
 | `EXIF_SERVICE_URL` | EXIF service URL | - |
 
+## Thumbnail Cache
+
+Thumbnails are generated on demand and cached on disk (WebP by default). Before
+resizing, generation applies the EXIF `Orientation` rotation (`3`, `6`, `8`) read
+locally from the source file, so portrait or rotated photos appear upright.
+
+On startup the service runs a one-time orientation backfill: it scans indexed
+image files and regenerates cached thumbnails for photos whose orientation is `3`,
+`6` or `8`. Completion is recorded as `.orientation-backfill.v1` in the cache
+directory; delete that file to force another pass (for example after restoring a
+cache from a backup).
+
 ## API Documentation
 
 OpenAPI specification: [`docs/api-contracts/core.yaml`](../docs/api-contracts/core.yaml)

@@ -7,6 +7,7 @@ import (
 	"image"
 	"image/jpeg"
 	"image/png"
+	"io"
 	"log"
 	"os"
 	"path/filepath"
@@ -241,10 +242,17 @@ func (s *Service) generateThumbnail(filePath string) ([]byte, error) {
 	}
 	defer file.Close()
 
+	orientation := readExifOrientation(file)
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
+		return nil, fmt.Errorf("failed to rewind image %s: %w", filePath, err)
+	}
+
 	img, _, err := image.Decode(file)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode image %s: %w", filePath, err)
 	}
+
+	img = applyOrientation(img, orientation)
 
 	bounds := img.Bounds()
 	width := bounds.Dx()

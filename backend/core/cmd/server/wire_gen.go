@@ -96,6 +96,7 @@ func InitializeApp() (*App, error) {
 		SyncHistoryRepo:     syncHistoryRepository,
 	}
 	server := di.ProvideServer(serverDeps)
+	rotationBackfill := di.ProvideRotationBackfill(thumbnailProvider, imageFileRepository)
 	loginLimiter := di.ProvideLoginRateLimiter()
 	sessionConfig := di.ProvideSessionConfig(appConfig)
 	sessionRepository := di.ProvideSessionRepository(db, sessionConfig)
@@ -118,6 +119,7 @@ func InitializeApp() (*App, error) {
 		TagScanManager:    tagScanManager,
 		EmbeddingBackfill: embeddingBackfillManager,
 		ThumbnailService:  thumbnailProvider,
+		RotationBackfill:  rotationBackfill,
 		LoginLimiter:      loginLimiter,
 		SessionCleanup:    sessionCleanupJob,
 		Registry:          bootstrap,

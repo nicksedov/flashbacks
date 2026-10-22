@@ -680,3 +680,24 @@ scopes:
     smart-search.no-embeddings-hint:
       evidence:
         - vitest::webapp/src/components/tabs/SmartSearchTab.test.tsx::SmartSearchTab > shows the no-embeddings hint when no embeddings exist
+    thumbnails.orientation-6-rotated:
+      evidence:
+        - go::./internal/application/thumbnail::TestGenerateThumbnail_Orientation6SwapsDimensions
+    thumbnails.orientation-8-rotated:
+      evidence:
+        - go::./internal/application/thumbnail::TestGenerateThumbnail_Orientation8SwapsDimensions
+    thumbnails.orientation-3-rotated:
+      evidence:
+        - go::./internal/application/thumbnail::TestGenerateThumbnail_Orientation3Rotates180
+    thumbnails.orientation-1-unrotated:
+      evidence:
+        - go::./internal/application/thumbnail::TestGenerateThumbnail_Orientation1Unrotated
+    thumbnails.startup-backfill-rotated:
+      evidence:
+        - go::./internal/application/thumbnail::TestRotationBackfill_RegeneratesRotated
+    thumbnails.startup-backfill-idempotent:
+      evidence:
+        - go::./internal/application/thumbnail::TestRotationBackfill_Idempotent
+    thumbnails.startup-backfill-unrotated-skipped:
+      evidence:
+        - go::./internal/application/thumbnail::TestRotationBackfill_SkipsUnrotated

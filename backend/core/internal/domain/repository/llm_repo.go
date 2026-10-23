@@ -20,10 +20,6 @@ type LlmRepository interface {
 	ReplaceProviderModels(providerID uint, models []domain.LlmProviderModel) error
 	DeleteModelsByProviderID(providerID uint) error
 
-	// --- Tag Scan Settings ---
-	GetTagScanSettings() (*domain.TagScanSettings, error)
-	UpsertTagScanSettings(settings *domain.TagScanSettings) error
-
 	// --- LLM Instrument Settings ---
 	GetInstrumentByType(instrumentType domain.InstrumentType) (*domain.LlmInstrumentSettings, error)
 	GetAllInstruments() ([]domain.LlmInstrumentSettings, error)
@@ -122,31 +118,6 @@ func (r *gormLlmRepo) ReplaceProviderModels(providerID uint, models []domain.Llm
 
 func (r *gormLlmRepo) DeleteModelsByProviderID(providerID uint) error {
 	return r.db.Where("llm_provider_id = ?", providerID).Delete(&domain.LlmProviderModel{}).Error
-}
-
-// --- Tag Scan Settings ---
-
-func (r *gormLlmRepo) GetTagScanSettings() (*domain.TagScanSettings, error) {
-	var s domain.TagScanSettings
-	if err := r.db.First(&s).Error; err != nil {
-		return nil, err
-	}
-	return &s, nil
-}
-
-func (r *gormLlmRepo) UpsertTagScanSettings(settings *domain.TagScanSettings) error {
-	var existing domain.TagScanSettings
-	if err := r.db.First(&existing).Error; err == nil {
-		return r.db.Model(&existing).Updates(map[string]interface{}{
-			"enabled":         settings.Enabled,
-			"start_hour":      settings.StartHour,
-			"start_minute":    settings.StartMinute,
-			"end_hour":        settings.EndHour,
-			"end_minute":      settings.EndMinute,
-			"timezone_offset": settings.TimezoneOffset,
-		}).Error
-	}
-	return r.db.Create(settings).Error
 }
 
 // --- LLM Instrument Settings ---

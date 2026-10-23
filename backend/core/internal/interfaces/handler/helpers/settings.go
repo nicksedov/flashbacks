@@ -23,10 +23,6 @@ func (sl *SettingsLoader) AppSettings() domain.AppSettings {
 		return domain.AppSettings{
 			ID:                    1,
 			OcrConcurrentRequests: 4,
-			SyncDays:              "1,2,3,4,5",
-			DailySyncHour:         3,
-			DailySyncMinute:       30,
-			SyncTimezoneOffset:    0,
 		}
 	}
 	return settings
@@ -74,19 +70,14 @@ func (sl *SettingsLoader) AllLlmInstruments() []domain.LlmInstrumentSettings {
 	return rows
 }
 
-// TagScanSettings loads tag scan settings, returning defaults if not found.
-func (sl *SettingsLoader) TagScanSettings() domain.TagScanSettings {
-	var settings domain.TagScanSettings
-	if err := sl.db.First(&settings).Error; err != nil {
-		return domain.TagScanSettings{
-			ID:        1,
-			Enabled:   true,
-			Days:      "1,2,3,4,5",
-			StartHour: 22,
-			EndHour:   7,
-		}
+// Schedule loads the stored schedule of a job kind, returning its built-in
+// defaults when the kind has no row yet.
+func (sl *SettingsLoader) Schedule(kind domain.ScheduleKind) domain.Schedule {
+	var schedule domain.Schedule
+	if err := sl.db.Where("kind = ?", string(kind)).First(&schedule).Error; err != nil {
+		return domain.DefaultSchedule(kind)
 	}
-	return settings
+	return schedule
 }
 
 // EmbeddingSettings loads embedding settings, returning defaults if not found.

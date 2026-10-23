@@ -29,6 +29,7 @@ func newLlmTestServer(t *testing.T) (*Server, *gorm.DB, func()) {
 		llmRepo:        repository.NewLlmRepository(db),
 		imageFileRepo:  repository.NewImageFileRepository(db),
 		imageTagRepo:   repository.NewImageTagRepository(db),
+		scheduleRepo:   repository.NewScheduleRepository(db),
 	}
 	return svc, db, cleanup
 }
@@ -160,9 +161,9 @@ func TestUpdateLlmSettingsTagScanDaysPersisted(t *testing.T) {
 		t.Fatalf("PUT llm settings: expected 200, got %d: %s", w.Code, w.Body.String())
 	}
 
-	var stored domain.TagScanSettings
-	if err := db.First(&stored).Error; err != nil {
-		t.Fatalf("failed to load stored tag scan settings: %v", err)
+	var stored domain.Schedule
+	if err := db.Where("kind = ?", string(domain.ScheduleTagScan)).First(&stored).Error; err != nil {
+		t.Fatalf("failed to load stored tag scan schedule: %v", err)
 	}
 	if stored.Days != days {
 		t.Errorf("stored tag scan days = %q, want %q", stored.Days, days)
@@ -179,8 +180,8 @@ func TestGetLlmSettingsDefaultsTagScanWeekdays(t *testing.T) {
 	svc, db, cleanup := newLlmTestServer(t)
 	defer cleanup()
 
-	if err := db.Exec("DELETE FROM tag_scan_settings").Error; err != nil {
-		t.Fatalf("failed to clear tag scan settings: %v", err)
+	if err := db.Where("kind = ?", string(domain.ScheduleTagScan)).Delete(&domain.Schedule{}).Error; err != nil {
+		t.Fatalf("failed to clear the tag scan schedule: %v", err)
 	}
 
 	if got := getLlmSettings(t, svc).TagScan.Days; got != "1,2,3,4,5" {

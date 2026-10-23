@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/flashbacks/core/internal/application/imaging"
 	catalog "github.com/flashbacks/core/internal/application/llm"
 	"github.com/flashbacks/core/internal/domain"
 	"github.com/flashbacks/core/internal/infrastructure/llm"
@@ -46,16 +45,16 @@ func buildInstrumentDTO(instr domain.LlmInstrumentSettings) dto.LlmInstrumentDTO
 	}
 }
 
-// buildTagScanDTO builds a TagScanSettingsDTO from a domain TagScanSettings.
-func buildTagScanDTO(ts domain.TagScanSettings) dto.TagScanSettingsDTO {
+// buildTagScanDTO builds a TagScanSettingsDTO from the tag scan schedule.
+func buildTagScanDTO(schedule domain.Schedule) dto.TagScanSettingsDTO {
 	return dto.TagScanSettingsDTO{
-		Enabled:        ts.Enabled,
-		Days:           ts.Days,
-		StartHour:      ts.StartHour,
-		StartMinute:    ts.StartMinute,
-		EndHour:        ts.EndHour,
-		EndMinute:      ts.EndMinute,
-		TimezoneOffset: ts.TimezoneOffset,
+		Enabled:        schedule.Enabled,
+		Days:           schedule.Days,
+		StartHour:      schedule.StartHour,
+		StartMinute:    schedule.StartMinute,
+		EndHour:        schedule.EndHour,
+		EndMinute:      schedule.EndMinute,
+		TimezoneOffset: schedule.TimezoneOffset,
 	}
 }
 
@@ -102,7 +101,7 @@ func domainModelsToDTOs(models []domain.LlmProviderModel) []dto.LlmModelDTO {
 func (s *Server) handleGetLlmSettings(c *gin.Context) {
 	providers := s.settingsLoader.AllLlmProviders()
 	instruments := s.settingsLoader.AllLlmInstruments()
-	tagScan := s.settingsLoader.TagScanSettings()
+	tagScan := s.settingsLoader.Schedule(domain.ScheduleTagScan)
 	embedding := s.settingsLoader.EmbeddingSettings()
 
 	cacheMap := make(map[string][]dto.LlmModelDTO)
@@ -188,39 +187,36 @@ func (s *Server) handleUpdateLlmSettings(c *gin.Context) {
 		req.TagScanTimezoneOffset != nil
 
 	if tagScanDirty {
-		var ts domain.TagScanSettings
-		if err := s.db.First(&ts).Error; err != nil {
-			ts = domain.TagScanSettings{ID: 1}
-		}
+		schedule := s.settingsLoader.Schedule(domain.ScheduleTagScan)
 		if req.TagScanEnabled != nil {
-			ts.Enabled = *req.TagScanEnabled
+			schedule.Enabled = *req.TagScanEnabled
 		}
 		if req.TagScanDays != nil {
-			ts.Days = *req.TagScanDays
+			schedule.Days = *req.TagScanDays
 		}
 		if req.TagScanStartHour != nil {
-			ts.StartHour = *req.TagScanStartHour
+			schedule.StartHour = *req.TagScanStartHour
 		}
 		if req.TagScanStartMinute != nil {
-			ts.StartMinute = *req.TagScanStartMinute
+			schedule.StartMinute = *req.TagScanStartMinute
 		}
 		if req.TagScanEndHour != nil {
-			ts.EndHour = *req.TagScanEndHour
+			schedule.EndHour = *req.TagScanEndHour
 		}
 		if req.TagScanEndMinute != nil {
-			ts.EndMinute = *req.TagScanEndMinute
+			schedule.EndMinute = *req.TagScanEndMinute
 		}
 		if req.TagScanTimezoneOffset != nil {
-			ts.TimezoneOffset = *req.TagScanTimezoneOffset
+			schedule.TimezoneOffset = *req.TagScanTimezoneOffset
 		}
-		if err := s.db.Save(&ts).Error; err != nil {
+		if err := s.scheduleRepo.Upsert(&schedule); err != nil {
 			c.JSON(http.StatusInternalServerError, i18n.ErrorResponse(i18n.MsgLlmOcrSettingsSaveFailed))
 			return
 		}
 
 		// Update tag scan manager schedule
 		if s.tagScanManager != nil && s.tagScanManager.IsRunning() {
-			s.tagScanManager.UpdateSchedule(ts.Enabled, imaging.ParseSyncDays(ts.Days), ts.StartHour, ts.StartMinute, ts.EndHour, ts.EndMinute, ts.TimezoneOffset)
+			s.tagScanManager.UpdateSchedule(schedule)
 		}
 	}
 

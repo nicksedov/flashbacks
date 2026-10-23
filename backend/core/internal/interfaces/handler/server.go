@@ -64,6 +64,7 @@ type ServerDeps struct {
 	AppSettingsRepo   repository.AppSettingsRepository
 	UserSettingsRepo  repository.UserSettingsRepository
 	SyncHistoryRepo   repository.SyncHistoryRepository
+	ScheduleRepo      repository.ScheduleRepository
 }
 
 // Server holds the application state
@@ -104,6 +105,7 @@ type Server struct {
 	appSettingsRepo   repository.AppSettingsRepository
 	userSettingsRepo  repository.UserSettingsRepository
 	syncHistoryRepo   repository.SyncHistoryRepository
+	scheduleRepo      repository.ScheduleRepository
 }
 
 // NewServer creates a new server instance from a dependency struct.
@@ -144,6 +146,7 @@ func NewServer(deps ServerDeps) *Server {
 		appSettingsRepo:     deps.AppSettingsRepo,
 		userSettingsRepo:    deps.UserSettingsRepo,
 		syncHistoryRepo:     deps.SyncHistoryRepo,
+		scheduleRepo:        deps.ScheduleRepo,
 	}
 }
 

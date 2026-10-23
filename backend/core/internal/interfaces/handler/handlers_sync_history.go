@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/flashbacks/core/internal/domain"
 	"github.com/flashbacks/core/internal/interfaces/dto"
 	"github.com/flashbacks/core/internal/interfaces/handler/helpers"
 	"github.com/flashbacks/core/internal/interfaces/i18n"
@@ -44,14 +45,14 @@ func (s *Server) handleGetSyncHistory(c *gin.Context) {
 		return
 	}
 
-	// Load settings for timezone formatting
-	settings := s.settingsLoader.AppSettings()
+	// Load the sync schedule for timezone formatting
+	syncSchedule := s.settingsLoader.Schedule(domain.ScheduleGallerySync)
 
 	dtos := make([]dto.SyncHistoryEntry, len(entries))
 	for i, e := range entries {
 		dtos[i] = dto.SyncHistoryEntry{
 			ID:                  e.ID,
-			CreatedAt:           helpers.FormatTimeInUserTZ(&e.CreatedAt, settings.SyncTimezoneOffset),
+			CreatedAt:           helpers.FormatTimeInUserTZ(&e.CreatedAt, syncSchedule.TimezoneOffset),
 			NewFiles:            e.NewFiles,
 			UpdatedFiles:        e.UpdatedFiles,
 			DeletedFiles:        e.DeletedFiles,

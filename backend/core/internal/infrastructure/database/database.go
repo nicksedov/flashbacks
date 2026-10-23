@@ -48,7 +48,7 @@ func InitDatabase(cfg *config.AppConfig) (*gorm.DB, error) {
 		&domain.OcrBoundingBox{},
 		&domain.LlmProvider{},
 		&domain.LlmInstrumentSettings{},
-		&domain.TagScanSettings{},
+		&domain.Schedule{},
 		&domain.EmbeddingSettings{},
 		&domain.OcrLlmRecognition{},
 		&domain.ImageTag{},
@@ -115,13 +115,6 @@ func InitDatabase(cfg *config.AppConfig) (*gorm.DB, error) {
 			{Type: domain.InstrumentImageEdit, ProviderID: chatProvider.ID, Model: "minicpm-v"},
 		})
 
-		// Seed default tag scan settings
-		var tagScanCount int64
-		db.Model(&domain.TagScanSettings{}).Count(&tagScanCount)
-		if tagScanCount == 0 {
-			db.Create(&domain.TagScanSettings{ID: 1, Enabled: true, Days: "1,2,3,4,5", StartHour: 22, StartMinute: 0, EndHour: 7, EndMinute: 0})
-		}
-
 		// Seed default embedding settings
 		var embCount int64
 		db.Model(&domain.EmbeddingSettings{}).Count(&embCount)
@@ -148,5 +141,105 @@ func InitDatabase(cfg *config.AppConfig) (*gorm.DB, error) {
 		}
 	}
 
+	// Seed the unified schedules table: create the row of every scheduled job
+	// kind from the legacy schedule columns when it is missing. Idempotent, so a
+	// restart never overwrites an edited schedule.
+	if err := seedSchedules(db); err != nil {
+		log.Printf("warning: failed to seed job schedules: %v", err)
+	}
+
 	return db, nil
+}
+
+// legacyGallerySyncSchedule mirrors the schedule columns the gallery sync used to
+// keep on app_settings. It exists only to backfill the schedules table.
+type legacyGallerySyncSchedule struct {
+	SyncDays           string `gorm:"column:sync_days"`
+	DailySyncHour      int    `gorm:"column:daily_sync_hour"`
+	DailySyncMinute    int    `gorm:"column:daily_sync_minute"`
+	SyncTimezoneOffset int    `gorm:"column:sync_timezone_offset"`
+}
+
+func (legacyGallerySyncSchedule) TableName() string { return "app_settings" }
+
+// legacyTagScanSchedule mirrors the schedule columns the tag scan used to keep on
+// tag_scan_settings. It exists only to backfill the schedules table.
+type legacyTagScanSchedule struct {
+	Enabled        bool   `gorm:"column:enabled"`
+	Days           string `gorm:"column:days"`
+	StartHour      int    `gorm:"column:start_hour"`
+	StartMinute    int    `gorm:"column:start_minute"`
+	EndHour        int    `gorm:"column:end_hour"`
+	EndMinute      int    `gorm:"column:end_minute"`
+	TimezoneOffset int    `gorm:"column:timezone_offset"`
+}
+
+func (legacyTagScanSchedule) TableName() string { return "tag_scan_settings" }
+
+// seedSchedules creates the missing schedule row of every job kind, backfilling
+// from the legacy columns when they are still present.
+func seedSchedules(db *gorm.DB) error {
+	kinds := []domain.ScheduleKind{domain.ScheduleGallerySync, domain.ScheduleTagScan}
+
+	for _, kind := range kinds {
+		var count int64
+		if err := db.Model(&domain.Schedule{}).Where("kind = ?", string(kind)).Count(&count).Error; err != nil {
+			return err
+		}
+		if count > 0 {
+			continue
+		}
+
+		schedule := domain.DefaultSchedule(kind)
+		switch kind {
+		case domain.ScheduleGallerySync:
+			backfillGallerySyncSchedule(db, &schedule)
+		case domain.ScheduleTagScan:
+			backfillTagScanSchedule(db, &schedule)
+		}
+
+		if err := db.Create(&schedule).Error; err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// backfillGallerySyncSchedule copies the legacy app_settings schedule columns
+// into schedule when they still exist.
+func backfillGallerySyncSchedule(db *gorm.DB, schedule *domain.Schedule) {
+	if !db.Migrator().HasTable("app_settings") || !db.Migrator().HasColumn(&legacyGallerySyncSchedule{}, "sync_days") {
+		return
+	}
+	var legacy legacyGallerySyncSchedule
+	if err := db.First(&legacy).Error; err != nil {
+		return
+	}
+	schedule.Days = legacy.SyncDays
+	if legacy.DailySyncHour > 0 || legacy.DailySyncMinute > 0 {
+		schedule.StartHour = legacy.DailySyncHour
+		schedule.StartMinute = legacy.DailySyncMinute
+	}
+	schedule.TimezoneOffset = legacy.SyncTimezoneOffset
+}
+
+// backfillTagScanSchedule copies the legacy tag_scan_settings schedule columns
+// into schedule when they still exist.
+func backfillTagScanSchedule(db *gorm.DB, schedule *domain.Schedule) {
+	if !db.Migrator().HasTable("tag_scan_settings") || !db.Migrator().HasColumn(&legacyTagScanSchedule{}, "start_hour") {
+		return
+	}
+	var legacy legacyTagScanSchedule
+	if err := db.First(&legacy).Error; err != nil {
+		return
+	}
+	schedule.Enabled = legacy.Enabled
+	if legacy.Days != "" {
+		schedule.Days = legacy.Days
+	}
+	schedule.StartHour = legacy.StartHour
+	schedule.StartMinute = legacy.StartMinute
+	schedule.EndHour = legacy.EndHour
+	schedule.EndMinute = legacy.EndMinute
+	schedule.TimezoneOffset = legacy.TimezoneOffset
 }

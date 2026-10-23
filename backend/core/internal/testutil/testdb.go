@@ -50,7 +50,7 @@ func NewTestDB(t *testing.T) (*gorm.DB, func()) {
 		&domain.OcrBoundingBox{},
 		&domain.LlmProvider{},
 		&domain.LlmInstrumentSettings{},
-		&domain.TagScanSettings{},
+		&domain.Schedule{},
 		&domain.EmbeddingSettings{},
 		&domain.OcrLlmRecognition{},
 		&domain.ImageTag{},
@@ -85,8 +85,11 @@ func NewTestDB(t *testing.T) (*gorm.DB, func()) {
 		{Type: domain.InstrumentImageEdit, ProviderID: p2.ID, Model: "gpt-4-vision"},
 		{Type: domain.InstrumentOCR, ProviderID: p1.ID, Model: "minicpm-v"},
 	})
-	db.Create(&domain.TagScanSettings{ID: 1, Enabled: true, StartHour: 22, EndHour: 7})
 	db.Create(&domain.EmbeddingSettings{ID: 1, Dimension: 1024, BatchSize: 50})
+	syncSchedule := domain.DefaultSchedule(domain.ScheduleGallerySync)
+	tagScanSchedule := domain.DefaultSchedule(domain.ScheduleTagScan)
+	db.Create(&syncSchedule)
+	db.Create(&tagScanSchedule)
 
 	cleanup := func() {
 		sqlDB, _ := db.DB()

@@ -3,6 +3,7 @@ package handler
 import (
 	"net/http"
 
+	"github.com/flashbacks/core/internal/domain"
 	"github.com/flashbacks/core/internal/interfaces/dto"
 	"github.com/flashbacks/core/internal/interfaces/handler/helpers"
 	"github.com/flashbacks/core/internal/interfaces/i18n"
@@ -45,12 +46,12 @@ func (s *Server) handleGetSyncStatus(c *gin.Context) {
 		return
 	}
 	status := s.backgroundSync.GetStatus()
-	settings := s.settingsLoader.AppSettings()
+	syncSchedule := s.settingsLoader.Schedule(domain.ScheduleGallerySync)
 	c.JSON(http.StatusOK, dto.SyncStatusResponse{
 		Running:            status.Running,
 		SyncInProgress:     status.SyncInProgress,
-		NextRunAt:          helpers.FormatTimeInUserTZ(status.NextRunAt, settings.SyncTimezoneOffset),
-		LastSyncAt:         helpers.FormatTimeInUserTZ(status.LastSyncAt, settings.SyncTimezoneOffset),
+		NextRunAt:          helpers.FormatTimeInUserTZ(status.NextRunAt, syncSchedule.TimezoneOffset),
+		LastSyncAt:         helpers.FormatTimeInUserTZ(status.LastSyncAt, syncSchedule.TimezoneOffset),
 		LastSyncNew:        status.LastSyncNew,
 		LastSyncUpdated:    status.LastSyncUpdated,
 		LastSyncDeleted:    status.LastSyncDeleted,

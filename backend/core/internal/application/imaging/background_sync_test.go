@@ -293,37 +293,3 @@ func TestBackgroundSyncManager_CleanupMissingFiles_CascadeDeletesChildren(t *tes
 	assert.Equal(t, int64(0), tagCount, "ImageTag should be deleted")
 	assert.Equal(t, int64(0), embCount, "TagEmbedding should be deleted")
 }
-
-func TestParseSyncDays(t *testing.T) {
-	tests := []struct {
-		input    string
-		expected []time.Weekday
-	}{
-		{"", nil},
-		{"0", []time.Weekday{time.Sunday}},
-		{"1,2,3,4,5", []time.Weekday{time.Monday, time.Tuesday, time.Wednesday, time.Thursday, time.Friday}},
-		{"0,6", []time.Weekday{time.Sunday, time.Saturday}},
-	}
-
-	for _, tt := range tests {
-		result := ParseSyncDays(tt.input)
-		assert.Equal(t, tt.expected, result, "input: %q", tt.input)
-	}
-}
-
-func TestFormatSyncDays(t *testing.T) {
-	tests := []struct {
-		input    []time.Weekday
-		expected string
-	}{
-		{nil, ""},
-		{[]time.Weekday{}, ""},
-		{[]time.Weekday{time.Monday, time.Friday}, "1,5"},
-		{[]time.Weekday{time.Sunday, time.Saturday}, "0,6"},
-	}
-
-	for _, tt := range tests {
-		result := FormatSyncDays(tt.input)
-		assert.Equal(t, tt.expected, result)
-	}
-}

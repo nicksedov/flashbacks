@@ -572,15 +572,3 @@ func (bsm *BackgroundSyncManager) InvalidateTagsAndEmbeddings(imageFileID uint) 
 		log.Printf("Background sync: invalidated tags and embeddings for image %d", imageFileID)
 	}
 }
-
-// ParseSyncDays converts a comma-separated string of weekday numbers to a slice
-// of time.Weekday. Deprecated: use domain.ParseWeekdays.
-func ParseSyncDays(s string) []time.Weekday {
-	return domain.ParseWeekdays(s)
-}
-
-// FormatSyncDays converts a slice of time.Weekday to a comma-separated string.
-// Deprecated: use domain.FormatWeekdays.
-func FormatSyncDays(days []time.Weekday) string {
-	return domain.FormatWeekdays(days)
-}

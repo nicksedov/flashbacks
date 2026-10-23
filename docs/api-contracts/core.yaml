@@ -3102,15 +3102,31 @@ components:
       properties:
         running:
           type: boolean
+          description: Whether the tag scan background manager is started.
         paused:
           type: boolean
-        processedCount:
-          type: integer
-        totalCount:
-          type: integer
-        currentFile:
+          description: Whether the administrator or a coordinating AI task paused the scan.
+        enabled:
+          type: boolean
+          description: Whether automatic tagging is enabled in the settings.
+        schedule:
           type: string
-        eta:
+          description: Human-readable scan window label, e.g. "23:00 - 07:00".
+        windowOpen:
+          type: boolean
+          description: >-
+            Whether the current local time falls on a selected weekday and inside
+            the configured window. When false the job is waiting for the next
+            window instead of scanning.
+        scanned:
+          type: integer
+        remaining:
+          type: integer
+        total:
+          type: integer
+        currentImage:
+          type: string
+        lastError:
           type: string
 
     EmbeddingStatusResponse:

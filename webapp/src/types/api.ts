@@ -2201,12 +2201,21 @@ export interface components {
             error?: string | null;
         };
         TagScanStatusResponse: {
+            /** @description Whether the tag scan background manager is started. */
             running?: boolean;
+            /** @description Whether the administrator or a coordinating AI task paused the scan. */
             paused?: boolean;
-            processedCount?: number;
-            totalCount?: number;
-            currentFile?: string;
-            eta?: string;
+            /** @description Whether automatic tagging is enabled in the settings. */
+            enabled?: boolean;
+            /** @description Human-readable scan window label, e.g. "23:00 - 07:00". */
+            schedule?: string;
+            /** @description Whether the current local time falls on a selected weekday and inside the configured window. When false the job is waiting for the next window instead of scanning. */
+            windowOpen?: boolean;
+            scanned?: number;
+            remaining?: number;
+            total?: number;
+            currentImage?: string;
+            lastError?: string;
         };
         EmbeddingStatusResponse: {
             running?: boolean;

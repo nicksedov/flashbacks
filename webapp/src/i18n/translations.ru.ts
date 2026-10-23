@@ -620,6 +620,7 @@ export const translationsRu = {
   "tagScan.status": "Статус",
   "tagScan.running": "Работает",
   "tagScan.paused": "Приостановлено",
+  "tagScan.waiting": "Ожидает",
   "tagScan.stopped": "Остановлено",
   "tagScan.currentImage": "Текущее изображение",
   "tagScan.lastError": "Последняя ошибка",

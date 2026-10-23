@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { AdminAnalysisTab } from "./AdminAnalysisTab"
 import { hasClass } from "@/test/dom"
-import type { LlmModelDTO, LlmSettingsResponse } from "@/types"
+import type { LlmModelDTO, LlmSettingsResponse, TagScanStatusResponse } from "@/types"
 
 // Controls which locale the mocked translator resolves.
 const languageState = vi.hoisted(() => ({ language: "en" as "en" | "ru" }))
@@ -20,7 +20,7 @@ const endpoints = vi.hoisted(() => ({
   stopOcrClassification: vi.fn(),
   fetchSettings: vi.fn(() => Promise.resolve({ ocrConcurrentRequests: 4 })),
   fetchExifServiceStatus: vi.fn(() => Promise.resolve({ enabled: false, health: "unknown" })),
-  fetchTagScanStatus: vi.fn(() => Promise.resolve(null)),
+  fetchTagScanStatus: vi.fn((): Promise<TagScanStatusResponse | null> => Promise.resolve(null)),
   pauseTagScan: vi.fn(),
   resumeTagScan: vi.fn(),
   probeEmbeddingDimension: vi.fn(() => Promise.resolve({ dimension: 1024 })),
@@ -390,5 +390,80 @@ describe("AdminAnalysisTab tagging schedule", () => {
         expect.objectContaining({ tagScanDays: "1,2,3,4" })
       )
     )
+  })
+
+  // tag-scan-schedule.waiting-outside-window
+  it("shows the waiting status outside the scheduling window", async () => {
+    endpoints.fetchLlmSettings.mockResolvedValue({
+      ...settings,
+      tagScan: { ...settings.tagScan, enabled: true },
+    })
+    endpoints.fetchTagScanStatus.mockResolvedValue({
+      running: true,
+      paused: false,
+      enabled: true,
+      schedule: "23:00 - 07:00",
+      windowOpen: false,
+      scanned: 12,
+      remaining: 40,
+      total: 52,
+    })
+
+    render(<AdminAnalysisTab />)
+
+    const card = await taggingCard()
+    expect(await within(card).findByText("Waiting")).not.toBeNull()
+    expect(within(card).queryByText("Running")).toBeNull()
+    // The pause action stays visible but cannot be used until scanning starts.
+    const pauseButton = within(card).getByRole("button", { name: "Pause" })
+    expect((pauseButton as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  // tag-scan-schedule.running-inside-window
+  it("shows the running status inside the scheduling window", async () => {
+    endpoints.fetchLlmSettings.mockResolvedValue({
+      ...settings,
+      tagScan: { ...settings.tagScan, enabled: true },
+    })
+    endpoints.fetchTagScanStatus.mockResolvedValue({
+      running: true,
+      paused: false,
+      enabled: true,
+      schedule: "23:00 - 07:00",
+      windowOpen: true,
+      scanned: 12,
+      remaining: 40,
+      total: 52,
+    })
+
+    render(<AdminAnalysisTab />)
+
+    const card = await taggingCard()
+    expect(await within(card).findByText("Running")).not.toBeNull()
+    const pauseButton = within(card).getByRole("button", { name: "Pause" })
+    expect((pauseButton as HTMLButtonElement).disabled).toBe(false)
+  })
+
+  // tag-scan-schedule.paused-wins-over-window
+  it("keeps the paused status when paused outside the scheduling window", async () => {
+    endpoints.fetchLlmSettings.mockResolvedValue({
+      ...settings,
+      tagScan: { ...settings.tagScan, enabled: true },
+    })
+    endpoints.fetchTagScanStatus.mockResolvedValue({
+      running: true,
+      paused: true,
+      enabled: true,
+      schedule: "23:00 - 07:00",
+      windowOpen: false,
+      scanned: 12,
+      remaining: 40,
+      total: 52,
+    })
+
+    render(<AdminAnalysisTab />)
+
+    const card = await taggingCard()
+    expect(await within(card).findByText("Paused")).not.toBeNull()
   })
 })

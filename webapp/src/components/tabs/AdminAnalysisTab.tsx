@@ -28,8 +28,11 @@ import {
 } from "@/api/endpoints"
 import { Shield, Loader2, Zap, Wand2, Play, Square, RefreshCw, Database } from "lucide-react"
 import { useTranslation } from "@/i18n"
+import type { TranslationKey } from "@/i18n"
 import { filterModelsForInstrument } from "@/lib/llm-model-filter"
 import { daysToString, parseDaysString } from "@/lib/schedule"
+import { deriveTagScanState } from "@/lib/tag-scan-status"
+import type { TagScanState } from "@/lib/tag-scan-status"
 import type {
   OCRStatus,
   OcrClassificationStatusResponse,
@@ -75,6 +78,35 @@ const EMPTY_SETTINGS: LlmSettingsResponse = {
   tagScan: { enabled: false, days: "1,2,3,4,5", startHour: 23, startMinute: 0, endHour: 7, endMinute: 0, timezoneOffset: 0 },
   embedding: { dimension: 1024, batchSize: 50 },
   providers: [],
+}
+
+const TAG_SCAN_STATE_LABELS: Record<TagScanState, TranslationKey> = {
+  running: "tagScan.running",
+  paused: "tagScan.paused",
+  waiting: "tagScan.waiting",
+  stopped: "tagScan.stopped",
+}
+
+const TAG_SCAN_STATE_CLASSES: Record<TagScanState, string> = {
+  running: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
+  paused: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200",
+  waiting: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
+  stopped: "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200",
+}
+
+/** Status badge of the automatic image tagging job. */
+export function TagScanStatusBadge({ status }: { status: TagScanStatusResponse }) {
+  const { t } = useTranslation()
+  const state = deriveTagScanState(status)
+  return (
+    <span
+      data-slot="tag-scan-status-badge"
+      data-state={state}
+      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${TAG_SCAN_STATE_CLASSES[state]}`}
+    >
+      {t(TAG_SCAN_STATE_LABELS[state])}
+    </span>
+  )
 }
 
 export function AdminAnalysisTab() {
@@ -451,6 +483,8 @@ export function AdminAnalysisTab() {
     )
   }
 
+  const tagState = tagScanStatus ? deriveTagScanState(tagScanStatus) : null
+
   return (
     <div className="space-y-6">
       {/* OCR Document Search */}
@@ -673,19 +707,16 @@ export function AdminAnalysisTab() {
                   <Label>{t("tagScan.status")}</Label>
                   <div className="flex items-center gap-4 rounded-lg bg-muted p-3">
                     <div className="flex items-center gap-2">
-                      <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                        tagScanStatus.running && !tagScanStatus.paused ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200" :
-                        tagScanStatus.paused ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200" :
-                        "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200"}`}>
-                        {tagScanStatus.running && !tagScanStatus.paused ? t("tagScan.running") : tagScanStatus.paused ? t("tagScan.paused") : t("tagScan.stopped")}
-                      </span>
+                      <TagScanStatusBadge status={tagScanStatus} />
                     </div>
                     <div className="flex-1 text-sm text-muted-foreground">{tagScanStatus.scanned} {t("tagScan.of")} {tagScanStatus.total} {t("tagScan.images")}</div>
                     <div className="flex gap-2">
-                      {tagScanStatus.running && !tagScanStatus.paused ? (
-                        <Button variant="outline" size="sm" onClick={handlePauseTagScan} disabled={isTagScanPausing}><Square className="mr-1.5 h-3.5 w-3.5" />{isTagScanPausing ? t("common.saving") : t("tagScan.pause")}</Button>
-                      ) : (
+                      {tagState === "paused" ? (
                         <Button variant="outline" size="sm" onClick={handleResumeTagScan} disabled={isTagScanPausing || !tagScanStatus.running}><Play className="mr-1.5 h-3.5 w-3.5" />{isTagScanPausing ? t("common.saving") : t("tagScan.resume")}</Button>
+                      ) : (
+                        // Pause stays visible in every non-paused state and only
+                        // becomes actionable while the job is actually scanning.
+                        <Button variant="outline" size="sm" onClick={handlePauseTagScan} disabled={isTagScanPausing || tagState !== "running"}><Square className="mr-1.5 h-3.5 w-3.5" />{isTagScanPausing ? t("common.saving") : t("tagScan.pause")}</Button>
                       )}
                     </div>
                   </div>

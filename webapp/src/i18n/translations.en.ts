@@ -710,6 +710,7 @@ export const translationsEn = {
   "tagScan.status": "Status",
   "tagScan.running": "Running",
   "tagScan.paused": "Paused",
+  "tagScan.waiting": "Waiting",
   "tagScan.stopped": "Stopped",
   "tagScan.currentImage": "Current Image",
   "tagScan.lastError": "Last Error",

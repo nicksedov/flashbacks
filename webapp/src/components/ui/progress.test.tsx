@@ -29,6 +29,7 @@ const baseTag: TagScanStatusResponse = {
   paused: false,
   enabled: true,
   schedule: "23:00 - 07:00",
+  windowOpen: true,
   scanned: 34,
   remaining: 5699,
   total: 5733,

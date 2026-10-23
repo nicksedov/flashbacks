@@ -652,6 +652,9 @@ export interface TagScanStatusResponse {
   paused: boolean
   enabled: boolean
   schedule: string
+  // windowOpen reports whether the current local time falls inside a selected
+  // weekday and the configured tagging window; false means the job is waiting.
+  windowOpen: boolean
   scanned: number
   remaining: number
   total: number

@@ -521,13 +521,20 @@ export function fetchLlmRecognition(path: string): Promise<LlmOcrDataResponse> {
   return apiGet<LlmOcrDataResponse>("/api/llm/recognition", { path })
 }
 
-export function fetchLlmModels(provider?: string, force?: boolean): Promise<LlmModelsResponse> {
+/**
+ * Fetches the stored model catalog of a provider.
+ *
+ * The catalog is re-collected on the backend only when it is missing, older than
+ * the configured TTL, or `refresh` is set. Callers must not force a refresh just
+ * to read the list.
+ */
+export function fetchLlmModels(provider?: string, refresh?: boolean): Promise<LlmModelsResponse> {
   const params: Record<string, string> = {}
   if (provider) {
     params.provider = provider
   }
-  if (force) {
-    params.force = "true"
+  if (refresh) {
+    params.refresh = "true"
   }
   return apiGet<LlmModelsResponse>("/api/llm/models", params)
 }

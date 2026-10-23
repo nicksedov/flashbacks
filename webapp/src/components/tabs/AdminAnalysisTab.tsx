@@ -87,6 +87,8 @@ export function AdminAnalysisTab() {
 
   // Model cache per provider alias
   const [modelCache, setModelCache] = useState<Record<string, LlmModelDTO[]>>({})
+  // Provider aliases whose last catalog refresh failed (backend reported `stale`)
+  const [staleCatalogAliases, setStaleCatalogAliases] = useState<Set<string>>(new Set())
   const [loadingModelsAlias, setLoadingModelsAlias] = useState<string | null>(null)
   // Track which instrument has manual model input mode
   const [manualModelInputs, setManualModelInputs] = useState<Set<string>>(new Set())
@@ -139,14 +141,24 @@ export function AdminAnalysisTab() {
     catch { setLlmSettings(EMPTY_SETTINGS) } finally { setIsLlmLoading(false) }
   }, [])
 
-  // Load models for a provider
-  const loadModels = useCallback(async (alias: string, force = false) => {
+  // Load the provider catalog. Reading the stored catalog is the default; only
+  // the refresh action asks the backend to re-collect it.
+  const loadModels = useCallback(async (alias: string, refresh = false) => {
     if (!alias) return null
-    if (!force && modelCache[alias]) return modelCache[alias]
+    if (!refresh && modelCache[alias]) return modelCache[alias]
     setLoadingModelsAlias(alias)
     try {
-      const r = await fetchLlmModels(alias, force)
-      if (r.success && r.models.length > 0) { setModelCache(p => ({ ...p, [alias]: r.models })); return r.models }
+      const r = await fetchLlmModels(alias, refresh)
+      if (r.success && r.models.length > 0) {
+        setModelCache(p => ({ ...p, [alias]: r.models }))
+        setStaleCatalogAliases(prev => {
+          const next = new Set(prev)
+          if (r.stale) next.add(alias)
+          else next.delete(alias)
+          return next
+        })
+        return r.models
+      }
       return null
     } catch { return null } finally { setLoadingModelsAlias(null) }
   }, [modelCache])
@@ -269,7 +281,28 @@ export function AdminAnalysisTab() {
     const init = async () => {
       try { setIsOcrLoading(true); const r = await fetchOCRStatus(); setOcrStatus(r.status) }
       catch { setOcrStatus(null) } finally { setIsOcrLoading(false) }
-      try { setIsLlmLoading(true); const s = await fetchLlmSettings(); setLlmSettings(s); setTagScanEnabled(s.tagScan?.enabled ?? false); setTagScanStartHour(s.tagScan?.startHour ?? 23); setTagScanStartMinute(s.tagScan?.startMinute ?? 0); setTagScanEndHour(s.tagScan?.endHour ?? 7); setTagScanEndMinute(s.tagScan?.endMinute ?? 0); const embInstr = s.instruments.find(i => i.type === "embedding"); if (embInstr) { setEmbeddingDimension(s.embedding?.dimension || 1024); setEmbeddingBatchSize(s.embedding?.batchSize || 50); if (embInstr.providerAlias && embInstr.model) probeDimension(embInstr.providerAlias, embInstr.model) } }
+      try {
+        setIsLlmLoading(true)
+        const s = await fetchLlmSettings()
+        setLlmSettings(s)
+        setTagScanEnabled(s.tagScan?.enabled ?? false)
+        setTagScanStartHour(s.tagScan?.startHour ?? 23)
+        setTagScanStartMinute(s.tagScan?.startMinute ?? 0)
+        setTagScanEndHour(s.tagScan?.endHour ?? 7)
+        setTagScanEndMinute(s.tagScan?.endMinute ?? 0)
+        const embInstr = s.instruments.find(i => i.type === "embedding")
+        if (embInstr) {
+          setEmbeddingDimension(s.embedding?.dimension || 1024)
+          setEmbeddingBatchSize(s.embedding?.batchSize || 50)
+          if (embInstr.providerAlias && embInstr.model) probeDimension(embInstr.providerAlias, embInstr.model)
+        }
+        // Populate every instrument dropdown from the stored provider catalog.
+        // No refresh is forced here: the backend re-collects it on its own TTL.
+        const aliases = Array.from(new Set(
+          s.instruments.map(i => i.providerAlias).filter((a): a is string => Boolean(a))
+        ))
+        aliases.forEach(alias => { void loadModels(alias, false) })
+      }
       catch { setLlmSettings(EMPTY_SETTINGS) }
       finally { isInitialLoad.current = false; setIsLlmLoading(false) }
       loadExifStatus()
@@ -322,7 +355,7 @@ export function AdminAnalysisTab() {
                   value={alias}
                   onValueChange={(v) => {
                     const provider = llmSettings.providers.find(p => p.alias === v)
-                    if (provider) saveInstrument(type, "providerId", provider.id)
+                    if (provider) { saveInstrument(type, "providerId", provider.id); void loadModels(v, false) }
                   }}
                 >
                   <SelectTrigger>
@@ -375,6 +408,12 @@ export function AdminAnalysisTab() {
                   </div>
                 )}
               </div>
+
+              {staleCatalogAliases.has(alias) && (
+                <p role="status" className="text-xs text-amber-600 dark:text-amber-400">
+                  {t("llm_ocr.catalogStale")}
+                </p>
+              )}
 
               {!instrument && (
                 <p className="text-sm text-muted-foreground text-center py-2">
@@ -511,7 +550,7 @@ export function AdminAnalysisTab() {
                     <>
                       <div className="space-y-2">
                         <Label>{t("llm_ocr.provider")}</Label>
-                        <Select value={alias} onValueChange={v => { const p = llmSettings.providers.find(pp => pp.alias === v); if (p) saveInstrument("embedding", "providerId", p.id) }}>
+                        <Select value={alias} onValueChange={v => { const p = llmSettings.providers.find(pp => pp.alias === v); if (p) { saveInstrument("embedding", "providerId", p.id); void loadModels(v, false) } }}>
                           <SelectTrigger><SelectValue placeholder={t("llm_providers.selectProvider")} /></SelectTrigger>
                           <SelectContent>{llmSettings.providers.map(p => <SelectItem key={p.alias} value={p.alias}>{p.alias} ({getProviderLabel(p.name)})</SelectItem>)}</SelectContent>
                         </Select>
@@ -541,6 +580,9 @@ export function AdminAnalysisTab() {
                           </div>
                         )}
                       </div>
+                      {staleCatalogAliases.has(alias) && (
+                        <p role="status" className="text-xs text-amber-600 dark:text-amber-400">{t("llm_ocr.catalogStale")}</p>
+                      )}
                     </>
                   )
                 })()}

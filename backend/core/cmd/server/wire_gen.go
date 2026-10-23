@@ -35,13 +35,15 @@ func InitializeApp() (*App, error) {
 	float64_2 := di.ProvideMaxMegapixels(appConfig)
 	tagScanManager := di.ProvideTagScanManager(db, llmOcrService, float64_2)
 	embeddingBackfillManager := di.ProvideEmbeddingBackfillManager(db)
+	llmCatalogRepository := di.ProvideLlmCatalogRepo(db)
+	service := di.ProvideLlmCatalogService(llmCatalogRepository, appConfig)
 	thumbnailBatch := di.ProvideThumbnailBatch(thumbnailProvider)
 	clusterStorage := di.ProvideClusterStorage()
 	galleryAccess := di.ProvideGalleryAccess(db)
 	settingsLoader := di.ProvideSettingsLoader(db)
 	llmFactory := di.ProvideLLMFactory(db, float64_2)
 	fileMover := di.ProvideFileMover(db)
-	service, err := di.ProvideI18nService()
+	i18nService, err := di.ProvideI18nService()
 	if err != nil {
 		return nil, err
 	}
@@ -69,6 +71,7 @@ func InitializeApp() (*App, error) {
 		BackgroundSync:      backgroundSyncManager,
 		TagScanManager:      tagScanManager,
 		EmbeddingBackfill:   embeddingBackfillManager,
+		LlmCatalog:          service,
 		ThumbnailProvider:   thumbnailProvider,
 		ThumbnailBatch:      thumbnailBatch,
 		OcrClient:           client,
@@ -77,7 +80,7 @@ func InitializeApp() (*App, error) {
 		SettingsLoader:      settingsLoader,
 		LlmFactory:          llmFactory,
 		FileMover:           fileMover,
-		I18n:                service,
+		I18n:                i18nService,
 		GeolocationService:  geolocationService,
 		Nominatim:           nominatimClient,
 		McpServer:           flashbacksMCPServer,
@@ -103,10 +106,10 @@ func InitializeApp() (*App, error) {
 	bootstrapService := di.ProvideBootstrapService(db, appConfig)
 	registerLimiter := di.ProvideRegisterRateLimiter()
 	authService := di.ProvideAuthService(db, bootstrapService, sessionRepository, loginLimiter, registerLimiter, appConfig)
-	authMiddleware := di.ProvideAuthMiddleware(sessionRepository, authService, service)
-	csrfProtection := di.ProvideCSRFProtection(service)
+	authMiddleware := di.ProvideAuthMiddleware(sessionRepository, authService, i18nService)
+	csrfProtection := di.ProvideCSRFProtection(i18nService)
 	userService := di.ProvideUserService(db, sessionRepository)
-	authHandlers := di.ProvideAuthHandlers(authService, bootstrapService, userService, sessionRepository, db, service)
+	authHandlers := di.ProvideAuthHandlers(authService, bootstrapService, userService, sessionRepository, db, i18nService)
 	app := &App{
 		DB:                db,
 		Config:            appConfig,

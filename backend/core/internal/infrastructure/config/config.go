@@ -6,6 +6,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/flashbacks/core/internal/domain"
 )
@@ -49,6 +50,9 @@ type AppConfig struct {
 
 	// VL LLM configuration
 	LlmMaxImageMegapixels float64
+	// LlmModelsCacheTTL is how long a stored provider model catalog stays valid
+	// before it is re-collected (default: 24h).
+	LlmModelsCacheTTL time.Duration
 
 	// Agent configuration
 	AgentMaxConversationTokens int
@@ -109,6 +113,7 @@ func LoadConfig() *AppConfig {
 		ThumbnailCachePreloadOnScan: getEnv("THUMBNAIL_CACHE_PRELOAD_ON_SCAN", "true") == "true",
 		BackgroundSyncEnabled:       getEnv("BACKGROUND_SYNC_ENABLED", "true") == "true",
 		LlmMaxImageMegapixels:       getEnvFloat("LLM_MAX_IMAGE_MEGAPIXELS", 2.4),
+		LlmModelsCacheTTL:           getEnvDuration("LLM_MODELS_CACHE_TTL", 24*time.Hour),
 		AgentMaxConversationTokens:  getEnvInt("AGENT_MAX_CONVERSATION_TOKENS", 128000),
 		ExifServiceURL:              getEnv("EXIF_SERVICE_URL", "http://localhost:5172"),
 	}
@@ -141,6 +146,7 @@ func (c *AppConfig) RegistryDefaults() map[string]string {
 		"THUMBNAIL_CACHE_PRELOAD_ON_SCAN": strconv.FormatBool(c.ThumbnailCachePreloadOnScan),
 		"BACKGROUND_SYNC_ENABLED":         strconv.FormatBool(c.BackgroundSyncEnabled),
 		"LLM_MAX_IMAGE_MEGAPIXELS":        strconv.FormatFloat(c.LlmMaxImageMegapixels, 'f', -1, 64),
+		"LLM_MODELS_CACHE_TTL":            c.LlmModelsCacheTTL.String(),
 		"AGENT_MAX_CONVERSATION_TOKENS":   strconv.Itoa(c.AgentMaxConversationTokens),
 		"EXIF_SERVICE_URL":                c.ExifServiceURL,
 	}
@@ -210,6 +216,12 @@ func (c *AppConfig) ApplyRegistry(values map[string]string) {
 
 	applyFloat("LLM_MAX_IMAGE_MEGAPIXELS", &c.LlmMaxImageMegapixels)
 
+	if value, ok := values["LLM_MODELS_CACHE_TTL"]; ok {
+		if parsed, err := time.ParseDuration(value); err == nil && parsed > 0 {
+			c.LlmModelsCacheTTL = parsed
+		}
+	}
+
 	if value, ok := values["ACCOUNT_CREATION_MODE"]; ok {
 		switch value {
 		case domain.AccountCreationModeSelfService,
@@ -225,6 +237,17 @@ func getEnvInt(key string, defaultValue int) int {
 	if value, exists := os.LookupEnv(key); exists {
 		if n, err := strconv.Atoi(value); err == nil {
 			return n
+		}
+	}
+	return defaultValue
+}
+
+// getEnvDuration gets environment variable as a Go duration with a default value.
+// Values that do not parse as a positive duration fall back to the default.
+func getEnvDuration(key string, defaultValue time.Duration) time.Duration {
+	if value, exists := os.LookupEnv(key); exists {
+		if d, err := time.ParseDuration(value); err == nil && d > 0 {
+			return d
 		}
 	}
 	return defaultValue

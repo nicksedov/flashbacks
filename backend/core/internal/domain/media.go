@@ -194,11 +194,17 @@ type LlmProvider struct {
 	// (not by GORM uniqueIndex) to avoid a naming mismatch between GORM v1.30.0's
 	// NamingStrategy.UniqueName ("uni_llm_providers_alias") and the existing DB
 	// constraint name ("idx_llm_providers_alias").
-	Alias     string    `gorm:"not null" json:"alias"`
-	ApiUrl    string    `gorm:"not null" json:"apiUrl"`
-	ApiKey    string    `gorm:"default:''" json:"apiKey"`
-	CreatedAt time.Time `json:"createdAt"`
-	UpdatedAt time.Time `json:"updatedAt"`
+	Alias  string `gorm:"not null" json:"alias"`
+	ApiUrl string `gorm:"not null" json:"apiUrl"`
+	ApiKey string `gorm:"default:''" json:"apiKey"`
+	// ModelsFetchedAt is the time of the last successful catalog refresh for this
+	// provider (nil = never refreshed). It drives the catalog TTL.
+	ModelsFetchedAt *time.Time `json:"modelsFetchedAt,omitempty"`
+	// ModelsSourceRich records whether the last successful refresh came from a
+	// rich provider source. Only a rich refresh may delete models.
+	ModelsSourceRich bool      `gorm:"default:false" json:"modelsSourceRich"`
+	CreatedAt        time.Time `json:"createdAt"`
+	UpdatedAt        time.Time `json:"updatedAt"`
 }
 
 // LlmProviderModel stores a single model per provider row.

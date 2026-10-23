@@ -1088,7 +1088,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get available LLM models */
+        /** Get the stored catalog of LLM models for a provider */
         get: operations["getLlmModels"];
         put?: never;
         post?: never;
@@ -2145,6 +2145,12 @@ export interface components {
         LlmModelsResponse: {
             success?: boolean;
             models?: components["schemas"]["LlmModelDTO"][];
+            provider?: string;
+            /** Format: date-time */
+            fetchedAt?: string;
+            stale?: boolean;
+            refreshError?: string;
+            error?: string;
         };
         LlmModelDTO: {
             id?: string;
@@ -3917,7 +3923,10 @@ export interface operations {
     getLlmModels: {
         parameters: {
             query?: {
-                providerAlias?: string;
+                /** @description Provider alias; defaults to the chat instrument's provider */
+                provider?: string;
+                /** @description Re-collect the provider catalog regardless of its age */
+                refresh?: boolean;
             };
             header?: never;
             path?: never;
@@ -3925,7 +3934,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Available models */
+            /** @description The stored provider catalog with its freshness metadata */
             200: {
                 headers: {
                     [name: string]: unknown;

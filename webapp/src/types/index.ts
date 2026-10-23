@@ -699,6 +699,12 @@ export interface LlmModelsResponse {
   models: LlmModelDTO[]
   error?: string
   provider: string
+  /** RFC3339 time of the last successful catalog refresh. */
+  fetchedAt?: string
+  /** True when the last refresh failed and the stored catalog was served. */
+  stale?: boolean
+  /** Failure text reported while `stale` is true. */
+  refreshError?: string
 }
 
 // --- Thumbnail Cache Types ---

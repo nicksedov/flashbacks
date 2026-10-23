@@ -559,6 +559,7 @@ export const translationsRu = {
   "llm_ocr.processingTime": "Время обработки",
   "llm_ocr.provider": "Провайдер",
   "llm_ocr.model": "Модель",
+  "llm_ocr.catalogStale": "Список моделей может быть устаревшим",
   "llm_ocr.sectionResult": "Результат",
   "llm_ocr.sectionDetected": "Обнаружено",
   "llm_ocr.errorHintNetwork": "Сервер недоступен. Убедитесь, что API-сервис запущен и сетевое соединение работает. Проверьте статус сервера или повторите попытку позже.",

@@ -834,24 +834,16 @@ func (c *AlibabaClient) GetModelDetails(ctx context.Context, modelID string) (*M
 	return alibabaEnrichedModelInfo(modelID, name), nil
 }
 
-// alibabaEnrichedModelInfo builds model metadata from ID heuristics and the
-// static pricing registry for a model that has no catalog entry.
+// alibabaEnrichedModelInfo builds model metadata for a model that has no rich
+// catalog entry. It walks the metadata pipeline in priority order: the curated
+// model-family registry first, then model-ID heuristics, then the safe default,
+// and normalizes the result.
 func alibabaEnrichedModelInfo(modelID, name string) *ModelInfo {
-	caps := inferAlibabaCapabilities(modelID)
-	input, output := inferModalities(caps)
-	info := &ModelInfo{
-		ID:               modelID,
-		Name:             name,
-		ContextLength:    inferContextLength(modelID),
-		Capabilities:     caps,
-		InputModalities:  input,
-		OutputModalities: output,
-	}
-	if p, ok := lookupModelPricing(modelID); ok {
-		info.InputPricePerMTok = p.InputPerMTok
-		info.OutputPricePerMTok = p.OutputPerMTok
-	}
-	return info
+	info := ModelInfo{ID: modelID, Name: name}
+	info = enrichFromRegistry(info)
+	info = enrichFromHeuristics(info)
+	info = normalizeModelInfo(info)
+	return &info
 }
 
 // alibabaCatalogResponse is the native ModelStudio model catalog response.
@@ -945,7 +937,7 @@ func alibabaCatalogModelToInfo(m alibabaCatalogModel) ModelInfo {
 	if info.ContextLength == 0 {
 		info.ContextLength = inferContextLength(m.Model)
 	}
-	return info
+	return normalizeModelInfo(info)
 }
 
 // alibabaCatalogPricing extracts the standard input/output per-1M-token prices
@@ -972,65 +964,36 @@ func alibabaCatalogPricing(ranges []alibabaPriceRange) (input, output float64, o
 	return input, output, input > 0 || output > 0
 }
 
-// inferContextLength returns context length based on model ID heuristics.
-// Falls back to 128000 if no pattern matches.
+// inferContextLength returns the context window of a model, consulting the
+// curated model-family registry and falling back to the safe default.
 func inferContextLength(modelID string) int {
-	lower := strings.ToLower(modelID)
-
-	// 1M+ token models
-	if strings.Contains(lower, "glm-5") ||
-		strings.Contains(lower, "deepseek-v4") ||
-		strings.Contains(lower, "qwen3-max") ||
-		strings.Contains(lower, "qwen-turbo") ||
-		strings.Contains(lower, "qwen-long") {
-		return 1000000
+	if family, ok := lookupModelFamily(modelID); ok && family.ContextLength > 0 {
+		return family.ContextLength
 	}
-
-	// 256K-512K token models
-	if strings.Contains(lower, "qwen-plus") ||
-		strings.Contains(lower, "kimi-k2.5") ||
-		strings.Contains(lower, "kimi-k2.6") ||
-		strings.Contains(lower, "kimi-k2.7") {
-		return 262144
-	}
-
-	// 128K token models
-	if strings.Contains(lower, "glm-4") ||
-		strings.Contains(lower, "glm-5.1") ||
-		strings.Contains(lower, "glm-5.2") {
-		return 128000
-	}
-
-	// 32K token models (qwen standard)
-	if strings.Contains(lower, "qwen") {
-		return 32768
-	}
-
-	// Default fallback
-	return 128000
+	return defaultContextLength
 }
 
-// inferAlibabaCapabilities infers model capabilities based on model ID naming patterns.
+// inferAlibabaCapabilities infers model capabilities based on model ID naming
+// patterns. Every capability is recorded at most once, even when several
+// detection rules match the same identifier (for example a "vl-ocr" model
+// matches both the vision rule and the OCR rule).
 func inferAlibabaCapabilities(modelID string) []string {
 	lower := strings.ToLower(modelID)
+
+	// Embedding capabilities are exclusive: an embedding model is not a chat model.
+	if strings.Contains(lower, "embedding") {
+		return []string{"embedding"}
+	}
+
 	caps := []string{"chat", "tool_calling"}
 
-	// Vision capabilities
+	// Vision capabilities (VL / vision / image / qvq / OCR families).
 	if strings.Contains(lower, "vl") ||
 		strings.Contains(lower, "vision") ||
 		strings.Contains(lower, "image") ||
-		strings.Contains(lower, "qvq") {
-		caps = append(caps, "vision")
-	}
-
-	// Embedding capabilities
-	if strings.Contains(lower, "embedding") {
-		caps = []string{"embedding"}
-	}
-
-	// OCR capabilities
-	if strings.Contains(lower, "ocr") {
-		caps = append(caps, "vision")
+		strings.Contains(lower, "qvq") ||
+		strings.Contains(lower, "ocr") {
+		caps = appendUnique(caps, "vision")
 	}
 
 	// Image editing models

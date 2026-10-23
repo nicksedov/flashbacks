@@ -58,6 +58,7 @@ var CoreSet = wire.NewSet(
 	ProvideAppSettingsRepo,
 	ProvideUserSettingsRepo,
 	ProvideSyncHistoryRepo,
+	ProvideScheduleRepo,
 )
 
 // ProvideRegistryBootstrap creates the optional registry client for core.
@@ -195,6 +196,11 @@ func ProvideImageTagRepo(db *gorm.DB) repository.ImageTagRepository {
 // ProvideAppSettingsRepo creates the app settings repository.
 func ProvideAppSettingsRepo(db *gorm.DB) repository.AppSettingsRepository {
 	return repository.NewAppSettingsRepository(db)
+}
+
+// ProvideScheduleRepo creates the unified job schedule repository.
+func ProvideScheduleRepo(db *gorm.DB) repository.ScheduleRepository {
+	return repository.NewScheduleRepository(db)
 }
 
 // ProvideUserSettingsRepo creates the user settings repository.

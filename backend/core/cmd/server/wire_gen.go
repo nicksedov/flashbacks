@@ -22,6 +22,7 @@ func InitializeApp() (*App, error) {
 	if err != nil {
 		return nil, err
 	}
+	scheduleRepository := di.ProvideScheduleRepo(db)
 	scanManager := di.ProvideScanManager(db, appConfig)
 	client := di.ProvideOcrClient(appConfig, bootstrap)
 	ocrManager := di.ProvideOcrManager(db, client, appConfig)
@@ -97,6 +98,7 @@ func InitializeApp() (*App, error) {
 		AppSettingsRepo:     appSettingsRepository,
 		UserSettingsRepo:    userSettingsRepository,
 		SyncHistoryRepo:     syncHistoryRepository,
+		ScheduleRepo:        scheduleRepository,
 	}
 	server := di.ProvideServer(serverDeps)
 	loginLimiter := di.ProvideLoginRateLimiter()
@@ -113,6 +115,7 @@ func InitializeApp() (*App, error) {
 	app := &App{
 		DB:                db,
 		Config:            appConfig,
+		ScheduleRepo:      scheduleRepository,
 		Server:            server,
 		ScanManager:       scanManager,
 		OcrManager:        ocrManager,

@@ -2,7 +2,6 @@ package imaging
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"os"
 	"path/filepath"
@@ -41,10 +40,7 @@ type BackgroundSyncManager struct {
 	thumbnailService   thumbnail.ThumbnailProvider
 	geolocationService *geocoder.GeolocationService
 	exifClient         ExifClient
-	syncDays           []time.Weekday
-	hour               int
-	minute             int
-	timezoneOffset     int // minutes from UTC (JS getTimezoneOffset sign: UTC+3 = -180)
+	schedule           domain.Schedule
 	// Status tracking
 	nextRunAt          *time.Time
 	lastSyncAt         *time.Time
@@ -64,17 +60,14 @@ func NewBackgroundSyncManager(db *gorm.DB, thumbnailService thumbnail.ThumbnailP
 		thumbnailService:   thumbnailService,
 		geolocationService: geoService,
 		exifClient:         exifClient,
-		syncDays:           []time.Weekday{time.Monday, time.Tuesday, time.Wednesday, time.Thursday, time.Friday},
-		hour:               3,
-		minute:             30,
-		timezoneOffset:     0,
+		schedule:           domain.DefaultSchedule(domain.ScheduleGallerySync),
 		stopCh:             make(chan struct{}),
 		scheduleCh:         make(chan struct{}),
 	}
 }
 
 // Start begins the background synchronization loop with the given schedule
-func (bsm *BackgroundSyncManager) Start(syncDays []time.Weekday, hour int, minute int, timezoneOffset int) {
+func (bsm *BackgroundSyncManager) Start(schedule domain.Schedule) {
 	bsm.mu.Lock()
 	if bsm.running {
 		bsm.mu.Unlock()
@@ -82,10 +75,7 @@ func (bsm *BackgroundSyncManager) Start(syncDays []time.Weekday, hour int, minut
 		return
 	}
 	bsm.running = true
-	bsm.syncDays = syncDays
-	bsm.hour = hour
-	bsm.minute = minute
-	bsm.timezoneOffset = timezoneOffset
+	bsm.schedule = schedule
 	bsm.stopCh = make(chan struct{})
 	bsm.scheduleCh = make(chan struct{})
 
@@ -100,7 +90,7 @@ func (bsm *BackgroundSyncManager) Start(syncDays []time.Weekday, hour int, minut
 	}
 	bsm.mu.Unlock()
 
-	log.Printf("Starting background gallery sync (days=%v at %02d:%02d, tzOffset=%d min)", syncDays, hour, minute, timezoneOffset)
+	log.Printf("Starting background gallery sync (days=%v at %02d:%02d, tzOffset=%d min)", schedule.Weekdays(), schedule.StartHour, schedule.StartMinute, schedule.TimezoneOffset)
 	go bsm.scheduleLoop()
 }
 
@@ -119,16 +109,13 @@ func (bsm *BackgroundSyncManager) Stop() {
 }
 
 // UpdateSchedule updates the schedule at runtime and restarts the loop
-func (bsm *BackgroundSyncManager) UpdateSchedule(syncDays []time.Weekday, hour int, minute int, timezoneOffset int) {
+func (bsm *BackgroundSyncManager) UpdateSchedule(schedule domain.Schedule) {
 	bsm.mu.Lock()
 	wasRunning := bsm.running
-	bsm.syncDays = syncDays
-	bsm.hour = hour
-	bsm.minute = minute
-	bsm.timezoneOffset = timezoneOffset
+	bsm.schedule = schedule
 	bsm.mu.Unlock()
 
-	log.Printf("Background sync schedule updated: days=%v at %02d:%02d, tzOffset=%d min", syncDays, hour, minute, timezoneOffset)
+	log.Printf("Background sync schedule updated: days=%v at %02d:%02d, tzOffset=%d min", schedule.Weekdays(), schedule.StartHour, schedule.StartMinute, schedule.TimezoneOffset)
 
 	// Signal the schedule loop to restart with new settings
 	if wasRunning {
@@ -161,22 +148,19 @@ func (bsm *BackgroundSyncManager) GetStatus() SyncStatus {
 func (bsm *BackgroundSyncManager) scheduleLoop() {
 	for {
 		bsm.mu.Lock()
-		syncDays := bsm.syncDays
-		hour := bsm.hour
-		minute := bsm.minute
-		timezoneOffset := bsm.timezoneOffset
+		schedule := bsm.schedule
 		stopCh := bsm.stopCh
 		bsm.mu.Unlock()
 
-		if len(syncDays) > 0 {
+		if len(schedule.Weekdays()) > 0 {
 			// Calculate next run time
-			nextRun := bsm.calculateNextRunTime(syncDays, hour, minute, timezoneOffset)
+			nextRun := schedule.NextRunAt(time.Now())
 
 			bsm.mu.Lock()
 			bsm.nextRunAt = &nextRun
 			bsm.mu.Unlock()
 
-			userTZ := time.FixedZone("UserTZ", -timezoneOffset*60)
+			userTZ := time.FixedZone("UserTZ", -schedule.TimezoneOffset*60)
 			log.Printf("Background sync: next run at %s (user local: %s)", nextRun.Format("2006-01-02 15:04:05"), nextRun.In(userTZ).Format("Mon 15:04"))
 
 			select {
@@ -205,38 +189,6 @@ func (bsm *BackgroundSyncManager) scheduleLoop() {
 			}
 		}
 	}
-}
-
-// calculateNextRunTime calculates the next time the sync should run based on the user's timezone.
-func (bsm *BackgroundSyncManager) calculateNextRunTime(syncDays []time.Weekday, hour, minute, timezoneOffset int) time.Time {
-	userTZ := time.FixedZone("UserTZ", -timezoneOffset*60)
-	now := time.Now().In(userTZ)
-
-	daySet := make(map[time.Weekday]bool)
-	for _, d := range syncDays {
-		daySet[d] = true
-	}
-
-	// Check today first: if it's a sync day and the scheduled time hasn't passed.
-	// Compare in UTC to avoid timezone-related comparison issues when server and user
-	// share the same timezone.
-	if daySet[now.Weekday()] {
-		candidate := time.Date(now.Year(), now.Month(), now.Day(), hour, minute, 0, 0, userTZ)
-		if candidate.UTC().After(now.UTC()) {
-			return candidate
-		}
-	}
-
-	// Check the next 7 days
-	for i := 1; i <= 7; i++ {
-		future := now.AddDate(0, 0, i)
-		if daySet[future.Weekday()] {
-			return time.Date(future.Year(), future.Month(), future.Day(), hour, minute, 0, 0, userTZ)
-		}
-	}
-
-	// Fallback: should not happen if syncDays is non-empty
-	return now.Add(24 * time.Hour)
 }
 
 // syncOnce performs a single synchronization pass
@@ -621,32 +573,14 @@ func (bsm *BackgroundSyncManager) InvalidateTagsAndEmbeddings(imageFileID uint) 
 	}
 }
 
-// ParseSyncDays converts a comma-separated string of weekday numbers to a slice of time.Weekday.
-// Returns nil if the input is empty.
+// ParseSyncDays converts a comma-separated string of weekday numbers to a slice
+// of time.Weekday. Deprecated: use domain.ParseWeekdays.
 func ParseSyncDays(s string) []time.Weekday {
-	if s == "" {
-		return nil
-	}
-	var days []time.Weekday
-	for _, c := range s {
-		if c >= '0' && c <= '6' {
-			days = append(days, time.Weekday(c-'0'))
-		}
-	}
-	return days
+	return domain.ParseWeekdays(s)
 }
 
 // FormatSyncDays converts a slice of time.Weekday to a comma-separated string.
+// Deprecated: use domain.FormatWeekdays.
 func FormatSyncDays(days []time.Weekday) string {
-	if len(days) == 0 {
-		return ""
-	}
-	result := ""
-	for i, d := range days {
-		if i > 0 {
-			result += ","
-		}
-		result += fmt.Sprintf("%d", d)
-	}
-	return result
+	return domain.FormatWeekdays(days)
 }

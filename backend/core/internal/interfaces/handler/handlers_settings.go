@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/flashbacks/core/internal/application/imaging"
+	"github.com/flashbacks/core/internal/domain"
 	"github.com/flashbacks/core/internal/interfaces/dto"
 	"github.com/flashbacks/core/internal/interfaces/handler/helpers"
 	"github.com/flashbacks/core/internal/interfaces/i18n"
@@ -15,20 +15,27 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// handleGetSettings returns the current application settings
-func (s *Server) handleGetSettings(c *gin.Context) {
-	settings := s.settingsLoader.AppSettings()
-	c.JSON(http.StatusOK, dto.AppSettingsDTO{
+// appSettingsDTO builds the settings payload, taking the gallery sync schedule
+// fields from the unified schedules table.
+func appSettingsDTO(settings domain.AppSettings, syncSchedule domain.Schedule) dto.AppSettingsDTO {
+	return dto.AppSettingsDTO{
 		TrashDir:              settings.TrashDir,
 		ExifBackupDir:         settings.ExifBackupDir,
 		ThumbnailCachePath:    settings.ThumbnailCachePath,
 		ThumbnailCacheSize:    settings.ThumbnailCacheSize,
 		OcrConcurrentRequests: settings.OcrConcurrentRequests,
-		SyncDays:              settings.SyncDays,
-		DailySyncHour:         settings.DailySyncHour,
-		DailySyncMinute:       settings.DailySyncMinute,
-		SyncTimezoneOffset:    settings.SyncTimezoneOffset,
-	})
+		SyncDays:              syncSchedule.Days,
+		DailySyncHour:         syncSchedule.StartHour,
+		DailySyncMinute:       syncSchedule.StartMinute,
+		SyncTimezoneOffset:    syncSchedule.TimezoneOffset,
+	}
+}
+
+// handleGetSettings returns the current application settings
+func (s *Server) handleGetSettings(c *gin.Context) {
+	settings := s.settingsLoader.AppSettings()
+	syncSchedule := s.settingsLoader.Schedule(domain.ScheduleGallerySync)
+	c.JSON(http.StatusOK, appSettingsDTO(settings, syncSchedule))
 }
 
 // handleUpdateSettings updates the application settings
@@ -124,9 +131,10 @@ func (s *Server) handleUpdateSettings(c *gin.Context) {
 		}
 	}
 
+	syncSchedule := s.settingsLoader.Schedule(domain.ScheduleGallerySync)
 	scheduleChanged := false
 	if req.SyncDays != nil {
-		settings.SyncDays = *req.SyncDays
+		syncSchedule.Days = *req.SyncDays
 		scheduleChanged = true
 	}
 	if req.DailySyncHour != nil {
@@ -135,7 +143,7 @@ func (s *Server) handleUpdateSettings(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, i18n.ErrorResponse(i18n.ValidationError))
 			return
 		}
-		settings.DailySyncHour = hour
+		syncSchedule.StartHour = hour
 		scheduleChanged = true
 	}
 	if req.DailySyncMinute != nil {
@@ -144,32 +152,28 @@ func (s *Server) handleUpdateSettings(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, i18n.ErrorResponse(i18n.ValidationError))
 			return
 		}
-		settings.DailySyncMinute = minute
+		syncSchedule.StartMinute = minute
 		scheduleChanged = true
 	}
 	if req.SyncTimezoneOffset != nil {
-		settings.SyncTimezoneOffset = *req.SyncTimezoneOffset
+		syncSchedule.TimezoneOffset = *req.SyncTimezoneOffset
 		scheduleChanged = true
 	}
 
-	if s.backgroundSync != nil && scheduleChanged {
-		syncDays := imaging.ParseSyncDays(settings.SyncDays)
-		s.backgroundSync.UpdateSchedule(syncDays, settings.DailySyncHour, settings.DailySyncMinute, settings.SyncTimezoneOffset)
+	if scheduleChanged {
+		if err := s.scheduleRepo.Upsert(&syncSchedule); err != nil {
+			log.Printf("Failed to save gallery sync schedule: %v", err)
+			c.JSON(http.StatusInternalServerError, i18n.ErrorResponse(i18n.MsgAuthInternalError))
+			return
+		}
+		if s.backgroundSync != nil {
+			s.backgroundSync.UpdateSchedule(syncSchedule)
+		}
 	}
 
 	s.appSettingsRepo.Save(&settings)
 
-	c.JSON(http.StatusOK, dto.AppSettingsDTO{
-		TrashDir:              settings.TrashDir,
-		ExifBackupDir:         settings.ExifBackupDir,
-		ThumbnailCachePath:    settings.ThumbnailCachePath,
-		ThumbnailCacheSize:    settings.ThumbnailCacheSize,
-		OcrConcurrentRequests: settings.OcrConcurrentRequests,
-		SyncDays:              settings.SyncDays,
-		DailySyncHour:         settings.DailySyncHour,
-		DailySyncMinute:       settings.DailySyncMinute,
-		SyncTimezoneOffset:    settings.SyncTimezoneOffset,
-	})
+	c.JSON(http.StatusOK, appSettingsDTO(settings, syncSchedule))
 }
 
 // handleGetUserSettings returns the current user's settings

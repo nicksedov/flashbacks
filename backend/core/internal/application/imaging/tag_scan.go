@@ -47,13 +47,7 @@ type TagScanManager struct {
 	pauseDepth         int
 	db                 *gorm.DB
 	llmOcrService      *LlmOcrService
-	enabled            bool
-	days               []time.Weekday
-	startHour          int
-	startMinute        int
-	endHour            int
-	endMinute          int
-	timezoneOffset     int // User's timezone offset in minutes (JS getTimezoneOffset: UTC+3 = -180)
+	schedule           domain.Schedule
 	cursor             uint
 	progress           TagScanProgress
 	maxImageMegapixels float64
@@ -66,11 +60,7 @@ func NewTagScanManager(db *gorm.DB, llmOcrService *LlmOcrService, maxImageMegapi
 		Manager:            background.New("tag-scan"),
 		db:                 db,
 		llmOcrService:      llmOcrService,
-		enabled:            true,
-		startHour:          22,
-		startMinute:        0,
-		endHour:            7,
-		endMinute:          0,
+		schedule:           domain.DefaultSchedule(domain.ScheduleTagScan),
 		scheduleCh:         make(chan struct{}),
 		resumeCh:           make(chan struct{}, 1),
 		maxImageMegapixels: maxImageMegapixels,
@@ -85,23 +75,18 @@ func (tsm *TagScanManager) SetEmbeddingBackfill(eb *EmbeddingBackfillManager) {
 }
 
 // Start begins the tag scanning loop with the given schedule
-func (tsm *TagScanManager) Start(enabled bool, days []time.Weekday, startH, startM, endH, endM, tzOffset int) {
+func (tsm *TagScanManager) Start(schedule domain.Schedule) {
 	if !tsm.TryStart() {
 		log.Println("Tag scanning already running")
 		return
 	}
 	tsm.mu.Lock()
-	tsm.enabled = enabled
-	tsm.days = days
-	tsm.startHour = startH
-	tsm.startMinute = startM
-	tsm.endHour = endH
-	tsm.endMinute = endM
-	tsm.timezoneOffset = tzOffset
+	tsm.schedule = schedule
 	tsm.scheduleCh = make(chan struct{})
 	tsm.mu.Unlock()
 
-	log.Printf("Starting background tag scanning (days=%v, window %02d:%02d - %02d:%02d, tzOffset=%d, enabled=%v)", days, startH, startM, endH, endM, tzOffset, enabled)
+	log.Printf("Starting background tag scanning (days=%v, window %02d:%02d - %02d:%02d, tzOffset=%d, enabled=%v)",
+		schedule.Weekdays(), schedule.StartHour, schedule.StartMinute, schedule.EndHour, schedule.EndMinute, schedule.TimezoneOffset, schedule.Enabled)
 	go tsm.scheduleLoop()
 }
 
@@ -117,19 +102,14 @@ func (tsm *TagScanManager) IsRunning() bool {
 }
 
 // UpdateSchedule updates the schedule at runtime and restarts the loop
-func (tsm *TagScanManager) UpdateSchedule(enabled bool, days []time.Weekday, startH, startM, endH, endM, tzOffset int) {
+func (tsm *TagScanManager) UpdateSchedule(schedule domain.Schedule) {
 	tsm.mu.Lock()
 	wasRunning := tsm.Manager.IsRunning()
-	tsm.enabled = enabled
-	tsm.days = days
-	tsm.startHour = startH
-	tsm.startMinute = startM
-	tsm.endHour = endH
-	tsm.endMinute = endM
-	tsm.timezoneOffset = tzOffset
+	tsm.schedule = schedule
 	tsm.mu.Unlock()
 
-	log.Printf("Tag scanning schedule updated: days=%v, window %02d:%02d - %02d:%02d, tzOffset=%d, enabled=%v", days, startH, startM, endH, endM, tzOffset, enabled)
+	log.Printf("Tag scanning schedule updated: days=%v, window %02d:%02d - %02d:%02d, tzOffset=%d, enabled=%v",
+		schedule.Weekdays(), schedule.StartHour, schedule.StartMinute, schedule.EndHour, schedule.EndMinute, schedule.TimezoneOffset, schedule.Enabled)
 
 	if wasRunning {
 		select {
@@ -190,11 +170,10 @@ func (tsm *TagScanManager) GetStatus() TagScanStatus {
 	tsm.mu.Lock()
 	running := tsm.Manager.IsRunning()
 	paused := tsm.paused
-	enabled := tsm.enabled
-	days := tsm.days
-	schedule := fmt.Sprintf("%02d:%02d - %02d:%02d", tsm.startHour, tsm.startMinute, tsm.endHour, tsm.endMinute)
+	schedule := tsm.schedule
+	windowLabel := fmt.Sprintf("%02d:%02d - %02d:%02d", schedule.StartHour, schedule.StartMinute, schedule.EndHour, schedule.EndMinute)
 	progress := tsm.progress
-	windowOpen := isWindowOpenAt(days, time.Now(), tsm.startHour, tsm.startMinute, tsm.endHour, tsm.endMinute, tsm.timezoneOffset)
+	windowOpen := schedule.IsWindowOpenAt(time.Now())
 	needsTotalQuery := running && progress.Total == 0
 	tsm.mu.Unlock()
 
@@ -213,8 +192,8 @@ func (tsm *TagScanManager) GetStatus() TagScanStatus {
 	return TagScanStatus{
 		Running:    running,
 		Paused:     paused,
-		Enabled:    enabled,
-		Schedule:   schedule,
+		Enabled:    schedule.Enabled,
+		Schedule:   windowLabel,
 		WindowOpen: windowOpen,
 		Progress:   progress,
 	}
@@ -225,13 +204,12 @@ func (tsm *TagScanManager) scheduleLoop() {
 	log.Println("Tag scan: scheduleLoop started")
 	for {
 		tsm.mu.Lock()
-		enabled := tsm.enabled
-		days := tsm.days
+		schedule := tsm.schedule
 		stopCh := tsm.Done()
 		tsm.mu.Unlock()
 
-		if !enabled || len(days) == 0 {
-			if !enabled {
+		if !schedule.Enabled || len(schedule.Weekdays()) == 0 {
+			if !schedule.Enabled {
 				log.Println("Tag scan: disabled, waiting for schedule change")
 			} else {
 				log.Println("Tag scan: no weekdays selected, waiting for schedule change")
@@ -247,9 +225,7 @@ func (tsm *TagScanManager) scheduleLoop() {
 		}
 
 		// If currently inside the scanning window, start scanning immediately
-		tsm.mu.Lock()
-		inWindow := isWindowOpenAt(days, time.Now(), tsm.startHour, tsm.startMinute, tsm.endHour, tsm.endMinute, tsm.timezoneOffset)
-		tsm.mu.Unlock()
+		inWindow := schedule.IsWindowOpenAt(time.Now())
 
 		if inWindow {
 			log.Println("Tag scan: inside window, starting scanWindow")
@@ -293,12 +269,10 @@ func (tsm *TagScanManager) scheduleLoop() {
 // the window.
 func (tsm *TagScanManager) calculateNextWindowOpen() time.Time {
 	tsm.mu.Lock()
-	days := tsm.days
-	startH, startM := tsm.startHour, tsm.startMinute
-	tzOffset := tsm.timezoneOffset
+	schedule := tsm.schedule
 	tsm.mu.Unlock()
 
-	return nextWindowOpenAt(days, time.Now(), startH, startM, tzOffset)
+	return schedule.NextWindowOpenAt(time.Now())
 }
 
 // scanWindow runs scanning while within the configured time window
@@ -329,19 +303,15 @@ func (tsm *TagScanManager) scanWindow() {
 	log.Printf("Tag scan: starting window scan, %d untagged images, cursor reset to 0", total)
 
 	for {
-		// Check if still within window — read fields under lock, then call
-		// isWithinWindow() outside the lock to avoid deadlock (Go sync.Mutex
-		// is not reentrant).
+		// Read the schedule under the lock, then evaluate the window outside it
+		// to avoid deadlock (Go sync.Mutex is not reentrant).
 		tsm.mu.Lock()
-		days := tsm.days
-		startH, startM := tsm.startHour, tsm.startMinute
-		endH, endM := tsm.endHour, tsm.endMinute
-		tzOffset := tsm.timezoneOffset
+		schedule := tsm.schedule
 		stopCh := tsm.Done()
 		resumeCh := tsm.resumeCh
 		tsm.mu.Unlock()
 
-		if !isWindowOpenAt(days, time.Now(), startH, startM, endH, endM, tzOffset) {
+		if !schedule.IsWindowOpenAt(time.Now()) {
 			log.Println("Tag scan: window closed, stopping scan")
 			break
 		}
@@ -405,83 +375,6 @@ func (tsm *TagScanManager) scanWindow() {
 	}
 
 	log.Printf("Tag scan: window scan complete, %d images scanned in this pass", tsm.progress.Scanned)
-}
-
-// isSelectedDay reports whether weekday is part of the configured weekday set.
-func isSelectedDay(days []time.Weekday, weekday time.Weekday) bool {
-	for _, d := range days {
-		if d == weekday {
-			return true
-		}
-	}
-	return false
-}
-
-// tagScanLocalTime converts an instant to the user's local wall clock.
-// tzOffset is the user's timezone offset in minutes (JS getTimezoneOffset
-// convention: UTC+3 = -180), so local = UTC - offset.
-func tagScanLocalTime(now time.Time, tzOffset int) time.Time {
-	return now.Add(-time.Duration(tzOffset) * time.Minute)
-}
-
-// isWindowOpenAt checks whether the scanning window is open at now.
-// The window only opens on the selected weekdays; an empty weekday set keeps it
-// closed. The schedule hours/minutes are in the user's local time, so the
-// instant is converted to the user's local time before comparing.
-func isWindowOpenAt(days []time.Weekday, now time.Time, startH, startM, endH, endM, tzOffset int) bool {
-	if len(days) == 0 {
-		return false
-	}
-
-	localNow := tagScanLocalTime(now, tzOffset)
-	if !isSelectedDay(days, localNow.Weekday()) {
-		return false
-	}
-
-	currentMinutes := localNow.Hour()*60 + localNow.Minute()
-	startMinutes := startH*60 + startM
-	endMinutes := endH*60 + endM
-
-	if startMinutes == endMinutes {
-		// Same time means 24-hour window
-		return true
-	}
-
-	if startMinutes < endMinutes {
-		// Normal window (e.g., 09:00 - 17:00)
-		return currentMinutes >= startMinutes && currentMinutes <= endMinutes
-	}
-
-	// Overnight window (e.g., 22:00 - 07:00)
-	return currentMinutes >= startMinutes || currentMinutes <= endMinutes
-}
-
-// nextWindowOpenAt returns the next instant the window opens on a selected
-// weekday. The search starts on the user's current local day and looks a full
-// week ahead, so it lands on the next selected weekday even when the nearest
-// calendar day is not selected. With no selected weekday the schedule never
-// opens, so a far-future instant is returned to park the caller.
-func nextWindowOpenAt(days []time.Weekday, now time.Time, startH, startM, tzOffset int) time.Time {
-	if len(days) == 0 {
-		return now.AddDate(100, 0, 0)
-	}
-
-	localNow := tagScanLocalTime(now, tzOffset)
-	for offset := 0; offset < 8; offset++ {
-		day := localNow.AddDate(0, 0, offset)
-		if !isSelectedDay(days, day.Weekday()) {
-			continue
-		}
-		candidate := time.Date(day.Year(), day.Month(), day.Day(), startH, startM, 0, 0, localNow.Location())
-		if !candidate.After(localNow) {
-			continue
-		}
-		// Convert the user's local opening back to an instant.
-		return candidate.Add(time.Duration(tzOffset) * time.Minute)
-	}
-
-	// Fallback: a selected day always exists, so this is unreachable in practice.
-	return now.AddDate(0, 0, 7)
 }
 
 // processImage processes a single image, generating tags via LLM

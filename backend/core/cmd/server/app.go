@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"log"
 	"strings"
-	"time"
 
 	"github.com/flashbacks/core/internal/application/auth"
 	"github.com/flashbacks/core/internal/application/imaging"
 	"github.com/flashbacks/core/internal/application/thumbnail"
 	"github.com/flashbacks/core/internal/domain"
+	"github.com/flashbacks/core/internal/domain/repository"
 	"github.com/flashbacks/core/internal/infrastructure/config"
 	"github.com/flashbacks/core/internal/infrastructure/di"
 	"github.com/flashbacks/core/internal/infrastructure/registrybootstrap"
@@ -26,6 +26,7 @@ import (
 type App struct {
 	DB                *gorm.DB
 	Config            *config.AppConfig
+	ScheduleRepo      repository.ScheduleRepository
 	Server            *handler.Server
 	ScanManager       *imaging.ScanManager
 	OcrManager        *imaging.OcrManager
@@ -48,22 +49,11 @@ type App struct {
 // callbacks, coordinator assignment, background task scheduling, and
 // starting the thumbnail service.
 func (app *App) Init() {
-	// Read background sync schedule from DB
-	syncHour := 3
-	syncMinute := 30
-	syncDays := []time.Weekday{time.Monday, time.Tuesday, time.Wednesday, time.Thursday, time.Friday}
-	syncTimezoneOffset := 0
-	var appSettings domain.AppSettings
-	if result := app.DB.First(&appSettings, 1); result.Error == nil {
-		if appSettings.DailySyncHour > 0 || appSettings.DailySyncMinute > 0 {
-			syncHour = appSettings.DailySyncHour
-			syncMinute = appSettings.DailySyncMinute
-		}
-		syncDays = imaging.ParseSyncDays(appSettings.SyncDays)
-		syncTimezoneOffset = appSettings.SyncTimezoneOffset
-	}
-	app.BackgroundSync.Start(syncDays, syncHour, syncMinute, syncTimezoneOffset)
-	fmt.Printf("Background sync: days=%v at %02d:%02d, tzOffset=%d min\n", syncDays, syncHour, syncMinute, syncTimezoneOffset)
+	// Read the job schedules from the unified schedules table
+	gallerySchedule := app.scheduleOrDefault(domain.ScheduleGallerySync)
+	app.BackgroundSync.Start(gallerySchedule)
+	fmt.Printf("Background sync: days=%v at %02d:%02d, tzOffset=%d min\n",
+		gallerySchedule.Weekdays(), gallerySchedule.StartHour, gallerySchedule.StartMinute, gallerySchedule.TimezoneOffset)
 
 	// Wire scan-complete callback → OCR classification
 	app.ScanManager.OnScanComplete = func() {
@@ -114,27 +104,11 @@ func (app *App) Init() {
 		}
 	}
 
-	// Read tag scan schedule from new TagScanSettings table
-	tagScanEnabled := true
-	tagScanDays := "1,2,3,4,5"
-	tagScanStartHour := 22
-	tagScanStartMinute := 0
-	tagScanEndHour := 7
-	tagScanEndMinute := 0
-	tagScanTimezoneOffset := 0
-	var tagScan domain.TagScanSettings
-	if result := app.DB.First(&tagScan); result.Error == nil {
-		tagScanEnabled = tagScan.Enabled
-		tagScanDays = tagScan.Days
-		tagScanStartHour = tagScan.StartHour
-		tagScanStartMinute = tagScan.StartMinute
-		tagScanEndHour = tagScan.EndHour
-		tagScanEndMinute = tagScan.EndMinute
-		tagScanTimezoneOffset = tagScan.TimezoneOffset
-	}
-	tagScanWeekdays := imaging.ParseSyncDays(tagScanDays)
-	app.TagScanManager.Start(tagScanEnabled, tagScanWeekdays, tagScanStartHour, tagScanStartMinute, tagScanEndHour, tagScanEndMinute, tagScanTimezoneOffset)
-	fmt.Printf("Tag scan: days=%v, window %02d:%02d - %02d:%02d, tzOffset=%d, enabled=%v\n", tagScanWeekdays, tagScanStartHour, tagScanStartMinute, tagScanEndHour, tagScanEndMinute, tagScanTimezoneOffset, tagScanEnabled)
+	// Read the tagging schedule from the unified schedules table
+	tagScanSchedule := app.scheduleOrDefault(domain.ScheduleTagScan)
+	app.TagScanManager.Start(tagScanSchedule)
+	fmt.Printf("Tag scan: days=%v, window %02d:%02d - %02d:%02d, tzOffset=%d, enabled=%v\n",
+		tagScanSchedule.Weekdays(), tagScanSchedule.StartHour, tagScanSchedule.StartMinute, tagScanSchedule.EndHour, tagScanSchedule.EndMinute, tagScanSchedule.TimezoneOffset, tagScanSchedule.Enabled)
 
 	// Set coordinator for AI task synchronization
 	app.LlmOcrService.SetCoordinator(app.TagScanManager)
@@ -149,6 +123,17 @@ func (app *App) Init() {
 		app.Registry.Register(context.Background(), "core", registrybootstrap.AdvertiseHost(),
 			registrybootstrap.PortInt(app.Config.ServerPort, 5170), "/api", "/api/auth/status", registrybootstrap.Version())
 	}
+}
+
+// scheduleOrDefault loads the schedule of a job kind, falling back to the
+// built-in defaults when the row is missing or unreadable.
+func (app *App) scheduleOrDefault(kind domain.ScheduleKind) domain.Schedule {
+	if app.ScheduleRepo != nil {
+		if schedule, err := app.ScheduleRepo.Get(kind); err == nil && schedule != nil {
+			return *schedule
+		}
+	}
+	return domain.DefaultSchedule(kind)
 }
 
 // PrintBanner prints the startup banner with configuration summary.

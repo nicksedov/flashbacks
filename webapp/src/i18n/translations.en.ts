@@ -110,7 +110,6 @@ export const translationsEn = {
   // Daily sync schedule
   "settings.dailySync.title": "Sync Schedule",
   "settings.dailySync.description": "Configure which days and time the gallery sync runs. Uncheck all days to disable.",
-  "settings.dailySync.save": "Save Schedule",
   "settings.dailySync.saved": "Schedule saved",
   "settings.dailySync.saveFailed": "Failed to save schedule",
   "settings.dailySync.status": "Sync Status",
@@ -717,7 +716,6 @@ export const translationsEn = {
   "tagScan.pause": "Pause",
   "tagScan.resume": "Resume",
   "tagScan.resumed": "Tag scanning resumed",
-  "tagScan.save": "Save Schedule",
   "tagScan.saved": "Schedule saved",
   "tagScan.saveFailed": "Failed to save schedule",
   "tagScan.pauseFailed": "Failed to pause",

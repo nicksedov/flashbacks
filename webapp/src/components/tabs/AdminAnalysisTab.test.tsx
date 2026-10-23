@@ -376,7 +376,11 @@ describe("AdminAnalysisTab tagging schedule", () => {
     const thursday = within(card).getByLabelText("Thu")
     fireEvent.click(thursday)
 
-    fireEvent.click(within(card).getByRole("button", { name: "Save Schedule" }))
+    const saveButton = within(card).getByRole("button", { name: "Save" })
+    // The save action sits in the schedule editor's time row, like the sync section.
+    expect(saveButton.closest('[data-slot="schedule-time-row"]')).not.toBeNull()
+
+    fireEvent.click(saveButton)
 
     await waitFor(() =>
       expect(endpoints.updateLlmSettings).toHaveBeenCalledWith(

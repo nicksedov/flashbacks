@@ -79,6 +79,26 @@ describe("ScheduleEditor", () => {
     ])
   })
 
+  it("renders the section action at the end of the time row", () => {
+    const { container } = render(
+      <ScheduleEditor
+        mode="at"
+        idPrefix="test-schedule"
+        days={days}
+        onToggleDay={() => {}}
+        hour={3}
+        minute={30}
+        onHourChange={() => {}}
+        onMinuteChange={() => {}}
+        action={<button type="button">Save</button>}
+      />
+    )
+
+    const timeRow = container.querySelector('[data-slot="schedule-time-row"]')
+    expect(timeRow).not.toBeNull()
+    expect(timeRow?.lastElementChild?.textContent).toBe("Save")
+  })
+
   // design-system.schedule-editor-weekday-labels-localized
   it("labels weekdays in Russian under the Russian interface", () => {
     languageState.language = "ru"

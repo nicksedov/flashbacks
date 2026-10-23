@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest"
-import { render, screen } from "@testing-library/react"
+import { render, screen, within } from "@testing-library/react"
 import { AdminGeneralTab } from "./AdminGeneralTab"
 import { hasClass } from "@/test/dom"
 
@@ -94,5 +94,9 @@ describe("AdminGeneralTab sync schedule", () => {
     const editor = container.querySelector('[data-slot="schedule-editor"]')
     expect(editor).not.toBeNull()
     expect(container.querySelectorAll('[data-slot="schedule-day"]')).toHaveLength(7)
+
+    // The save action sits in the schedule editor's time row.
+    const saveButton = within(editor as HTMLElement).getByRole("button", { name: "common.save" })
+    expect(saveButton.closest('[data-slot="schedule-time-row"]')).not.toBeNull()
   })
 })

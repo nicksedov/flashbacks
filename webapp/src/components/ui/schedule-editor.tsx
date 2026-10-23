@@ -1,3 +1,4 @@
+import type { ReactNode } from "react"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -59,6 +60,11 @@ interface ScheduleEditorBaseProps {
   days: boolean[]
   /** Called with the weekday index (0=Sunday ... 6=Saturday) when a day is toggled. */
   onToggleDay: (dayIndex: number) => void
+  /**
+   * Action rendered at the end of the time row (e.g. the section's save
+   * button), so every schedule section presents its action the same way.
+   */
+  action?: ReactNode
 }
 
 /** A schedule with one run time per selected day. */
@@ -114,7 +120,7 @@ export function ScheduleEditor(props: ScheduleEditorProps) {
       </div>
 
       {props.mode === "at" ? (
-        <div className="flex flex-wrap items-end gap-4">
+        <div data-slot="schedule-time-row" className="flex flex-wrap items-end gap-4">
           <div className="space-y-2">
             <Label htmlFor={`${props.idPrefix}-hour`}>{t("schedule.hour")}</Label>
             <HourMinuteSelects
@@ -125,9 +131,10 @@ export function ScheduleEditor(props: ScheduleEditorProps) {
               onMinuteChange={props.onMinuteChange}
             />
           </div>
+          {props.action}
         </div>
       ) : (
-        <div className="flex flex-wrap items-end gap-4">
+        <div data-slot="schedule-time-row" className="flex flex-wrap items-end gap-4">
           <div className="space-y-2">
             <Label htmlFor={`${props.idPrefix}-start-hour`}>{t("schedule.startTime")}</Label>
             <HourMinuteSelects
@@ -148,6 +155,7 @@ export function ScheduleEditor(props: ScheduleEditorProps) {
               onMinuteChange={props.onEndMinuteChange}
             />
           </div>
+          {props.action}
         </div>
       )}
     </div>

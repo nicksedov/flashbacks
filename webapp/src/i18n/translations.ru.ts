@@ -110,7 +110,6 @@ export const translationsRu = {
   // Daily sync schedule
   "settings.dailySync.title": "Расписание синхронизации",
   "settings.dailySync.description": "Настройте дни и время синхронизации галереи. Снимите все галочки, чтобы отключить.",
-  "settings.dailySync.save": "Сохранить расписание",
   "settings.dailySync.saved": "Расписание сохранено",
   "settings.dailySync.saveFailed": "Не удалось сохранить расписание",
   "settings.dailySync.status": "Статус синхронизации",
@@ -627,7 +626,6 @@ export const translationsRu = {
   "tagScan.pause": "Приостановить",
   "tagScan.resume": "Возобновить",
   "tagScan.resumed": "Тегирование возобновлено",
-  "tagScan.save": "Сохранить расписание",
   "tagScan.saved": "Расписание сохранено",
   "tagScan.saveFailed": "Не удалось сохранить расписание",
   "tagScan.pauseFailed": "Не удалось приостановить",

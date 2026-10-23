@@ -402,17 +402,16 @@ export function AdminGeneralTab() {
             minute={dailySyncMinute}
             onHourChange={setDailySyncHour}
             onMinuteChange={setDailySyncMinute}
+            action={
+              <Button
+                onClick={handleSaveSchedule}
+                disabled={isSavingSchedule}
+                size="sm"
+              >
+                {isSavingSchedule ? t("common.saving") : t("common.save")}
+              </Button>
+            }
           />
-
-          <div className="flex justify-end">
-            <Button
-              onClick={handleSaveSchedule}
-              disabled={isSavingSchedule}
-              size="sm"
-            >
-              {isSavingSchedule ? t("common.saving") : t("settings.dailySync.save")}
-            </Button>
-          </div>
 
           {/* Sync Status */}
           <div className="rounded-lg bg-muted p-3 space-y-2">

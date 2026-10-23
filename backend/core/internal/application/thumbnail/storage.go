@@ -12,45 +12,45 @@ import (
 )
 
 const (
-	// ThumbnailCacheSubdirs количество подпапок для равномерного распределения файлов (одноуровневая структура)
+	// ThumbnailCacheSubdirs is the number of subdirectories used to spread files evenly (single-level layout)
 	ThumbnailCacheSubdirs = 256
-	// ThumbnailFormat формат сохраняемых миниатюр
+	// ThumbnailFormat is the format of the stored thumbnails
 	ThumbnailFormat = "webp"
-	// ThumbnailQuality качество сжатия миниатюр (0-100)
+	// ThumbnailQuality is the thumbnail compression quality (0-100)
 	ThumbnailQuality = 80
-	// ThumbnailMaxSize максимальный размер миниатюры в пикселях
+	// ThumbnailMaxSize is the maximum thumbnail dimension in pixels
 	ThumbnailMaxSize = 320
 )
 
-// CacheKey генерирует ключ кэша на основе пути к файлу
+// CacheKey derives the cache key from the file path.
 func CacheKey(filePath string) string {
-	// Нормализуем путь: заменяем обратные слеши на прямые для консистентности
+	// Normalize the path: replace backslashes with forward slashes for consistency
 	normalizedPath := filepath.ToSlash(filePath)
-	// MD5 хеш пути для получения фиксированной длины
+	// MD5 hash of the path to get a fixed-length key
 	hash := md5.Sum([]byte(normalizedPath))
 	return hex.EncodeToString(hash[:])
 }
 
-// CachePath вычисляет абсолютный путь к файлу миниатюры в структуре кэша с одним уровнем подпапок
+// CachePath returns the absolute thumbnail path in the single-level cache layout.
 func CachePath(cacheDir, filePath string) string {
 	cacheKey := CacheKey(filePath)
-	subdir := cacheKey[:2] // Первые 2 символа хеша (00-ff = 256 вариантов)
+	subdir := cacheKey[:2] // First 2 characters of the hash (00-ff = 256 buckets)
 	fileName := cacheKey + "." + ThumbnailFormat
 
 	return filepath.Join(cacheDir, subdir, fileName)
 }
 
-// CachePathRelative вычисляет относительный путь к файлу миниатюры (относительно корня кэша)
+// CachePathRelative returns the thumbnail path relative to the cache root.
 func CachePathRelative(filePath string) string {
 	cacheKey := CacheKey(filePath)
 	subdir := cacheKey[:2]
 	fileName := cacheKey + "." + ThumbnailFormat
 
-	// Возвращаем относительный путь без префикса кэш-директории
+	// Return the relative path without the cache directory prefix
 	return filepath.Join(subdir, fileName)
 }
 
-// CacheDirPath вычисляет путь к подпапке кэша для хеша
+// CacheDirPath returns the cache subdirectory for the file hash.
 func CacheDirPath(cacheDir, filePath string) string {
 	cacheKey := CacheKey(filePath)
 	subdir := cacheKey[:2]
@@ -58,20 +58,20 @@ func CacheDirPath(cacheDir, filePath string) string {
 	return filepath.Join(cacheDir, subdir)
 }
 
-// ThumbnailCacheStorage управляет иерархическим кэшем миниатюр на файловой системе
+// ThumbnailCacheStorage manages the on-disk thumbnail cache.
 type ThumbnailCacheStorage struct {
 	cacheDir string
 	mu       sync.RWMutex
 	enabled  bool
 }
 
-// NewThumbnailCacheStorage создает новое хранилище кэша миниатюр
+// NewThumbnailCacheStorage creates a new thumbnail cache storage.
 func NewThumbnailCacheStorage(cacheDir string) (*ThumbnailCacheStorage, error) {
 	if cacheDir == "" {
 		return nil, &ErrInvalidCachePath{Path: cacheDir}
 	}
 
-	// Если путь не абсолютный, делаем его абсолютным
+	// Make a relative path absolute
 	if !filepath.IsAbs(cacheDir) {
 		absPath, err := filepath.Abs(cacheDir)
 		if err != nil {
@@ -85,7 +85,7 @@ func NewThumbnailCacheStorage(cacheDir string) (*ThumbnailCacheStorage, error) {
 		enabled:  true,
 	}
 
-	// Инициализируем структуру подпапок
+	// Initialize the subdirectory structure
 	if err := storage.initStructure(); err != nil {
 		return nil, &ErrCacheInitFailed{Path: cacheDir, Err: err}
 	}
@@ -93,18 +93,18 @@ func NewThumbnailCacheStorage(cacheDir string) (*ThumbnailCacheStorage, error) {
 	return storage, nil
 }
 
-// initStructure создает одноуровневую структуру из 256 подпапок
+// initStructure creates the single-level structure of 256 subdirectories.
 func (tcs *ThumbnailCacheStorage) initStructure() error {
 	tcs.mu.Lock()
 	defer tcs.mu.Unlock()
 
-	// Создаем главную подпапку кэша
+	// Create the cache root directory
 	if err := os.MkdirAll(tcs.cacheDir, 0755); err != nil {
 		return fmt.Errorf("failed to create cache directory: %w", err)
 	}
 
-	// Создаем 256 подпапок для равномерного распределения
-	// Формат: 00, 01, 02, ..., ff (hexadecimal)
+	// Create 256 subdirectories to spread the files evenly
+	// Names: 00, 01, 02, ..., ff (hexadecimal)
 	for i := 0; i < ThumbnailCacheSubdirs; i++ {
 		subdirName := fmt.Sprintf("%02x", i)
 		subdirPath := filepath.Join(tcs.cacheDir, subdirName)
@@ -117,28 +117,28 @@ func (tcs *ThumbnailCacheStorage) initStructure() error {
 	return nil
 }
 
-// Enable включает кэш миниатюр
+// Enable turns the thumbnail cache on.
 func (tcs *ThumbnailCacheStorage) Enable() {
 	tcs.mu.Lock()
 	defer tcs.mu.Unlock()
 	tcs.enabled = true
 }
 
-// Disable выключает кэш миниатюр
+// Disable turns the thumbnail cache off.
 func (tcs *ThumbnailCacheStorage) Disable() {
 	tcs.mu.Lock()
 	defer tcs.mu.Unlock()
 	tcs.enabled = false
 }
 
-// IsEnabled проверяет включен ли кэш
+// IsEnabled reports whether the cache is enabled.
 func (tcs *ThumbnailCacheStorage) IsEnabled() bool {
 	tcs.mu.RLock()
 	defer tcs.mu.RUnlock()
 	return tcs.enabled
 }
 
-// GetPath возвращает абсолютный путь к файлу миниатюры для заданного пути к изображению
+// GetPath returns the absolute thumbnail path for the given image path.
 func (tcs *ThumbnailCacheStorage) GetPath(filePath string) string {
 	if !tcs.enabled {
 		return ""
@@ -146,7 +146,7 @@ func (tcs *ThumbnailCacheStorage) GetPath(filePath string) string {
 	return CachePath(tcs.cacheDir, filePath)
 }
 
-// GetPathRelative возвращает относительный путь к файлу миниатюры для заданного пути к изображению
+// GetPathRelative returns the thumbnail path relative to the cache root.
 func (tcs *ThumbnailCacheStorage) GetPathRelative(filePath string) string {
 	if !tcs.enabled {
 		return ""
@@ -154,7 +154,7 @@ func (tcs *ThumbnailCacheStorage) GetPathRelative(filePath string) string {
 	return CachePathRelative(filePath)
 }
 
-// Exists проверяет наличие миниатюры в кэше
+// Exists reports whether the thumbnail exists in the cache.
 func (tcs *ThumbnailCacheStorage) Exists(filePath string) bool {
 	if !tcs.enabled {
 		return false
@@ -168,7 +168,7 @@ func (tcs *ThumbnailCacheStorage) Exists(filePath string) bool {
 	return err == nil
 }
 
-// Get возвращает путь к миниатюре, если она существует, пустую строку иначе
+// Get returns the thumbnail path when it exists, an empty string otherwise.
 func (tcs *ThumbnailCacheStorage) Get(filePath string) string {
 	if !tcs.enabled {
 		return ""
@@ -184,7 +184,7 @@ func (tcs *ThumbnailCacheStorage) Get(filePath string) string {
 	return path
 }
 
-// Set сохраняет миниатюру в кэш
+// Set stores the thumbnail in the cache.
 func (tcs *ThumbnailCacheStorage) Set(filePath string, thumbnailData []byte) error {
 	if !tcs.enabled {
 		return ErrThumbnailCacheDisabled
@@ -195,13 +195,13 @@ func (tcs *ThumbnailCacheStorage) Set(filePath string, thumbnailData []byte) err
 
 	cachePath := CachePath(tcs.cacheDir, filePath)
 
-	// Убедимся, что подпапка существует
+	// Make sure the subdirectory exists
 	dir := filepath.Dir(cachePath)
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return &ErrCacheWriteFailed{Path: filePath, Err: err}
 	}
 
-	// Записываем файл миниатюры
+	// Write the thumbnail file
 	if err := os.WriteFile(cachePath, thumbnailData, 0644); err != nil {
 		return &ErrCacheWriteFailed{Path: filePath, Err: err}
 	}
@@ -209,7 +209,7 @@ func (tcs *ThumbnailCacheStorage) Set(filePath string, thumbnailData []byte) err
 	return nil
 }
 
-// Delete удаляет миниатюру из кэша
+// Delete removes the thumbnail from the cache.
 func (tcs *ThumbnailCacheStorage) Delete(filePath string) error {
 	if !tcs.enabled {
 		return nil
@@ -222,7 +222,7 @@ func (tcs *ThumbnailCacheStorage) Delete(filePath string) error {
 
 	if err := os.Remove(cachePath); err != nil {
 		if os.IsNotExist(err) {
-			return nil // Файл уже не существует
+			return nil // File is already gone
 		}
 		return &ErrCacheReadFailed{Path: filePath, Err: err}
 	}
@@ -230,16 +230,16 @@ func (tcs *ThumbnailCacheStorage) Delete(filePath string) error {
 	return nil
 }
 
-// ClearAll очищает весь кэш миниатюр
+// ClearAll wipes the whole thumbnail cache.
 func (tcs *ThumbnailCacheStorage) ClearAll() error {
 	tcs.mu.Lock()
 	defer tcs.mu.Unlock()
 
-	// Удаляем всю структуру кэша
+	// Remove the whole cache tree
 	return os.RemoveAll(tcs.cacheDir)
 }
 
-// Stats возвращает статистику кэша
+// Stats returns the cache statistics.
 func (tcs *ThumbnailCacheStorage) Stats() (int, int64, error) {
 	tcs.mu.RLock()
 	defer tcs.mu.RUnlock()
@@ -249,7 +249,7 @@ func (tcs *ThumbnailCacheStorage) Stats() (int, int64, error) {
 
 	err := filepath.Walk(tcs.cacheDir, func(path string, info fs.FileInfo, err error) error {
 		if err != nil {
-			return nil // Продолжаем обход при ошибках
+			return nil // Keep walking on errors
 		}
 
 		if !info.IsDir() && strings.HasSuffix(info.Name(), "."+ThumbnailFormat) {
@@ -267,7 +267,7 @@ func (tcs *ThumbnailCacheStorage) Stats() (int, int64, error) {
 	return count, totalSize, nil
 }
 
-// ListFiles возвращает список всех файлов в кэше
+// ListFiles returns the list of all files in the cache.
 func (tcs *ThumbnailCacheStorage) ListFiles() ([]string, error) {
 	tcs.mu.RLock()
 	defer tcs.mu.RUnlock()

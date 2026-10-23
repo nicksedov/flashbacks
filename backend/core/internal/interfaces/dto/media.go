@@ -130,12 +130,12 @@ type ThumbnailResponse struct {
 	Thumbnail string `json:"thumbnail"`
 }
 
-// InvalidateThumbnailRequest запрос на удаление миниатюры
+// InvalidateThumbnailRequest is the request body for deleting a cached thumbnail.
 type InvalidateThumbnailRequest struct {
 	FilePath string `json:"filePath" binding:"required"`
 }
 
-// WarmupThumbnailsRequest запрос на предварительную генерацию миниатюр
+// WarmupThumbnailsRequest is the request body for pre-generating thumbnails.
 type WarmupThumbnailsRequest struct {
 	FilePaths []string `json:"filePaths" binding:"required"`
 }

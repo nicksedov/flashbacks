@@ -15,7 +15,7 @@ type ScanResult struct {
 	GenerationTimeMs int64
 }
 
-// GenerateThumbnailsDuringScan генерирует миниатюры для новых файлов во время сканирования
+// GenerateThumbnailsDuringScan generates thumbnails for new files found during a scan.
 func GenerateThumbnailsDuringScan(db *gorm.DB, scanPaths []string, service *Service) error {
 	// Get all new image files for thumbnail generation
 	var filesToThumbnail []domain.ImageFile

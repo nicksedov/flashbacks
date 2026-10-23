@@ -18,18 +18,18 @@ import (
 	"github.com/disintegration/imaging"
 )
 
-// Config конфигурация ThumbnailService
+// Config holds the ThumbnailService configuration.
 type Config struct {
 	CacheDir      string
-	MaxSize       int // Максимальный размер миниатюры в пикселях
-	Quality       int // Качество сжатия (0-100)
+	MaxSize       int // Maximum thumbnail dimension in pixels
+	Quality       int // Compression quality (0-100)
 	Enabled       bool
-	Format        string // "webp" или "jpeg"
+	Format        string // "webp" or "jpeg"
 	CacheTTL      time.Duration
 	PreloadOnScan bool
 }
 
-// Service управляет кэшированием миниатюр
+// Service manages thumbnail caching.
 type Service struct {
 	cfg         *Config
 	storage     *ThumbnailCacheStorage
@@ -38,7 +38,7 @@ type Service struct {
 	initialized bool
 }
 
-// ThumbnailStats статистика кэша миниатюр
+// ThumbnailStats describes thumbnail cache statistics.
 type ThumbnailStats struct {
 	TotalSize   int64  `json:"totalSize"`
 	TotalFiles  int    `json:"totalFiles"`
@@ -47,17 +47,17 @@ type ThumbnailStats struct {
 	Initialized bool   `json:"initialized"`
 }
 
-// DefaultCacheDir возвращает путь по умолчанию для кэша миниатюр (Linux XDG Compatible)
+// DefaultCacheDir returns the default thumbnail cache directory (Linux XDG compatible).
 func DefaultCacheDir() string {
 	home := os.Getenv("HOME")
-	// В Docker/Alpine HOME может быть "/" или пустым - в этих случаях используем /tmp
+	// In Docker/Alpine HOME may be "/" or empty - fall back to /tmp in that case
 	if home == "" || home == "/" {
 		return filepath.Join(os.TempDir(), "image-tool", "thumbnails")
 	}
 	return filepath.Join(home, ".cache", "image-tool", "thumbnails")
 }
 
-// NewService создает новый ThumbnailService
+// NewService creates a new ThumbnailService.
 func NewService(cfg *Config) (*Service, error) {
 	if cfg == nil {
 		cfg = &Config{
@@ -66,7 +66,7 @@ func NewService(cfg *Config) (*Service, error) {
 			Quality:       ThumbnailQuality,
 			Enabled:       true,
 			Format:        ThumbnailFormat,
-			CacheTTL:      30 * 24 * time.Hour, // 30 дней
+			CacheTTL:      30 * 24 * time.Hour, // 30 days
 			PreloadOnScan: true,
 		}
 	}
@@ -86,13 +86,13 @@ func NewService(cfg *Config) (*Service, error) {
 		initialized: true,
 	}
 
-	// Получаем статистику при инициализации
+	// Collect statistics during initialization
 	s.updateStats()
 
 	return s, nil
 }
 
-// Start инициализирует сервис (вызывается при старте приложения)
+// Start initializes the service (called on application startup).
 func (s *Service) Start() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -101,7 +101,7 @@ func (s *Service) Start() error {
 		return nil
 	}
 
-	// Убедимся, что структура кэша создана
+	// Make sure the cache directory structure exists
 	if err := s.storage.initStructure(); err != nil {
 		return fmt.Errorf("failed to initialize thumbnail cache: %w", err)
 	}
@@ -111,7 +111,7 @@ func (s *Service) Start() error {
 	return nil
 }
 
-// Stop останавливает сервис (вызывается при остановке приложения)
+// Stop stops the service (called on application shutdown).
 func (s *Service) Stop() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -119,14 +119,14 @@ func (s *Service) Stop() {
 	s.initialized = false
 }
 
-// IsEnabled проверяет, включен ли кэш
+// IsEnabled reports whether the thumbnail cache is enabled and initialized.
 func (s *Service) IsEnabled() bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.cfg.Enabled && s.initialized
 }
 
-// GetThumbnailPath возвращает путь к миниатюре для указанного файла
+// GetThumbnailPath returns the cached thumbnail path for the given file ("" when absent).
 func (s *Service) GetThumbnailPath(filePath string) string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -139,7 +139,7 @@ func (s *Service) GetThumbnailPath(filePath string) string {
 	return path
 }
 
-// HasThumbnail проверяет наличие миниатюры в кэше
+// HasThumbnail reports whether a thumbnail for the file exists in the cache.
 func (s *Service) HasThumbnail(filePath string) bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -214,7 +214,7 @@ func (s *Service) GetOrGenerate(filePath string) (string, error) {
 	return s.encodeToDataURL(encodedData), nil
 }
 
-// encodeToDataURL кодирует бинарные данные в data URL с правильным MIME типом
+// encodeToDataURL encodes binary data as a data URL with the configured MIME type.
 func (s *Service) encodeToDataURL(data []byte) string {
 	mimeType := "image/webp"
 	switch s.cfg.Format {
@@ -226,7 +226,7 @@ func (s *Service) encodeToDataURL(data []byte) string {
 	return "data:" + mimeType + ";base64," + base64.StdEncoding.EncodeToString(data)
 }
 
-// GenerateThumbnail генерирует миниатюру для указанного файла (без сохранения в кэш)
+// GenerateThumbnail generates a thumbnail for the file without caching it.
 func (s *Service) GenerateThumbnail(filePath string) ([]byte, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -234,7 +234,7 @@ func (s *Service) GenerateThumbnail(filePath string) ([]byte, error) {
 	return s.generateThumbnail(filePath)
 }
 
-// generateThumbnail внутренняя функция генерации миниатюры
+// generateThumbnail is the internal thumbnail generation routine.
 func (s *Service) generateThumbnail(filePath string) ([]byte, error) {
 	file, err := os.Open(filePath)
 	if err != nil {
@@ -291,7 +291,7 @@ func (s *Service) generateThumbnail(filePath string) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// Invalidate invalидирует миниатюру для указанного файла (удаляет из кэша)
+// Invalidate removes the thumbnail of the given file from the cache.
 func (s *Service) Invalidate(filePath string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -303,7 +303,7 @@ func (s *Service) Invalidate(filePath string) error {
 	return s.storage.Delete(filePath)
 }
 
-// saveThumbnailToCache внутренний метод для сохранения миниатюры (для интеграции со сканером)
+// saveThumbnailToCache stores a thumbnail in the cache (used by scan integration).
 func (s *Service) saveThumbnailToCache(filePath string, thumbnailData []byte) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -315,7 +315,7 @@ func (s *Service) saveThumbnailToCache(filePath string, thumbnailData []byte) er
 	return s.storage.Set(filePath, thumbnailData)
 }
 
-// InvalidateAll invalидирует все миниатюры
+// InvalidateAll removes every thumbnail from the cache.
 func (s *Service) InvalidateAll() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -332,7 +332,7 @@ func (s *Service) InvalidateAll() error {
 	return nil
 }
 
-// Warmup предварительно генерирует миниатюры для всех файлов
+// Warmup pre-generates thumbnails for the given files.
 func (s *Service) Warmup(imagePaths []string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -345,7 +345,7 @@ func (s *Service) Warmup(imagePaths []string) error {
 		if !s.storage.Exists(path) {
 			encodedData, err := s.generateThumbnail(path)
 			if err != nil {
-				continue // Пропускаем файлы с ошибками
+				continue // Skip files that failed to generate
 			}
 
 			if err := s.storage.Set(path, encodedData); err != nil {
@@ -360,7 +360,7 @@ func (s *Service) Warmup(imagePaths []string) error {
 	return nil
 }
 
-// UpdateStats обновляет статистику кэша
+// updateStats refreshes the in-memory cache statistics.
 func (s *Service) updateStats() {
 	if !s.initialized {
 		return
@@ -380,7 +380,7 @@ func (s *Service) updateStats() {
 	}
 }
 
-// Stats возвращает текущую статистику кэша
+// Stats returns the current cache statistics.
 func (s *Service) Stats() ThumbnailStats {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -410,7 +410,7 @@ func (s *Service) GetStats() (*Stats, error) {
 	}, nil
 }
 
-// UpdateCachePath обновляет путь кэша с физическим перемещением файлов
+// UpdateCachePath switches the cache directory and moves the existing thumbnail files.
 func (s *Service) UpdateCachePath(newPath string) error {
 	if newPath == "" {
 		return &ErrInvalidCachePath{Path: newPath}
@@ -422,7 +422,7 @@ func (s *Service) UpdateCachePath(newPath string) error {
 	oldPath := s.cfg.CacheDir
 	log.Printf("UpdateCachePath: old=%s, new=%s", oldPath, newPath)
 
-	// Если путь не изменился, просто обновляем статистику
+	// Same path: only refresh the statistics
 	if oldPath == newPath {
 		log.Printf("UpdateCachePath: paths are the same, updating stats only")
 		s.updateStats()
@@ -430,13 +430,13 @@ func (s *Service) UpdateCachePath(newPath string) error {
 		return nil
 	}
 
-	// Перемещаем файлы из старого хранилища в новое
+	// Move files from the old storage to the new one
 	if err := s.moveCacheTo(newPath); err != nil {
 		log.Printf("UpdateCachePath: moveCacheTo failed: %v", err)
 		return err
 	}
 
-	// Создаем новое хранилище и заменяем старое
+	// Create the new storage and swap it in
 	newStorage, err := NewThumbnailCacheStorage(newPath)
 	if err != nil {
 		log.Printf("UpdateCachePath: NewThumbnailCacheStorage failed: %v", err)
@@ -453,42 +453,42 @@ func (s *Service) UpdateCachePath(newPath string) error {
 	return nil
 }
 
-// moveCacheTo перемещает кэш в новое место
+// moveCacheTo moves the cached files to newPath.
 func (s *Service) moveCacheTo(newPath string) error {
 	oldPath := s.cfg.CacheDir
 
-	// Если старый путь пустой, ничего не перемещаем
+	// Nothing to move when the old path is empty
 	if oldPath == "" {
 		return nil
 	}
 
-	// Проверяем, существует ли старая директория
+	// Check whether the old directory exists
 	if _, err := os.Stat(oldPath); os.IsNotExist(err) {
-		// Старая директория не существует, просто создаем новую
+		// Old directory missing: just create the new one
 		if err := os.MkdirAll(newPath, 0755); err != nil {
 			return &ErrCacheInitFailed{Path: newPath, Err: err}
 		}
 		return nil
 	}
 
-	// Получаем список файлов в текущем кэше
+	// List the files in the current cache
 	files, err := s.storage.ListFiles()
 	if err != nil {
-		// Если не удалось получить список файлов, пробуем продолжить
-		// Возможно, кэш пустой или структура не создана
+		// Failed to list files: continue with an empty set, the cache may be
+		// empty or its directory structure may not exist yet
 		files = []string{}
 	}
 
-	// Перемещаем каждый файл
+	// Move each file
 	for _, srcPath := range files {
-		// Считываем содержимое
+		// Read the contents
 		data, err := os.ReadFile(srcPath)
 		if err != nil {
-			// Пропускаем файлы, которые не удалось прочитать
+			// Skip unreadable files
 			continue
 		}
 
-		// Записываем в новое место
+		// Write to the new location
 		dstPath := filepath.Join(newPath, filepath.Base(filepath.Dir(srcPath)), filepath.Base(srcPath))
 		if err := os.MkdirAll(filepath.Dir(dstPath), 0755); err != nil {
 			continue
@@ -498,17 +498,17 @@ func (s *Service) moveCacheTo(newPath string) error {
 			continue
 		}
 
-		// Удаляем старый файл после успешного копирования
+		// Remove the old file after the copy succeeded
 		os.Remove(srcPath)
 	}
 
-	// Удаляем старую папку кэша (она должна быть пустой после перемещения файлов)
+	// Remove the old cache tree (it should be empty after the move)
 	s.cleanupEmptyDirs(oldPath)
 
 	return nil
 }
 
-// cleanupEmptyDirs удаляет пустые подпапки
+// cleanupEmptyDirs removes empty subdirectories.
 func (s *Service) cleanupEmptyDirs(dir string) {
 	filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -516,7 +516,7 @@ func (s *Service) cleanupEmptyDirs(dir string) {
 		}
 
 		if info.IsDir() {
-			// Пытаемся удалить пустую папку
+			// Try to remove the empty directory
 			os.Remove(path)
 		}
 
@@ -524,7 +524,7 @@ func (s *Service) cleanupEmptyDirs(dir string) {
 	})
 }
 
-// Enable включает кэш
+// Enable turns the thumbnail cache on.
 func (s *Service) Enable() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -535,7 +535,7 @@ func (s *Service) Enable() {
 	}
 }
 
-// Disable выключает кэш
+// Disable turns the thumbnail cache off.
 func (s *Service) Disable() {
 	s.mu.Lock()
 	defer s.mu.Unlock()

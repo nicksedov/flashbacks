@@ -3,6 +3,7 @@ import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { SearchableSelect } from "@/components/ui/searchable-select"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -60,6 +61,11 @@ const INSTRUMENT_DESCRIPTIONS: Record<LlmInstrumentType, string> = {
   embedding: "llm_ocr.embeddingSettingsDescription",
   image_edit: "llm_ocr.imgEditSettingsDescription",
   ocr: "llm_ocr.ocrSettingsDescription",
+}
+
+/** Dropdown label for a model: its name plus the size suffix when the catalog reports one. */
+function formatModelLabel(model: LlmModelDTO): string {
+  return `${model.name}${model.size ? ` (${(model.size / 1073741824).toFixed(1)} GB)` : ""}`
 }
 
 const EMPTY_SETTINGS: LlmSettingsResponse = {
@@ -329,6 +335,7 @@ export function AdminAnalysisTab() {
     const model = instrument?.model ?? ""
     const models = modelCache[alias] ?? []
     const compatibleModels = filterModelsForInstrument(models, type)
+    const modelOptions = compatibleModels.map((m) => ({ value: m.id, label: formatModelLabel(m) }))
     const isManual = manualModelInputs.has(type)
     const isLoadingModelsVal = loadingModelsAlias === alias
 
@@ -380,16 +387,14 @@ export function AdminAnalysisTab() {
                 </div>
                 {compatibleModels.length > 0 && !isManual ? (
                   <div className="space-y-2">
-                    <Select value={model} onValueChange={(v) => saveInstrument(type, "model", v)}>
-                      <SelectTrigger>
-                        <SelectValue placeholder={t("llm_providers.selectModel")} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {compatibleModels.map(m => (
-                          <SelectItem key={m.id} value={m.id}>{m.name}{m.size ? ` (${(m.size / 1073741824).toFixed(1)} GB)` : ""}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <SearchableSelect
+                      value={model}
+                      onValueChange={(v) => saveInstrument(type, "model", v)}
+                      options={modelOptions}
+                      placeholder={t("llm_providers.selectModel")}
+                      searchPlaceholder={t("llm_providers.searchModels")}
+                      noResultsText={t("llm_providers.noMatchingModels")}
+                    />
                     <Button variant="link" size="sm" className="px-0 h-auto text-xs" onClick={() => setManualModelInputs(s => new Set(s).add(type))}>
                       {t("llm_providers.enterModelManually")}
                     </Button>
@@ -544,6 +549,7 @@ export function AdminAnalysisTab() {
                   const model = embeddingInstrument?.model ?? ""
                   const models = modelCache[alias] ?? []
                   const compatibleModels = filterModelsForInstrument(models, "embedding")
+                  const modelOptions = compatibleModels.map((m) => ({ value: m.id, label: formatModelLabel(m) }))
                   const isManual = manualModelInputs.has("embedding")
                   const isLoadingModelsVal = loadingModelsAlias === alias
                   return (
@@ -564,10 +570,14 @@ export function AdminAnalysisTab() {
                         </div>
                         {compatibleModels.length > 0 && !isManual ? (
                           <div className="space-y-2">
-                            <Select value={model} onValueChange={v => saveInstrument("embedding", "model", v)}>
-                              <SelectTrigger><SelectValue placeholder={t("llm_providers.selectModel")} /></SelectTrigger>
-                              <SelectContent>{compatibleModels.map(m => <SelectItem key={m.id} value={m.id}>{m.name}{m.size ? ` (${(m.size / 1073741824).toFixed(1)} GB)` : ""}</SelectItem>)}</SelectContent>
-                            </Select>
+                            <SearchableSelect
+                              value={model}
+                              onValueChange={v => saveInstrument("embedding", "model", v)}
+                              options={modelOptions}
+                              placeholder={t("llm_providers.selectModel")}
+                              searchPlaceholder={t("llm_providers.searchModels")}
+                              noResultsText={t("llm_providers.noMatchingModels")}
+                            />
                             <Button variant="link" size="sm" className="px-0 h-auto text-xs" onClick={() => setManualModelInputs(s => new Set(s).add("embedding"))}>{t("llm_providers.enterModelManually")}</Button>
                           </div>
                         ) : (

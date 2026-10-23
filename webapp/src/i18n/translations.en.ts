@@ -788,6 +788,8 @@ export const translationsEn = {
   "llm_providers.manageInProvidersTab": "Manage in LLM Providers",
   "llm_providers.viewDetails": "View model details",
   "llm_providers.noCompatibleModels": "No models compatible with this instrument. Use manual entry below.",
+  "llm_providers.searchModels": "Search models…",
+  "llm_providers.noMatchingModels": "No models match your search",
   "llm_model_details.contextLength": "Context length",
   "llm_model_details.inputModalities": "Input modalities",
   "llm_model_details.outputModalities": "Output modalities",

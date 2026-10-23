@@ -217,7 +217,6 @@ var AppSet = wire.NewSet(
 	ProvideSettingsLoader,
 	ProvideFileMover,
 	ProvideThumbnailBatch,
-	ProvideRotationBackfill,
 )
 
 // ProvideScanManager creates the scan manager.
@@ -290,11 +289,6 @@ func ProvideFileMover(db *gorm.DB) *helpers.FileMover {
 // ProvideThumbnailBatch creates the thumbnail batch generator.
 func ProvideThumbnailBatch(provider thumbnail.ThumbnailProvider) *helpers.ThumbnailBatch {
 	return helpers.NewThumbnailBatch(provider)
-}
-
-// ProvideRotationBackfill creates the startup orientation backfill.
-func ProvideRotationBackfill(provider thumbnail.ThumbnailProvider, repo repository.ImageFileRepository) *thumbnail.RotationBackfill {
-	return thumbnail.NewRotationBackfill(provider, repo)
 }
 
 // ──────────────────────────────────────────────────────────────────────────────

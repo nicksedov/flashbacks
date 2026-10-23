@@ -13,7 +13,6 @@ type ImageFileRepository interface {
 	FindByID(id uint) (*domain.ImageFile, error)
 	CountByPathPrefix(prefix string) (int64, error)
 	DeleteByPathPrefix(prefix string) (int64, error)
-	ListAll() ([]domain.ImageFile, error)
 }
 
 type gormImageFileRepo struct {
@@ -50,12 +49,4 @@ func (r *gormImageFileRepo) CountByPathPrefix(prefix string) (int64, error) {
 func (r *gormImageFileRepo) DeleteByPathPrefix(prefix string) (int64, error) {
 	result := r.db.Where("path LIKE ?", prefix+"%").Delete(&domain.ImageFile{})
 	return result.RowsAffected, result.Error
-}
-
-func (r *gormImageFileRepo) ListAll() ([]domain.ImageFile, error) {
-	var files []domain.ImageFile
-	if err := r.db.Order("id").Find(&files).Error; err != nil {
-		return nil, err
-	}
-	return files, nil
 }

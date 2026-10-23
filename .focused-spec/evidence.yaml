@@ -692,12 +692,3 @@ scopes:
     thumbnails.orientation-1-unrotated:
       evidence:
         - go::./internal/application/thumbnail::TestGenerateThumbnail_Orientation1Unrotated
-    thumbnails.startup-backfill-rotated:
-      evidence:
-        - go::./internal/application/thumbnail::TestRotationBackfill_RegeneratesRotated
-    thumbnails.startup-backfill-idempotent:
-      evidence:
-        - go::./internal/application/thumbnail::TestRotationBackfill_Idempotent
-    thumbnails.startup-backfill-unrotated-skipped:
-      evidence:
-        - go::./internal/application/thumbnail::TestRotationBackfill_SkipsUnrotated

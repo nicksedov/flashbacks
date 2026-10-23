@@ -113,13 +113,6 @@ and the mirrored values `2`, `4`, `5`, `7` are flipped as well. Note that
 `imaging.Rotate90`/`Rotate270` rotate counter-clockwise, so those helpers must be
 paired with the values in reverse.
 
-On startup the service runs a one-time orientation backfill: it scans indexed
-image files and regenerates cached thumbnails for photos whose orientation is not
-`1`. Completion is recorded as `.orientation-backfill.v2` in the cache directory;
-delete that file, or bump the marker name, to force another pass (the marker is
-bumped whenever the rotation mapping changes, since only a new marker name
-re-processes an already corrected cache).
-
 ## API Documentation
 
 OpenAPI specification: [`docs/api-contracts/core.yaml`](../docs/api-contracts/core.yaml)

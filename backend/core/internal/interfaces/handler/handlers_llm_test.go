@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"encoding/json"
 	"net/http"
 	"testing"
 	"time"
@@ -25,6 +26,7 @@ func newLlmTestServer(t *testing.T) (*Server, *gorm.DB, func()) {
 		settingsLoader: helpers.NewSettingsLoader(db),
 		llmFactory:     helpers.NewLLMFactory(db, 0),
 		llmOcrService:  imaging.NewLlmOcrService(db),
+		llmRepo:        repository.NewLlmRepository(db),
 		imageFileRepo:  repository.NewImageFileRepository(db),
 		imageTagRepo:   repository.NewImageTagRepository(db),
 	}
@@ -129,4 +131,59 @@ func TestHandleLlmRecognize_UsesOCRInstrument(t *testing.T) {
 	}
 
 	time.Sleep(200 * time.Millisecond)
+}
+
+// getLlmSettings serves GET /api/llm-settings and decodes the response.
+func getLlmSettings(t *testing.T, svc *Server) dto.LlmSettingsResponse {
+	t.Helper()
+	w := serveHandler(svc.handleGetLlmSettings, http.MethodGet, "/api/llm-settings", nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("GET llm settings: expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	var resp dto.LlmSettingsResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to unmarshal llm settings response: %v", err)
+	}
+	return resp
+}
+
+// tag-scan-schedule.days-persisted
+func TestUpdateLlmSettingsTagScanDaysPersisted(t *testing.T) {
+	svc, db, cleanup := newLlmTestServer(t)
+	defer cleanup()
+
+	days := "1,3,5"
+	w := serveHandler(svc.handleUpdateLlmSettings, http.MethodPut, "/api/llm-settings", dto.UpdateLlmSettingsRequest{
+		TagScanDays: &days,
+	})
+	if w.Code != http.StatusOK {
+		t.Fatalf("PUT llm settings: expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var stored domain.TagScanSettings
+	if err := db.First(&stored).Error; err != nil {
+		t.Fatalf("failed to load stored tag scan settings: %v", err)
+	}
+	if stored.Days != days {
+		t.Errorf("stored tag scan days = %q, want %q", stored.Days, days)
+	}
+
+	if got := getLlmSettings(t, svc).TagScan.Days; got != days {
+		t.Errorf("response tagScan.days = %q, want %q", got, days)
+	}
+}
+
+// TestGetLlmSettingsDefaultsTagScanWeekdays covers the default weekday set
+// used when no tag scan settings row exists yet.
+func TestGetLlmSettingsDefaultsTagScanWeekdays(t *testing.T) {
+	svc, db, cleanup := newLlmTestServer(t)
+	defer cleanup()
+
+	if err := db.Exec("DELETE FROM tag_scan_settings").Error; err != nil {
+		t.Fatalf("failed to clear tag scan settings: %v", err)
+	}
+
+	if got := getLlmSettings(t, svc).TagScan.Days; got != "1,2,3,4,5" {
+		t.Errorf("default tagScan.days = %q, want %q", got, "1,2,3,4,5")
+	}
 }

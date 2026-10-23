@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
 import { ProgressIndicator } from "@/components/ui/progress"
+import { ScheduleEditor } from "@/components/ui/schedule-editor"
 import {
   fetchOCRStatus,
   startOcrClassification,
@@ -28,6 +29,7 @@ import {
 import { Shield, Loader2, Zap, Wand2, Play, Square, RefreshCw, Database } from "lucide-react"
 import { useTranslation } from "@/i18n"
 import { filterModelsForInstrument } from "@/lib/llm-model-filter"
+import { daysToString, parseDaysString } from "@/lib/schedule"
 import type {
   OCRStatus,
   OcrClassificationStatusResponse,
@@ -70,7 +72,7 @@ function formatModelLabel(model: LlmModelDTO): string {
 
 const EMPTY_SETTINGS: LlmSettingsResponse = {
   instruments: [],
-  tagScan: { enabled: false, startHour: 23, startMinute: 0, endHour: 7, endMinute: 0, timezoneOffset: 0 },
+  tagScan: { enabled: false, days: "1,2,3,4,5", startHour: 23, startMinute: 0, endHour: 7, endMinute: 0, timezoneOffset: 0 },
   embedding: { dimension: 1024, batchSize: 50 },
   providers: [],
 }
@@ -123,6 +125,7 @@ export function AdminAnalysisTab() {
 
   // Tag Scan state
   const [tagScanEnabled, setTagScanEnabled] = useState(false)
+  const [tagScanDays, setTagScanDays] = useState<boolean[]>([false, true, true, true, true, true, false]) // index 0=Sun,1=Mon..6=Sat
   const [tagScanStartHour, setTagScanStartHour] = useState(23)
   const [tagScanStartMinute, setTagScanStartMinute] = useState(0)
   const [tagScanEndHour, setTagScanEndHour] = useState(7)
@@ -228,12 +231,21 @@ export function AdminAnalysisTab() {
   const handleSaveTagScanSchedule = useCallback(async () => {
     setIsTagScanSaving(true)
     try {
-      await updateLlmSettings({ tagScanEnabled, tagScanStartHour, tagScanStartMinute, tagScanEndHour, tagScanEndMinute, tagScanTimezoneOffset: new Date().getTimezoneOffset() })
+      await updateLlmSettings({ tagScanEnabled, tagScanDays: daysToString(tagScanDays), tagScanStartHour, tagScanStartMinute, tagScanEndHour, tagScanEndMinute, tagScanTimezoneOffset: new Date().getTimezoneOffset() })
       toast.success(t("tagScan.saved"))
       setTagScanFormDirty(false); await loadTagScanStatus()
     } catch (err) { toast.error(err instanceof Error ? err.message : t("tagScan.saveFailed")) }
     finally { setIsTagScanSaving(false) }
-  }, [tagScanEnabled, tagScanStartHour, tagScanStartMinute, tagScanEndHour, tagScanEndMinute, loadTagScanStatus, t])
+  }, [tagScanEnabled, tagScanDays, tagScanStartHour, tagScanStartMinute, tagScanEndHour, tagScanEndMinute, loadTagScanStatus, t])
+
+  const toggleTagScanDay = useCallback((dayIndex: number) => {
+    setTagScanDays(prev => {
+      const next = [...prev]
+      next[dayIndex] = !next[dayIndex]
+      return next
+    })
+    setTagScanFormDirty(true)
+  }, [])
 
   const handleTagScanFieldChange = useCallback((field: string, value: string | boolean | number) => {
     switch (field) {
@@ -292,6 +304,7 @@ export function AdminAnalysisTab() {
         const s = await fetchLlmSettings()
         setLlmSettings(s)
         setTagScanEnabled(s.tagScan?.enabled ?? false)
+        setTagScanDays(parseDaysString(s.tagScan?.days ?? "1,2,3,4,5"))
         setTagScanStartHour(s.tagScan?.startHour ?? 23)
         setTagScanStartMinute(s.tagScan?.startMinute ?? 0)
         setTagScanEndHour(s.tagScan?.endHour ?? 7)
@@ -635,39 +648,21 @@ export function AdminAnalysisTab() {
           </div>
           {tagScanEnabled && (
             <>
-              <div className="space-y-2">
-                <Label>{t("tagScan.schedule")}</Label>
-                <div className="flex items-center gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="tag-scan-start-hour">{t("tagScan.startTime")}</Label>
-                    <div className="flex gap-2">
-                      <Select value={String(tagScanStartHour)} onValueChange={v => handleTagScanFieldChange("tagScanStartHour", Number(v))}>
-                        <SelectTrigger id="tag-scan-start-hour" className="w-20"><SelectValue /></SelectTrigger>
-                        <SelectContent>{Array.from({ length: 24 }, (_, i) => i).map(h => <SelectItem key={h} value={String(h)}>{String(h).padStart(2, "0")}</SelectItem>)}</SelectContent>
-                      </Select>
-                      <span className="self-center text-muted-foreground">:</span>
-                      <Select value={String(tagScanStartMinute)} onValueChange={v => handleTagScanFieldChange("tagScanStartMinute", Number(v))}>
-                        <SelectTrigger id="tag-scan-start-minute" className="w-20"><SelectValue /></SelectTrigger>
-                        <SelectContent>{Array.from({ length: 12 }, (_, i) => i * 5).map(m => <SelectItem key={m} value={String(m)}>{String(m).padStart(2, "0")}</SelectItem>)}</SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="tag-scan-end-hour">{t("tagScan.endTime")}</Label>
-                    <div className="flex gap-2">
-                      <Select value={String(tagScanEndHour)} onValueChange={v => handleTagScanFieldChange("tagScanEndHour", Number(v))}>
-                        <SelectTrigger id="tag-scan-end-hour" className="w-20"><SelectValue /></SelectTrigger>
-                        <SelectContent>{Array.from({ length: 24 }, (_, i) => i).map(h => <SelectItem key={h} value={String(h)}>{String(h).padStart(2, "0")}</SelectItem>)}</SelectContent>
-                      </Select>
-                      <span className="self-center text-muted-foreground">:</span>
-                      <Select value={String(tagScanEndMinute)} onValueChange={v => handleTagScanFieldChange("tagScanEndMinute", Number(v))}>
-                        <SelectTrigger id="tag-scan-end-minute" className="w-20"><SelectValue /></SelectTrigger>
-                        <SelectContent>{Array.from({ length: 12 }, (_, i) => i * 5).map(m => <SelectItem key={m} value={String(m)}>{String(m).padStart(2, "0")}</SelectItem>)}</SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                </div>
-              </div>
+              <p className="text-xs text-muted-foreground">{t("tagScan.scheduleHint")}</p>
+              <ScheduleEditor
+                mode="window"
+                idPrefix="tag-scan"
+                days={tagScanDays}
+                onToggleDay={toggleTagScanDay}
+                startHour={tagScanStartHour}
+                startMinute={tagScanStartMinute}
+                endHour={tagScanEndHour}
+                endMinute={tagScanEndMinute}
+                onStartHourChange={v => handleTagScanFieldChange("tagScanStartHour", v)}
+                onStartMinuteChange={v => handleTagScanFieldChange("tagScanStartMinute", v)}
+                onEndHourChange={v => handleTagScanFieldChange("tagScanEndHour", v)}
+                onEndMinuteChange={v => handleTagScanFieldChange("tagScanEndMinute", v)}
+              />
               {tagScanStatus && (
                 <div className="space-y-2">
                   <Label>{t("tagScan.status")}</Label>

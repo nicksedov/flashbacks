@@ -812,3 +812,31 @@ scopes:
     thumbnails.orientation-1-unrotated:
       evidence:
         - go::./internal/application/thumbnail::TestGenerateThumbnail_Orientation1Unrotated
+    tag-scan-schedule.days-persisted:
+      evidence:
+        - go::./internal/interfaces/handler::TestUpdateLlmSettingsTagScanDaysPersisted
+    tag-scan-schedule.selected-day-opens-window:
+      evidence:
+        - go::./internal/application/imaging::TestTagScanWindowOpensOnSelectedWeekday
+    tag-scan-schedule.unselected-day-closed:
+      evidence:
+        - go::./internal/application/imaging::TestTagScanWindowClosedOnUnselectedWeekday
+    tag-scan-schedule.no-days-selected-disables:
+      evidence:
+        - go::./internal/application/imaging::TestTagScanWindowClosedWithoutSelectedDays
+    tag-scan-schedule.next-opening-skips-unselected-days:
+      evidence:
+        - go::./internal/application/imaging::TestTagScanNextOpenSkipsUnselectedWeekday
+    tag-scan-schedule.days-saved-from-ui:
+      evidence:
+        - vitest::webapp/src/components/tabs/AdminAnalysisTab.test.tsx::AdminAnalysisTab tagging schedule > saves the selected weekday together with the tagging schedule
+    design-system.schedule-editor-shared:
+      evidence:
+        - vitest::webapp/src/components/tabs/AdminGeneralTab.test.tsx::AdminGeneralTab sync schedule > renders the sync schedule through the shared schedule editor
+        - vitest::webapp/src/components/tabs/AdminAnalysisTab.test.tsx::AdminAnalysisTab tagging schedule > renders the tagging schedule through the shared schedule editor
+    design-system.schedule-editor-weekday-order:
+      evidence:
+        - vitest::webapp/src/components/ui/schedule-editor.test.tsx::ScheduleEditor > orders weekday controls Monday through Sunday
+    design-system.schedule-editor-weekday-labels-localized:
+      evidence:
+        - vitest::webapp/src/components/ui/schedule-editor.test.tsx::ScheduleEditor > labels weekdays in Russian under the Russian interface

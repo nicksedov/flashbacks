@@ -2863,6 +2863,11 @@ components:
       properties:
         enabled:
           type: boolean
+        days:
+          type: string
+          description: >-
+            Comma-separated weekday numbers (0=Sunday ... 6=Saturday) tag
+            scanning may run on; an empty string disables the schedule.
         startHour:
           type: integer
         startMinute:
@@ -2890,6 +2895,11 @@ components:
           properties:
             enabled:
               type: boolean
+        tagScanDays:
+          type: string
+          description: >-
+            Comma-separated weekday numbers (0=Sunday ... 6=Saturday) the tag
+            scan schedule runs on; an empty string disables it.
         embedding:
           type: object
           properties:

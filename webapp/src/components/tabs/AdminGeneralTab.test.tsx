@@ -85,3 +85,14 @@ describe("AdminGeneralTab gallery folders", () => {
     expect(hasClass(row, "flex-wrap")).toBe(true)
   })
 })
+
+describe("AdminGeneralTab sync schedule", () => {
+  // design-system.schedule-editor-shared (sync side)
+  it("renders the sync schedule through the shared schedule editor", () => {
+    const { container } = render(<AdminGeneralTab />)
+
+    const editor = container.querySelector('[data-slot="schedule-editor"]')
+    expect(editor).not.toBeNull()
+    expect(container.querySelectorAll('[data-slot="schedule-day"]')).toHaveLength(7)
+  })
+})

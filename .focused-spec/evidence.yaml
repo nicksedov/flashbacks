@@ -10,6 +10,30 @@ scopes:
       evidence:
         - go::./internal/infrastructure/llm::TestAlibabaChatIdentifierNotVision
         - go::./internal/infrastructure/llm::TestGenericFamilyDoesNotHideVisionSiblings
+    llm-model-metadata.wan-image-identifier:
+      evidence:
+        - go::./internal/infrastructure/llm::TestEnrichedWanImageModelSupportsImageEditing
+    llm-model-metadata.image-family-identifiers:
+      evidence:
+        - go::./internal/infrastructure/llm::TestImageGenerationIdentifiersAreImageEditCapable
+    llm-model-metadata.video-family-not-image-edit:
+      evidence:
+        - go::./internal/infrastructure/llm::TestImageGenerationIdentifiersAreImageEditCapable
+    llm-model-metadata.image-output-implies-image-edit:
+      evidence:
+        - go::./internal/infrastructure/llm::TestImageOutputModalityIsImageEditCapable
+    llm-model-metadata.alibaba-underreported-image-model:
+      evidence:
+        - go::./internal/infrastructure/llm::TestAlibabaCatalogUnderReportedImageModelIsImageEditCapable
+    llm-model-metadata.alibaba-image-code-spellings:
+      evidence:
+        - go::./internal/infrastructure/llm::TestNormalizeCapabilitiesImageGeneration
+    llm-model-metadata.alibaba-video-model-not-image-edit:
+      evidence:
+        - go::./internal/infrastructure/llm::TestAlibabaCatalogWanVideoStaysVideoOnly
+    llm-model-metadata.refresh-replaces-stored-classification:
+      evidence:
+        - go::./internal/application/llm::TestRefreshCorrectsImageEditClassification
     llm-model-catalog.native-source-preferred:
       evidence:
         - go::./internal/application/llm::TestCatalogPrefersRichSource

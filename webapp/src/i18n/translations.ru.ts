@@ -600,7 +600,7 @@ export const translationsRu = {
   // Image Edit LLM Settings
   "llm_ocr.imgEditSettings": "Настройки LLM для редактирования изображений",
   "llm_ocr.imgEditSettingsDescription": "Настройте ИИ для улучшения качества изображений: повышение детализации, устранение размытия, увеличение разрешения",
-  "llm_providers.usageShortImgEdit": "ImgEdit",
+  "llm_providers.usageShortImgEdit": "Image Edit",
   "llm_providers.usageShortOCR": "OCR",
   "llm_ocr.settingsSaved": "Настройки сохранены",
   "llm_ocr.settingsSaveFailed": "Ошибка сохранения настроек",

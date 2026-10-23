@@ -690,7 +690,7 @@ export const translationsEn = {
   // Image Edit LLM Settings
   "llm_ocr.imgEditSettings": "Image Edit LLM Settings",
   "llm_ocr.imgEditSettingsDescription": "Configure AI for image quality enhancement: detail improvement, deblurring, resolution upscaling",
-  "llm_providers.usageShortImgEdit": "ImgEdit",
+  "llm_providers.usageShortImgEdit": "Image Edit",
   "llm_providers.usageShortOCR": "OCR",
   "llm_ocr.settingsSaved": "Settings saved",
   "llm_ocr.settingsSaveFailed": "Failed to save settings",

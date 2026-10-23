@@ -101,24 +101,62 @@ type AuditLog struct {
 	CreatedAt   time.Time   `json:"createdAt"`
 }
 
-// AuthError represents authentication error types
-type AuthError string
-
-func (e AuthError) Error() string {
-	return string(e)
+// AuthError is a sentinel authentication error.
+//
+// It is declared as a struct whose Error method has a pointer receiver, so only
+// *AuthError implements the error interface. A value-receiver string type would
+// have made both AuthError and *AuthError implement error, leaving it ambiguous
+// whether callers compare by value or by pointer (and hiding mismatches between
+// the two forms). The concrete sentinels are the package-level variables below
+// and must be matched by identity (errors.Is or ==).
+type AuthError struct {
+	// msg is the developer/log-facing description of the error. User-facing
+	// text is selected by the interfaces layer from i18n.Msg* keys, never from
+	// this field.
+	msg string
 }
 
-const (
-	ErrInvalidCredentials   AuthError = "Неверный логин или пароль"
-	ErrUserDeactivated      AuthError = "Учётная запись деактивирована"
-	ErrRateLimited          AuthError = "Слишком много попыток входа. Попробуйте позже"
-	ErrForbidden            AuthError = "Недостаточно прав"
-	ErrAccountPending       AuthError = "Учётная запись ожидает одобрения администратора"
-	ErrAccountRejected      AuthError = "Учётная запись отклонена администратором"
-	ErrRegistrationDisabled AuthError = "Самостоятельная регистрация отключена"
-	ErrUserNotPending       AuthError = "Учётная запись не ожидает одобрения"
-	ErrBootstrapMode        AuthError = "Режим первичной настройки"
-	ErrInvalidRequestFormat AuthError = "Неверный формат запроса"
-	ErrPasswordLength       AuthError = "Пароль должен содержать от 8 до 128 символов"
-	ErrUserExists           AuthError = "Пользователь с таким логином уже существует"
+// Error implements the error interface. The pointer receiver is deliberate: it
+// guarantees that only *AuthError (never a copy) satisfies error.
+func (e *AuthError) Error() string {
+	return e.msg
+}
+
+// Authentication error sentinels. Each one is a distinct *AuthError value, so
+// errors can be matched with errors.Is or a direct == comparison.
+//
+// Messages are English, log-facing descriptions. Translated, user-facing text is
+// resolved in the interfaces layer from the matching i18n.Msg* keys, never here.
+var (
+	// ErrInvalidCredentials is returned for a wrong login/password pair or a
+	// wrong current password.
+	ErrInvalidCredentials = &AuthError{msg: "invalid login or password"}
+	// ErrUserDeactivated is returned when the account is deactivated.
+	ErrUserDeactivated = &AuthError{msg: "account is deactivated"}
+	// ErrRateLimited is returned when the caller exceeded the auth rate limit.
+	ErrRateLimited = &AuthError{msg: "too many login attempts, please try again later"}
+	// ErrForbidden is returned when the actor lacks the required role.
+	ErrForbidden = &AuthError{msg: "insufficient permissions"}
+	// ErrAccountPending is returned while the account awaits admin approval.
+	ErrAccountPending = &AuthError{msg: "account is pending administrator approval"}
+	// ErrAccountRejected is returned when the account was rejected by an admin.
+	ErrAccountRejected = &AuthError{msg: "account has been rejected by an administrator"}
+	// ErrRegistrationDisabled is returned when self-service sign-up is off.
+	ErrRegistrationDisabled = &AuthError{msg: "self-service registration is disabled"}
+	// ErrUserNotPending is returned when approving/rejecting a user that is not
+	// pending.
+	ErrUserNotPending = &AuthError{msg: "account is not awaiting approval"}
+	// ErrBootstrapMode is returned when the action is unavailable while the
+	// system is in bootstrap mode.
+	ErrBootstrapMode = &AuthError{msg: "bootstrap mode is active"}
+	// ErrInvalidRequestFormat is returned when required request fields are
+	// missing or malformed.
+	ErrInvalidRequestFormat = &AuthError{msg: "invalid request format"}
+	// ErrPasswordLength is returned when the password violates the length rules.
+	ErrPasswordLength = &AuthError{msg: "password must be between 8 and 128 characters"}
+	// ErrUserExists is returned when the login is already taken.
+	ErrUserExists = &AuthError{msg: "user with this login already exists"}
 )
+
+// compile-time assertion: only the pointer form implements error.
+var _ error = (*AuthError)(nil)

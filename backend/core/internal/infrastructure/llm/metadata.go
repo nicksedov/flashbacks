@@ -401,12 +401,16 @@ var capabilityCodeMap = map[string][]string{
 	"embeddings": {"embedding"},
 
 	// Alibaba ModelStudio reports image-generation models with the "IG" code.
-	// Qwen-Image models unify generation and editing, so IG is treated as
-	// image-edit capable for instrument filtering.
+	// Qwen-Image and wan image models unify generation and editing, so every
+	// image-generation code is treated as image-edit capable for instrument
+	// filtering. The separator-less spellings are what some catalog revisions
+	// return for the same capability.
 	"image_edit":       {"image_edit"},
 	"image-edit":       {"image_edit"},
 	"image_generation": {"image_edit"},
 	"image-generation": {"image_edit"},
+	"imagegeneration":  {"image_edit"},
+	"imagegen":         {"image_edit"},
 	"ig":               {"image_edit"},
 
 	"reasoning": {"reasoning"},
@@ -484,8 +488,8 @@ func normalizeModalityList(raw []string) []string {
 // are lower-cased and deduplicated while keeping their input/output direction.
 func normalizeModelInfo(info ModelInfo) ModelInfo {
 	info.Capabilities = normalizeCapabilities(info.Capabilities)
-	if len(info.Capabilities) == 0 && len(info.InputModalities) > 0 {
-		info.Capabilities = capabilitiesFromModalities(info.InputModalities)
+	if len(info.Capabilities) == 0 && (len(info.InputModalities) > 0 || len(info.OutputModalities) > 0) {
+		info.Capabilities = capabilitiesFromModalities(info.InputModalities, info.OutputModalities)
 	}
 	info.InputModalities = normalizeModalityList(info.InputModalities)
 	info.OutputModalities = normalizeModalityList(info.OutputModalities)
@@ -512,20 +516,29 @@ func NormalizeModelInfo(info ModelInfo) ModelInfo {
 }
 
 // inferModalities derives input and output modality lists from standardized
-// capabilities. A vision capability implies image input.
+// capabilities. A vision capability implies image input; an image_edit
+// capability accepts an image prompt and answers with an image.
 func inferModalities(caps []string) (input []string, output []string) {
 	input = []string{"text"}
-	if containsFold(caps, "vision") {
+	if containsFold(caps, "vision") || containsFold(caps, "image_edit") {
 		input = append(input, "image")
 	}
 	output = []string{"text"}
+	if containsFold(caps, "image_edit") {
+		output = []string{"image"}
+	}
 	return input, output
 }
 
 // capabilitiesFromModalities builds standardized capabilities from a model's
-// input modality list: an image input implies vision, and all other models are
-// treated as chat + tool_calling.
-func capabilitiesFromModalities(inputModalities []string) []string {
+// reported modalities. An image output means the model generates or edits
+// images, so it is image_edit capable and never a chat model (the same reading
+// the catalog's "IG" code receives). Otherwise an image input implies vision and
+// the model is treated as chat + tool_calling.
+func capabilitiesFromModalities(inputModalities, outputModalities []string) []string {
+	if containsFold(outputModalities, "image") {
+		return []string{"image_edit"}
+	}
 	caps := []string{"chat", "tool_calling"}
 	if containsFold(inputModalities, "image") {
 		caps = appendUnique(caps, "vision")
@@ -549,21 +562,55 @@ func mergeModalities(lists ...[]string) []string {
 }
 
 // inferCapabilitiesByID falls back to model-ID heuristics for providers that do
-// not report capabilities. Embedding models are detected first; image-edit and
-// vision models are detected from family tokens.
+// not report capabilities. Embedding models are detected first, then image
+// generation/editing models; everything else is a chat model plus vision when
+// the identifier names a vision lineage.
 func inferCapabilitiesByID(modelID string) []string {
 	lower := strings.ToLower(modelID)
 	if strings.Contains(lower, "embedding") {
 		return []string{"embedding"}
 	}
+	// An image generator is image-edit capable and nothing else: it must not
+	// inherit chat/tool_calling from the default chat set.
+	if isImageGenerationModelID(lower) {
+		return []string{"image_edit"}
+	}
 	caps := []string{"chat", "tool_calling"}
 	if isVisionModelID(lower) {
 		caps = appendUnique(caps, "vision")
 	}
-	if strings.Contains(lower, "image-edit") || strings.Contains(lower, "image_edit") {
-		caps = appendUnique(caps, "image_edit")
-	}
 	return caps
+}
+
+// imageGenerationFamilyTokens are the identifier tokens that explicitly name an
+// image generation/editing lineage, independent of the provider's capability
+// codes. Qwen-Image and wan image models unify text-to-image and
+// image-to-image, so every one of them is treated as image-edit capable for
+// instrument filtering (the same meaning the catalog's "IG" code receives).
+var imageGenerationFamilyTokens = []string{
+	"image-edit", "image_edit", "imageedit",
+	"qwen-image", "wanx", "cogview", "gpt-image", "dall-e",
+	"stable-diffusion", "i2i", "t2i",
+}
+
+// isImageGenerationModelID reports whether a lower-cased model identifier names
+// an image generation or editing model.
+func isImageGenerationModelID(lower string) bool {
+	for _, tok := range imageGenerationFamilyTokens {
+		if strings.Contains(lower, tok) {
+			return true
+		}
+	}
+	// Versioned wan and qwen image models (wan2.7-image, wan2.6-image-pro,
+	// qwen-image-2.1-pro) interleave the family name with a version number, so
+	// no single static token survives. They are matched structurally instead:
+	// the family prefix plus the "image" token. The video variants
+	// (wan2.7-t2v, wan2.7-i2v) never carry "image" and stay unaffected.
+	if strings.Contains(lower, "image") &&
+		(strings.Contains(lower, "wan") || strings.Contains(lower, "qwen")) {
+		return true
+	}
+	return false
 }
 
 // visionFamilyTokens are the identifier tokens that explicitly name a vision

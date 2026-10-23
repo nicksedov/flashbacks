@@ -435,6 +435,53 @@ func TestMergeKeepsMissingModels(t *testing.T) {
 	}
 }
 
+// TestRefreshCorrectsImageEditClassification guards the regression where a wan
+// image model stored as a chat model stayed missing from the image edit
+// instrument dropdown: a refresh that reports the model's modalities must
+// replace the stored classification, because the image-edit capability is
+// derived from provider facts rather than from identifier heuristics.
+func TestRefreshCorrectsImageEditClassification(t *testing.T) {
+	env := newCatalogTestEnv(t, []modelllm.ModelInfo{
+		modelllm.EnrichModelInfo(modelllm.ModelInfo{
+			ID:               "wan2.7-image",
+			Name:             "Wan 2.7 Image",
+			InputModalities:  []string{"text", "image"},
+			OutputModalities: []string{"image"},
+			Provenance:       modelllm.ProvenancePartial,
+		}),
+	}, nil)
+	defer env.cleanup()
+
+	env.seedCatalog(t, []domain.LlmProviderModel{{
+		ModelID:   "wan2.7-image",
+		ModelName: "Wan 2.7 Image",
+		Capabilities: []domain.LlmModelCapability{
+			{Capability: "chat"},
+			{Capability: "tool_calling"},
+		},
+		Modalities: []domain.LlmModelModality{
+			{Modality: "text", Direction: domain.ModalityDirectionInput},
+			{Modality: "text", Direction: domain.ModalityDirectionOutput},
+		},
+	}}, true)
+
+	result, err := env.service.Get(context.Background(), testProviderAlias, true)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if len(result.Models) != 1 {
+		t.Fatalf("expected 1 model, got %d", len(result.Models))
+	}
+
+	model := result.Models[0]
+	if !contains(model.Capabilities, "image_edit") {
+		t.Errorf("capabilities = %v, want image_edit after the refresh", model.Capabilities)
+	}
+	if contains(model.Capabilities, "chat") {
+		t.Errorf("capabilities = %v, want the stale chat capability replaced", model.Capabilities)
+	}
+}
+
 // TestDegradedRefreshKeepsStoredModalities guards the production regression where
 // an identifier-only listing (the Alibaba compatible-mode fallback) replaced the
 // provider-reported modalities of every stored model with text only.

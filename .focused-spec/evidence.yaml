@@ -63,6 +63,39 @@ scopes:
     llm-settings.stale-notice-russian:
       evidence:
         - vitest::webapp/src/components/tabs/AdminAnalysisTab.test.tsx::AdminAnalysisTab > renders the stale notice in Russian
+    llm-settings.model-search-visible:
+      evidence:
+        - vitest::webapp/src/components/tabs/AdminAnalysisTab.test.tsx::AdminAnalysisTab > renders a search field in the chat card model dropdown
+    llm-settings.model-search-embedding-card:
+      evidence:
+        - vitest::webapp/src/components/tabs/AdminAnalysisTab.test.tsx::AdminAnalysisTab > renders a search field in the embeddings card model dropdown
+    llm-settings.model-search-filters-substring:
+      evidence:
+        - vitest::webapp/src/components/tabs/AdminAnalysisTab.test.tsx::AdminAnalysisTab > filters chat models by the typed substring
+    llm-settings.model-search-case-insensitive:
+      evidence:
+        - vitest::webapp/src/components/tabs/AdminAnalysisTab.test.tsx::AdminAnalysisTab > matches model labels regardless of letter case
+    llm-settings.model-search-respects-compatibility:
+      evidence:
+        - vitest::webapp/src/components/tabs/AdminAnalysisTab.test.tsx::AdminAnalysisTab > never lists a model incompatible with the instrument
+    llm-settings.model-search-clear-restores:
+      evidence:
+        - vitest::webapp/src/components/tabs/AdminAnalysisTab.test.tsx::AdminAnalysisTab > restores every compatible model when the query is cleared
+    llm-settings.model-search-reopen-resets:
+      evidence:
+        - vitest::webapp/src/components/tabs/AdminAnalysisTab.test.tsx::AdminAnalysisTab > reopens the dropdown unfiltered
+    llm-settings.model-search-empty-state-en:
+      evidence:
+        - vitest::webapp/src/components/tabs/AdminAnalysisTab.test.tsx::AdminAnalysisTab > shows the no-match message in English
+    llm-settings.model-search-empty-state-ru:
+      evidence:
+        - vitest::webapp/src/components/tabs/AdminAnalysisTab.test.tsx::AdminAnalysisTab > shows the no-match message in Russian
+    llm-settings.model-search-keeps-saved-model:
+      evidence:
+        - vitest::webapp/src/components/tabs/AdminAnalysisTab.test.tsx::AdminAnalysisTab > keeps the saved model when a filtered dropdown is closed
+    llm-settings.model-search-select-saves:
+      evidence:
+        - vitest::webapp/src/components/tabs/AdminAnalysisTab.test.tsx::AdminAnalysisTab > saves the model chosen from a filtered list
     design-system.info-label-collapse:
       evidence:
         - vitest::webapp/src/components/gallery/GalleryAllImagesView.test.tsx::GalleryAllImagesView > collapses the image count to an info icon on mobile

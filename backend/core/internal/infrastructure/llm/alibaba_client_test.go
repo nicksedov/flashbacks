@@ -123,7 +123,7 @@ const alibabaImageCatalogFixture = `{
 }`
 
 func TestNormalizeCapabilitiesImageGeneration(t *testing.T) {
-	for _, raw := range []string{"IG", "ig", "image_generation"} {
+	for _, raw := range []string{"IG", "ig", "image_generation", "ImageGeneration", "imagegen"} {
 		caps := normalizeCapabilities([]string{raw})
 		if !containsFold(caps, "image_edit") {
 			t.Errorf("normalizeCapabilities(%q) = %v, want image_edit", raw, caps)
@@ -183,6 +183,34 @@ func assertHasCapabilities(t *testing.T, got []string, want ...string) {
 			t.Fatalf("capabilities = %v, want it to include %q", got, w)
 		}
 	}
+}
+
+// TestAlibabaCatalogUnderReportedImageModelIsImageEditCapable guards the
+// regression where wan2.7 catalog entries that omit the "IG" code were stored
+// as chat models and therefore missing from the image edit instrument dropdown.
+func TestAlibabaCatalogUnderReportedImageModelIsImageEditCapable(t *testing.T) {
+	info := alibabaCatalogModelToInfo(alibabaTestModel(
+		"wan2.7-image", nil, []string{"Text", "Image"}, []string{"Image"},
+	))
+	assertCapabilitySet(t, info.Capabilities, []string{"image_edit"})
+}
+
+// TestAlibabaCatalogWanImageWithNativeCodeIsImageEditCapable verifies the native
+// "IG" code and the family identifier agree for the same model.
+func TestAlibabaCatalogWanImageWithNativeCodeIsImageEditCapable(t *testing.T) {
+	info := alibabaCatalogModelToInfo(alibabaTestModel(
+		"wan2.7-image", []string{"IG"}, []string{"Text", "Image"}, []string{"Image"},
+	))
+	assertCapabilitySet(t, info.Capabilities, []string{"image_edit"})
+}
+
+// TestAlibabaCatalogWanVideoStaysVideoOnly verifies the wan video siblings are
+// never granted image_edit.
+func TestAlibabaCatalogWanVideoStaysVideoOnly(t *testing.T) {
+	info := alibabaCatalogModelToInfo(alibabaTestModel(
+		"wan2.7-t2v", []string{"VG"}, []string{"Text"}, []string{"Video"},
+	))
+	assertCapabilitySet(t, info.Capabilities, []string{"video_generation"})
 }
 
 func TestAlibabaVideoGenerationCapability(t *testing.T) {

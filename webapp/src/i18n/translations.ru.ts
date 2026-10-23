@@ -788,6 +788,8 @@ export const translationsRu = {
   "llm_providers.manageInProvidersTab": "Управление в LLM провайдерах",
   "llm_providers.viewDetails": "Показать сведения о модели",
   "llm_providers.noCompatibleModels": "Нет моделей, совместимых с этим инструментом. Используйте ручной ввод ниже.",
+  "llm_providers.searchModels": "Поиск моделей…",
+  "llm_providers.noMatchingModels": "Нет моделей, соответствующих поиску",
   "llm_model_details.contextLength": "Размер контекста",
   "llm_model_details.inputModalities": "Модальности ввода",
   "llm_model_details.outputModalities": "Модальности вывода",

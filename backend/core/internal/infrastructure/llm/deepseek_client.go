@@ -376,7 +376,7 @@ func (c *DeepSeekClient) listRichModels(ctx context.Context, client *apiClient) 
 			info.Capabilities = inferCapabilitiesByID(m.ID)
 			info.InputModalities, info.OutputModalities = inferModalities(info.Capabilities)
 		} else {
-			info.Capabilities = capabilitiesFromModalities(info.InputModalities)
+			info.Capabilities = capabilitiesFromModalities(info.InputModalities, info.OutputModalities)
 		}
 		if strings.Contains(strings.ToLower(m.ID), "embedding") {
 			info.Capabilities = []string{"embedding"}

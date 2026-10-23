@@ -131,7 +131,7 @@ export function ScheduleEditor(props: ScheduleEditorProps) {
               onMinuteChange={props.onMinuteChange}
             />
           </div>
-          {props.action}
+          {props.action ? <div className="ml-2 shrink-0">{props.action}</div> : null}
         </div>
       ) : (
         <div data-slot="schedule-time-row" className="flex flex-wrap items-end gap-4">
@@ -155,7 +155,7 @@ export function ScheduleEditor(props: ScheduleEditorProps) {
               onMinuteChange={props.onEndMinuteChange}
             />
           </div>
-          {props.action}
+          {props.action ? <div className="ml-2 shrink-0">{props.action}</div> : null}
         </div>
       )}
     </div>

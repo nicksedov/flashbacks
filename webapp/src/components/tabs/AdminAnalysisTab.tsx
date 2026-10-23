@@ -663,7 +663,7 @@ export function AdminAnalysisTab() {
                 onEndHourChange={v => handleTagScanFieldChange("tagScanEndHour", v)}
                 onEndMinuteChange={v => handleTagScanFieldChange("tagScanEndMinute", v)}
                 action={
-                  <Button onClick={handleSaveTagScanSchedule} disabled={isTagScanSaving || !tagScanFormDirty} size="sm">
+                  <Button onClick={handleSaveTagScanSchedule} disabled={isTagScanSaving || !tagScanFormDirty}>
                     {isTagScanSaving ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />{t("common.saving")}</> : t("common.save")}
                   </Button>
                 }

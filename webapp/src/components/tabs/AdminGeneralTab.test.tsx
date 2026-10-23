@@ -95,8 +95,10 @@ describe("AdminGeneralTab sync schedule", () => {
     expect(editor).not.toBeNull()
     expect(container.querySelectorAll('[data-slot="schedule-day"]')).toHaveLength(7)
 
-    // The save action sits in the schedule editor's time row.
+    // The save action sits in the schedule editor's time row and matches the
+    // h-9 hour/minute select fields.
     const saveButton = within(editor as HTMLElement).getByRole("button", { name: "common.save" })
     expect(saveButton.closest('[data-slot="schedule-time-row"]')).not.toBeNull()
+    expect(hasClass(saveButton, "h-9")).toBe(true)
   })
 })

@@ -406,7 +406,6 @@ export function AdminGeneralTab() {
               <Button
                 onClick={handleSaveSchedule}
                 disabled={isSavingSchedule}
-                size="sm"
               >
                 {isSavingSchedule ? t("common.saving") : t("common.save")}
               </Button>

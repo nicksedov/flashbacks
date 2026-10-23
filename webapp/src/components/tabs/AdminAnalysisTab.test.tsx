@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { AdminAnalysisTab } from "./AdminAnalysisTab"
+import { hasClass } from "@/test/dom"
 import type { LlmModelDTO, LlmSettingsResponse } from "@/types"
 
 // Controls which locale the mocked translator resolves.
@@ -377,8 +378,10 @@ describe("AdminAnalysisTab tagging schedule", () => {
     fireEvent.click(thursday)
 
     const saveButton = within(card).getByRole("button", { name: "Save" })
-    // The save action sits in the schedule editor's time row, like the sync section.
+    // The save action sits in the schedule editor's time row, like the sync
+    // section, and matches the h-9 hour/minute select fields.
     expect(saveButton.closest('[data-slot="schedule-time-row"]')).not.toBeNull()
+    expect(hasClass(saveButton, "h-9")).toBe(true)
 
     fireEvent.click(saveButton)
 

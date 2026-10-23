@@ -119,7 +119,7 @@ func InitDatabase(cfg *config.AppConfig) (*gorm.DB, error) {
 		var tagScanCount int64
 		db.Model(&domain.TagScanSettings{}).Count(&tagScanCount)
 		if tagScanCount == 0 {
-			db.Create(&domain.TagScanSettings{ID: 1, Enabled: true, StartHour: 22, StartMinute: 0, EndHour: 7, EndMinute: 0})
+			db.Create(&domain.TagScanSettings{ID: 1, Enabled: true, Days: "1,2,3,4,5", StartHour: 22, StartMinute: 0, EndHour: 7, EndMinute: 0})
 		}
 
 		// Seed default embedding settings

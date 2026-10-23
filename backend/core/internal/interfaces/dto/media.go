@@ -563,12 +563,15 @@ type LlmInstrumentDTO struct {
 
 // TagScanSettingsDTO represents tag scan settings in API responses.
 type TagScanSettingsDTO struct {
-	Enabled        bool `json:"enabled"`
-	StartHour      int  `json:"startHour"`
-	StartMinute    int  `json:"startMinute"`
-	EndHour        int  `json:"endHour"`
-	EndMinute      int  `json:"endMinute"`
-	TimezoneOffset int  `json:"timezoneOffset"`
+	Enabled bool `json:"enabled"`
+	// Days lists the weekdays tag scanning may run on as comma-separated
+	// numbers (0=Sunday ... 6=Saturday); an empty string means disabled.
+	Days           string `json:"days"`
+	StartHour      int    `json:"startHour"`
+	StartMinute    int    `json:"startMinute"`
+	EndHour        int    `json:"endHour"`
+	EndMinute      int    `json:"endMinute"`
+	TimezoneOffset int    `json:"timezoneOffset"`
 }
 
 // EmbeddingSettingsDTO represents embedding settings in API responses.
@@ -593,12 +596,13 @@ type UpdateLlmSettingsRequest struct {
 	ProviderID      *uint   `json:"providerId"`      // New provider ID for the instrument
 
 	// Tag scan settings
-	TagScanEnabled        *bool `json:"tagScanEnabled,omitempty"`
-	TagScanStartHour      *int  `json:"tagScanStartHour,omitempty"`
-	TagScanStartMinute    *int  `json:"tagScanStartMinute,omitempty"`
-	TagScanEndHour        *int  `json:"tagScanEndHour,omitempty"`
-	TagScanEndMinute      *int  `json:"tagScanEndMinute,omitempty"`
-	TagScanTimezoneOffset *int  `json:"tagScanTimezoneOffset,omitempty"`
+	TagScanEnabled        *bool   `json:"tagScanEnabled,omitempty"`
+	TagScanDays           *string `json:"tagScanDays,omitempty"`
+	TagScanStartHour      *int    `json:"tagScanStartHour,omitempty"`
+	TagScanStartMinute    *int    `json:"tagScanStartMinute,omitempty"`
+	TagScanEndHour        *int    `json:"tagScanEndHour,omitempty"`
+	TagScanEndMinute      *int    `json:"tagScanEndMinute,omitempty"`
+	TagScanTimezoneOffset *int    `json:"tagScanTimezoneOffset,omitempty"`
 
 	// Embedding settings
 	EmbeddingDimension *int `json:"embeddingDimension,omitempty"`

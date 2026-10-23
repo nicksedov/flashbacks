@@ -2091,6 +2091,8 @@ export interface components {
         };
         TagScanSettingsDTO: {
             enabled?: boolean;
+            /** @description Comma-separated weekday numbers (0=Sunday ... 6=Saturday) tag scanning may run on; an empty string disables the schedule. */
+            days?: string;
             startHour?: number;
             startMinute?: number;
             endHour?: number;
@@ -2105,6 +2107,8 @@ export interface components {
             tagScan?: {
                 enabled?: boolean;
             };
+            /** @description Comma-separated weekday numbers (0=Sunday ... 6=Saturday) the tag scan schedule runs on; an empty string disables it. */
+            tagScanDays?: string;
             embedding?: {
                 dimension?: number;
                 batchSize?: number;

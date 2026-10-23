@@ -3,6 +3,7 @@ package imaging
 import (
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/flashbacks/core/internal/domain"
 	imgutil "github.com/flashbacks/core/internal/infrastructure/imaging"
@@ -191,4 +192,52 @@ func TestImageProcessingError_DeletedOnCascade(t *testing.T) {
 	var count int64
 	db.Model(&domain.ImageProcessingError{}).Where("image_file_id = ?", img.ID).Count(&count)
 	assert.Equal(t, int64(0), count, "processing error should be cascade-deleted with image file")
+}
+
+// --- Weekday schedule tests (tag-scan-schedule capability) ---
+
+// testWednesday is the local instant used by the weekday window tests:
+// 2026-10-21 23:30, a Wednesday.
+var testWednesday = time.Date(2026, time.October, 21, 23, 30, 0, 0, time.UTC)
+
+// tag-scan-schedule.selected-day-opens-window
+func TestTagScanWindowOpensOnSelectedWeekday(t *testing.T) {
+	days := []time.Weekday{time.Wednesday, time.Friday}
+
+	// Overnight window covering the late evening of the selected Wednesday.
+	assert.True(t, isWindowOpenAt(days, testWednesday, 22, 0, 7, 0, 0),
+		"window should be open on a selected weekday")
+	require.Equal(t, time.Wednesday, testWednesday.Weekday(), "fixture must be a Wednesday")
+}
+
+// tag-scan-schedule.unselected-day-closed
+func TestTagScanWindowClosedOnUnselectedWeekday(t *testing.T) {
+	// Thursday is not selected although the clock time is inside the window.
+	days := []time.Weekday{time.Thursday}
+
+	assert.False(t, isWindowOpenAt(days, testWednesday, 22, 0, 7, 0, 0),
+		"window must stay closed on a weekday that is not selected")
+}
+
+// tag-scan-schedule.no-days-selected-disables
+func TestTagScanWindowClosedWithoutSelectedDays(t *testing.T) {
+	midday := time.Date(2026, time.October, 21, 12, 0, 0, 0, time.UTC)
+
+	assert.False(t, isWindowOpenAt(nil, midday, 0, 0, 0, 0, 0),
+		"an empty weekday set must keep the window closed even for a 24-hour window")
+	assert.False(t, isWindowOpenAt([]time.Weekday{}, midday, 22, 0, 7, 0, 0),
+		"an empty weekday set must keep the overnight window closed")
+}
+
+// tag-scan-schedule.next-opening-skips-unselected-days
+func TestTagScanNextOpenSkipsUnselectedWeekday(t *testing.T) {
+	days := []time.Weekday{time.Friday}
+
+	next := nextWindowOpenAt(days, testWednesday, 22, 0, 0)
+
+	require.True(t, next.After(testWednesday), "next opening must be in the future")
+	assert.Equal(t, time.Friday, next.Weekday(), "next opening must land on the selected weekday")
+	assert.Equal(t, 23, next.Day(), "next opening must skip Thursday and land on Friday 2026-10-23")
+	assert.Equal(t, 22, next.Hour())
+	assert.Equal(t, 0, next.Minute())
 }

@@ -116,6 +116,7 @@ func (app *App) Init() {
 
 	// Read tag scan schedule from new TagScanSettings table
 	tagScanEnabled := true
+	tagScanDays := "1,2,3,4,5"
 	tagScanStartHour := 22
 	tagScanStartMinute := 0
 	tagScanEndHour := 7
@@ -124,14 +125,16 @@ func (app *App) Init() {
 	var tagScan domain.TagScanSettings
 	if result := app.DB.First(&tagScan); result.Error == nil {
 		tagScanEnabled = tagScan.Enabled
+		tagScanDays = tagScan.Days
 		tagScanStartHour = tagScan.StartHour
 		tagScanStartMinute = tagScan.StartMinute
 		tagScanEndHour = tagScan.EndHour
 		tagScanEndMinute = tagScan.EndMinute
 		tagScanTimezoneOffset = tagScan.TimezoneOffset
 	}
-	app.TagScanManager.Start(tagScanEnabled, tagScanStartHour, tagScanStartMinute, tagScanEndHour, tagScanEndMinute, tagScanTimezoneOffset)
-	fmt.Printf("Tag scan: window %02d:%02d - %02d:%02d, tzOffset=%d, enabled=%v\n", tagScanStartHour, tagScanStartMinute, tagScanEndHour, tagScanEndMinute, tagScanTimezoneOffset, tagScanEnabled)
+	tagScanWeekdays := imaging.ParseSyncDays(tagScanDays)
+	app.TagScanManager.Start(tagScanEnabled, tagScanWeekdays, tagScanStartHour, tagScanStartMinute, tagScanEndHour, tagScanEndMinute, tagScanTimezoneOffset)
+	fmt.Printf("Tag scan: days=%v, window %02d:%02d - %02d:%02d, tzOffset=%d, enabled=%v\n", tagScanWeekdays, tagScanStartHour, tagScanStartMinute, tagScanEndHour, tagScanEndMinute, tagScanTimezoneOffset, tagScanEnabled)
 
 	// Set coordinator for AI task synchronization
 	app.LlmOcrService.SetCoordinator(app.TagScanManager)

@@ -604,6 +604,9 @@ export interface LlmInstrumentDTO {
 // TagScanSettingsDTO represents tag scan schedule settings.
 export interface TagScanSettingsDTO {
   enabled: boolean
+  // days lists the weekdays tag scanning may run on as comma-separated numbers
+  // (0=Sunday ... 6=Saturday); an empty string means the schedule is disabled.
+  days: string
   startHour: number
   startMinute: number
   endHour: number
@@ -632,6 +635,7 @@ export interface UpdateLlmSettingsRequest {
 
   // Tag scan settings
   tagScanEnabled?: boolean
+  tagScanDays?: string
   tagScanStartHour?: number
   tagScanStartMinute?: number
   tagScanEndHour?: number

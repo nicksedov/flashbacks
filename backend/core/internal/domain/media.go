@@ -296,8 +296,11 @@ func (LlmInstrumentSettings) TableName() string {
 
 // TagScanSettings stores tag scan scheduling configuration (singleton, ID=1).
 type TagScanSettings struct {
-	ID             uint      `gorm:"primaryKey" json:"id"`
-	Enabled        bool      `gorm:"default:true" json:"enabled"`
+	ID      uint `gorm:"primaryKey" json:"id"`
+	Enabled bool `gorm:"default:true" json:"enabled"`
+	// Days: comma-separated weekday numbers (time.Weekday: 0=Sunday,1=Monday,...,6=Saturday)
+	// on which tag scanning may run. An empty string disables the schedule.
+	Days           string    `gorm:"default:'1,2,3,4,5'" json:"days"`
 	StartHour      int       `gorm:"default:22" json:"startHour"`
 	StartMinute    int       `gorm:"default:0" json:"startMinute"`
 	EndHour        int       `gorm:"default:7" json:"endHour"`

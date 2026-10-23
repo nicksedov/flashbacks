@@ -5,8 +5,7 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Checkbox } from "@/components/ui/checkbox"
+import { ScheduleEditor } from "@/components/ui/schedule-editor"
 import { AddFolderForm } from "@/components/settings/AddFolderForm"
 import { FolderList } from "@/components/settings/FolderList"
 import { ScanProgressBanner } from "@/components/ScanProgressBanner"
@@ -18,28 +17,8 @@ import { useSettings } from "@/providers/useSettings"
 import { RefreshCw, Trash2, Loader2, Zap, DatabaseZap, DatabaseBackup, Database, Clock, History } from "lucide-react"
 import { useTranslation, type TranslationKey } from "@/i18n"
 import { formatDateTime } from "@/lib/format"
+import { daysToString, parseDaysString } from "@/lib/schedule"
 import type { SyncStatusResponse } from "@/types"
-
-// Weekday order for UI: Mon, Tue, Wed, Thu, Fri, Sat, Sun (Go time.Weekday: 1,2,3,4,5,6,0)
-const WEEKDAY_ORDER = [1, 2, 3, 4, 5, 6, 0] as const
-const WEEKDAY_KEYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"] as const
-
-function parseSyncDaysString(s: string): boolean[] {
-  const days = new Array(7).fill(false) as boolean[]
-  if (!s) return days
-  for (const c of s) {
-    const n = Number(c)
-    if (n >= 0 && n <= 6) days[n] = true
-  }
-  return days
-}
-
-function syncDaysToString(days: boolean[]): string {
-  return days
-    .map((checked, i) => (checked ? String(i) : ""))
-    .filter(Boolean)
-    .join(",")
-}
 
 export function AdminGeneralTab() {
   const { folders, isLoading, add, remove, refetch } = useGalleryFolders()
@@ -110,7 +89,7 @@ export function AdminGeneralTab() {
       setExifBackupDir(settings.exifBackupDir || "")
       setExifBackupInput(settings.exifBackupDir || "")
       setThumbnailCachePath(settings.thumbnailCachePath || "")
-      setSyncDays(parseSyncDaysString(settings.syncDays ?? "1,2,3,4,5"))
+      setSyncDays(parseDaysString(settings.syncDays ?? "1,2,3,4,5"))
       setDailySyncHour(settings.dailySyncHour ?? 3)
       setDailySyncMinute(settings.dailySyncMinute ?? 30)
       if (settings.syncTimezoneOffset !== undefined) {
@@ -213,7 +192,7 @@ export function AdminGeneralTab() {
     setIsSavingSchedule(true)
     try {
       await updateSettings({
-        syncDays: syncDaysToString(syncDays),
+        syncDays: daysToString(syncDays),
         dailySyncHour,
         dailySyncMinute,
         syncTimezoneOffset,
@@ -359,10 +338,6 @@ export function AdminGeneralTab() {
     }
   }, [folders.length, startPolling, setOnScanComplete, refetch, t])
 
-  // Generate hour options (0-23) and minute options (0, 5, 10, ..., 55)
-  const hourOptions = Array.from({ length: 24 }, (_, i) => i)
-  const minuteOptions = Array.from({ length: 12 }, (_, i) => i * 5)
-
   return (
     <div className="space-y-6">
       {/* Gallery Folder Management */}
@@ -418,65 +393,18 @@ export function AdminGeneralTab() {
           <CardDescription>{t("settings.dailySync.description")}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* Day checkboxes */}
-          <div className="space-y-2">
-            <Label>{t("settings.dailySync.days")}</Label>
-            <div className="flex flex-wrap gap-3">
-              {WEEKDAY_ORDER.map((dayIdx, uiIdx) => (
-                <div key={dayIdx} className="flex items-center space-x-1.5">
-                  <Checkbox
-                    id={`sync-day-${dayIdx}`}
-                    checked={syncDays[dayIdx]}
-                    onCheckedChange={() => toggleDay(dayIdx)}
-                  />
-                  <Label htmlFor={`sync-day-${dayIdx}`} className="text-sm cursor-pointer">
-                    {t(`settings.dailySync.day.${WEEKDAY_KEYS[uiIdx]}` as TranslationKey)}
-                  </Label>
-                </div>
-              ))}
-            </div>
-          </div>
+          <ScheduleEditor
+            mode="at"
+            idPrefix="sync"
+            days={syncDays}
+            onToggleDay={toggleDay}
+            hour={dailySyncHour}
+            minute={dailySyncMinute}
+            onHourChange={setDailySyncHour}
+            onMinuteChange={setDailySyncMinute}
+          />
 
-          {/* Time & Sync Mode selectors — responsive: single row on wide, wraps on mobile */}
-          <div className="flex flex-wrap items-end gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="daily-sync-hour">{t("settings.dailySync.hour")}</Label>
-              <Select
-                value={String(dailySyncHour)}
-                onValueChange={(val) => setDailySyncHour(Number(val))}
-              >
-                <SelectTrigger id="daily-sync-hour" className="w-24">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {hourOptions.map((h) => (
-                    <SelectItem key={h} value={String(h)}>
-                      {String(h).padStart(2, "0")}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="daily-sync-minute">{t("settings.dailySync.minute")}</Label>
-              <Select
-                value={String(dailySyncMinute)}
-                onValueChange={(val) => setDailySyncMinute(Number(val))}
-              >
-                <SelectTrigger id="daily-sync-minute" className="w-24">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {minuteOptions.map((m) => (
-                    <SelectItem key={m} value={String(m)}>
-                      {String(m).padStart(2, "0")}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
+          <div className="flex justify-end">
             <Button
               onClick={handleSaveSchedule}
               disabled={isSavingSchedule}

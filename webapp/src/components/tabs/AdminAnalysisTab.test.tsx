@@ -81,7 +81,7 @@ const settings: LlmSettingsResponse = {
     { type: "image_edit", providerId: 1, model: "minicpm-v", providerAlias: "ollama_1", providerName: "ollama" },
     { type: "embedding", providerId: 1, model: "qwen3-embedding:4b", providerAlias: "ollama_1", providerName: "ollama" },
   ],
-  tagScan: { enabled: false, startHour: 23, startMinute: 0, endHour: 7, endMinute: 0, timezoneOffset: 0 },
+  tagScan: { enabled: false, days: "1,2,3", startHour: 23, startMinute: 0, endHour: 7, endMinute: 0, timezoneOffset: 0 },
   embedding: { dimension: 1024, batchSize: 50 },
   providers: [
     { id: 1, alias: "ollama_1", name: "ollama", apiUrl: "http://localhost:11434", apiKey: "", cachedModels: null },
@@ -335,5 +335,53 @@ describe("AdminAnalysisTab", () => {
     await waitFor(() => expect(screen.getAllByRole("option")).toHaveLength(1))
     expect(search.getAttribute("aria-label")).toBe("Search models…")
     expect(screen.getAllByRole("option")[0].textContent).toContain("Nomic Embed Text")
+  })
+})
+
+describe("AdminAnalysisTab tagging schedule", () => {
+  // taggingCard returns the Automatic Image Tagging card element.
+  async function taggingCard(): Promise<HTMLElement> {
+    const title = await screen.findByText("Automatic Image Tagging")
+    const card = title.closest(".rounded-lg")
+    if (!(card instanceof HTMLElement)) {
+      throw new Error("tagging card not found")
+    }
+    return card
+  }
+
+  // design-system.schedule-editor-shared (tagging side)
+  it("renders the tagging schedule through the shared schedule editor", async () => {
+    endpoints.fetchLlmSettings.mockResolvedValue({
+      ...settings,
+      tagScan: { ...settings.tagScan, enabled: true },
+    })
+
+    render(<AdminAnalysisTab />)
+
+    const card = await taggingCard()
+    expect(within(card).queryByText("Automatic Image Tagging")).not.toBeNull()
+    expect(card.querySelector('[data-slot="schedule-editor"]')).not.toBeNull()
+  })
+
+  // tag-scan-schedule.days-saved-from-ui
+  it("saves the selected weekday together with the tagging schedule", async () => {
+    endpoints.fetchLlmSettings.mockResolvedValue({
+      ...settings,
+      tagScan: { ...settings.tagScan, enabled: true },
+    })
+
+    render(<AdminAnalysisTab />)
+
+    const card = await taggingCard()
+    const thursday = within(card).getByLabelText("Thu")
+    fireEvent.click(thursday)
+
+    fireEvent.click(within(card).getByRole("button", { name: "Save Schedule" }))
+
+    await waitFor(() =>
+      expect(endpoints.updateLlmSettings).toHaveBeenCalledWith(
+        expect.objectContaining({ tagScanDays: "1,2,3,4" })
+      )
+    )
   })
 })

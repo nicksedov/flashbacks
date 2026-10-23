@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/flashbacks/core/internal/application/imaging"
 	catalog "github.com/flashbacks/core/internal/application/llm"
 	"github.com/flashbacks/core/internal/domain"
 	"github.com/flashbacks/core/internal/infrastructure/llm"
@@ -49,6 +50,7 @@ func buildInstrumentDTO(instr domain.LlmInstrumentSettings) dto.LlmInstrumentDTO
 func buildTagScanDTO(ts domain.TagScanSettings) dto.TagScanSettingsDTO {
 	return dto.TagScanSettingsDTO{
 		Enabled:        ts.Enabled,
+		Days:           ts.Days,
 		StartHour:      ts.StartHour,
 		StartMinute:    ts.StartMinute,
 		EndHour:        ts.EndHour,
@@ -178,6 +180,7 @@ func (s *Server) handleUpdateLlmSettings(c *gin.Context) {
 
 	// --- Handle tag scan settings update ---
 	tagScanDirty := req.TagScanEnabled != nil ||
+		req.TagScanDays != nil ||
 		req.TagScanStartHour != nil ||
 		req.TagScanStartMinute != nil ||
 		req.TagScanEndHour != nil ||
@@ -191,6 +194,9 @@ func (s *Server) handleUpdateLlmSettings(c *gin.Context) {
 		}
 		if req.TagScanEnabled != nil {
 			ts.Enabled = *req.TagScanEnabled
+		}
+		if req.TagScanDays != nil {
+			ts.Days = *req.TagScanDays
 		}
 		if req.TagScanStartHour != nil {
 			ts.StartHour = *req.TagScanStartHour
@@ -214,7 +220,7 @@ func (s *Server) handleUpdateLlmSettings(c *gin.Context) {
 
 		// Update tag scan manager schedule
 		if s.tagScanManager != nil && s.tagScanManager.IsRunning() {
-			s.tagScanManager.UpdateSchedule(ts.Enabled, ts.StartHour, ts.StartMinute, ts.EndHour, ts.EndMinute, ts.TimezoneOffset)
+			s.tagScanManager.UpdateSchedule(ts.Enabled, imaging.ParseSyncDays(ts.Days), ts.StartHour, ts.StartMinute, ts.EndHour, ts.EndMinute, ts.TimezoneOffset)
 		}
 	}
 

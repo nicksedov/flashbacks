@@ -81,6 +81,7 @@ func (sl *SettingsLoader) TagScanSettings() domain.TagScanSettings {
 		return domain.TagScanSettings{
 			ID:        1,
 			Enabled:   true,
+			Days:      "1,2,3,4,5",
 			StartHour: 22,
 			EndHour:   7,
 		}

@@ -159,54 +159,41 @@ var modelFamilies = []ModelFamily{
 	},
 
 	// ── Text chat families ───────────────────────────────────────────
+	//
+	// These entries deliberately carry context length (and prices) only. A
+	// non-vision family must not claim capabilities or modality lists: those
+	// entries match broad identifier substrings (the "qwen" token matches every
+	// Qwen model), so asserting "text only" here would hide the vision models of
+	// the same family and pre-empt the identifier heuristics that detect them.
+	// Capabilities and modalities are left to the provider or, when absent, to
+	// the vision families above and the ID heuristics.
 	{
-		Token:            "qwen3.5-flash",
-		Capabilities:     chatCapabilities("reasoning"),
-		InputModalities:  textOnly(),
-		OutputModalities: textOnly(),
-		ContextLength:    1000000,
+		Token:         "qwen3.5-flash",
+		ContextLength: 1000000,
 	},
 	{
-		Token:            "qwen3-max",
-		Capabilities:     chatCapabilities("reasoning"),
-		InputModalities:  textOnly(),
-		OutputModalities: textOnly(),
-		ContextLength:    1000000,
+		Token:         "qwen3-max",
+		ContextLength: 1000000,
 	},
 	{
-		Token:            "qwen-long",
-		Capabilities:     chatCapabilities(),
-		InputModalities:  textOnly(),
-		OutputModalities: textOnly(),
-		ContextLength:    1000000,
+		Token:         "qwen-long",
+		ContextLength: 1000000,
 	},
 	{
-		Token:            "qwen-turbo",
-		Capabilities:     chatCapabilities(),
-		InputModalities:  textOnly(),
-		OutputModalities: textOnly(),
-		ContextLength:    1000000,
+		Token:         "qwen-turbo",
+		ContextLength: 1000000,
 	},
 	{
-		Token:            "qwen-plus",
-		Capabilities:     chatCapabilities(),
-		InputModalities:  textOnly(),
-		OutputModalities: textOnly(),
-		ContextLength:    262144,
+		Token:         "qwen-plus",
+		ContextLength: 262144,
 	},
 	{
-		Token:            "qwen",
-		Capabilities:     chatCapabilities(),
-		InputModalities:  textOnly(),
-		OutputModalities: textOnly(),
-		ContextLength:    32768,
+		Token:         "qwen",
+		ContextLength: 32768,
 	},
 	{
-		Token:            "kimi-k2.5",
-		Capabilities:     chatCapabilities(),
-		InputModalities:  textOnly(),
-		OutputModalities: textOnly(),
-		ContextLength:    262144,
+		Token:         "kimi-k2.5",
+		ContextLength: 262144,
 	},
 	{
 		Token:         "glm-5.1",
@@ -225,20 +212,14 @@ var modelFamilies = []ModelFamily{
 		ContextLength: 128000,
 	},
 	{
-		Token:            "deepseek-v4-pro",
-		Capabilities:     chatCapabilities("reasoning"),
-		InputModalities:  textOnly(),
-		OutputModalities: textOnly(),
-		ContextLength:    1000000,
-		Pricing:          ModelPricing{InputPerMTok: 0.55, OutputPerMTok: 2.19},
+		Token:         "deepseek-v4-pro",
+		ContextLength: 1000000,
+		Pricing:       ModelPricing{InputPerMTok: 0.55, OutputPerMTok: 2.19},
 	},
 	{
-		Token:            "deepseek-v4-flash",
-		Capabilities:     chatCapabilities(),
-		InputModalities:  textOnly(),
-		OutputModalities: textOnly(),
-		ContextLength:    1000000,
-		Pricing:          ModelPricing{InputPerMTok: 0.20, OutputPerMTok: 0.80},
+		Token:         "deepseek-v4-flash",
+		ContextLength: 1000000,
+		Pricing:       ModelPricing{InputPerMTok: 0.20, OutputPerMTok: 0.80},
 	},
 	{
 		Token:         "deepseek-chat",

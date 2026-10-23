@@ -9,6 +9,7 @@ scopes:
     llm-model-metadata.chat-identifier-not-vision:
       evidence:
         - go::./internal/infrastructure/llm::TestAlibabaChatIdentifierNotVision
+        - go::./internal/infrastructure/llm::TestGenericFamilyDoesNotHideVisionSiblings
     llm-model-catalog.native-source-preferred:
       evidence:
         - go::./internal/application/llm::TestCatalogPrefersRichSource
@@ -36,9 +37,11 @@ scopes:
     llm-model-catalog.degraded-refresh-keeps-vision:
       evidence:
         - go::./internal/application/llm::TestMergeKeepsVision
+        - go::./internal/application/llm::TestDegradedRefreshKeepsStoredModalities
     llm-model-catalog.degraded-refresh-keeps-context:
       evidence:
         - go::./internal/application/llm::TestMergeKeepsContextLength
+        - go::./internal/application/llm::TestDegradedRefreshKeepsStoredModalities
     llm-model-catalog.degraded-refresh-keeps-models:
       evidence:
         - go::./internal/application/llm::TestMergeKeepsMissingModels

@@ -133,7 +133,7 @@ func (s *Service) getForProvider(ctx context.Context, provider domain.LlmProvide
 		return resultFromStored(provider, stored, false, nil), nil
 	}
 
-	refreshErr := s.refresh(ctx, provider)
+	refreshErr := s.refresh(ctx, provider, stored)
 
 	stored, err = s.store.GetProviderCatalog(provider.ID)
 	if err != nil {
@@ -162,9 +162,9 @@ func (s *Service) isExpired(stored *repository.StoredProviderCatalog) bool {
 
 // refresh re-collects and persists a provider catalog, with one in-flight
 // refresh per provider so concurrent requests do not stampede the provider.
-func (s *Service) refresh(ctx context.Context, provider domain.LlmProvider) error {
+func (s *Service) refresh(ctx context.Context, provider domain.LlmProvider, stored *repository.StoredProviderCatalog) error {
 	return s.singleFlight(ctx, provider.ID, func() error {
-		return s.collectAndPersist(ctx, provider)
+		return s.collectAndPersist(ctx, provider, stored)
 	})
 }
 
@@ -198,7 +198,13 @@ func (s *Service) singleFlight(ctx context.Context, providerID uint, fn func() e
 
 // collectAndPersist lists the provider models, runs them through the metadata
 // pipeline, and merges the result into the stored catalog.
-func (s *Service) collectAndPersist(ctx context.Context, provider domain.LlmProvider) error {
+//
+// A model the provider described itself is persisted fully (enriched where the
+// source left gaps). A model only reachable through identifier heuristics is
+// persisted with the fields the provider actually reported, so the stored
+// richer metadata survives a degraded refresh instead of being replaced by
+// guesses.
+func (s *Service) collectAndPersist(ctx context.Context, provider domain.LlmProvider, stored *repository.StoredProviderCatalog) error {
 	raw, err := s.lister.ListModels(ctx, provider, s.config.DefaultModel)
 	if err != nil {
 		return err
@@ -207,26 +213,60 @@ func (s *Service) collectAndPersist(ctx context.Context, provider domain.LlmProv
 		return fmt.Errorf("provider %s returned no models", provider.Alias)
 	}
 
+	storedModels := make(map[string]struct{}, len(stored.Models))
+	for _, model := range stored.Models {
+		storedModels[model.ModelID] = struct{}{}
+	}
+
 	rich := true
+	degraded := 0
 	models := make([]domain.LlmProviderModel, 0, len(raw))
 	for _, info := range raw {
-		if !isRichInfo(info) {
+		described := describesFully(info)
+		if !described {
 			rich = false
+		}
+		if _, exists := storedModels[info.ID]; exists && !described {
+			// The source could not describe this model (identifier-only listing,
+			// partial detail): only its identity may be refreshed. Every
+			// descriptive field keeps its stored value, because we cannot tell
+			// which of the collected values the provider actually reported and
+			// which came from the registry or the identifier heuristics.
+			degraded++
+			models = append(models, domain.LlmProviderModel{
+				ModelID:   info.ID,
+				ModelName: modelDisplayName(info),
+			})
+			continue
 		}
 		models = append(models, storedModelFromInfo(modelllm.EnrichModelInfo(info)))
 	}
 
 	if !rich {
 		s.logger.Info("llm catalog refresh produced a degraded catalog",
-			"provider", provider.Alias, "models", len(models))
+			"provider", provider.Alias, "models", len(models), "kept_stored", degraded)
 	}
 
 	return s.store.MergeProviderCatalog(provider.ID, models, s.config.Now(), rich)
 }
 
-// isRichInfo reports whether a collected model carries a full, provider-supplied
-// description. A refresh containing any undescribed model is not rich, so it may
-// not delete stored models.
+// describesFully reports whether a collected model carries a full description
+// that the provider itself supplied (not one filled in by registry defaults or
+// identifier heuristics). A refresh containing any other model is degraded: it
+// may neither delete stored models nor overwrite their metadata.
+func describesFully(info modelllm.ModelInfo) bool {
+	return info.Provenance == modelllm.ProvenanceRich && isRichInfo(info)
+}
+
+// modelDisplayName returns the display name of a collected model.
+func modelDisplayName(info modelllm.ModelInfo) string {
+	if info.Name != "" {
+		return info.Name
+	}
+	return info.ID
+}
+
+// isRichInfo reports whether a collected model carries a complete metadata set.
 func isRichInfo(info modelllm.ModelInfo) bool {
 	return len(info.Capabilities) > 0 &&
 		info.ContextLength > 0 &&

@@ -118,6 +118,7 @@ func TestCatalogPrefersRichSource(t *testing.T) {
 		OutputModalities:   []string{"text"},
 		InputPricePerMTok:  1.5,
 		OutputPricePerMTok: 2.5,
+		Provenance:         modelllm.ProvenanceRich,
 	}}, nil)
 	defer env.cleanup()
 
@@ -203,6 +204,7 @@ func TestModelsResponseEqualsStored(t *testing.T) {
 			Capabilities:     []string{"chat", "tool_calling", "vision"},
 			InputModalities:  []string{"text", "image"},
 			OutputModalities: []string{"text"},
+			Provenance:       modelllm.ProvenanceRich,
 		},
 		{
 			ID:               "acme-chat-7b",
@@ -211,6 +213,7 @@ func TestModelsResponseEqualsStored(t *testing.T) {
 			Capabilities:     []string{"chat"},
 			InputModalities:  []string{"text"},
 			OutputModalities: []string{"text"},
+			Provenance:       modelllm.ProvenanceRich,
 		},
 	}, nil)
 	defer env.cleanup()
@@ -429,6 +432,62 @@ func TestMergeKeepsMissingModels(t *testing.T) {
 	}
 	if len(stored.Models) != 1 {
 		t.Fatalf("expected the dropped model to be deleted by a rich refresh, got %d models", len(stored.Models))
+	}
+}
+
+// TestDegradedRefreshKeepsStoredModalities guards the production regression where
+// an identifier-only listing (the Alibaba compatible-mode fallback) replaced the
+// provider-reported modalities of every stored model with text only.
+func TestDegradedRefreshKeepsStoredModalities(t *testing.T) {
+	// The Alibaba compatible-mode listing exposes only the identifier, so the
+	// client fills the rest from the registry and the ID heuristics — exactly the
+	// values that must never overwrite what the provider reported earlier.
+	listing := modelllm.EnrichModelInfo(modelllm.ModelInfo{
+		ID:         "qwen3.5-flash",
+		Name:       "Qwen3.5-Flash",
+		Provenance: modelllm.ProvenanceHeuristic,
+	})
+	env := newCatalogTestEnv(t, []modelllm.ModelInfo{listing}, nil)
+	defer env.cleanup()
+
+	env.seedCatalog(t, []domain.LlmProviderModel{{
+		ModelID:       "qwen3.5-flash",
+		ModelName:     "Qwen3.5-Flash",
+		ContextLength: 1000000,
+		Capabilities: []domain.LlmModelCapability{
+			{Capability: "chat"},
+			{Capability: "vision"},
+		},
+		Modalities: []domain.LlmModelModality{
+			{Modality: "text", Direction: domain.ModalityDirectionInput},
+			{Modality: "image", Direction: domain.ModalityDirectionInput},
+			{Modality: "video", Direction: domain.ModalityDirectionInput},
+			{Modality: "text", Direction: domain.ModalityDirectionOutput},
+		},
+	}}, true)
+
+	result, err := env.service.Get(context.Background(), testProviderAlias, true)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if len(result.Models) != 1 {
+		t.Fatalf("expected 1 model, got %d", len(result.Models))
+	}
+
+	model := result.Models[0]
+	if !contains(model.Capabilities, "vision") {
+		t.Errorf("capabilities = %v, want the stored vision capability kept", model.Capabilities)
+	}
+	for _, modality := range []string{"text", "image", "video"} {
+		if !contains(model.InputModalities, modality) {
+			t.Errorf("input modalities = %v, want the stored %q kept", model.InputModalities, modality)
+		}
+	}
+	if model.ContextLength != 1000000 {
+		t.Errorf("context length = %d, want the stored 1000000 kept", model.ContextLength)
+	}
+	if result.Stale {
+		t.Error("a degraded refresh that kept the catalog is not a failure")
 	}
 }
 

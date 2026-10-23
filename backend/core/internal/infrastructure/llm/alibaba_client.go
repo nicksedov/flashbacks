@@ -839,7 +839,7 @@ func (c *AlibabaClient) GetModelDetails(ctx context.Context, modelID string) (*M
 // model-family registry first, then model-ID heuristics, then the safe default,
 // and normalizes the result.
 func alibabaEnrichedModelInfo(modelID, name string) *ModelInfo {
-	info := ModelInfo{ID: modelID, Name: name}
+	info := ModelInfo{ID: modelID, Name: name, Provenance: ProvenanceHeuristic}
 	info = enrichFromRegistry(info)
 	info = enrichFromHeuristics(info)
 	info = normalizeModelInfo(info)
@@ -934,6 +934,21 @@ func alibabaCatalogModelToInfo(m alibabaCatalogModel) ModelInfo {
 		info.InputPricePerMTok = input
 		info.OutputPricePerMTok = output
 	}
+
+	// Provenance is decided from what the catalog entry itself reported, before
+	// any registry or heuristic fill-in. Only a fully described entry is
+	// authoritative enough to overwrite a stored model.
+	switch {
+	case len(m.Capabilities) > 0 && len(m.InferenceMetadata.RequestModality) > 0:
+		info.Provenance = ProvenanceRich
+	case len(m.Capabilities) > 0 ||
+		len(m.InferenceMetadata.RequestModality) > 0 ||
+		(m.ModelInfo.ContextWindow != nil && *m.ModelInfo.ContextWindow > 0):
+		info.Provenance = ProvenancePartial
+	default:
+		info.Provenance = ProvenanceHeuristic
+	}
+
 	if info.ContextLength == 0 {
 		info.ContextLength = inferContextLength(m.Model)
 	}

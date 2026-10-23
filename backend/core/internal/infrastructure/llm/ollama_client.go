@@ -229,6 +229,9 @@ func (c *OllamaClient) ListModels(ctx context.Context) ([]ModelInfo, error) {
 			mu.Lock()
 			if ctxLen > 0 {
 				models[idx].ContextLength = ctxLen
+				// /api/show described the model itself, but the modality lists are
+				// still inferred from its capabilities.
+				models[idx].Provenance = ProvenancePartial
 			}
 			if len(caps) > 0 {
 				models[idx].Capabilities = caps

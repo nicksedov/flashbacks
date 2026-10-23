@@ -76,6 +76,53 @@ func TestModelFamilyRegistryLongestTokenWins(t *testing.T) {
 	}
 }
 
+// TestGenericFamilyDoesNotHideVisionSiblings guards the regression where the
+// broad "qwen" registry token asserted text-only metadata for every Qwen model
+// and therefore hid the vision models of the same family.
+func TestGenericFamilyDoesNotHideVisionSiblings(t *testing.T) {
+	vision := alibabaEnrichedModelInfo("qwen2.5-vl-72b", "Qwen2.5-VL-72B")
+	assertHasCapabilities(t, vision.Capabilities, "vision")
+	if !containsFold(vision.InputModalities, "image") {
+		t.Errorf("input modalities = %v, want image for a VL identifier", vision.InputModalities)
+	}
+
+	chat := alibabaEnrichedModelInfo("qwen-plus", "Qwen-Plus")
+	if containsFold(chat.Capabilities, "vision") {
+		t.Errorf("capabilities = %v, want no vision for a plain chat identifier", chat.Capabilities)
+	}
+	if containsFold(chat.InputModalities, "image") {
+		t.Errorf("input modalities = %v, want text only for a plain chat identifier", chat.InputModalities)
+	}
+	if chat.ContextLength != 262144 {
+		t.Errorf("context length = %d, want the registry's 262144", chat.ContextLength)
+	}
+
+	// The generic family still supplies the context window.
+	if vision.ContextLength != 32768 {
+		t.Errorf("context length = %d, want the generic qwen default 32768", vision.ContextLength)
+	}
+}
+
+// TestProvenance reflects how much the source reported: a fully described
+// catalog entry is rich, an identifier-only model is heuristic.
+func TestProvenance(t *testing.T) {
+	rich := alibabaCatalogModelToInfo(alibabaTestModel(
+		"qwen3.8-max", []string{"TG"}, []string{"Text"}, []string{"Text"},
+	))
+	if rich.Provenance != ProvenanceRich {
+		t.Errorf("catalog entry provenance = %q, want %q", rich.Provenance, ProvenanceRich)
+	}
+
+	bare := alibabaCatalogModelToInfo(alibabaTestModel("bare-model", nil, nil, nil))
+	if bare.Provenance == ProvenanceRich {
+		t.Errorf("identifier-only entry must not be rich, got %q", bare.Provenance)
+	}
+
+	if got := alibabaEnrichedModelInfo("acme-chat-7b", "Acme").Provenance; got != ProvenanceHeuristic {
+		t.Errorf("enriched model provenance = %q, want %q", got, ProvenanceHeuristic)
+	}
+}
+
 // TestModelFamilyRegistrySuppliesDefaults verifies a described family receives
 // its curated defaults while an undescribed chat model stays text-only.
 func TestModelFamilyRegistrySuppliesDefaults(t *testing.T) {

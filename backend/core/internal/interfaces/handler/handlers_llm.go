@@ -1,8 +1,11 @@
 package handler
 
 import (
+	"errors"
 	"net/http"
+	"time"
 
+	catalog "github.com/flashbacks/core/internal/application/llm"
 	"github.com/flashbacks/core/internal/domain"
 	"github.com/flashbacks/core/internal/infrastructure/llm"
 	"github.com/flashbacks/core/internal/interfaces/dto"
@@ -556,84 +559,11 @@ func (s *Server) handleGetLlmRecognition(c *gin.Context) {
 	})
 }
 
-// handleGetLlmModels returns a list of available LLM models from the configured server.
-func (s *Server) handleGetLlmModels(c *gin.Context) {
-	providerName := c.Query("provider")
-	forceRefresh := c.Query("force") == "true"
-
-	var provider domain.LlmProvider
-	var found bool
-
-	if providerName != "" {
-		provider, found = s.settingsLoader.LlmProvider(providerName)
-	} else {
-		// Default to chat instrument's provider
-		instrument, instrFound := s.settingsLoader.LlmInstrumentByType(domain.InstrumentChat)
-		if !instrFound {
-			c.JSON(http.StatusNotFound, dto.LlmModelsResponse{
-				Success:  false,
-				Error:    "LLM settings not configured",
-				Provider: "",
-			})
-			return
-		}
-		provider = instrument.Provider
-		found = true
-	}
-
-	if !found {
-		c.JSON(http.StatusNotFound, dto.LlmModelsResponse{
-			Success:  false,
-			Error:    "Provider not configured",
-			Provider: providerName,
-		})
-		return
-	}
-
-	if !forceRefresh {
-		dbModels, err := s.llmRepo.GetModelsByProviderID(provider.ID)
-		if err == nil && len(dbModels) > 0 {
-			modelDTOs := domainModelsToDTOs(dbModels)
-			c.JSON(http.StatusOK, dto.LlmModelsResponse{
-				Success:  true,
-				Models:   modelDTOs,
-				Provider: provider.Name,
-			})
-			return
-		}
-	}
-
-	// Use the chat instrument's model for listing models (the provider itself no longer has a model)
-	instrument, instrFound := s.settingsLoader.LlmInstrumentByType(domain.InstrumentChat)
-	modelToUse := "minicpm-v"
-	if instrFound {
-		modelToUse = instrument.Model
-	}
-
-	llmClient, err := llm.NewClient(provider.Name, provider.ApiUrl, provider.ApiKey, modelToUse, s.config.LlmMaxImageMegapixels)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, dto.LlmModelsResponse{
-			Success:  false,
-			Error:    err.Error(),
-			Provider: provider.Name,
-		})
-		return
-	}
-
-	models, err := llmClient.ListModels(c.Request.Context())
-	if err != nil {
-		c.JSON(http.StatusOK, dto.LlmModelsResponse{
-			Success:  false,
-			Error:    err.Error(),
-			Provider: provider.Name,
-		})
-		return
-	}
-
-	modelDTOs := make([]dto.LlmModelDTO, len(models))
-	domainModels := make([]domain.LlmProviderModel, len(models))
+// modelInfosToDTOs converts collected catalog models to API DTOs.
+func modelInfosToDTOs(models []llm.ModelInfo) []dto.LlmModelDTO {
+	dtos := make([]dto.LlmModelDTO, len(models))
 	for i, m := range models {
-		modelDTOs[i] = dto.LlmModelDTO{
+		dtos[i] = dto.LlmModelDTO{
 			ID:                 m.ID,
 			Name:               m.Name,
 			Size:               m.Size,
@@ -644,43 +574,71 @@ func (s *Server) handleGetLlmModels(c *gin.Context) {
 			InputPricePerMTok:  m.InputPricePerMTok,
 			OutputPricePerMTok: m.OutputPricePerMTok,
 		}
-		domainModels[i] = domain.LlmProviderModel{
-			ModelID:            m.ID,
-			ModelName:          m.Name,
-			Size:               m.Size,
-			ContextLength:      m.ContextLength,
-			InputPricePerMTok:  m.InputPricePerMTok,
-			OutputPricePerMTok: m.OutputPricePerMTok,
-		}
-		if len(m.Capabilities) > 0 {
-			domainModels[i].Capabilities = make([]domain.LlmModelCapability, len(m.Capabilities))
-			for j, cap := range m.Capabilities {
-				domainModels[i].Capabilities[j] = domain.LlmModelCapability{Capability: cap}
-			}
-		}
-		for _, mod := range m.InputModalities {
-			domainModels[i].Modalities = append(domainModels[i].Modalities, domain.LlmModelModality{
-				Modality:  mod,
-				Direction: domain.ModalityDirectionInput,
+	}
+	return dtos
+}
+
+// handleGetLlmModels returns the stored model catalog of a provider.
+//
+// The answered list is always the persisted catalog; it is re-collected when it
+// has never been refreshed, is older than the configured TTL, or the caller
+// passes `refresh=true`. A failed re-collection is reported through `stale` and
+// `refreshError` while the previously stored catalog keeps being served.
+func (s *Server) handleGetLlmModels(c *gin.Context) {
+	providerAlias := c.Query("provider")
+	refresh := c.Query("refresh") == "true" || c.Query("force") == "true"
+
+	if providerAlias == "" {
+		// Default to the chat instrument's provider.
+		instrument, found := s.settingsLoader.LlmInstrumentByType(domain.InstrumentChat)
+		if !found {
+			c.JSON(http.StatusNotFound, dto.LlmModelsResponse{
+				Success:  false,
+				Error:    "LLM settings not configured",
+				Provider: "",
 			})
+			return
 		}
-		for _, mod := range m.OutputModalities {
-			domainModels[i].Modalities = append(domainModels[i].Modalities, domain.LlmModelModality{
-				Modality:  mod,
-				Direction: domain.ModalityDirectionOutput,
-			})
-		}
+		providerAlias = instrument.Provider.Alias
 	}
 
-	if len(domainModels) > 0 {
-		s.llmRepo.ReplaceProviderModels(provider.ID, domainModels)
+	if s.llmCatalog == nil {
+		c.JSON(http.StatusServiceUnavailable, dto.LlmModelsResponse{
+			Success:  false,
+			Error:    "LLM model catalog is not available",
+			Provider: providerAlias,
+		})
+		return
 	}
 
-	c.JSON(http.StatusOK, dto.LlmModelsResponse{
+	result, err := s.llmCatalog.Get(c.Request.Context(), providerAlias, refresh)
+	if err != nil {
+		status := http.StatusInternalServerError
+		if errors.Is(err, catalog.ErrProviderNotFound) {
+			status = http.StatusNotFound
+		}
+		c.JSON(status, dto.LlmModelsResponse{
+			Success:  false,
+			Error:    err.Error(),
+			Provider: providerAlias,
+		})
+		return
+	}
+
+	response := dto.LlmModelsResponse{
 		Success:  true,
-		Models:   modelDTOs,
-		Provider: provider.Name,
-	})
+		Models:   modelInfosToDTOs(result.Models),
+		Provider: result.Provider.Name,
+		Stale:    result.Stale,
+	}
+	if result.FetchedAt != nil {
+		response.FetchedAt = result.FetchedAt.UTC().Format(time.RFC3339)
+	}
+	if result.RefreshError != nil {
+		response.RefreshError = result.RefreshError.Error()
+	}
+
+	c.JSON(http.StatusOK, response)
 }
 
 // handleGetImageTags returns existing tags for an image (without generating new ones).

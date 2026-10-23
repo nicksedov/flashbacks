@@ -664,6 +664,13 @@ type LlmModelsResponse struct {
 	Models   []LlmModelDTO `json:"models"`
 	Error    string        `json:"error,omitempty"`
 	Provider string        `json:"provider"`
+	// FetchedAt is the RFC3339 time of the last successful catalog refresh.
+	FetchedAt string `json:"fetchedAt,omitempty"`
+	// Stale reports that the last refresh attempt failed and the stored catalog
+	// was served instead.
+	Stale bool `json:"stale"`
+	// RefreshError carries the failure text while Stale is true.
+	RefreshError string `json:"refreshError,omitempty"`
 }
 
 // --- LLM OCR API ---

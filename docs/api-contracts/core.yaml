@@ -1247,16 +1247,22 @@ paths:
 
   /api/llm/models:
     get:
-      summary: Get available LLM models
+      summary: Get the stored catalog of LLM models for a provider
       operationId: getLlmModels
       parameters:
-        - name: providerAlias
+        - name: provider
           in: query
+          description: Provider alias; defaults to the chat instrument's provider
           schema:
             type: string
+        - name: refresh
+          in: query
+          description: Re-collect the provider catalog regardless of its age
+          schema:
+            type: boolean
       responses:
         "200":
-          description: Available models
+          description: The stored provider catalog with its freshness metadata
           content:
             application/json:
               schema:
@@ -2970,6 +2976,17 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/LlmModelDTO"
+        provider:
+          type: string
+        fetchedAt:
+          type: string
+          format: date-time
+        stale:
+          type: boolean
+        refreshError:
+          type: string
+        error:
+          type: string
 
     LlmModelDTO:
       type: object

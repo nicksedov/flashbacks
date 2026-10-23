@@ -102,6 +102,7 @@ go test ./... -coverprofile=coverage.out
 | `ACCOUNT_CREATION_MODE` | Account creation mode: `admin_only`, `self_service`, `self_service_with_approval` | `admin_only` |
 | `OCR_SERVICE_URL` | OCR service URL | - |
 | `EXIF_SERVICE_URL` | EXIF service URL | - |
+| `LLM_MODELS_CACHE_TTL` | How long a stored provider model catalog stays valid before it is re-collected on read (Go duration) | `24h` |
 
 ## Thumbnail Cache
 

@@ -1,5 +1,68 @@
 scopes:
   current:
+    llm-model-metadata.capabilities-deduplicated:
+      evidence:
+        - go::./internal/infrastructure/llm::TestAlibabaCapabilitiesDeduplicated
+    llm-model-metadata.image-input-implies-vision:
+      evidence:
+        - go::./internal/infrastructure/llm::TestAlibabaListingDerivesVisionFromModalities
+    llm-model-metadata.chat-identifier-not-vision:
+      evidence:
+        - go::./internal/infrastructure/llm::TestAlibabaChatIdentifierNotVision
+        - go::./internal/infrastructure/llm::TestGenericFamilyDoesNotHideVisionSiblings
+    llm-model-catalog.native-source-preferred:
+      evidence:
+        - go::./internal/application/llm::TestCatalogPrefersRichSource
+    llm-model-catalog.registry-fills-partial-listing:
+      evidence:
+        - go::./internal/application/llm::TestCatalogRegistryFillsListing
+    llm-model-catalog.unknown-model-safe-default:
+      evidence:
+        - go::./internal/application/llm::TestCatalogUnknownModelDefault
+    llm-model-catalog.response-equals-stored:
+      evidence:
+        - go::./internal/application/llm::TestModelsResponseEqualsStored
+    llm-model-catalog.response-exposes-freshness:
+      evidence:
+        - go::./internal/application/llm::TestModelsResponseExposesFetchedAt
+    llm-model-catalog.fresh-catalog-not-refetched:
+      evidence:
+        - go::./internal/application/llm::TestCatalogFreshNotRefetched
+    llm-model-catalog.expired-catalog-refetched:
+      evidence:
+        - go::./internal/application/llm::TestCatalogExpiredRefetched
+    llm-model-catalog.explicit-refresh-ignores-ttl:
+      evidence:
+        - go::./internal/application/llm::TestCatalogExplicitRefreshIgnoresTTL
+    llm-model-catalog.degraded-refresh-keeps-vision:
+      evidence:
+        - go::./internal/application/llm::TestMergeKeepsVision
+        - go::./internal/application/llm::TestDegradedRefreshKeepsStoredModalities
+    llm-model-catalog.degraded-refresh-keeps-context:
+      evidence:
+        - go::./internal/application/llm::TestMergeKeepsContextLength
+        - go::./internal/application/llm::TestDegradedRefreshKeepsStoredModalities
+    llm-model-catalog.degraded-refresh-keeps-models:
+      evidence:
+        - go::./internal/application/llm::TestMergeKeepsMissingModels
+    llm-model-catalog.write-failure-reported:
+      evidence:
+        - go::./internal/application/llm::TestRefreshWriteFailureReported
+    llm-model-catalog.write-failure-keeps-catalog:
+      evidence:
+        - go::./internal/application/llm::TestRefreshFailureKeepsCatalog
+    llm-settings.dropdown-populated-automatically:
+      evidence:
+        - vitest::webapp/src/components/tabs/AdminAnalysisTab.test.tsx::AdminAnalysisTab > loads models on mount without forcing a refresh
+    llm-settings.refresh-updates-dropdowns:
+      evidence:
+        - vitest::webapp/src/components/tabs/AdminAnalysisTab.test.tsx::AdminAnalysisTab > refresh action replaces the dropdown models
+    llm-settings.stale-notice-english:
+      evidence:
+        - vitest::webapp/src/components/tabs/AdminAnalysisTab.test.tsx::AdminAnalysisTab > renders the stale notice in English
+    llm-settings.stale-notice-russian:
+      evidence:
+        - vitest::webapp/src/components/tabs/AdminAnalysisTab.test.tsx::AdminAnalysisTab > renders the stale notice in Russian
     design-system.info-label-collapse:
       evidence:
         - vitest::webapp/src/components/gallery/GalleryAllImagesView.test.tsx::GalleryAllImagesView > collapses the image count to an info icon on mobile

@@ -8,6 +8,7 @@ import (
 	"github.com/flashbacks/core/internal/application/agent"
 	"github.com/flashbacks/core/internal/application/geo"
 	"github.com/flashbacks/core/internal/application/imaging"
+	catalog "github.com/flashbacks/core/internal/application/llm"
 	"github.com/flashbacks/core/internal/application/thumbnail"
 	"github.com/flashbacks/core/internal/domain/repository"
 	"github.com/flashbacks/core/internal/infrastructure/config"
@@ -35,6 +36,7 @@ type ServerDeps struct {
 	BackgroundSync      *imaging.BackgroundSyncManager
 	TagScanManager      *imaging.TagScanManager
 	EmbeddingBackfill   *imaging.EmbeddingBackfillManager
+	LlmCatalog          *catalog.Service
 	ThumbnailProvider   thumbnail.ThumbnailProvider
 	ThumbnailBatch      *helpers.ThumbnailBatch
 	OcrClient           ocr.Client
@@ -75,6 +77,7 @@ type Server struct {
 	backgroundSync      *imaging.BackgroundSyncManager
 	tagScanManager      *imaging.TagScanManager
 	embeddingBackfill   *imaging.EmbeddingBackfillManager
+	llmCatalog          *catalog.Service
 	config              *config.AppConfig
 	ocrClient           ocr.Client
 	clusterStorage      *geo.ClusterStorage
@@ -116,6 +119,7 @@ func NewServer(deps ServerDeps) *Server {
 		backgroundSync:      deps.BackgroundSync,
 		tagScanManager:      deps.TagScanManager,
 		embeddingBackfill:   deps.EmbeddingBackfill,
+		llmCatalog:          deps.LlmCatalog,
 		config:              deps.Config,
 		ocrClient:           deps.OcrClient,
 		clusterStorage:      deps.ClusterStorage,

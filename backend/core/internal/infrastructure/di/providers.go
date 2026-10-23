@@ -10,6 +10,7 @@ import (
 	"github.com/flashbacks/core/internal/application/auth"
 	"github.com/flashbacks/core/internal/application/geo"
 	"github.com/flashbacks/core/internal/application/imaging"
+	catalog "github.com/flashbacks/core/internal/application/llm"
 	"github.com/flashbacks/core/internal/application/thumbnail"
 	"github.com/flashbacks/core/internal/domain"
 	"github.com/flashbacks/core/internal/domain/repository"
@@ -50,6 +51,7 @@ var CoreSet = wire.NewSet(
 	ProvideImageFileRepo,
 	ProvideGalleryFolderRepo,
 	ProvideLlmRepo,
+	ProvideLlmCatalogRepo,
 	ProvideMetadataRepo,
 	ProvideOcrRepo,
 	ProvideImageTagRepo,
@@ -170,6 +172,11 @@ func ProvideLlmRepo(db *gorm.DB) repository.LlmRepository {
 	return repository.NewLlmRepository(db)
 }
 
+// ProvideLlmCatalogRepo creates the LLM model catalog repository.
+func ProvideLlmCatalogRepo(db *gorm.DB) repository.LlmCatalogRepository {
+	return repository.NewLlmCatalogRepository(db)
+}
+
 // ProvideMetadataRepo creates the image metadata repository.
 func ProvideMetadataRepo(db *gorm.DB) repository.MetadataRepository {
 	return repository.NewMetadataRepository(db)
@@ -209,6 +216,7 @@ var AppSet = wire.NewSet(
 	ProvideScanManager,
 	ProvideOcrManager,
 	ProvideLlmOcrService,
+	ProvideLlmCatalogService,
 	ProvideBackgroundSyncManager,
 	ProvideTagScanManager,
 	ProvideEmbeddingBackfillManager,
@@ -240,6 +248,12 @@ func ProvideOcrManager(db *gorm.DB, ocrClient ocr.Client, cfg *config.AppConfig)
 // ProvideLlmOcrService creates the LLM-based OCR service.
 func ProvideLlmOcrService(db *gorm.DB) *imaging.LlmOcrService {
 	return imaging.NewLlmOcrService(db)
+}
+
+// ProvideLlmCatalogService creates the authoritative LLM model catalog service.
+func ProvideLlmCatalogService(store repository.LlmCatalogRepository, cfg *config.AppConfig) *catalog.Service {
+	lister := catalog.NewClientLister(cfg.LlmMaxImageMegapixels)
+	return catalog.NewService(store, lister, catalog.Config{TTL: cfg.LlmModelsCacheTTL})
 }
 
 // ProvideBackgroundSyncManager creates the background sync manager.

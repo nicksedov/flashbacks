@@ -559,6 +559,7 @@ export const translationsRu = {
   "llm_ocr.processingTime": "Время обработки",
   "llm_ocr.provider": "Провайдер",
   "llm_ocr.model": "Модель",
+  "llm_ocr.catalogStale": "Список моделей может быть устаревшим",
   "llm_ocr.sectionResult": "Результат",
   "llm_ocr.sectionDetected": "Обнаружено",
   "llm_ocr.errorHintNetwork": "Сервер недоступен. Убедитесь, что API-сервис запущен и сетевое соединение работает. Проверьте статус сервера или повторите попытку позже.",
@@ -599,7 +600,7 @@ export const translationsRu = {
   // Image Edit LLM Settings
   "llm_ocr.imgEditSettings": "Настройки LLM для редактирования изображений",
   "llm_ocr.imgEditSettingsDescription": "Настройте ИИ для улучшения качества изображений: повышение детализации, устранение размытия, увеличение разрешения",
-  "llm_providers.usageShortImgEdit": "ImgEdit",
+  "llm_providers.usageShortImgEdit": "Image Edit",
   "llm_providers.usageShortOCR": "OCR",
   "llm_ocr.settingsSaved": "Настройки сохранены",
   "llm_ocr.settingsSaveFailed": "Ошибка сохранения настроек",

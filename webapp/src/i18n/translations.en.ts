@@ -649,6 +649,7 @@ export const translationsEn = {
   "llm_ocr.processingTime": "Processing time",
   "llm_ocr.provider": "Provider",
   "llm_ocr.model": "Model",
+  "llm_ocr.catalogStale": "The model list may be outdated",
   "llm_ocr.sectionResult": "Result",
   "llm_ocr.sectionDetected": "Detected",
   "llm_ocr.errorHintNetwork": "The backend server is unreachable. Make sure the API service is running and your network connection is working. Check the server status or try again in a moment.",
@@ -689,7 +690,7 @@ export const translationsEn = {
   // Image Edit LLM Settings
   "llm_ocr.imgEditSettings": "Image Edit LLM Settings",
   "llm_ocr.imgEditSettingsDescription": "Configure AI for image quality enhancement: detail improvement, deblurring, resolution upscaling",
-  "llm_providers.usageShortImgEdit": "ImgEdit",
+  "llm_providers.usageShortImgEdit": "Image Edit",
   "llm_providers.usageShortOCR": "OCR",
   "llm_ocr.settingsSaved": "Settings saved",
   "llm_ocr.settingsSaveFailed": "Failed to save settings",

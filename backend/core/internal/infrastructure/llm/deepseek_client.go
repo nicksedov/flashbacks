@@ -310,11 +310,13 @@ func (c *DeepSeekClient) ListModels(ctx context.Context) ([]ModelInfo, error) {
 
 	models := make([]ModelInfo, len(modelsResp.Data))
 	for i, m := range modelsResp.Data {
+		// The plain listing exposes only identifiers; everything else is inferred.
 		info := ModelInfo{
 			ID:            m.ID,
 			Name:          m.ID,
 			ContextLength: deepSeekKnownContext(m.ID),
 			Capabilities:  inferCapabilitiesByID(m.ID),
+			Provenance:    ProvenanceHeuristic,
 		}
 		info.InputModalities, info.OutputModalities = inferModalities(info.Capabilities)
 		if p, ok := lookupModelPricing(m.ID); ok {
@@ -359,6 +361,10 @@ func (c *DeepSeekClient) listRichModels(ctx context.Context, client *apiClient) 
 			ContextLength:    m.ContextWindow,
 			InputModalities:  mergeModalities(m.InputModalities),
 			OutputModalities: mergeModalities(m.OutputModalities),
+			Provenance:       ProvenancePartial,
+		}
+		if len(info.InputModalities) > 0 && info.ContextLength > 0 {
+			info.Provenance = ProvenanceRich
 		}
 		if info.Name == "" {
 			info.Name = m.ID

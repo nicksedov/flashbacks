@@ -401,10 +401,13 @@ func (c *OpenAIClient) ListModels(ctx context.Context) ([]ModelInfo, error) {
 
 	models := make([]ModelInfo, len(modelsResp.Data))
 	for i, m := range modelsResp.Data {
+		// The OpenAI-compatible listing exposes nothing but the identifier, so
+		// every metadata field below is inferred, never provider-reported.
 		info := ModelInfo{
 			ID:           m.ID,
 			Name:         m.ID,
 			Capabilities: inferCapabilitiesByID(m.ID),
+			Provenance:   ProvenanceHeuristic,
 		}
 		info.InputModalities, info.OutputModalities = inferModalities(info.Capabilities)
 		if p, ok := lookupModelPricing(m.ID); ok {

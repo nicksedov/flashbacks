@@ -914,7 +914,7 @@ func alibabaCatalogModelToInfo(m alibabaCatalogModel) ModelInfo {
 	// chat/tool_calling from their input modalities.
 	info.Capabilities = normalizeCapabilities(m.Capabilities)
 	if len(info.Capabilities) == 0 {
-		info.Capabilities = capabilitiesFromModalities(info.InputModalities)
+		info.Capabilities = capabilitiesFromModalities(info.InputModalities, info.OutputModalities)
 	}
 	// An image input means vision only for models that also answer in text;
 	// pure generators (image, video) are not vision models.
@@ -926,8 +926,16 @@ func alibabaCatalogModelToInfo(m alibabaCatalogModel) ModelInfo {
 	if strings.Contains(lower, "embedding") {
 		info.Capabilities = []string{"embedding"}
 	}
-	if strings.Contains(lower, "image-edit") || strings.Contains(lower, "image_edit") {
-		info.Capabilities = appendUnique(info.Capabilities, "image_edit")
+	// The wan and qwen image families generate and edit images. Some catalog
+	// entries omit or under-report the "IG" code, so the identifier decides: a
+	// model of that family that does not answer in text is an image generator,
+	// not a chat model.
+	if isImageGenerationModelID(lower) {
+		if containsFold(info.OutputModalities, "text") {
+			info.Capabilities = appendUnique(info.Capabilities, "image_edit")
+		} else {
+			info.Capabilities = []string{"image_edit"}
+		}
 	}
 
 	if input, output, ok := alibabaCatalogPricing(m.Prices); ok {
@@ -1000,6 +1008,12 @@ func inferAlibabaCapabilities(modelID string) []string {
 		return []string{"embedding"}
 	}
 
+	// Image generation and editing models are image-edit capable and nothing
+	// else: they must not inherit chat/tool_calling.
+	if isImageGenerationModelID(lower) {
+		return []string{"image_edit"}
+	}
+
 	caps := []string{"chat", "tool_calling"}
 
 	// Vision capabilities (VL / vision / image / qvq / OCR families).
@@ -1009,11 +1023,6 @@ func inferAlibabaCapabilities(modelID string) []string {
 		strings.Contains(lower, "qvq") ||
 		strings.Contains(lower, "ocr") {
 		caps = appendUnique(caps, "vision")
-	}
-
-	// Image editing models
-	if strings.Contains(lower, "image-edit") || strings.Contains(lower, "image_edit") {
-		caps = appendUnique(caps, "image_edit")
 	}
 
 	return caps

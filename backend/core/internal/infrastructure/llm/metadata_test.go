@@ -195,6 +195,65 @@ func TestNormalizeModelInfoNativeCodes(t *testing.T) {
 	}
 }
 
+// TestImageGenerationIdentifiersAreImageEditCapable guards the regression where
+// the wan2.7 and qwen-image families were classified as chat models and
+// therefore never appeared in the image edit instrument dropdown.
+func TestImageGenerationIdentifiersAreImageEditCapable(t *testing.T) {
+	for _, id := range []string{
+		"wan2.7-image",
+		"wan2.7-image-pro",
+		"wan2.5-i2i-preview",
+		"wan2.1-t2i-turbo",
+		"wanx2.1-t2i-turbo",
+		"qwen-image-2.1-pro",
+		"qwen-image-edit",
+	} {
+		if caps := inferCapabilitiesByID(id); !containsFold(caps, "image_edit") {
+			t.Errorf("inferCapabilitiesByID(%q) = %v, want image_edit", id, caps)
+		}
+	}
+
+	// The video and chat siblings of the same families stay chat models and
+	// must never be offered for image editing.
+	for _, id := range []string{"wan2.7-t2v", "wan2.7-i2v", "qwen-plus", "acme-chat-7b"} {
+		caps := inferCapabilitiesByID(id)
+		if containsFold(caps, "image_edit") {
+			t.Errorf("inferCapabilitiesByID(%q) = %v, want no image_edit", id, caps)
+		}
+		if !containsFold(caps, "chat") {
+			t.Errorf("inferCapabilitiesByID(%q) = %v, want chat", id, caps)
+		}
+	}
+}
+
+// TestEnrichedWanImageModelSupportsImageEditing guards the identifier-only
+// fallback path (the Alibaba compatible-mode listing) for the wan image family.
+func TestEnrichedWanImageModelSupportsImageEditing(t *testing.T) {
+	info := alibabaEnrichedModelInfo("wan2.7-image", "Wan 2.7 Image")
+	assertCapabilitySet(t, info.Capabilities, []string{"image_edit"})
+	if !containsFold(info.InputModalities, "image") {
+		t.Errorf("input modalities = %v, want image", info.InputModalities)
+	}
+	if !containsFold(info.OutputModalities, "image") {
+		t.Errorf("output modalities = %v, want image", info.OutputModalities)
+	}
+}
+
+// TestImageOutputModalityIsImageEditCapable guards the modality derivation: a
+// model that answers with an image and reports no capability codes is an image
+// generator, not a chat model.
+func TestImageOutputModalityIsImageEditCapable(t *testing.T) {
+	got := normalizeModelInfo(ModelInfo{
+		ID:               "acme-image-1",
+		InputModalities:  []string{"Text", "Image"},
+		OutputModalities: []string{"Image"},
+	})
+	assertCapabilitySet(t, got.Capabilities, []string{"image_edit"})
+	if !containsFold(got.OutputModalities, "image") {
+		t.Errorf("output modalities = %v, want image", got.OutputModalities)
+	}
+}
+
 // TestNormalizeModelInfoListingInput verifies the normalization step derives
 // capabilities from reported modalities and keeps input/output direction apart.
 func TestNormalizeModelInfoListingInput(t *testing.T) {

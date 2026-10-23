@@ -250,12 +250,23 @@ func (s *Service) collectAndPersist(ctx context.Context, provider domain.LlmProv
 	return s.store.MergeProviderCatalog(provider.ID, models, s.config.Now(), rich)
 }
 
-// describesFully reports whether a collected model carries a full description
-// that the provider itself supplied (not one filled in by registry defaults or
-// identifier heuristics). A refresh containing any other model is degraded: it
-// may neither delete stored models nor overwrite their metadata.
+// describesFully reports whether a collected model carries a description the
+// provider itself supplied and that is complete enough to replace the stored
+// one. A complete (rich) catalog entry qualifies, and so does a partial entry
+// that reported both modalities and capabilities: those capabilities are
+// derived from provider facts, not from the registry or the identifier
+// heuristics. A refresh containing any other model is degraded: it may neither
+// delete stored models nor overwrite their metadata.
 func describesFully(info modelllm.ModelInfo) bool {
-	return info.Provenance == modelllm.ProvenanceRich && isRichInfo(info)
+	if !isRichInfo(info) {
+		return false
+	}
+	switch info.Provenance {
+	case modelllm.ProvenanceRich, modelllm.ProvenancePartial:
+		return true
+	default:
+		return false
+	}
 }
 
 // modelDisplayName returns the display name of a collected model.

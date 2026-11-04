@@ -71,6 +71,9 @@ type AppConfig struct {
 	// FacesBatchSize is how many images one faces-service analysis request
 	// carries (default: 8). One batching degenerates to one request per photo.
 	FacesBatchSize int
+	// FacesBatchConcurrency is how many analysis requests may be in flight at
+	// once, i.e. how many model sessions (GPUs) the job keeps busy (default: 2).
+	FacesBatchConcurrency int
 	// FacesAnalyzeTimeout bounds a single batch analysis request (default: 300s).
 	FacesAnalyzeTimeout time.Duration
 }
@@ -146,6 +149,7 @@ func LoadConfig() *AppConfig {
 		ExifServiceURL:              getEnv("EXIF_SERVICE_URL", "http://localhost:5172"),
 		FacesServiceURL:             getEnv("FACES_SERVICE_URL", "http://localhost:5173"),
 		FacesBatchSize:              getEnvInt("FACES_BATCH_SIZE", 8),
+		FacesBatchConcurrency:       getEnvInt("FACES_BATCH_CONCURRENCY", 2),
 		FacesAnalyzeTimeout:         getEnvDuration("FACES_ANALYZE_TIMEOUT", 300*time.Second),
 		FacesClusterMode:            facesClusterMode,
 		FacesClusterNeighbours:      getEnvInt("FACES_CLUSTER_NEIGHBOURS", 16),
@@ -184,6 +188,7 @@ func (c *AppConfig) RegistryDefaults() map[string]string {
 		"EXIF_SERVICE_URL":                c.ExifServiceURL,
 		"FACES_SERVICE_URL":               c.FacesServiceURL,
 		"FACES_BATCH_SIZE":                strconv.Itoa(c.FacesBatchSize),
+		"FACES_BATCH_CONCURRENCY":         strconv.Itoa(c.FacesBatchConcurrency),
 		"FACES_ANALYZE_TIMEOUT":           c.FacesAnalyzeTimeout.String(),
 		"FACES_CLUSTER_MODE":              c.FacesClusterMode,
 		"FACES_CLUSTER_NEIGHBOURS":        strconv.Itoa(c.FacesClusterNeighbours),
@@ -248,6 +253,7 @@ func (c *AppConfig) ApplyRegistry(values map[string]string) {
 	applyPositiveInt("THUMBNAIL_CACHE_QUALITY", &c.ThumbnailCacheQuality)
 	applyPositiveInt("AGENT_MAX_CONVERSATION_TOKENS", &c.AgentMaxConversationTokens)
 	applyPositiveInt("FACES_BATCH_SIZE", &c.FacesBatchSize)
+	applyPositiveInt("FACES_BATCH_CONCURRENCY", &c.FacesBatchConcurrency)
 	applyPositiveInt("FACES_CLUSTER_NEIGHBOURS", &c.FacesClusterNeighbours)
 
 	if value, ok := values["FACES_CLUSTER_MODE"]; ok {

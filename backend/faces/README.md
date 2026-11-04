@@ -26,7 +26,7 @@ Runs the Flashbacks face recognition ML pipeline over HTTP:
 
 | Method | Path | Description |
 |---|---|---|
-| GET | `/faces/health` | Health probe: `status`, `activeProvider`, `requestedProviders` and the calibrated `thresholds`. |
+| GET | `/faces/health` | Health probe: `status`, `activeProvider`, `requestedProviders`, the session `devices` and the calibrated `thresholds`. |
 | POST | `/faces/analyze` | `{"image": "<base64>"}` → `{"faces": [{x,y,width,height,confidence,embedding}]}` |
 | POST | `/faces/analyze-batch` | `{"images": ["<base64>", ...]}` → `{"results": [{"faces": [...]} \| {"error": "..."}]}`, one entry per image in request order. |
 | POST | `/faces/detect` | `{"image": "<base64>"}` → `{"boxes": [{x,y,width,height,confidence}]}` |
@@ -47,6 +47,13 @@ accepting both shorthands (`cpu`, `cuda`, `tensorrt`, `openvino`, `directml`,
 `coreml`) and full names (`CPUExecutionProvider`, `CUDAExecutionProvider`, ...).
 It defaults to `cpu`: accelerating a host is an operator decision, because the
 ollama containers already own most of the VRAM.
+
+`FACES_GPU_IDS` lists the CUDA devices the service keeps a session on
+(`FACES_GPU_IDS=0,1` on a two-card host). Every device owns one `FaceAnalysis`
+session and one slot in the request pool, so concurrent analysis requests run on
+different cards instead of queueing behind a single session. `FACES_GPU_ID`
+(single device) remains supported when `FACES_GPU_IDS` is unset. All sessions
+resolve the same provider list; each gets its own `ctx_id`.
 
 The request is intersected with `onnxruntime.get_available_providers()` at the
 first inference or health call:
@@ -130,10 +137,11 @@ scenarios and the cosine thresholds.
 |---|---|---|
 | `FACES_PORT` | `5173` | HTTP listen port. |
 | `FACES_PROVIDERS` | `cpu` | Ordered ONNX Runtime providers (shorthands or full names); unavailable ones degrade to CPU with a warning. |
-| `FACES_GPU_ID` | `0` | CUDA device id passed as InsightFace `ctx_id` when a CUDA provider is active. |
+| `FACES_GPU_IDS` | empty (`FACES_GPU_ID`) | Comma-separated CUDA devices that each get their own model session and request slot, e.g. `0,1`. |
+| `FACES_GPU_ID` | `0` | Single CUDA device id used when `FACES_GPU_IDS` is unset. |
 | `FACES_MAX_BATCH` | `16` | Maximum images one `/faces/analyze-batch` request may carry (larger requests are rejected with `422`). |
 | `FACES_RECOGNITION_BATCH` | `32` | Aligned small-face crops sent through the recognizer per forward pass; `1` keeps the per-image path. |
-| `FACES_MAX_CONCURRENCY` | `1` | Concurrent batch analyses; one GPU is kept busy by one batch, so more only duplicates VRAM use. |
+| `FACES_MAX_CONCURRENCY` | `1` | Concurrent analyses **per device**; each device has its own session, and more per device only duplicates its VRAM use. |
 | `FACES_CLUSTER_MODE` | `auto` | Read by **core**, not this service: clustering strategy (`auto`, `store`, `memory`) for the recognition job's candidate graph. |
 | `FACES_CLUSTER_NEIGHBOURS` | `16` | Read by **core**, not this service: candidates per unassigned face when it queries the store for neighbours. |
 | `REGISTRY_URL` | (empty) | Registry facade URL; empty disables registration. |

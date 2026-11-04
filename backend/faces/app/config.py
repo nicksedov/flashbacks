@@ -99,13 +99,14 @@ class FaceSettings:
 
     #: Requested providers as canonical ONNX Runtime names, in priority order.
     providers: tuple[str, ...] = (CPU_PROVIDER,)
-    #: CUDA device id used when a CUDA provider is active.
-    gpu_id: int = 0
+    #: CUDA devices the engine keeps a model session on, in preference order.
+    #: ``FACES_GPU_IDS=0,1`` spreads one session over both cards.
+    gpu_ids: tuple[int, ...] = (0,)
     #: Maximum number of images one ``/faces/analyze-batch`` request may carry.
     max_batch: int = 16
     #: Number of aligned face crops sent through the recognizer per forward pass.
     recognition_batch: int = 32
-    #: Concurrent batch analyses allowed (one GPU is kept busy by one batch).
+    #: Concurrent analyses allowed per device (each device holds its own session).
     max_concurrency: int = 1
 
     @classmethod
@@ -117,13 +118,33 @@ class FaceSettings:
             for name in source.get("FACES_PROVIDERS", "cpu").split(",")
             if name.strip()
         )
+        gpu_ids = _env_int_list(source, "FACES_GPU_IDS")
+        if not gpu_ids:
+            gpu_ids = (_env_int(source, "FACES_GPU_ID", 0),)
         return cls(
             providers=providers or (CPU_PROVIDER,),
-            gpu_id=_env_int(source, "FACES_GPU_ID", 0),
+            gpu_ids=gpu_ids,
             max_batch=_env_int(source, "FACES_MAX_BATCH", 16, minimum=1),
             recognition_batch=_env_int(source, "FACES_RECOGNITION_BATCH", 32, minimum=1),
             max_concurrency=_env_int(source, "FACES_MAX_CONCURRENCY", 1, minimum=1),
         )
+
+
+def _env_int_list(environ: Mapping[str, str], name: str) -> tuple[int, ...]:
+    """Parse a comma-separated int list, ignoring blank or invalid entries."""
+    raw = environ.get(name, "").strip()
+    if not raw:
+        return ()
+    values: list[int] = []
+    for part in raw.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        try:
+            values.append(int(part))
+        except ValueError:
+            logger.warning("invalid %s entry %r; ignoring", name, part)
+    return tuple(values)
 
 
 def _env_int(

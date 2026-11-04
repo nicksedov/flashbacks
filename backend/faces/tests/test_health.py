@@ -41,6 +41,7 @@ def test_health_reports_provider() -> None:
     assert body["status"] == "ok"
     assert body["activeProvider"] == "cuda"
     assert body["requestedProviders"] == ["cuda", "cpu"]
+    assert body["devices"] == [{"deviceId": 0, "provider": "cuda"}]
 
 
 def test_health_reports_the_cpu_default(client) -> None:

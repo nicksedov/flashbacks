@@ -2,6 +2,7 @@ package mocks
 
 import (
 	"context"
+	"sync"
 
 	"github.com/flashbacks/core/internal/infrastructure/faces"
 )
@@ -26,6 +27,10 @@ type MockFacesClient struct {
 	ClusterCallCount      int
 	ClusterGraphCallCount int
 	HealthCallCount       int
+
+	// batchMu guards the batch counters: the recognition job dispatches batch
+	// requests concurrently, one per faces model session.
+	batchMu sync.Mutex
 }
 
 // ServiceURL implements faces.Client.
@@ -53,8 +58,10 @@ func (m *MockFacesClient) Analyze(ctx context.Context, image []byte) ([]faces.An
 
 // AnalyzeBatch implements faces.Client.
 func (m *MockFacesClient) AnalyzeBatch(ctx context.Context, images [][]byte) ([]faces.BatchResult, error) {
+	m.batchMu.Lock()
 	m.AnalyzeBatchCallCount++
 	m.AnalyzeBatchSizes = append(m.AnalyzeBatchSizes, len(images))
+	m.batchMu.Unlock()
 	if m.AnalyzeBatchFunc != nil {
 		return m.AnalyzeBatchFunc(ctx, images)
 	}

@@ -35,6 +35,14 @@ class FakeEngine:
     def provider_selection(self):
         return self._selection
 
+    def device_info(self):
+        return [
+            {
+                "deviceId": self._selection.device_id,
+                "provider": self._selection.active_provider,
+            }
+        ]
+
     def detect(self, image_b64: str) -> list[dict[str, float]]:
         # Prove the payload decodes as a real image.
         FaceEngine.decode_image(image_b64)

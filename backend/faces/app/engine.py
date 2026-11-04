@@ -5,8 +5,11 @@ from __future__ import annotations
 import base64
 import io
 import logging
-from dataclasses import replace
-from typing import Any, Optional, Sequence
+import queue
+import threading
+from contextlib import contextmanager
+from dataclasses import dataclass, replace
+from typing import Any, Iterator, Optional, Sequence
 
 import numpy as np
 from PIL import Image
@@ -63,12 +66,21 @@ def _l2_normalize(features: np.ndarray) -> np.ndarray:
     return features / norms
 
 
+@dataclass
+class DeviceWorker:
+    """One model session pinned to a device (or the CPU fallback)."""
+
+    device_id: int
+    selection: ProviderSelection
+    analysis: Any = None
+
+
 class FaceEngine:
     """Loads and runs the face recognition models.
 
-    Model loading is lazy and the class keeps no state beyond the loaded
-    analysis object, so endpoints stay stateless and tests can substitute a
-    deterministic fake engine.
+    One InsightFace session is kept per configured CUDA device
+    (``FACES_GPU_IDS``), so a request submitted while one card is busy runs on
+    the free one. Model loading stays lazy and the endpoints stay stateless.
     """
 
     def __init__(
@@ -77,6 +89,7 @@ class FaceEngine:
         providers: Optional[Sequence[str]] = None,
         settings: Optional[FaceSettings] = None,
         available: Optional[Sequence[str]] = None,
+        analysis: Optional[Any] = None,
     ) -> None:
         self._name = name
         self._settings = settings or FaceSettings.from_env()
@@ -88,52 +101,119 @@ class FaceEngine:
         self._available: Optional[tuple[str, ...]] = (
             tuple(available) if available is not None else None
         )
-        self._selection: Optional[ProviderSelection] = None
-        self._analysis: Any = None
+        # ``analysis`` injects a ready fake session (tests); the primary device
+        # uses it instead of loading real weights.
+        self._analysis: Any = analysis
+        self._workers: Optional[list[DeviceWorker]] = None
+        self._free_workers: Optional[queue.Queue[DeviceWorker]] = None
+        self._workers_lock = threading.Lock()
 
     @property
     def settings(self) -> FaceSettings:
         """The effective service settings (provider list, batch knobs)."""
         return self._settings
 
-    def provider_selection(self) -> ProviderSelection:
-        """Resolve the execution providers once and reuse the decision.
+    @property
+    def device_count(self) -> int:
+        """Number of devices the pool can use in parallel."""
+        return len(self._ensure_workers())
 
-        Model loading stays lazy, so ``/faces/health`` can report the provider
-        without pulling the InsightFace models (or any weights) into memory.
-        """
-        if self._selection is None:
+    def device_slots(self) -> int:
+        """Total concurrent analysis slots (devices x per-device concurrency)."""
+        return self.device_count * max(1, self._settings.max_concurrency)
+
+    def device_info(self) -> list[dict[str, Any]]:
+        """Describe every session in the pool for ``/faces/health``."""
+        return [
+            {
+                "deviceId": worker.device_id,
+                "provider": worker.selection.active_provider,
+            }
+            for worker in self._ensure_workers()
+        ]
+
+    def _ensure_workers(self) -> list[DeviceWorker]:
+        """Build the device pool once; provider resolution happens here."""
+        with self._workers_lock:
+            if self._workers is not None:
+                return self._workers
+
             offered = self._available if self._available is not None else available_providers()
-            self._selection = resolve_providers(
-                self._settings.providers, offered, self._settings.gpu_id
-            )
+            selection = resolve_providers(self._settings.providers, offered, 0)
+            if selection.device_id >= 0:
+                gpu_ids = self._settings.gpu_ids or (selection.device_id,)
+                workers = [
+                    DeviceWorker(device_id, replace(selection, device_id=device_id))
+                    for device_id in gpu_ids
+                ]
+            else:
+                # CPU fallback: one worker is all a CPU host can use.
+                workers = [DeviceWorker(-1, selection)]
+
+            free: queue.Queue[DeviceWorker] = queue.Queue()
+            for worker in workers:
+                for _ in range(max(1, self._settings.max_concurrency)):
+                    free.put(worker)
+
+            self._workers = workers
+            self._free_workers = free
             logger.info(
-                "execution providers: requested=%s available=%s active=%s ctx_id=%d",
-                list(self._selection.requested),
-                list(self._selection.available),
-                list(self._selection.active),
-                self._selection.device_id,
+                "execution providers: requested=%s available=%s devices=%s",
+                list(selection.requested),
+                list(selection.available),
+                [(worker.device_id, worker.selection.active_provider) for worker in workers],
             )
-        return self._selection
+            return workers
+
+    def provider_selection(self) -> ProviderSelection:
+        """Selection of the first device, kept for the health payload."""
+        return self._ensure_workers()[0].selection
+
+    @contextmanager
+    def _device(self) -> Iterator[DeviceWorker]:
+        """Borrow a free session; waits when every device is busy."""
+        self._ensure_workers()
+        assert self._free_workers is not None
+        worker = self._free_workers.get()
+        try:
+            yield worker
+        finally:
+            self._free_workers.put(worker)
+
+    def _analysis_for(self, worker: DeviceWorker) -> Any:
+        if worker is self._ensure_workers()[0]:
+            return self.ensure_loaded()
+        if worker.analysis is None:
+            worker.analysis = self._load_analysis(worker.selection)
+        return worker.analysis
 
     def ensure_loaded(self) -> Any:
-        if self._analysis is None:
-            # Imported lazily so the service (and its tests) do not require the
-            # heavy ML dependencies until a real inference runs.
-            from insightface.app import FaceAnalysis
-
-            selection = self.provider_selection()
-            app = FaceAnalysis(name=self._name, providers=list(selection.active))
-            # In InsightFace ``ctx_id >= 0`` selects a GPU device and ``ctx_id < 0``
-            # selects CPU, so it is derived from the resolved provider list.
-            app.prepare(ctx_id=selection.device_id, det_size=(640, 640))
-            self._analysis = app
-            # Format the model name into the message: an ``extra={"name": ...}``
-            # key collides with LogRecord.name and raises on Python 3.12.
-            logger.info(
-                "face models loaded: %s on %s", self._name, selection.active_provider
+        """Load (or return) the session of the first device."""
+        primary = self._ensure_workers()[0]
+        if primary.analysis is None:
+            primary.analysis = (
+                self._analysis
+                if self._analysis is not None
+                else self._load_analysis(primary.selection)
             )
-        return self._analysis
+        return primary.analysis
+
+    def _load_analysis(self, selection: ProviderSelection) -> Any:
+        # Imported lazily so the service (and its tests) do not require the
+        # heavy ML dependencies until a real inference runs.
+        from insightface.app import FaceAnalysis
+
+        app = FaceAnalysis(name=self._name, providers=list(selection.active))
+        # In InsightFace ``ctx_id >= 0`` selects a GPU device and ``ctx_id < 0``
+        # selects CPU, so it is derived from the resolved provider list.
+        app.prepare(ctx_id=selection.device_id, det_size=(640, 640))
+        logger.info(
+            "face models loaded: %s on %s (device %d)",
+            self._name,
+            selection.active_provider,
+            selection.device_id,
+        )
+        return app
 
     @staticmethod
     def decode_image(image_b64: str) -> np.ndarray:
@@ -145,7 +225,8 @@ class FaceEngine:
 
     def detect(self, image_b64: str) -> list[dict[str, float]]:
         img = self.decode_image(image_b64)
-        faces = self.ensure_loaded().get(img)
+        with self._device() as worker:
+            faces = self._analysis_for(worker).get(img)
         boxes: list[dict[str, float]] = []
         for face in faces:
             x1, y1, x2, y2 = (float(v) for v in face.bbox)
@@ -173,8 +254,9 @@ class FaceEngine:
         ``FACES_RECOGNITION_BATCH`` so one GPU submission covers many faces.
         """
         img = self.decode_image(image_b64)
-        analysis = self.ensure_loaded()
-        return self._describe_faces(img, analysis.get(img), analysis)
+        with self._device() as worker:
+            analysis = self._analysis_for(worker)
+            return self._describe_faces(img, analysis.get(img), analysis)
 
     def _describe_faces(
         self, img: np.ndarray, faces: list[Any], analysis: Any
@@ -189,7 +271,7 @@ class FaceEngine:
             x1, y1, x2, y2 = (float(v) for v in face.bbox)
             if x2 - x1 >= SMALL_FACE_WIDTH:
                 continue
-            match = self._upscaled_match(img, (x1, y1, x2, y2))
+            match = self._upscaled_match(img, (x1, y1, x2, y2), analysis)
             if match is None:
                 continue
             crop, candidate = match
@@ -240,7 +322,7 @@ class FaceEngine:
                 descriptions[index]["embedding"] = [float(v) for v in embedding]
 
     def _upscaled_match(
-        self, img: np.ndarray, box: tuple[float, float, float, float]
+        self, img: np.ndarray, box: tuple[float, float, float, float], analysis: Any
     ) -> Optional[tuple[np.ndarray, Any]]:
         """Find the face of an upscaled padded crop that refines one small face.
 
@@ -269,7 +351,7 @@ class FaceEngine:
             Image.LANCZOS,
         )
         upscaled = np.asarray(crop)
-        faces = self.ensure_loaded().get(upscaled)
+        faces = analysis.get(upscaled)
         if not faces:
             return None
 
@@ -301,14 +383,15 @@ class FaceEngine:
         upscaled crop, exactly like ``analyze`` does.
         """
         img = self.decode_image(image_b64)
-        analysis = self.ensure_loaded()
-        faces = analysis.get(img)
-        if not faces:
-            return []
-        face = self._select_face(faces, box) if box is not None else self._largest_face(faces)
-        if face is None:
-            return []
-        return self._describe_faces(img, [face], analysis)[0]["embedding"]
+        with self._device() as worker:
+            analysis = self._analysis_for(worker)
+            faces = analysis.get(img)
+            if not faces:
+                return []
+            face = self._select_face(faces, box) if box is not None else self._largest_face(faces)
+            if face is None:
+                return []
+            return self._describe_faces(img, [face], analysis)[0]["embedding"]
 
     @classmethod
     def _select_face(cls, faces: list[Any], box: dict[str, float]) -> Optional[Any]:

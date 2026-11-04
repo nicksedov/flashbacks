@@ -61,11 +61,15 @@ func TestLlmModelsCacheTTLRegistryRoundTrip(t *testing.T) {
 // analysis request and a five-minute budget for it.
 func TestFacesBatchDefaults(t *testing.T) {
 	t.Setenv("FACES_BATCH_SIZE", "")
+	t.Setenv("FACES_BATCH_CONCURRENCY", "")
 	t.Setenv("FACES_ANALYZE_TIMEOUT", "")
 
 	cfg := LoadConfig()
 	if cfg.FacesBatchSize != 8 {
 		t.Fatalf("FACES_BATCH_SIZE default = %d, want 8", cfg.FacesBatchSize)
+	}
+	if cfg.FacesBatchConcurrency != 2 {
+		t.Fatalf("FACES_BATCH_CONCURRENCY default = %d, want 2", cfg.FacesBatchConcurrency)
 	}
 	if cfg.FacesAnalyzeTimeout != 300*time.Second {
 		t.Fatalf("FACES_ANALYZE_TIMEOUT default = %v, want 300s", cfg.FacesAnalyzeTimeout)
@@ -76,11 +80,15 @@ func TestFacesBatchDefaults(t *testing.T) {
 // environment.
 func TestFacesBatchOverrides(t *testing.T) {
 	t.Setenv("FACES_BATCH_SIZE", "1")
+	t.Setenv("FACES_BATCH_CONCURRENCY", "3")
 	t.Setenv("FACES_ANALYZE_TIMEOUT", "90s")
 
 	cfg := LoadConfig()
 	if cfg.FacesBatchSize != 1 {
 		t.Fatalf("FACES_BATCH_SIZE = %d, want 1", cfg.FacesBatchSize)
+	}
+	if cfg.FacesBatchConcurrency != 3 {
+		t.Fatalf("FACES_BATCH_CONCURRENCY = %d, want 3", cfg.FacesBatchConcurrency)
 	}
 	if cfg.FacesAnalyzeTimeout != 90*time.Second {
 		t.Fatalf("FACES_ANALYZE_TIMEOUT = %v, want 90s", cfg.FacesAnalyzeTimeout)

@@ -156,6 +156,9 @@ def health(request: Request) -> dict[str, Any]:
     if selection is not None:
         payload["activeProvider"] = selection.active_provider
         payload["requestedProviders"] = selection.requested_providers
+    devices = engine.device_info() if hasattr(engine, "device_info") else []
+    if devices:
+        payload["devices"] = devices
     return payload
 
 

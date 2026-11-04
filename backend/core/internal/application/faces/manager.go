@@ -41,6 +41,9 @@ const fallbackRecognitionSimilarity = 0.25
 type Options struct {
 	// BatchSize is the maximum number of images one analysis request carries.
 	BatchSize int
+	// BatchConcurrency is how many analysis requests may be in flight at once,
+	// one per model session on the faces service (one session per GPU).
+	BatchConcurrency int
 	// AnalyzeTimeout bounds a single batch analysis request.
 	AnalyzeTimeout time.Duration
 	// ClusterMode selects the clustering strategy: auto, store or memory.
@@ -64,6 +67,7 @@ type Dependencies struct {
 func DefaultOptions() Options {
 	return Options{
 		BatchSize:         8,
+		BatchConcurrency:  2,
 		AnalyzeTimeout:    300 * time.Second,
 		ClusterMode:       domain.FacesClusterModeAuto,
 		ClusterNeighbours: 16,
@@ -74,6 +78,9 @@ func (o Options) normalized() Options {
 	defaults := DefaultOptions()
 	if o.BatchSize <= 0 {
 		o.BatchSize = defaults.BatchSize
+	}
+	if o.BatchConcurrency <= 0 {
+		o.BatchConcurrency = defaults.BatchConcurrency
 	}
 	if o.AnalyzeTimeout <= 0 {
 		o.AnalyzeTimeout = defaults.AnalyzeTimeout
@@ -117,6 +124,7 @@ type Manager struct {
 	progress          Progress
 	clusterSize       int
 	batchSize         int
+	batchConcurrency  int
 	analyzeTimeout    time.Duration
 	clusterMode       string
 	clusterNeighbours int
@@ -150,6 +158,7 @@ func NewManagerWithDependencies(
 		scheduleCh:        make(chan struct{}),
 		clusterSize:       minClusterSize,
 		batchSize:         options.BatchSize,
+		batchConcurrency:  options.BatchConcurrency,
 		analyzeTimeout:    options.AnalyzeTimeout,
 		clusterMode:       options.ClusterMode,
 		clusterNeighbours: options.ClusterNeighbours,
@@ -247,6 +256,11 @@ func (m *Manager) scheduleLoop() {
 
 // runPass analyses every image the current analyser has not seen yet, then
 // clusters and assigns people.
+//
+// Batches are collected sequentially (one resumable cursor) but sent to the
+// faces service by a small worker pool, so a faces service with one session per
+// GPU keeps several requests in flight. Results are persisted on this goroutine,
+// which keeps the database writes ordered.
 func (m *Manager) runPass(stopCh <-chan struct{}) {
 	var total int64
 	m.db.Model(&domain.ImageFile{}).
@@ -260,6 +274,66 @@ func (m *Manager) runPass(stopCh <-chan struct{}) {
 	m.progress = Progress{Total: int(total)}
 	m.mu.Unlock()
 
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	// Cancel in-flight requests as soon as the job is asked to stop.
+	go func() {
+		select {
+		case <-stopCh:
+			cancel()
+		case <-ctx.Done():
+		}
+	}()
+
+	batches := make(chan []batchImage)
+	outcomes := make(chan batchOutcome)
+
+	var workers sync.WaitGroup
+	for i := 0; i < m.batchConcurrency; i++ {
+		workers.Add(1)
+		go func() {
+			defer workers.Done()
+			m.dispatchBatches(ctx, batches, outcomes)
+		}()
+	}
+	go func() {
+		defer close(batches)
+		m.collectBatches(stopCh, batches)
+	}()
+	go func() {
+		workers.Wait()
+		close(outcomes)
+	}()
+
+	for outcome := range outcomes {
+		if ctx.Err() != nil {
+			// Drained after a stop: the pass is being abandoned.
+			continue
+		}
+		m.applyBatch(outcome)
+	}
+
+	select {
+	case <-stopCh:
+		return
+	default:
+	}
+
+	// The new faces are stored, so the neighbour index can be (re)built before
+	// clustering reads it. Building it after the analysis loop means inserts
+	// during the scan hit a heap-only table.
+	m.ensureNeighbourIndex()
+
+	// Detection is finished, so the per-image face counts are final and serve
+	// both the covers of the new clusters and the refresh of stored ones.
+	counts := m.imageFaceCounts()
+	m.clusterAssign(stopCh, counts)
+	m.refreshPersonCovers(counts)
+}
+
+// collectBatches reads unprocessed images from the cursor and queues full
+// batches for the dispatchers. It stops early when the pass is cancelled.
+func (m *Manager) collectBatches(stopCh <-chan struct{}, out chan<- []batchImage) {
 	cursor := uint(0)
 	exhausted := false
 	for !exhausted {
@@ -299,21 +373,60 @@ func (m *Manager) runPass(stopCh <-chan struct{}) {
 			batch = append(batch, batchImage{file: imageFile, data: data})
 		}
 
-		if len(batch) > 0 {
-			m.processBatch(batch)
+		if len(batch) == 0 {
+			continue
+		}
+		select {
+		case out <- batch:
+		case <-stopCh:
+			return
 		}
 	}
+}
 
-	// The new faces are stored, so the neighbour index can be (re)built before
-	// clustering reads it. Building it after the analysis loop means inserts
-	// during the scan hit a heap-only table.
-	m.ensureNeighbourIndex()
+// batchOutcome is the result of one dispatched analysis request.
+type batchOutcome struct {
+	images  []batchImage
+	results []facesclient.BatchResult
+	err     error
+}
 
-	// Detection is finished, so the per-image face counts are final and serve
-	// both the covers of the new clusters and the refresh of stored ones.
-	counts := m.imageFaceCounts()
-	m.clusterAssign(stopCh, counts)
-	m.refreshPersonCovers(counts)
+// dispatchBatches consumes queued batches until the channel closes or the pass
+// is cancelled.
+func (m *Manager) dispatchBatches(
+	ctx context.Context, in <-chan []batchImage, out chan<- batchOutcome,
+) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case batch, ok := <-in:
+			if !ok {
+				return
+			}
+			m.dispatchBatch(ctx, batch, out)
+		}
+	}
+}
+
+// dispatchBatch sends one batch and reports its outcome. Every worker may have
+// a request in flight, which is what lets the faces service use both GPUs.
+func (m *Manager) dispatchBatch(
+	ctx context.Context, images []batchImage, out chan<- batchOutcome,
+) {
+	payload := make([][]byte, len(images))
+	for i, image := range images {
+		payload[i] = image.data
+	}
+
+	requestCtx, cancel := context.WithTimeout(ctx, m.analyzeTimeout)
+	defer cancel()
+
+	results, err := m.client.AnalyzeBatch(requestCtx, payload)
+	select {
+	case out <- batchOutcome{images: images, results: results, err: err}:
+	case <-ctx.Done():
+	}
 }
 
 // ensureNeighbourIndex asks the store to (re)build the face neighbour index
@@ -335,38 +448,29 @@ type batchImage struct {
 	data []byte
 }
 
-// processBatch sends up to one batch of images to the faces service and stores
-// each successful entry.
+// applyBatch stores the entries of one analysed batch.
 //
 // A request-level failure leaves the whole batch unmarked so the next pass
 // analyses it again. A per-entry failure is recorded and also left unmarked,
 // so one unreadable photo never blocks the images that succeeded.
-func (m *Manager) processBatch(images []batchImage) {
-	payload := make([][]byte, len(images))
-	for i, image := range images {
-		payload[i] = image.data
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), m.analyzeTimeout)
-	defer cancel()
-
-	results, err := m.client.AnalyzeBatch(ctx, payload)
-	if err != nil {
-		m.setError(fmt.Sprintf("analyze batch of %d: %v", len(images), err))
+func (m *Manager) applyBatch(outcome batchOutcome) {
+	images := outcome.images
+	if outcome.err != nil {
+		m.setError(fmt.Sprintf("analyze batch of %d: %v", len(images), outcome.err))
 		return
 	}
 
 	for i, image := range images {
-		if i >= len(results) {
+		if i >= len(outcome.results) {
 			m.setError(fmt.Sprintf("analyze batch: service returned %d entries for %d images",
-				len(results), len(images)))
+				len(outcome.results), len(images)))
 			return
 		}
-		if results[i].Error != "" {
-			m.setError(fmt.Sprintf("analyze %s: %s", image.file.Path, results[i].Error))
+		if outcome.results[i].Error != "" {
+			m.setError(fmt.Sprintf("analyze %s: %s", image.file.Path, outcome.results[i].Error))
 			continue
 		}
-		m.replaceFaces(image.file.ID, results[i].Faces)
+		m.replaceFaces(image.file.ID, outcome.results[i].Faces)
 		m.markScanned(image.file.ID)
 	}
 }

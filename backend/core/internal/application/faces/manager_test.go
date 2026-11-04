@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"sort"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -410,8 +412,12 @@ func TestFaceRecognitionManager_AnalyzesInBatches(t *testing.T) {
 
 	batchManager(db, client, 2).runPass(nil)
 
-	if want := []int{2, 2, 1}; !reflect.DeepEqual(client.AnalyzeBatchSizes, want) {
-		t.Fatalf("batch sizes = %v, want %v", client.AnalyzeBatchSizes, want)
+	// Two requests may be in flight, so only the multiset of batch sizes is
+	// deterministic, not the order in which the requests arrived.
+	sizes := append([]int(nil), client.AnalyzeBatchSizes...)
+	sort.Ints(sizes)
+	if want := []int{1, 2, 2}; !reflect.DeepEqual(sizes, want) {
+		t.Fatalf("batch sizes = %v, want %v", sizes, want)
 	}
 	if client.AnalyzeCallCount != 0 {
 		t.Errorf("single-image analyses = %d, want 0 (the job must batch)", client.AnalyzeCallCount)
@@ -466,6 +472,52 @@ func TestFaceRecognitionManager_FailedBatchRetried(t *testing.T) {
 		Count(&scanned)
 	if scanned != 2 {
 		t.Errorf("scanned images after retry = %d, want 2", scanned)
+	}
+}
+
+// TestFaceRecognitionManager_AnalyzesConcurrently guards the multi-GPU dispatch:
+// a batch size of one with two slots keeps two requests in flight, so a faces
+// service with one session per GPU is fed from both sides.
+func TestFaceRecognitionManager_AnalyzesConcurrently(t *testing.T) {
+	db, cleanup := testutil.NewTestDB(t)
+	defer cleanup()
+
+	for _, content := range []string{"person-a-1", "person-a-2", "person-b", "solo"} {
+		seedImage(t, db, content)
+	}
+
+	client := newFakeFacesClient()
+	var inFlight, maxInFlight int32
+	client.AnalyzeBatchFunc = func(_ context.Context, images [][]byte) ([]facesclient.BatchResult, error) {
+		current := atomic.AddInt32(&inFlight, 1)
+		for {
+			observed := atomic.LoadInt32(&maxInFlight)
+			if current <= observed || atomic.CompareAndSwapInt32(&maxInFlight, observed, current) {
+				break
+			}
+		}
+		// Hold the request open so a second worker must overlap with this one.
+		time.Sleep(30 * time.Millisecond)
+		atomic.AddInt32(&inFlight, -1)
+		return batchResults(images), nil
+	}
+
+	m := NewManagerWithOptions(db, client, Options{
+		BatchSize:        1,
+		BatchConcurrency: 2,
+		AnalyzeTimeout:   5 * time.Second,
+	})
+	m.runPass(nil)
+
+	if got := atomic.LoadInt32(&maxInFlight); got != 2 {
+		t.Fatalf("max in-flight batch requests = %d, want 2", got)
+	}
+	var scanned int64
+	db.Model(&domain.ImageFile{}).
+		Where("faces_scan_version = ?", facesScanVersion).
+		Count(&scanned)
+	if scanned != 4 {
+		t.Errorf("scanned images = %d, want 4", scanned)
 	}
 }
 

@@ -324,6 +324,7 @@ func ProvideFaceRecognitionManager(
 		Indexes:    indexes,
 	}, recognition.Options{
 		BatchSize:         cfg.FacesBatchSize,
+		BatchConcurrency:  cfg.FacesBatchConcurrency,
 		AnalyzeTimeout:    cfg.FacesAnalyzeTimeout,
 		ClusterMode:       cfg.FacesClusterMode,
 		ClusterNeighbours: cfg.FacesClusterNeighbours,

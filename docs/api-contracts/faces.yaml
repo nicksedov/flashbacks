@@ -182,6 +182,18 @@ components:
           description: Configured providers in priority order, as short names.
           items:
             type: string
+        devices:
+          type: array
+          description: |
+            One entry per model session in the pool. A two-GPU host reports two
+            devices; the CPU fallback reports a single device with id -1.
+          items:
+            type: object
+            properties:
+              deviceId:
+                type: integer
+              provider:
+                type: string
         thresholds:
           type: object
           description: |

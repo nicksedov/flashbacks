@@ -104,6 +104,7 @@ go test ./... -coverprofile=coverage.out
 | `EXIF_SERVICE_URL` | EXIF service URL | - |
 | `FACES_SERVICE_URL` | Faces service URL | `http://localhost:5173` |
 | `FACES_BATCH_SIZE` | Images per faces-service analysis request (`1` = one request per photo) | `8` |
+| `FACES_BATCH_CONCURRENCY` | Analysis requests in flight; one per faces model session (one session per GPU) | `2` |
 | `FACES_ANALYZE_TIMEOUT` | Time budget for one batch analysis request (Go duration) | `300s` |
 | `FACES_CLUSTER_MODE` | Clustering strategy: `auto` (store when it can answer kNN), `store`, `memory` | `auto` |
 | `FACES_CLUSTER_NEIGHBOURS` | Candidates per unassigned face in the store path | `16` |

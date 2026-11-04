@@ -37,10 +37,14 @@ def create_app(
     resolved_settings = settings or getattr(engine, "settings", None) or FaceSettings.from_env()
     app = FastAPI(title="Flashbacks faces", version="0.1.0", lifespan=lifespan)
     app.state.settings = resolved_settings
-    app.state.engine = engine if engine is not None else FaceEngine(settings=resolved_settings)
-    # Serialise batch analyses: two concurrent GPU batches would double VRAM use
-    # while one device can only work on one batch at a time.
-    app.state.batch_semaphore = threading.Semaphore(resolved_settings.max_concurrency)
+    engine_obj = engine if engine is not None else FaceEngine(settings=resolved_settings)
+    app.state.engine = engine_obj
+    # One slot per model session: a multi-GPU pool admits one batch per device,
+    # so concurrent requests land on different cards instead of queueing.
+    slots = resolved_settings.max_concurrency
+    if hasattr(engine_obj, "device_slots"):
+        slots = max(slots, int(engine_obj.device_slots()))
+    app.state.batch_semaphore = threading.Semaphore(slots)
     app.include_router(router)
     return app
 

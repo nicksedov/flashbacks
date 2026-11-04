@@ -17,7 +17,7 @@
 #   scripts/dev.sh logs    [service ...]   # tail -f logs (all by default)
 #   scripts/dev.sh run      service        # run one service in the foreground
 #
-# Services: core exif ocr webapp          (default for start/stop: all)
+# Services: registry core exif ocr faces webapp   (default for start/stop: all)
 # Runtime state lives under .run/ (git-ignored): bin/, logs/, <svc>.pid
 
 set -Eeuo pipefail
@@ -38,7 +38,7 @@ if [[ -n "$OVERLAY_ENV_FILE" && "$OVERLAY_ENV_FILE" != /* ]]; then
   OVERLAY_ENV_FILE="$ROOT_DIR/$OVERLAY_ENV_FILE"
 fi
 
-ALL_SERVICES=(registry core exif ocr webapp)
+ALL_SERVICES=(registry core exif ocr faces webapp)
 
 # ─── Colours / logging ───────────────────────────────────────────────────────
 GREEN='\033[0;32m'; YELLOW='\033[1;33m'; RED='\033[0;31m'; NC='\033[0m'
@@ -95,10 +95,13 @@ load_env() {
   : "${BOOTSTRAP_PASSWORD:=admin}"
   : "${EXIF_SERVICE_URL:=http://localhost:5172}"
   : "${OCR_SERVICE_URL:=http://localhost:5174}"
+  : "${FACES_SERVICE_URL:=http://localhost:5173}"
   : "${EXIF_HOST:=0.0.0.0}"
   : "${EXIF_PORT:=5172}"
   : "${OCR_HOST:=0.0.0.0}"
   : "${OCR_PORT:=5174}"
+  : "${FACES_HOST:=0.0.0.0}"
+  : "${FACES_PORT:=5173}"
   : "${REGISTRY_DATA_DIR:=$ROOT_DIR/.run/registry-data}"
   : "${REGISTRY_CLIENT_URL:=http://127.0.0.1:2379}"
   : "${REGISTRY_PEER_URL:=http://127.0.0.1:2380}"
@@ -109,8 +112,8 @@ load_env() {
 
   export DB_HOST DB_PORT DB_USER DB_PASSWORD DB_NAME DB_SSLMODE
   export SERVER_HOST SERVER_PORT CORS_ORIGINS BOOTSTRAP_LOGIN BOOTSTRAP_PASSWORD
-  export EXIF_SERVICE_URL OCR_SERVICE_URL
-  export EXIF_HOST EXIF_PORT OCR_HOST OCR_PORT
+  export EXIF_SERVICE_URL OCR_SERVICE_URL FACES_SERVICE_URL
+  export EXIF_HOST EXIF_PORT OCR_HOST OCR_PORT FACES_HOST FACES_PORT
   export REGISTRY_DATA_DIR REGISTRY_CLIENT_URL REGISTRY_PEER_URL
   export REGISTRY_HTTP_PORT REGISTRY_HTTP_ADDR REGISTRY_MASTER_KEY REGISTRY_URL
 }
@@ -120,6 +123,7 @@ svc_dir() {
   case "$1" in
     core|exif|ocr) echo "backend/$1" ;;
     registry)      echo "backend/registry" ;;
+    faces)         echo "backend/faces" ;;
     webapp)        echo "webapp" ;;
   esac
 }
@@ -129,6 +133,7 @@ svc_port() {
     core)     echo "${SERVER_PORT}" ;;
     exif)     echo "${EXIF_PORT}" ;;
     ocr)      echo "${OCR_PORT}" ;;
+    faces)    echo "${FACES_PORT}" ;;
     registry) echo "${REGISTRY_HTTP_PORT}" ;;
     webapp)   echo "5180" ;;
   esac
@@ -139,6 +144,7 @@ svc_health_path() {
     core)     echo "/api/auth/status" ;;
     exif)     echo "/exif/health" ;;
     ocr)      echo "/ocr/api/health" ;;
+    faces)    echo "/faces/health" ;;
     registry) echo "/registry/v1/health" ;;
     webapp)   echo "/" ;;
   esac
@@ -150,6 +156,7 @@ svc_public_url() {
     core)     echo "http://localhost:$(svc_port core)/api" ;;
     exif)     echo "http://localhost:$(svc_port exif)/exif" ;;
     ocr)      echo "http://localhost:$(svc_port ocr)/ocr/api" ;;
+    faces)    echo "http://localhost:$(svc_port faces)/faces" ;;
     registry) echo "http://localhost:$(svc_port registry)/registry/v1" ;;
     webapp)   echo "http://localhost:$(svc_port webapp)" ;;
   esac
@@ -176,6 +183,7 @@ build_bin() {
 build_service() {
   case "$1" in
     core|exif|ocr|registry) build_bin "$1" "$(svc_dir "$1")" ;;
+    faces)                  info "faces is a Python service (uvicorn); run: make setup-faces" ;;
     webapp)                 info "webapp is served by the Vite dev server (no build step)" ;;
   esac
 }
@@ -202,6 +210,13 @@ start_one() {
     registry)
       build_bin "$svc" "$dir"
       cmd=( "$BIN_DIR/registry" )
+      ;;
+    faces)
+      if [[ ! -x "$ROOT_DIR/backend/faces/.venv/bin/uvicorn" ]]; then
+        err "faces dependencies missing — run: make setup-faces"
+        return 1
+      fi
+      cmd=( "$ROOT_DIR/backend/faces/.venv/bin/uvicorn" app.main:app --host "${FACES_HOST}" --port "${FACES_PORT}" )
       ;;
     webapp)
       if [[ ! -d "$ROOT_DIR/webapp/node_modules" ]]; then
@@ -309,6 +324,11 @@ run_foreground() {
         exec "$BIN_DIR/registry"
       fi
       exec env "SERVICE_NAME=$svc" "SERVICE_ID=$svc-dev" "$BIN_DIR/$svc"
+      ;;
+    faces)
+      info "Running faces in the foreground (Ctrl-C to stop)"
+      cd "$ROOT_DIR/$dir"
+      exec "$ROOT_DIR/backend/faces/.venv/bin/uvicorn" app.main:app --host "${FACES_HOST}" --port "${FACES_PORT}"
       ;;
     webapp)
       info "Running webapp in the foreground (Ctrl-C to stop)"

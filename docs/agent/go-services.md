@@ -86,8 +86,9 @@ humans.
 | embeddings-builder | `cd tools/embeddings-builder && go test ./... -count=1` | `go vet ./...` | `go build -o embeddings-builder ./cmd/embeddings-builder/` |
 
 Make targets wrap the same commands: `make test-core`, `make test-exif`,
-`make test-ocr`, `make lint-core`, `make lint-exif`, `make lint-ocr`,
-`make build-core`, `make build-exif`, `make build-ocr`.
+`make test-ocr`, `make test-faces`, `make lint-core`, `make lint-exif`,
+`make lint-ocr`, `make build-core`, `make build-exif`, `make build-ocr`,
+`make build-faces`, `make setup-faces`.
 
 ---
 

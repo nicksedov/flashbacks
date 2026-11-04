@@ -873,3 +873,18 @@ scopes:
     design-system.schedule-editor-weekday-labels-localized:
       evidence:
         - vitest::webapp/src/components/ui/schedule-editor.test.tsx::ScheduleEditor > labels weekdays in Russian under the Russian interface
+    service-deployment.workflow-deploy-step:
+      evidence:
+        - pytest::tests/deploy/test_service_deployment.py::test_workflow_has_deploy_step
+    service-deployment.workflow-definition-of-done:
+      evidence:
+        - pytest::tests/deploy/test_service_deployment.py::test_workflow_dod_has_deploy_criterion
+    service-deployment.local-dev-manages-faces:
+      evidence:
+        - pytest::tests/deploy/test_service_deployment.py::test_dev_stack_manages_faces
+    service-deployment.make-targets-for-faces:
+      evidence:
+        - pytest::tests/deploy/test_service_deployment.py::test_make_has_faces_targets
+    service-deployment.faces-image-healthcheck:
+      evidence:
+        - pytest::tests/deploy/test_service_deployment.py::test_faces_image_healthcheck_and_user

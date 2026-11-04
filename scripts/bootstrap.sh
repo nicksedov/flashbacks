@@ -9,7 +9,7 @@
 # by setting up the Python virtualenv used by the OCR pytest suite.
 #
 # Usage:
-#   scripts/bootstrap.sh [all|godeps|webapp|pytest|exiftool|tesseract]
+#   scripts/bootstrap.sh [all|godeps|webapp|pytest|faces|exiftool|tesseract]
 #   (no argument = all)
 
 set -Eeuo pipefail
@@ -267,6 +267,24 @@ _install_tesseract() {
   warn "Project-local paths are exported by scripts/toolenv.sh (make / dev.sh handle it)"
 }
 
+# ─── faces service (Python venv) ─────────────────────────────────────────────
+ensure_faces() {
+  require_cmd python3
+  local dir="$ROOT_DIR/backend/faces"
+  local venv="$dir/.venv"
+
+  if [[ ! -x "$venv/bin/python" ]]; then
+    info "Creating Python virtualenv at backend/faces/.venv"
+    python3 -m venv "$venv"
+  fi
+
+  info "Installing faces dependencies (downloads onnxruntime/insightface) …"
+  "$venv/bin/python" -m pip install --quiet --upgrade pip
+  ( cd "$dir" && "$venv/bin/python" -m pip install --quiet -e ".[dev]" )
+
+  info "faces ready · $("$venv/bin/uvicorn" --version 2>/dev/null | head -n1)"
+}
+
 # ─── Main ────────────────────────────────────────────────────────────────────
 main() {
   local target="${1:-all}"
@@ -275,13 +293,14 @@ main() {
     godeps)    ensure_godeps ;;
     webapp)    ensure_webapp ;;
     pytest)    ensure_pytest ;;
+    faces)     ensure_faces ;;
     exiftool)  ensure_exiftool ;;
     tesseract) ensure_tesseract ;;
     -h|--help|help)
       sed -n '2,13p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
       ;;
     *)
-      err "Unknown target: $target (expected: all|godeps|webapp|pytest|exiftool|tesseract)"
+      err "Unknown target: $target (expected: all|godeps|webapp|pytest|faces|exiftool|tesseract)"
       exit 2
       ;;
   esac

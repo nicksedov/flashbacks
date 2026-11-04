@@ -146,8 +146,12 @@ type Manager struct {
 	clusterNeighbours int
 	clusterTimeout    time.Duration
 	reclusterAll      bool
-	neighbours        NeighbourSource
-	indexes           IndexMaintainer
+	// clusterPending is true while a pass still owes a clustering decision:
+	// on start (the gallery may be fully analysed already) and after every
+	// pass that analysed images. It is cleared once clustering succeeds.
+	clusterPending bool
+	neighbours     NeighbourSource
+	indexes        IndexMaintainer
 }
 
 // batchCaps bound the per-statement work on a gallery of tens of thousands of
@@ -193,6 +197,7 @@ func NewManagerWithDependencies(
 		clusterNeighbours: options.ClusterNeighbours,
 		clusterTimeout:    options.ClusterTimeout,
 		reclusterAll:      options.ReclusterAll,
+		clusterPending:    true,
 		neighbours:        dependencies.Neighbours,
 		indexes:           dependencies.Indexes,
 	}
@@ -297,28 +302,30 @@ func (m *Manager) runPass(stopCh <-chan struct{}) {
 	m.db.Model(&domain.ImageFile{}).
 		Where("faces_scan_version <> ?", facesScanVersion).
 		Count(&total)
+	m.mu.Lock()
 	if total == 0 {
-		if m.reclusterAll {
+		// A previous pass may have stored faces and then failed (or been
+		// stopped) before clustering. The pending flag keeps retrying that
+		// step, but only while a pass still owes a decision: retrying merely
+		// because unassigned faces exist would re-cluster every thirty seconds
+		// forever, since the faces no person claims stay unassigned on purpose.
+		pending := m.clusterPending
+		reclusterAll := m.reclusterAll
+		m.reclusterAll = false
+		m.progress = Progress{}
+		m.mu.Unlock()
+		if !pending && !reclusterAll {
+			return
+		}
+		if reclusterAll {
 			// A finished gallery keeps its faces, so a clustering change is
 			// only visible after the stored people are discarded. The flag is
 			// one-shot: the pass rebuilds the people, and the next pass keeps
 			// them instead of deleting everything every thirty seconds.
-			m.reclusterAll = false
 			m.resetGeneratedPeople()
 		}
-		// A previous pass may have stored faces and then failed (or been
-		// stopped) before clustering. Keep retrying that step until no
-		// unassigned face is left, instead of leaving the People view empty
-		// forever.
-		var unassigned int64
-		if err := m.db.Model(&domain.Face{}).Where("person_id = ?", 0).Count(&unassigned).Error; err == nil && unassigned == 0 {
-			return
-		}
-		m.mu.Lock()
-		m.progress = Progress{}
-		m.mu.Unlock()
 	} else {
-		m.mu.Lock()
+		m.clusterPending = true
 		m.progress = Progress{Total: int(total)}
 		m.mu.Unlock()
 	}
@@ -773,6 +780,9 @@ func (m *Manager) clusterAssign(stopCh <-chan struct{}, facesPerImage map[uint]i
 		"Face recognition: clustered %d faces into %d people (%d assigned)",
 		len(members), len(labelIDs), assigned,
 	)
+	m.mu.Lock()
+	m.clusterPending = false
+	m.mu.Unlock()
 }
 
 // loadEmbeddings returns the stored vectors of *faceIDs*, one query per batch

@@ -443,6 +443,36 @@ func seedPeople(t *testing.T, db *gorm.DB, name string, faceIDs []uint) *domain.
 	return &person
 }
 
+// TestFaceRecognitionManager_DoesNotReclusterWithoutPendingWork guards the
+// steady state: a gallery whose faces no person claims keeps unassigned faces,
+// and that must not re-run clustering on every thirty-second pass.
+func TestFaceRecognitionManager_DoesNotReclusterWithoutPendingWork(t *testing.T) {
+	db, cleanup := testutil.NewTestDB(t)
+	defer cleanup()
+
+	seedImage(t, db, "person-a-1")
+	seedImage(t, db, "person-a-2")
+	client := newFakeFacesClient()
+	calls := 0
+	client.ClusterFunc = func(
+		ctx context.Context, embeddings [][]float32, size int, solo []bool,
+	) ([]int, error) {
+		calls++
+		return clusterByFirstComponent()(ctx, embeddings, size, solo)
+	}
+
+	m := NewManagerWithOptions(db, client, Options{})
+	m.runPass(nil)
+	if calls != 1 {
+		t.Fatalf("cluster calls after the first pass = %d, want 1", calls)
+	}
+
+	m.runPass(nil)
+	if calls != 1 {
+		t.Fatalf("cluster calls after the second pass = %d, want no extra clustering", calls)
+	}
+}
+
 // TestFaceRecognitionManager_ReclusterAllRebuildsGeneratedPeople guards the
 // repair path: a fully analysed gallery whose people came from an older
 // clustering is clustered again, and the stale person disappears.

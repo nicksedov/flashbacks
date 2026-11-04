@@ -71,6 +71,10 @@ type AppConfig struct {
 	// FacesClusterTimeout bounds one clustering decision and the neighbour
 	// index build (default: 10m; a large gallery needs minutes, not seconds).
 	FacesClusterTimeout time.Duration
+	// FacesReclusterAll discards the generated people before the next pass
+	// clusters again, so a changed clustering algorithm reaches a gallery that
+	// is already fully analysed. People the user named are kept (default: false).
+	FacesReclusterAll bool
 	// FacesBatchSize is how many images one faces-service analysis request
 	// carries (default: 8). One batching degenerates to one request per photo.
 	FacesBatchSize int
@@ -157,6 +161,7 @@ func LoadConfig() *AppConfig {
 		FacesClusterMode:            facesClusterMode,
 		FacesClusterNeighbours:      getEnvInt("FACES_CLUSTER_NEIGHBOURS", 16),
 		FacesClusterTimeout:         getEnvDuration("FACES_CLUSTER_TIMEOUT", 10*time.Minute),
+		FacesReclusterAll:           getEnvBool("FACES_RECLUSTER_ALL", false),
 	}
 }
 
@@ -197,6 +202,7 @@ func (c *AppConfig) RegistryDefaults() map[string]string {
 		"FACES_CLUSTER_MODE":              c.FacesClusterMode,
 		"FACES_CLUSTER_NEIGHBOURS":        strconv.Itoa(c.FacesClusterNeighbours),
 		"FACES_CLUSTER_TIMEOUT":           c.FacesClusterTimeout.String(),
+		"FACES_RECLUSTER_ALL":             strconv.FormatBool(c.FacesReclusterAll),
 	}
 }
 
@@ -293,6 +299,8 @@ func (c *AppConfig) ApplyRegistry(values map[string]string) {
 		}
 	}
 
+	applyBool("FACES_RECLUSTER_ALL", &c.FacesReclusterAll)
+
 	if value, ok := values["ACCOUNT_CREATION_MODE"]; ok {
 		switch value {
 		case domain.AccountCreationModeSelfService,
@@ -315,6 +323,20 @@ func getEnvInt(key string, defaultValue int) int {
 
 // getEnvDuration gets environment variable as a Go duration with a default value.
 // Values that do not parse as a positive duration fall back to the default.
+// getEnvBool reads a boolean flag, falling back to *defaultValue* when the
+// variable is unset or not a boolean.
+func getEnvBool(key string, defaultValue bool) bool {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		return defaultValue
+	}
+	parsed, err := strconv.ParseBool(value)
+	if err != nil {
+		return defaultValue
+	}
+	return parsed
+}
+
 func getEnvDuration(key string, defaultValue time.Duration) time.Duration {
 	if value, exists := os.LookupEnv(key); exists {
 		if d, err := time.ParseDuration(value); err == nil && d > 0 {

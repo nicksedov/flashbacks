@@ -60,6 +60,28 @@ RECOGNITION_MIN_SIMILARITY = 0.25
 #: linked: an ambiguous match stays unassigned instead of guessing.
 RECOGNITION_MARGIN = 0.05
 
+#: Largest share of the gallery one person may hold before the group is treated
+#: as chained. Single-linkage follows a chain of lookalikes and merges the whole
+#: library into one person as soon as a few faces bridge two identities, so a
+#: group above this share is re-split at a stricter similarity floor.
+#:
+#: Measured on a 39,024-face production gallery: the strict pass chains
+#: everything into one group of 32,442, while a 10% cap re-splits it at
+#: similarity 0.70 into groups whose largest holds 3,167 faces and leaves 61.5%
+#: of the faces in a person. A tighter cap only buys smaller groups at the price
+#: of a much stricter floor and far more unassigned faces.
+CLUSTER_MAX_SHARE = 0.10
+
+#: Floor of the share above: a small gallery must not split a legitimate person,
+#: so the cap never drops below this many faces.
+CLUSTER_MAX_FACES_MIN = 250
+
+#: Similarity step used when a chained group is re-split, and the floor at which
+#: the split stops. At this similarity two faces are the same person by any
+#: reasonable calibration, so a group that survives it is kept as one person.
+CLUSTER_SPLIT_STEP = 0.05
+CLUSTER_SPLIT_MAX_SIMILARITY = 0.9
+
 #: The always-available provider every host runs on.
 CPU_PROVIDER = "CPUExecutionProvider"
 

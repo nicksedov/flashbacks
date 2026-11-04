@@ -120,6 +120,7 @@ func TestFacesClusterDefaults(t *testing.T) {
 	t.Setenv("FACES_CLUSTER_MODE", "")
 	t.Setenv("FACES_CLUSTER_NEIGHBOURS", "")
 	t.Setenv("FACES_CLUSTER_TIMEOUT", "")
+	t.Setenv("FACES_RECLUSTER_ALL", "")
 
 	cfg := LoadConfig()
 	if cfg.FacesClusterMode != domain.FacesClusterModeAuto {
@@ -131,6 +132,9 @@ func TestFacesClusterDefaults(t *testing.T) {
 	if cfg.FacesClusterTimeout != 10*time.Minute {
 		t.Fatalf("FACES_CLUSTER_TIMEOUT default = %v, want 10m", cfg.FacesClusterTimeout)
 	}
+	if cfg.FacesReclusterAll {
+		t.Fatal("FACES_RECLUSTER_ALL default = true, want false")
+	}
 }
 
 // TestFacesClusterOverrides verifies the clustering knobs parse from the
@@ -138,6 +142,7 @@ func TestFacesClusterDefaults(t *testing.T) {
 func TestFacesClusterOverrides(t *testing.T) {
 	t.Setenv("FACES_CLUSTER_MODE", domain.FacesClusterModeMemory)
 	t.Setenv("FACES_CLUSTER_NEIGHBOURS", "32")
+	t.Setenv("FACES_RECLUSTER_ALL", "true")
 
 	cfg := LoadConfig()
 	if cfg.FacesClusterMode != domain.FacesClusterModeMemory {
@@ -145,6 +150,9 @@ func TestFacesClusterOverrides(t *testing.T) {
 	}
 	if cfg.FacesClusterNeighbours != 32 {
 		t.Fatalf("FACES_CLUSTER_NEIGHBOURS = %d, want 32", cfg.FacesClusterNeighbours)
+	}
+	if !cfg.FacesReclusterAll {
+		t.Fatal("FACES_RECLUSTER_ALL = false, want true")
 	}
 
 	overlay := LoadConfig()
@@ -154,5 +162,8 @@ func TestFacesClusterOverrides(t *testing.T) {
 	}
 	if overlay.FacesClusterNeighbours != 32 {
 		t.Fatalf("applied FACES_CLUSTER_NEIGHBOURS = %d, want 32", overlay.FacesClusterNeighbours)
+	}
+	if !overlay.FacesReclusterAll {
+		t.Fatal("applied FACES_RECLUSTER_ALL = false, want true")
 	}
 }

@@ -426,6 +426,108 @@ func TestFaceRecognitionManager_ClustersWithoutUnscannedImages(t *testing.T) {
 	}
 }
 
+// seedPeople stores a person row and, when faceIDs is non-empty, assigns those
+// faces to it.
+func seedPeople(t *testing.T, db *gorm.DB, name string, faceIDs []uint) *domain.Person {
+	t.Helper()
+	person := domain.Person{Name: name}
+	if err := db.Create(&person).Error; err != nil {
+		t.Fatalf("create person: %v", err)
+	}
+	if len(faceIDs) > 0 {
+		if err := db.Model(&domain.Face{}).Where("id IN ?", faceIDs).
+			Update("person_id", person.ID).Error; err != nil {
+			t.Fatalf("assign faces: %v", err)
+		}
+	}
+	return &person
+}
+
+// TestFaceRecognitionManager_ReclusterAllRebuildsGeneratedPeople guards the
+// repair path: a fully analysed gallery whose people came from an older
+// clustering is clustered again, and the stale person disappears.
+func TestFaceRecognitionManager_ReclusterAllRebuildsGeneratedPeople(t *testing.T) {
+	db, cleanup := testutil.NewTestDB(t)
+	defer cleanup()
+
+	first := seedImage(t, db, "person-a-1")
+	second := seedImage(t, db, "person-a-2")
+	if err := db.Model(&domain.ImageFile{}).
+		Where("id IN ?", []uint{first.ID, second.ID}).
+		Update("faces_scan_version", facesScanVersion).Error; err != nil {
+		t.Fatalf("mark scanned: %v", err)
+	}
+	faceA := seedFace(t, db, first.ID)
+	faceB := seedFace(t, db, second.ID)
+	stale := seedPeople(t, db, "", []uint{faceA.ID, faceB.ID})
+
+	m := NewManagerWithOptions(db, newFakeFacesClient(), Options{ReclusterAll: true})
+	m.runPass(nil)
+
+	var storedA, storedB domain.Face
+	db.First(&storedA, faceA.ID)
+	db.First(&storedB, faceB.ID)
+	if storedA.PersonID == 0 || storedA.PersonID != storedB.PersonID {
+		t.Fatalf("person ids = %d and %d, want one shared person",
+			storedA.PersonID, storedB.PersonID)
+	}
+	if storedA.PersonID == stale.ID {
+		t.Fatalf("faces kept the stale person %d", stale.ID)
+	}
+	var people []domain.Person
+	db.Find(&people)
+	if len(people) != 1 || people[0].ID == stale.ID {
+		t.Fatalf("people = %+v, want one freshly built person", people)
+	}
+
+	// The flag is one-shot: the next pass keeps what this one built instead of
+	// deleting every generated person again.
+	rebuilt := people[0].ID
+	m.runPass(nil)
+	var later []domain.Person
+	db.Find(&later)
+	if len(later) != 1 || later[0].ID != rebuilt {
+		t.Fatalf("people after a second pass = %+v, want the person %d kept", later, rebuilt)
+	}
+}
+
+// TestFaceRecognitionManager_ReclusterAllKeepsNamedPeople guards the other half
+// of the repair path: a person the user named keeps its faces.
+func TestFaceRecognitionManager_ReclusterAllKeepsNamedPeople(t *testing.T) {
+	db, cleanup := testutil.NewTestDB(t)
+	defer cleanup()
+
+	first := seedImage(t, db, "person-a-1")
+	second := seedImage(t, db, "person-b")
+	if err := db.Model(&domain.ImageFile{}).
+		Where("id IN ?", []uint{first.ID, second.ID}).
+		Update("faces_scan_version", facesScanVersion).Error; err != nil {
+		t.Fatalf("mark scanned: %v", err)
+	}
+	faceA := seedFace(t, db, first.ID)
+	faceB := seedFace(t, db, second.ID)
+	named := seedPeople(t, db, "Аня", []uint{faceA.ID})
+	seedPeople(t, db, "", []uint{faceB.ID})
+
+	m := NewManagerWithOptions(db, newFakeFacesClient(), Options{ReclusterAll: true})
+	m.runPass(nil)
+
+	var storedA, storedB domain.Face
+	db.First(&storedA, faceA.ID)
+	db.First(&storedB, faceB.ID)
+	if storedA.PersonID != named.ID {
+		t.Fatalf("named face person id = %d, want %d", storedA.PersonID, named.ID)
+	}
+	if storedB.PersonID == 0 {
+		t.Fatal("the rebuilt gallery left the generated face unassigned")
+	}
+	var people []domain.Person
+	db.Find(&people)
+	if len(people) != 2 {
+		t.Fatalf("people = %+v, want the named person plus one rebuilt person", people)
+	}
+}
+
 // TestFaceRecognitionManager_AnalyzesInBatches guards the batch contract: five
 // images with a batch size of two reach the faces service as three requests
 // (2 + 2 + 1), and every image — including one without a face — is marked

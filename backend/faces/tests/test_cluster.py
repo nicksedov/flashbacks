@@ -239,6 +239,38 @@ def test_cluster_of_an_empty_gallery_is_empty(client) -> None:
     assert _cluster(client, []) == []
 
 
+def _unit(axis: int) -> np.ndarray:
+    vector = np.zeros(EMBEDDING_DIM)
+    vector[axis] = 1.0
+    return vector
+
+
+def test_chained_group_is_split_on_the_memory_path(client) -> None:
+    """A bridge that chains two identities is broken by the person size cap.
+
+    Two 150-face identities are joined into one 301-face group by a single face
+    sitting at 0.42 similarity to both — above the strict floor, so the density
+    pass merges everything. The group is larger than the cap, so it is
+    re-clustered at a stricter radius and the identities separate again.
+    """
+    identity_a = [_unit(0) for _ in range(150)]
+    identity_b = [_unit(1) for _ in range(150)]
+    bridge = (
+        0.42 * _unit(0)
+        + 0.42 * _unit(1)
+        + math.sqrt(1.0 - 2 * 0.42**2) * _unit(2)
+    )
+    embeddings = [vector.tolist() for vector in identity_a + identity_b]
+    embeddings.append(bridge.tolist())
+
+    labels = _cluster(client, embeddings)
+
+    assert labels[0] == labels[149] != -1, labels[:3]
+    assert labels[150] == labels[299] != -1, labels[150:153]
+    assert labels[0] != labels[150], labels[:3]
+    assert labels[300] == -1, labels[298:]
+
+
 def test_cluster_is_deterministic(client) -> None:
     rng = np.random.default_rng(7)
     base = np.zeros(EMBEDDING_DIM)

@@ -53,6 +53,10 @@ type Options struct {
 	// ClusterTimeout bounds index maintenance and one clustering decision; a
 	// large gallery (tens of thousands of faces) needs minutes, not seconds.
 	ClusterTimeout time.Duration
+	// ReclusterAll discards the people a previous clustering produced before a
+	// pass clusters again, so a changed clustering algorithm reaches a gallery
+	// that is already fully analysed. Names a user typed are kept.
+	ReclusterAll bool
 }
 
 // memoryClusterLimit caps the in-memory all-pairs fallback: sklearn computes a
@@ -141,9 +145,21 @@ type Manager struct {
 	clusterMode       string
 	clusterNeighbours int
 	clusterTimeout    time.Duration
+	reclusterAll      bool
 	neighbours        NeighbourSource
 	indexes           IndexMaintainer
 }
+
+// batchCaps bound the per-statement work on a gallery of tens of thousands of
+// faces, so one clustering pass does not build a single huge query.
+const (
+	// embeddingBatch is how many face ids one embedding lookup carries.
+	embeddingBatch = 1000
+	// assignmentBatch is how many face ids one person assignment carries.
+	assignmentBatch = 500
+	// neighbourBatch is how many seeds one neighbour query asks for.
+	neighbourBatch = 4000
+)
 
 // NewManager creates a face recognition manager with the default batching
 // options and no optional stores.
@@ -176,6 +192,7 @@ func NewManagerWithDependencies(
 		clusterMode:       options.ClusterMode,
 		clusterNeighbours: options.ClusterNeighbours,
 		clusterTimeout:    options.ClusterTimeout,
+		reclusterAll:      options.ReclusterAll,
 		neighbours:        dependencies.Neighbours,
 		indexes:           dependencies.Indexes,
 	}
@@ -281,6 +298,14 @@ func (m *Manager) runPass(stopCh <-chan struct{}) {
 		Where("faces_scan_version <> ?", facesScanVersion).
 		Count(&total)
 	if total == 0 {
+		if m.reclusterAll {
+			// A finished gallery keeps its faces, so a clustering change is
+			// only visible after the stored people are discarded. The flag is
+			// one-shot: the pass rebuilds the people, and the next pass keeps
+			// them instead of deleting everything every thirty seconds.
+			m.reclusterAll = false
+			m.resetGeneratedPeople()
+		}
 		// A previous pass may have stored faces and then failed (or been
 		// stopped) before clustering. Keep retrying that step until no
 		// unassigned face is left, instead of leaving the People view empty
@@ -668,14 +693,16 @@ func (m *Manager) clusterAssign(stopCh <-chan struct{}, facesPerImage map[uint]i
 		return
 	}
 
+	faceIDs := make([]uint, 0, len(unassigned))
+	for _, face := range unassigned {
+		faceIDs = append(faceIDs, face.ID)
+	}
+	vectors := m.loadEmbeddings(faceIDs)
+
 	members := make([]faceRef, 0, len(unassigned))
 	embeddings := make([][]float32, 0, len(unassigned))
 	for _, face := range unassigned {
-		var embedding domain.FaceEmbedding
-		if err := m.db.Where("face_id = ?", face.ID).First(&embedding).Error; err != nil {
-			continue
-		}
-		vec := parsePgVector(embedding.Embedding)
+		vec := vectors[face.ID]
 		if len(vec) == 0 {
 			continue
 		}
@@ -717,6 +744,7 @@ func (m *Manager) clusterAssign(stopCh <-chan struct{}, facesPerImage map[uint]i
 	}
 	sort.Ints(labelIDs)
 
+	assigned := 0
 	for _, label := range labelIDs {
 		cluster := byLabel[label]
 		coverFaceID := chooseCover(cluster, facesPerImage)
@@ -725,13 +753,75 @@ func (m *Manager) clusterAssign(stopCh <-chan struct{}, facesPerImage map[uint]i
 			m.setError(fmt.Sprintf("create person: %v", err))
 			continue
 		}
-		for _, member := range cluster {
-			if err := m.db.Model(&domain.Face{}).Where("id = ?", member.faceID).
+		for start := 0; start < len(cluster); start += assignmentBatch {
+			end := start + assignmentBatch
+			if end > len(cluster) {
+				end = len(cluster)
+			}
+			ids := make([]uint, 0, end-start)
+			for _, member := range cluster[start:end] {
+				ids = append(ids, member.faceID)
+			}
+			if err := m.db.Model(&domain.Face{}).Where("id IN ?", ids).
 				Update("person_id", person.ID).Error; err != nil {
 				m.setError(fmt.Sprintf("assign person: %v", err))
 			}
 		}
+		assigned += len(cluster)
 	}
+	log.Printf(
+		"Face recognition: clustered %d faces into %d people (%d assigned)",
+		len(members), len(labelIDs), assigned,
+	)
+}
+
+// loadEmbeddings returns the stored vectors of *faceIDs*, one query per batch
+// rather than one per face: a gallery of tens of thousands of faces would
+// otherwise issue tens of thousands of single-row reads per pass.
+func (m *Manager) loadEmbeddings(faceIDs []uint) map[uint][]float32 {
+	type embeddingRow struct {
+		FaceID    uint
+		Embedding string
+	}
+	vectors := make(map[uint][]float32, len(faceIDs))
+	for start := 0; start < len(faceIDs); start += embeddingBatch {
+		end := start + embeddingBatch
+		if end > len(faceIDs) {
+			end = len(faceIDs)
+		}
+		var rows []embeddingRow
+		if err := m.db.Model(&domain.FaceEmbedding{}).
+			Select("face_id, embedding").
+			Where("face_id IN ?", faceIDs[start:end]).
+			Find(&rows).Error; err != nil {
+			m.setError(fmt.Sprintf("load embeddings: %v", err))
+			continue
+		}
+		for _, row := range rows {
+			if vec := parsePgVector(row.Embedding); len(vec) > 0 {
+				vectors[row.FaceID] = vec
+			}
+		}
+	}
+	return vectors
+}
+
+// resetGeneratedPeople discards the people a previous clustering produced so a
+// finished gallery can be clustered again with the current algorithm. People a
+// user named are kept, together with their faces.
+func (m *Manager) resetGeneratedPeople() {
+	generated := m.db.Model(&domain.Person{}).Select("id").Where("name = ?", "")
+	if err := m.db.Model(&domain.Face{}).
+		Where("person_id IN (?)", generated).
+		Update("person_id", 0).Error; err != nil {
+		m.setError(fmt.Sprintf("reset face assignments: %v", err))
+		return
+	}
+	if err := m.db.Where("name = ?", "").Delete(&domain.Person{}).Error; err != nil {
+		m.setError(fmt.Sprintf("reset people: %v", err))
+		return
+	}
+	log.Println("Face recognition: cleared generated people for a full re-cluster")
 }
 
 // clusterLabels decides the person labels of the unassigned faces.
@@ -787,11 +877,22 @@ func (m *Manager) clusterFromNeighbours(
 		seeds[i] = member.faceID
 	}
 
-	candidates, err := m.neighbours.Neighbours(
-		ctx, seeds, m.recognitionSimilarity(ctx), m.clusterNeighbours,
-	)
-	if err != nil {
-		return nil, err
+	similarity := m.recognitionSimilarity(ctx)
+	candidates := make(map[uint][]Neighbour, len(seeds))
+	for start := 0; start < len(seeds); start += neighbourBatch {
+		end := start + neighbourBatch
+		if end > len(seeds) {
+			end = len(seeds)
+		}
+		batch, err := m.neighbours.Neighbours(
+			ctx, seeds[start:end], similarity, m.clusterNeighbours,
+		)
+		if err != nil {
+			return nil, err
+		}
+		for seed, neighbours := range batch {
+			candidates[seed] = neighbours
+		}
 	}
 
 	edges := make([]facesclient.FaceLink, 0, len(candidates))

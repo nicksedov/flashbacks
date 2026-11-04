@@ -40,6 +40,24 @@ short name (`cpu`, `cuda`, `tensorrt`) of the provider the model session actuall
 uses, and `thresholds` reports the calibrated similarities so callers do not
 have to keep their own copies.
 
+## Clustering
+
+Both clustering endpoints group faces by absolute cosine similarity (ArcFace
+embeddings are calibrated for that): the strict floor is `CLUSTER_MIN_SIMILARITY`
+(0.40), a leftover face joins a group at `RECOGNITION_MIN_SIMILARITY` (0.25) only
+when it beats the runner-up by `RECOGNITION_MARGIN` (0.05), and only portraits
+(the sole face of their photo) may recognise or anchor a person.
+
+Because the graph is built by single linkage, a gallery with many photos of the
+same few people chains into one group: measured on a 39,024-face library, the
+strict pass merges 32,442 faces into a single "person". A group above
+`CLUSTER_MAX_SHARE` (10% of the submitted faces, never below 250 faces) is
+therefore re-clustered on its own at a stricter floor (`+0.05` per round, up to
+`0.90`), and that re-split follows **mutual** links only — a one-way candidate
+link is what a lookalike bridge looks like. On the same library this yields
+2,837 people, 60% of the faces in a person, and the largest person at 8.4% of
+the gallery.
+
 ## Execution providers
 
 `FACES_PROVIDERS` is an ordered, comma-separated list of ONNX Runtime providers
@@ -145,6 +163,7 @@ scenarios and the cosine thresholds.
 | `FACES_CLUSTER_MODE` | `auto` | Read by **core**, not this service: clustering strategy (`auto`, `store`, `memory`) for the recognition job's candidate graph. |
 | `FACES_CLUSTER_NEIGHBOURS` | `16` | Read by **core**, not this service: candidates per unassigned face when it queries the store for neighbours. |
 | `FACES_CLUSTER_TIMEOUT` | `10m` | Read by **core**: budget for one clustering decision and the HNSW index build (`halfvec(512)` is required for the index). |
+| `FACES_RECLUSTER_ALL` | `false` | Read by **core**: one-shot repair flag that deletes generated people (named ones are kept) before the next pass clusters the gallery again. |
 | `REGISTRY_URL` | (empty) | Registry facade URL; empty disables registration. |
 | `SERVICE_HOST` | `localhost` | Host peers use to reach this service. |
 | `SERVICE_ID` | `<host>-<pid>` | Unique instance id. |

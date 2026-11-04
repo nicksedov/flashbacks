@@ -62,3 +62,53 @@ def test_unknown_faces_are_ignored(client) -> None:
 
 def test_empty_graph_is_empty(client) -> None:
     assert _graph(client, [], []) == []
+
+
+def test_one_way_candidates_still_form_a_group(client) -> None:
+    """The strict pass follows every candidate link, mutual or not."""
+    labels = _graph(
+        client,
+        [1, 2, 3, 4],
+        [(1, 2, 0.9), (2, 3, 0.9), (3, 4, 0.9)],
+        [True, True, True, True],
+    )
+
+    assert len(set(labels)) == 1 and labels[0] != -1, labels
+
+
+def _identity_chain(first: int, size: int, similarity: float = 0.9) -> list[tuple]:
+    """A chain of mutual links joining *size* faces of one identity."""
+    return [
+        pair
+        for face in range(first, first + size - 1)
+        for pair in ((face, face + 1, similarity), (face + 1, face, similarity))
+    ]
+
+
+def test_chained_group_is_split_into_identities(client) -> None:
+    """A bridge that chains two identities is broken by the person size cap.
+
+    Two 150-face identities are joined into one 301-face component by a single
+    face whose two links sit at 0.42 — just above the strict floor. That group
+    cannot be one person, so it is re-split on mutual links only, where the
+    bridge does not exist.
+    """
+    first = _identity_chain(1, 150)
+    second = _identity_chain(151, 150)
+    bridge = [(1, 301, 0.42), (301, 151, 0.42)]
+
+    labels = _graph(client, list(range(1, 302)), first + second + bridge)
+
+    assert labels[0] == labels[149] != -1, labels[:5]
+    assert labels[150] == labels[299] != -1, labels[150:155]
+    assert labels[0] != labels[150], labels[:5]
+    # The bridging face matches both identities equally well, so it is noise
+    # rather than a member of either.
+    assert labels[300] == -1, labels[298:]
+
+
+def test_group_under_the_cap_keeps_its_identity(client) -> None:
+    """A single identity within the size cap is never split."""
+    labels = _graph(client, list(range(1, 121)), _identity_chain(1, 120))
+
+    assert set(labels) == {0}, labels[:5]

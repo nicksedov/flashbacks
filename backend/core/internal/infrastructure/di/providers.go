@@ -329,6 +329,7 @@ func ProvideFaceRecognitionManager(
 		ClusterMode:       cfg.FacesClusterMode,
 		ClusterNeighbours: cfg.FacesClusterNeighbours,
 		ClusterTimeout:    cfg.FacesClusterTimeout,
+		ReclusterAll:      cfg.FacesReclusterAll,
 	})
 }
 

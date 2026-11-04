@@ -15,7 +15,11 @@ import numpy as np
 from PIL import Image
 
 from app.config import (
+    CLUSTER_MAX_FACES_MIN,
+    CLUSTER_MAX_SHARE,
     CLUSTER_MIN_SIMILARITY,
+    CLUSTER_SPLIT_MAX_SIMILARITY,
+    CLUSTER_SPLIT_STEP,
     CUDA_PROVIDERS,
     EMBEDDING_DIM,
     RECOGNITION_MARGIN,
@@ -467,6 +471,9 @@ class FaceEngine:
             metric="cosine",
         )
         labels = [int(label) for label in clusterer.fit_predict(normalized)]
+        labels = FaceEngine._resplit_by_density(
+            normalized, labels, max(2, int(min_cluster_size))
+        )
         return FaceEngine._recognise_leftovers(
             normalized, labels, max(2, int(min_cluster_size)), solo_faces or []
         )
@@ -484,8 +491,15 @@ class FaceEngine:
         inside the clustering radius and posts those links instead of every
         embedding. Every threshold stays here: the strict floor
         (``CLUSTER_MIN_SIMILARITY``), the relaxed recognition floor
-        (``RECOGNITION_MIN_SIMILARITY``) and the runner-up margin
-        (``RECOGNITION_MARGIN``). Faces that belong to no person keep ``-1``.
+        (``RECOGNITION_MIN_SIMILARITY``), the runner-up margin
+        (``RECOGNITION_MARGIN``) and the person size cap
+        (``CLUSTER_MAX_SHARE``). Faces that belong to no person keep ``-1``.
+
+        A group holding an implausible share of the gallery cannot be one
+        person, so it is re-split at a stricter similarity floor, and that
+        re-split only follows links both faces named each other. A one-way link
+        is what a lookalike bridge looks like, and following those chains is how
+        a library collapses into a single person.
         """
         count = len(face_ids)
         if count == 0:
@@ -496,44 +510,29 @@ class FaceEngine:
             index.setdefault(int(face_id), position)
 
         links: dict[tuple[int, int], float] = {}
+        directed: set[tuple[int, int]] = set()
+        neighbour_scores: dict[int, dict[int, float]] = {}
         for face_id, candidate_id, similarity in edges:
             left, right = index.get(int(face_id)), index.get(int(candidate_id))
             if left is None or right is None or left == right:
                 continue
+            value = float(similarity)
+            directed.add((left, right))
+            scores = neighbour_scores.setdefault(left, {})
+            scores[right] = max(scores.get(right, 0.0), value)
             key = (min(left, right), max(left, right))
-            links[key] = max(links.get(key, 0.0), float(similarity))
-
-        def similarity(left: int, right: int) -> float:
-            if left == right:
-                return 1.0
-            return links.get((min(left, right), max(left, right)), 0.0)
-
-        # Strict pass: connected faces at or above the clustering floor form a
-        # group, exactly like the density pass does over the full matrix.
-        parent = list(range(count))
-
-        def find(node: int) -> int:
-            while parent[node] != node:
-                parent[node] = parent[parent[node]]
-                node = parent[node]
-            return node
-
-        for (left, right), value in links.items():
-            if value < CLUSTER_MIN_SIMILARITY:
-                continue
-            root_left, root_right = find(left), find(right)
-            if root_left != root_right:
-                parent[root_right] = root_left
-
-        components: dict[int, list[int]] = {}
-        for position in range(count):
-            components.setdefault(find(position), []).append(position)
+            links[key] = max(links.get(key, 0.0), value)
 
         minimum = max(2, int(min_cluster_size))
+        components = FaceEngine._graph_groups(
+            count, links, directed, CLUSTER_MIN_SIMILARITY
+        )
+        components = FaceEngine._split_chained_groups(count, links, directed, components)
+
         labels = [-1] * count
         groups: dict[int, list[int]] = {}
         next_label = 0
-        for members in sorted(components.values(), key=lambda members: members[0]):
+        for members in components:
             if len(members) < minimum:
                 continue
             for member in members:
@@ -544,11 +543,19 @@ class FaceEngine:
         def is_solo(position: int) -> bool:
             return 0 <= position < len(solo_faces or []) and bool(solo_faces[position])
 
-        def decisive(position: int, targets: dict[int, list[int]]) -> Optional[int]:
+        # Only portraits may recognise a leftover: a face cropped from a group
+        # shot is similar to the people standing next to it.
+        portrait_labels: dict[int, int] = {}
+        for label, members in groups.items():
+            for member in members:
+                if is_solo(member):
+                    portrait_labels[member] = label
+
+        def decisive(scores: dict[int, float]) -> Optional[int]:
+            """Best group the face names, when it beats the runner-up."""
             best_label: Optional[int] = None
             best_score = runner_up = -1.0
-            for label, members in targets.items():
-                score = max(similarity(position, member) for member in members)
+            for label, score in sorted(scores.items()):
                 if score > best_score:
                     best_score, runner_up, best_label = score, best_score, label
                 elif score > runner_up:
@@ -561,19 +568,24 @@ class FaceEngine:
                 return best_label
             return None
 
-        # Only portraits may recognise a leftover: a face cropped from a group
-        # shot is similar to the people standing next to it.
-        recognition_targets = {
-            label: [member for member in members if is_solo(member)]
-            for label, members in groups.items()
-        }
-        recognition_targets = {
-            label: members for label, members in recognition_targets.items() if members
-        }
+        def group_scores(position: int) -> dict[int, float]:
+            """Best similarity from *position*'s own candidates to each group.
+
+            Only the face's candidate list is examined, so a large gallery does
+            not compare every leftover against every group's portraits.
+            """
+            best: dict[int, float] = {}
+            for other, value in neighbour_scores.get(position, {}).items():
+                label = portrait_labels.get(other)
+                if label is None:
+                    continue
+                if value > best.get(label, -1.0):
+                    best[label] = value
+            return best
 
         leftovers = [position for position, label in enumerate(labels) if label == -1]
         for position in leftovers:
-            label = decisive(position, recognition_targets)
+            label = decisive(group_scores(position))
             if label is not None:
                 labels[position] = label
 
@@ -584,14 +596,26 @@ class FaceEngine:
         # A portrait anchors a new person together with the leftovers that match
         # it unambiguously; leftovers never become targets themselves, or a
         # lookalike chain would merge strangers.
-        anchor_targets = {anchor: [anchor] for anchor in anchors}
-        anchored_members = {anchor: [anchor] for anchor in anchors}
+        anchor_set = set(anchors)
+        anchored_members: dict[int, list[int]] = {anchor: [anchor] for anchor in anchors}
         for position in leftovers:
             if labels[position] != -1 or position in anchored_members:
                 continue
-            anchor = decisive(position, anchor_targets)
-            if anchor is not None:
-                anchored_members[anchor].append(position)
+            best_anchor: Optional[int] = None
+            best_score = runner_up = -1.0
+            for other, value in neighbour_scores.get(position, {}).items():
+                if other not in anchor_set:
+                    continue
+                if value > best_score:
+                    best_score, runner_up, best_anchor = value, best_score, other
+                elif value > runner_up:
+                    runner_up = value
+            if (
+                best_anchor is not None
+                and best_score >= RECOGNITION_MIN_SIMILARITY
+                and best_score - runner_up >= RECOGNITION_MARGIN
+            ):
+                anchored_members[best_anchor].append(position)
 
         for members in anchored_members.values():
             if len(members) < minimum:
@@ -600,6 +624,134 @@ class FaceEngine:
                 labels[member] = next_label
             next_label += 1
         return labels
+
+    @staticmethod
+    def _graph_groups(
+        count: int,
+        links: dict[tuple[int, int], float],
+        directed: set[tuple[int, int]],
+        floor: float,
+        members: Optional[Sequence[int]] = None,
+        mutual_only: bool = False,
+    ) -> list[list[int]]:
+        """Connected components of the links at or above *floor*.
+
+        With *mutual_only* a link counts only when both faces named each other,
+        which is how a chained group is broken up: the one-way bridges that join
+        two identities are dropped.
+        """
+        nodes = list(range(count)) if members is None else list(members)
+        parent = {node: node for node in nodes}
+
+        def find(node: int) -> int:
+            while parent[node] != node:
+                parent[node] = parent[parent[node]]
+                node = parent[node]
+            return node
+
+        for (left, right), value in links.items():
+            if value < floor:
+                continue
+            if mutual_only and (right, left) not in directed:
+                continue
+            if left not in parent or right not in parent:
+                continue
+            root_left, root_right = find(left), find(right)
+            if root_left != root_right:
+                parent[root_right] = root_left
+
+        grouped: dict[int, list[int]] = {}
+        for node in nodes:
+            grouped.setdefault(find(node), []).append(node)
+        return sorted(grouped.values(), key=lambda group: group[0])
+
+    @staticmethod
+    def _split_chained_groups(
+        count: int,
+        links: dict[tuple[int, int], float],
+        directed: set[tuple[int, int]],
+        groups: Sequence[Sequence[int]],
+    ) -> list[list[int]]:
+        """Re-split groups that hold an implausible share of the gallery.
+
+        Single-linkage has no notion of a person being "too large": one chain of
+        lookalikes joins every identity in the library. A group above the cap is
+        therefore re-clustered on its own at a stricter similarity floor until
+        the pieces are plausible people.
+        """
+        cap = max(CLUSTER_MAX_FACES_MIN, int(count * CLUSTER_MAX_SHARE))
+        resolved: list[list[int]] = []
+        for members in groups:
+            if len(members) <= cap:
+                resolved.append(list(members))
+                continue
+            floor = CLUSTER_MIN_SIMILARITY
+            pieces = [list(members)]
+            while floor < CLUSTER_SPLIT_MAX_SIMILARITY:
+                floor = min(CLUSTER_SPLIT_MAX_SIMILARITY, floor + CLUSTER_SPLIT_STEP)
+                pieces = FaceEngine._graph_groups(
+                    count, links, directed, floor, members, mutual_only=True
+                )
+                if all(len(piece) <= cap for piece in pieces):
+                    break
+            for piece in pieces:
+                if len(piece) > cap:
+                    logger.warning(
+                        "Face group of %d still exceeds the cap of %d at similarity %.2f",
+                        len(piece),
+                        cap,
+                        floor,
+                    )
+            resolved.extend(pieces)
+        return resolved
+
+    @staticmethod
+    def _resplit_by_density(
+        normalized: np.ndarray, labels: list[int], minimum: int
+    ) -> list[int]:
+        """Apply the same size cap to the in-memory density pass.
+
+        DBSCAN over the cosine matrix chains exactly like single-linkage over
+        candidate links, so an oversized group is re-clustered on its own at a
+        stricter radius.
+        """
+        from sklearn.cluster import DBSCAN
+
+        count = len(labels)
+        if count == 0:
+            return labels
+        cap = max(CLUSTER_MAX_FACES_MIN, int(count * CLUSTER_MAX_SHARE))
+
+        grouped: dict[int, list[int]] = {}
+        for position, label in enumerate(labels):
+            if label >= 0:
+                grouped.setdefault(label, []).append(position)
+
+        resolved = list(labels)
+        next_label = max(labels) + 1
+        for positions in grouped.values():
+            if len(positions) <= cap:
+                continue
+            floor = CLUSTER_MIN_SIMILARITY
+            pieces = [-1] * len(positions)
+            while floor < CLUSTER_SPLIT_MAX_SIMILARITY:
+                floor = min(CLUSTER_SPLIT_MAX_SIMILARITY, floor + CLUSTER_SPLIT_STEP)
+                pieces = [
+                    int(piece)
+                    for piece in DBSCAN(
+                        eps=1.0 - floor, min_samples=minimum, metric="cosine"
+                    ).fit_predict(normalized[positions])
+                ]
+                sizes: dict[int, int] = {}
+                for piece in pieces:
+                    if piece >= 0:
+                        sizes[piece] = sizes.get(piece, 0) + 1
+                if all(size <= cap for size in sizes.values()):
+                    break
+            for position, piece in zip(positions, pieces):
+                resolved[position] = -1 if piece < 0 else next_label + piece
+            next_label += len({piece for piece in pieces if piece >= 0}) + 1
+        return resolved
 
     @staticmethod
     def _recognise_leftovers(

@@ -318,6 +318,51 @@ Stop and surface the issue instead of guessing when a task is ambiguous, when th
 implementation reveals a design problem (suggest `openspec-update-change`), when
 the work exceeds what the spec and tasks describe, or when a blocker appears.
 
+### 6.4 New microservice — deployment artifacts (mandatory)
+
+A change **introduces a microservice** when it adds any of: a new directory under
+`backend/` that runs as its own process and port; a service another component
+calls over REST (a new peer in the registry); or a new container image in a
+deploy stack.
+
+Such a change is **not complete** until every surface below is updated. The
+deploy skills live in `.roo/` (gitignored, operator-local), so their edits never
+appear in the branch diff — record the verification command output for each one
+in the apply report.
+
+| Surface | File | Update |
+|---|---|---|
+| Staging skill | `.roo/skills/deploy-staging-backend/SKILL.md` | description, images table (build target, registry image, port), deployment assets, prerequisites |
+| Staging compose | `.roo/skills/deploy-staging-backend/deploy/docker-compose.yml` | service block: image, container name, `env_file`, `x-registry-client` bootstrap, `SERVICE_ID`/`SERVICE_HOST`/`SERVICE_VERSION`, `backend` + `outbound` networks (when the service needs internet), volumes, healthcheck, registry `depends_on`; add the service to the consumer's `depends_on` |
+| Staging seed | `deploy/flashbacks-staging.seed.env`, `deploy/seed-registry.sh` | configuration/secrets the service reads from the registry, or an explicit comment that it is bootstrap-only |
+| Staging script | `.roo/skills/deploy-staging-backend/scripts/deploy-staging-backend.sh` | `VALID_SERVICES`, per-service build spec (context/dockerfile/target), `CONSUMER_SERVICES`, `wait_for_consumers`, `show_failure_context`, usage/image list |
+| Production skill | `.roo/skills/deploy-production-backend/SKILL.md` | images, versioning, change-detection and rollback sections |
+| Production compose | `.roo/skills/deploy-production-backend/deploy/docker-compose.yml` | service block plus a `${<SVC>_IMAGE_TAG:-latest}` image reference |
+| Production script | `.roo/skills/deploy-production-backend/scripts/deploy-production-backend.sh` | `VALID_SERVICES`, change-detection path map, `compose_name`, per-service build spec, consumer/wait lists |
+| Image | `backend/Dockerfile` (Go) or `backend/<service>/Dockerfile` | a build target/runtime stage (Go) or a dedicated Dockerfile, with a `HEALTHCHECK` and a non-root `USER` |
+| Local dev | `scripts/dev.sh` | `ALL_SERVICES`, `svc_dir`/`svc_port`/`svc_health_path`/`svc_public_url`, start branch, env defaults and exports |
+| Makefile | `Makefile` | `build-<svc>`, `run-<svc>`, `dev-<svc>`, `test-<svc>`, `setup-<svc>` and `.PHONY` |
+| Bootstrap | `scripts/bootstrap.sh` | the toolchain/venv target the new runtime needs |
+| Environment example | `.env.example` | service section and the `*_SERVICE_URL` the consumer defaults to |
+| Consumer wiring | calling service (e.g. `core`) | `*_SERVICE_URL` default, `RegistryDefaults`/`ApplyRegistry`, discovery service name, timeout and degradation path |
+| Docs | `docs/agent/go-services.md` | service table (path, role, port, README) and the checks table |
+
+Every item must be verified with a runnable command and reported:
+
+```bash
+docker compose --env-file <env> -f <compose> config -q   # both stacks
+bash -n <deploy script>                                  # both scripts
+<deploy script> --dry-run --no-push                      # new image / release plan
+make -n build-<svc> test-<svc>                           # local targets resolve
+curl -fsS http://localhost:<port>/<health>               # service answers
+```
+
+A new peer that a consumer calls must register with the registry and answer a
+health probe. Omitting the deploy entry does not fail loudly: the consumer falls
+back to its bootstrap URL (typically `http://localhost:<port>` inside its own
+container) and every call fails at runtime — the exact failure this step exists
+to prevent.
+
 ---
 
 ---
@@ -562,6 +607,10 @@ A change is done only when all of the following hold:
 - [ ] New/changed EVIDENCE survived the mutation check (fails when reverted, passes when restored).
 - [ ] Validate stage (§7) run on the final diff with verdict **PASS** and no open blocking finding.
 - [ ] All tasks are `- [x]`; service tests and linters are green.
+- [ ] Deployment assets updated for every new or changed microservice (§6.4):
+      staging + production deploy skills, image `HEALTHCHECK`/non-root user,
+      local dev tooling, `.env.example`, consumer `*_SERVICE_URL` and
+      `docs/agent/go-services.md`.
 - [ ] `openspec validate --specs` passes after sync.
 - [ ] Delta specs are merged into main specs before the change is archived.
 
@@ -582,6 +631,7 @@ A change is done only when all of the following hold:
 | Re-running the apply gates during validate instead of reading the diff | Duplicates §6.1/§6.2 work and masks a missing apply report, which is itself blocking. |
 | Blocking a change on a style preference with no rule or scenario behind it | Turns review into taste; such observations are advisory only. |
 | Starting sync or archive with an open blocking finding | Ships a change that never passed its own gate. |
+| Shipping a new microservice without deploy and local-dev wiring | The service cannot be deployed, the consumer falls back to a dead URL, and the failure only surfaces at runtime (§6.4, §10). |
 | Editing code during `propose`/`explore`/`update-change` | Violates the stage boundary; the prompt authorized planning only. |
 | Copying a delta spec verbatim into a main spec | Leaves delta headers in a main spec; breaks `validate --specs`. |
 | Archiving with an in-flight spec sync | The archived change is never reflected in the main specs. |

@@ -20,6 +20,12 @@ runners:
   vitest:
     package: "@focused-spec/runner-vitest"
     timeoutMs: 600000
+  pytest:
+    package: "@focused-spec/runner-pytest"
+    options:
+      command: uv
+      commandArgs: ["run", "--with", "pytest", "python"]
+    timeoutMs: 300000
   go:
     package: "@focused-spec/runner-go"
     options:

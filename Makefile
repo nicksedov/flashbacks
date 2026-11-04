@@ -46,12 +46,12 @@ YELLOW := \033[1;33m
 RED    := \033[0;31m
 NC     := \033[0m
 
-.PHONY: help all doctor env setup setup-env setup-webapp setup-pytest deps tools tools-exiftool tools-tesseract \
-        build build-core build-exif build-ocr build-registry \
+.PHONY: help all doctor env setup setup-env setup-webapp setup-pytest setup-faces deps tools tools-exiftool tools-tesseract \
+        build build-core build-exif build-ocr build-registry build-faces \
         up start down stop restart status logs \
-        run-core run-exif run-ocr run-registry run-webapp \
-        dev-core dev-exif dev-ocr dev-registry dev-webapp \
-        test test-all test-go test-core test-exif test-ocr test-registry test-webapp test-webapp-integration test-ocr-integration test-pytest \
+        run-core run-exif run-ocr run-registry run-webapp run-faces \
+        dev-core dev-exif dev-ocr dev-registry dev-webapp dev-faces \
+        test test-all test-go test-core test-exif test-ocr test-registry test-webapp test-faces test-webapp-integration test-ocr-integration test-pytest \
         lint lint-all lint-core lint-exif lint-ocr lint-registry lint-webapp \
         db-migrate db-shell generate-types generate-go clean clean-tools
 
@@ -106,6 +106,9 @@ setup-webapp: ## Install webapp npm dependencies
 setup-pytest: ## Create the pytest virtualenv and install its requirements
 	@$(BOOTSTRAP) pytest
 
+setup-faces: ## Create the faces Python venv and install its dependencies
+	@$(BOOTSTRAP) faces
+
 deps: ## Download Go module dependencies for every service
 	@$(BOOTSTRAP) godeps
 
@@ -135,6 +138,9 @@ build-ocr: ## Compile the ocr binary
 
 build-registry: ## Compile the registry binary
 	@$(DEV) build registry
+
+build-faces: ## Install the faces service for local dev
+	@$(DEV) build faces
 
 ##@ Run (background)
 
@@ -172,6 +178,9 @@ run-registry: ## Start registry in the background
 run-webapp: ## Start the webapp dev server in the background
 	@$(DEV) start webapp
 
+run-faces: ## Start the faces service in the background
+	@$(DEV) start faces
+
 ##@ Run (foreground)
 
 dev-core: ## Run core in the foreground
@@ -188,6 +197,9 @@ dev-registry: ## Run registry in the foreground
 
 dev-webapp: ## Run the webapp dev server in the foreground
 	@$(DEV) run webapp
+
+dev-faces: ## Run the faces service in the foreground
+	@$(DEV) run faces
 
 ##@ Testing
 
@@ -227,6 +239,14 @@ test-registry: ## Run registry Go unit tests
 test-webapp: ## Run webapp unit tests (Vitest)
 	@echo "${GREEN}Testing webapp…${NC}"
 	@cd webapp && npm test
+
+test-faces: ## Run the faces pytest suite
+	@if [ -x backend/faces/.venv/bin/python ]; then \
+	  echo "${GREEN}Testing faces…${NC}"; \
+	  cd backend/faces && .venv/bin/python -m pytest; \
+	else \
+	  echo "${YELLOW}faces venv missing — run: make setup-faces${NC}"; exit 1; \
+	fi
 
 test-webapp-integration: ## Run webapp HTTP integration tests (tests/webapp, Vitest; boots core itself)
 	@echo "${GREEN}Testing webapp (integration)…${NC}"

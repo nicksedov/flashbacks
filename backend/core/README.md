@@ -108,6 +108,7 @@ go test ./... -coverprofile=coverage.out
 | `FACES_ANALYZE_TIMEOUT` | Time budget for one batch analysis request (Go duration) | `300s` |
 | `FACES_CLUSTER_MODE` | Clustering strategy: `auto` (store when it can answer kNN), `store`, `memory` | `auto` |
 | `FACES_CLUSTER_NEIGHBOURS` | Candidates per unassigned face in the store path | `16` |
+| `FACES_CLUSTER_TIMEOUT` | Budget for one clustering decision and the neighbour index build (Go duration) | `10m` |
 | `LLM_MODELS_CACHE_TTL` | How long a stored provider model catalog stays valid before it is re-collected on read (Go duration) | `24h` |
 
 ## Thumbnail Cache

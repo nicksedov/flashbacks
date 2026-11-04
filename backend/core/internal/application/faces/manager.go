@@ -50,7 +50,15 @@ type Options struct {
 	ClusterMode string
 	// ClusterNeighbours caps the candidates per face in the store path.
 	ClusterNeighbours int
+	// ClusterTimeout bounds index maintenance and one clustering decision; a
+	// large gallery (tens of thousands of faces) needs minutes, not seconds.
+	ClusterTimeout time.Duration
 }
+
+// memoryClusterLimit caps the in-memory all-pairs fallback: sklearn computes a
+// full NxN distance matrix, so a very large gallery would exhaust memory
+// instead of merely being slow.
+const memoryClusterLimit = 5000
 
 // Dependencies are the optional stores the job consults when a clustering
 // strategy needs them.
@@ -71,6 +79,7 @@ func DefaultOptions() Options {
 		AnalyzeTimeout:    300 * time.Second,
 		ClusterMode:       domain.FacesClusterModeAuto,
 		ClusterNeighbours: 16,
+		ClusterTimeout:    10 * time.Minute,
 	}
 }
 
@@ -90,6 +99,9 @@ func (o Options) normalized() Options {
 	}
 	if o.ClusterNeighbours <= 0 {
 		o.ClusterNeighbours = defaults.ClusterNeighbours
+	}
+	if o.ClusterTimeout <= 0 {
+		o.ClusterTimeout = defaults.ClusterTimeout
 	}
 	return o
 }
@@ -128,6 +140,7 @@ type Manager struct {
 	analyzeTimeout    time.Duration
 	clusterMode       string
 	clusterNeighbours int
+	clusterTimeout    time.Duration
 	neighbours        NeighbourSource
 	indexes           IndexMaintainer
 }
@@ -162,6 +175,7 @@ func NewManagerWithDependencies(
 		analyzeTimeout:    options.AnalyzeTimeout,
 		clusterMode:       options.ClusterMode,
 		clusterNeighbours: options.ClusterNeighbours,
+		clusterTimeout:    options.ClusterTimeout,
 		neighbours:        dependencies.Neighbours,
 		indexes:           dependencies.Indexes,
 	}
@@ -267,12 +281,22 @@ func (m *Manager) runPass(stopCh <-chan struct{}) {
 		Where("faces_scan_version <> ?", facesScanVersion).
 		Count(&total)
 	if total == 0 {
-		return
+		// A previous pass may have stored faces and then failed (or been
+		// stopped) before clustering. Keep retrying that step until no
+		// unassigned face is left, instead of leaving the People view empty
+		// forever.
+		var unassigned int64
+		if err := m.db.Model(&domain.Face{}).Where("person_id = ?", 0).Count(&unassigned).Error; err == nil && unassigned == 0 {
+			return
+		}
+		m.mu.Lock()
+		m.progress = Progress{}
+		m.mu.Unlock()
+	} else {
+		m.mu.Lock()
+		m.progress = Progress{Total: int(total)}
+		m.mu.Unlock()
 	}
-
-	m.mu.Lock()
-	m.progress = Progress{Total: int(total)}
-	m.mu.Unlock()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -435,7 +459,7 @@ func (m *Manager) ensureNeighbourIndex() {
 	if m.indexes == nil {
 		return
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), m.clusterTimeout)
 	defer cancel()
 	if _, err := m.indexes.EnsureNeighbourIndex(ctx); err != nil {
 		m.setError(fmt.Sprintf("ensure face embedding index: %v", err))
@@ -671,7 +695,7 @@ func (m *Manager) clusterAssign(stopCh <-chan struct{}, facesPerImage map[uint]i
 		solo[i] = facesPerImage[member.imageFileID] <= 1
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), m.clusterTimeout)
 	defer cancel()
 	labels, err := m.clusterLabels(ctx, members, embeddings, solo)
 	if err != nil {
@@ -714,8 +738,10 @@ func (m *Manager) clusterAssign(stopCh <-chan struct{}, facesPerImage map[uint]i
 //
 // The store path sends one candidate graph built from kNN answers; the memory
 // path keeps the all-pairs call the service has always accepted. A failing
-// store query degrades to the memory path, because the graph is an optimisation
-// and people must still be produced.
+// store query degrades to the memory path for small galleries, because the
+// graph is an optimisation and people must still be produced. For a large
+// gallery the all-pairs matrix would exhaust memory, so the faces stay
+// unassigned and the next pass retries the store path.
 func (m *Manager) clusterLabels(
 	ctx context.Context, members []faceRef, embeddings [][]float32, solo []bool,
 ) ([]int, error) {
@@ -725,6 +751,12 @@ func (m *Manager) clusterLabels(
 			return labels, nil
 		}
 		m.setError(fmt.Sprintf("cluster from store: %v", err))
+		if len(members) > memoryClusterLimit {
+			return nil, fmt.Errorf(
+				"store clustering failed for %d faces; in-memory fallback is capped at %d: %w",
+				len(members), memoryClusterLimit, err,
+			)
+		}
 	}
 	return m.client.Cluster(ctx, embeddings, m.clusterSize, solo)
 }

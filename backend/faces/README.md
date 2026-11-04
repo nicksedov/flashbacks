@@ -144,6 +144,7 @@ scenarios and the cosine thresholds.
 | `FACES_MAX_CONCURRENCY` | `1` | Concurrent analyses **per device**; each device has its own session, and more per device only duplicates its VRAM use. |
 | `FACES_CLUSTER_MODE` | `auto` | Read by **core**, not this service: clustering strategy (`auto`, `store`, `memory`) for the recognition job's candidate graph. |
 | `FACES_CLUSTER_NEIGHBOURS` | `16` | Read by **core**, not this service: candidates per unassigned face when it queries the store for neighbours. |
+| `FACES_CLUSTER_TIMEOUT` | `10m` | Read by **core**: budget for one clustering decision and the HNSW index build (`halfvec(512)` is required for the index). |
 | `REGISTRY_URL` | (empty) | Registry facade URL; empty disables registration. |
 | `SERVICE_HOST` | `localhost` | Host peers use to reach this service. |
 | `SERVICE_ID` | `<host>-<pid>` | Unique instance id. |

@@ -68,6 +68,9 @@ type AppConfig struct {
 	FacesClusterMode string
 	// FacesClusterNeighbours caps the candidates per face in the store path.
 	FacesClusterNeighbours int
+	// FacesClusterTimeout bounds one clustering decision and the neighbour
+	// index build (default: 10m; a large gallery needs minutes, not seconds).
+	FacesClusterTimeout time.Duration
 	// FacesBatchSize is how many images one faces-service analysis request
 	// carries (default: 8). One batching degenerates to one request per photo.
 	FacesBatchSize int
@@ -153,6 +156,7 @@ func LoadConfig() *AppConfig {
 		FacesAnalyzeTimeout:         getEnvDuration("FACES_ANALYZE_TIMEOUT", 300*time.Second),
 		FacesClusterMode:            facesClusterMode,
 		FacesClusterNeighbours:      getEnvInt("FACES_CLUSTER_NEIGHBOURS", 16),
+		FacesClusterTimeout:         getEnvDuration("FACES_CLUSTER_TIMEOUT", 10*time.Minute),
 	}
 }
 
@@ -192,6 +196,7 @@ func (c *AppConfig) RegistryDefaults() map[string]string {
 		"FACES_ANALYZE_TIMEOUT":           c.FacesAnalyzeTimeout.String(),
 		"FACES_CLUSTER_MODE":              c.FacesClusterMode,
 		"FACES_CLUSTER_NEIGHBOURS":        strconv.Itoa(c.FacesClusterNeighbours),
+		"FACES_CLUSTER_TIMEOUT":           c.FacesClusterTimeout.String(),
 	}
 }
 
@@ -279,6 +284,12 @@ func (c *AppConfig) ApplyRegistry(values map[string]string) {
 	if value, ok := values["FACES_ANALYZE_TIMEOUT"]; ok {
 		if parsed, err := time.ParseDuration(value); err == nil && parsed > 0 {
 			c.FacesAnalyzeTimeout = parsed
+		}
+	}
+
+	if value, ok := values["FACES_CLUSTER_TIMEOUT"]; ok {
+		if parsed, err := time.ParseDuration(value); err == nil && parsed > 0 {
+			c.FacesClusterTimeout = parsed
 		}
 	}
 

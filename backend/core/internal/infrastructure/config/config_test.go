@@ -119,6 +119,7 @@ func TestFacesBatchRegistryRoundTrip(t *testing.T) {
 func TestFacesClusterDefaults(t *testing.T) {
 	t.Setenv("FACES_CLUSTER_MODE", "")
 	t.Setenv("FACES_CLUSTER_NEIGHBOURS", "")
+	t.Setenv("FACES_CLUSTER_TIMEOUT", "")
 
 	cfg := LoadConfig()
 	if cfg.FacesClusterMode != domain.FacesClusterModeAuto {
@@ -126,6 +127,9 @@ func TestFacesClusterDefaults(t *testing.T) {
 	}
 	if cfg.FacesClusterNeighbours != 16 {
 		t.Fatalf("FACES_CLUSTER_NEIGHBOURS default = %d, want 16", cfg.FacesClusterNeighbours)
+	}
+	if cfg.FacesClusterTimeout != 10*time.Minute {
+		t.Fatalf("FACES_CLUSTER_TIMEOUT default = %v, want 10m", cfg.FacesClusterTimeout)
 	}
 }
 

@@ -397,6 +397,35 @@ func TestFaceRecognitionManager_AnalysesEachImageOnce(t *testing.T) {
 	}
 }
 
+// TestFaceRecognitionManager_ClustersWithoutUnscannedImages guards the recovery
+// path: a pass that stored faces but failed before clustering must still cluster
+// on the next pass, even though no image is left to analyse.
+func TestFaceRecognitionManager_ClustersWithoutUnscannedImages(t *testing.T) {
+	db, cleanup := testutil.NewTestDB(t)
+	defer cleanup()
+
+	first := seedImage(t, db, "person-a-1")
+	second := seedImage(t, db, "person-a-2")
+	if err := db.Model(&domain.ImageFile{}).
+		Where("id IN ?", []uint{first.ID, second.ID}).
+		Update("faces_scan_version", facesScanVersion).Error; err != nil {
+		t.Fatalf("mark scanned: %v", err)
+	}
+	faceA := seedFace(t, db, first.ID)
+	faceB := seedFace(t, db, second.ID)
+
+	m := newTestManager(t, db)
+	m.runPass(nil)
+
+	var storedA, storedB domain.Face
+	db.First(&storedA, faceA.ID)
+	db.First(&storedB, faceB.ID)
+	if storedA.PersonID == 0 || storedA.PersonID != storedB.PersonID {
+		t.Fatalf("person ids = %d and %d, want one shared person",
+			storedA.PersonID, storedB.PersonID)
+	}
+}
+
 // TestFaceRecognitionManager_AnalyzesInBatches guards the batch contract: five
 // images with a batch size of two reach the faces service as three requests
 // (2 + 2 + 1), and every image — including one without a face — is marked

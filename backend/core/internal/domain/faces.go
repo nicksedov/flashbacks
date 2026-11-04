@@ -51,11 +51,15 @@ type Face struct {
 func (Face) TableName() string { return "faces" }
 
 // FaceEmbedding stores the pgvector halfvec embedding of a detected face.
+//
+// The column is declared with its dimension on purpose: pgvector's HNSW index
+// rejects an unconstrained “halfvec“ column ("column does not have
+// dimensions"), and the kNN candidate query depends on that index.
 type FaceEmbedding struct {
 	ID        uint      `gorm:"primaryKey" json:"id"`
 	FaceID    uint      `gorm:"not null;index" json:"faceId"`
 	Dimension int       `gorm:"not null" json:"dimension"`
-	Embedding string    `gorm:"type:halfvec;not null" json:"-"`
+	Embedding string    `gorm:"type:halfvec(512);not null" json:"-"`
 	Model     string    `gorm:"default:''" json:"model"`
 	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt"`

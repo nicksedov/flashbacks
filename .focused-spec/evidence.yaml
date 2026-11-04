@@ -1,5 +1,38 @@
 scopes:
   current:
+    face-recognition.face-assigned:
+      evidence:
+        - go::./internal/application/faces::TestFaceRecognitionManager_FaceAssignedToPerson
+    face-recognition.same-person-grouped:
+      evidence:
+        - go::./internal/application/faces::TestFaceRecognitionManager_SamePersonGrouped
+    face-recognition.no-face-skipped:
+      evidence:
+        - go::./internal/application/faces::TestFaceRecognitionManager_NoFaceSkipped
+    face-recognition.status-progress:
+      evidence:
+        - go::./internal/application/faces::TestFaceRecognitionManager_StatusProgress
+    face-recognition.people-listed:
+      evidence:
+        - go::./internal/interfaces/handler::TestHandleGetPeople_ListsWithCoverAndCount
+    face-recognition.person-photos:
+      evidence:
+        - go::./internal/interfaces/handler::TestHandleGetPersonPhotos_Paginated
+    face-recognition.settings-persisted:
+      evidence:
+        - go::./internal/interfaces/handler::TestHandleFacesSettingsPersisted
+    face-recognition.job-started:
+      evidence:
+        - go::./internal/interfaces/handler::TestHandleFacesStart_JobStarted
+    face-recognition.people-grid:
+      evidence:
+        - vitest::webapp/src/components/tabs/PeopleTab.test.tsx::PeopleTab > renders one tile per person with the person's name and cover thumbnail
+    face-recognition.people-empty:
+      evidence:
+        - vitest::webapp/src/components/tabs/PeopleTab.test.tsx::PeopleTab > shows the empty-state title and hint when no people have been discovered
+    face-recognition.people-localized:
+      evidence:
+        - vitest::webapp/src/components/tabs/PeopleTab.test.tsx::PeopleTab > renders People labels in the selected language without falling back to a raw key
     llm-model-metadata.capabilities-deduplicated:
       evidence:
         - go::./internal/infrastructure/llm::TestAlibabaCapabilitiesDeduplicated

@@ -1457,6 +1457,66 @@ paths:
         "200":
           description: Tag scan resumed
 
+  /api/people:
+    get:
+      summary: List discovered people
+      operationId: getPeople
+      responses:
+        "200":
+          description: People discovered by face recognition
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PeopleResponse"
+
+  /api/people/{id}/photos:
+    get:
+      summary: List a person's photos
+      operationId: getPersonPhotos
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Paginated photos of the person
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PersonPhotosResponse"
+        "404":
+          description: Person not found
+
+  /api/faces/status:
+    get:
+      summary: Get face recognition status
+      operationId: getFacesStatus
+      responses:
+        "200":
+          description: Face recognition job status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FaceStatusResponse"
+
+  /api/faces/start:
+    post:
+      summary: Start face recognition
+      operationId: startFaces
+      responses:
+        "200":
+          description: Face recognition started
+
+  /api/faces/stop:
+    post:
+      summary: Stop face recognition
+      operationId: stopFaces
+      responses:
+        "200":
+          description: Face recognition stopped
+
   /api/embedding/status:
     get:
       summary: Get embedding backfill status
@@ -2832,6 +2892,8 @@ components:
             $ref: "#/components/schemas/LlmProviderDTO"
         tagScan:
           $ref: "#/components/schemas/TagScanSettingsDTO"
+        faceRecognition:
+          $ref: "#/components/schemas/FaceRecognitionSettingsDTO"
         embedding:
           $ref: "#/components/schemas/EmbeddingSettingsDTO"
 
@@ -2879,6 +2941,27 @@ components:
         timezoneOffset:
           type: integer
 
+    FaceRecognitionSettingsDTO:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+        days:
+          type: string
+          description: >-
+            Comma-separated weekday numbers (0=Sunday ... 6=Saturday) face
+            recognition may run on; an empty string disables the schedule.
+        startHour:
+          type: integer
+        startMinute:
+          type: integer
+        endHour:
+          type: integer
+        endMinute:
+          type: integer
+        timezoneOffset:
+          type: integer
+
     EmbeddingSettingsDTO:
       type: object
       properties:
@@ -2900,6 +2983,23 @@ components:
           description: >-
             Comma-separated weekday numbers (0=Sunday ... 6=Saturday) the tag
             scan schedule runs on; an empty string disables it.
+        faceRecognitionEnabled:
+          type: boolean
+        faceRecognitionDays:
+          type: string
+          description: >-
+            Comma-separated weekday numbers (0=Sunday ... 6=Saturday) the face
+            recognition schedule runs on; an empty string disables it.
+        faceRecognitionStartHour:
+          type: integer
+        faceRecognitionStartMinute:
+          type: integer
+        faceRecognitionEndHour:
+          type: integer
+        faceRecognitionEndMinute:
+          type: integer
+        faceRecognitionTimezoneOffset:
+          type: integer
         embedding:
           type: object
           properties:
@@ -3128,6 +3228,54 @@ components:
           type: string
         lastError:
           type: string
+
+    FaceStatusResponse:
+      type: object
+      properties:
+        running:
+          type: boolean
+        processed:
+          type: integer
+        total:
+          type: integer
+
+    PersonDTO:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        photoCount:
+          type: integer
+        coverThumbnail:
+          type: string
+
+    PeopleResponse:
+      type: object
+      properties:
+        people:
+          type: array
+          items:
+            $ref: "#/components/schemas/PersonDTO"
+
+    PersonPhotosResponse:
+      type: object
+      properties:
+        images:
+          type: array
+          items:
+            $ref: "#/components/schemas/GalleryImageDTO"
+        totalImages:
+          type: integer
+        currentPage:
+          type: integer
+        pageSize:
+          type: integer
+        totalPages:
+          type: integer
+        hasNextPage:
+          type: boolean
 
     EmbeddingStatusResponse:
       type: object

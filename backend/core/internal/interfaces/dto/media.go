@@ -574,6 +574,19 @@ type TagScanSettingsDTO struct {
 	TimezoneOffset int    `json:"timezoneOffset"`
 }
 
+// FaceRecognitionSettingsDTO represents face recognition settings in API responses.
+type FaceRecognitionSettingsDTO struct {
+	Enabled bool `json:"enabled"`
+	// Days lists the weekdays face recognition may run on as comma-separated
+	// numbers (0=Sunday ... 6=Saturday); an empty string means disabled.
+	Days           string `json:"days"`
+	StartHour      int    `json:"startHour"`
+	StartMinute    int    `json:"startMinute"`
+	EndHour        int    `json:"endHour"`
+	EndMinute      int    `json:"endMinute"`
+	TimezoneOffset int    `json:"timezoneOffset"`
+}
+
 // EmbeddingSettingsDTO represents embedding settings in API responses.
 type EmbeddingSettingsDTO struct {
 	Dimension int `json:"dimension"`
@@ -582,10 +595,11 @@ type EmbeddingSettingsDTO struct {
 
 // LlmSettingsResponse for GET /api/llm/settings
 type LlmSettingsResponse struct {
-	Instruments []LlmInstrumentDTO   `json:"instruments"`
-	TagScan     TagScanSettingsDTO   `json:"tagScan"`
-	Embedding   EmbeddingSettingsDTO `json:"embedding"`
-	Providers   []LlmProviderDTO     `json:"providers"`
+	Instruments     []LlmInstrumentDTO         `json:"instruments"`
+	TagScan         TagScanSettingsDTO         `json:"tagScan"`
+	FaceRecognition FaceRecognitionSettingsDTO `json:"faceRecognition"`
+	Embedding       EmbeddingSettingsDTO       `json:"embedding"`
+	Providers       []LlmProviderDTO           `json:"providers"`
 }
 
 // UpdateLlmSettingsRequest for PUT /api/llm/settings
@@ -603,6 +617,15 @@ type UpdateLlmSettingsRequest struct {
 	TagScanEndHour        *int    `json:"tagScanEndHour,omitempty"`
 	TagScanEndMinute      *int    `json:"tagScanEndMinute,omitempty"`
 	TagScanTimezoneOffset *int    `json:"tagScanTimezoneOffset,omitempty"`
+
+	// Face recognition settings
+	FaceRecognitionEnabled        *bool   `json:"faceRecognitionEnabled,omitempty"`
+	FaceRecognitionDays           *string `json:"faceRecognitionDays,omitempty"`
+	FaceRecognitionStartHour      *int    `json:"faceRecognitionStartHour,omitempty"`
+	FaceRecognitionStartMinute    *int    `json:"faceRecognitionStartMinute,omitempty"`
+	FaceRecognitionEndHour        *int    `json:"faceRecognitionEndHour,omitempty"`
+	FaceRecognitionEndMinute      *int    `json:"faceRecognitionEndMinute,omitempty"`
+	FaceRecognitionTimezoneOffset *int    `json:"faceRecognitionTimezoneOffset,omitempty"`
 
 	// Embedding settings
 	EmbeddingDimension *int `json:"embeddingDimension,omitempty"`
@@ -852,4 +875,36 @@ type EnhancementActionRequest struct {
 type EnhancementActionResponse struct {
 	Success bool   `json:"success"`
 	Message string `json:"message"`
+}
+
+// --- People (face recognition) API ---
+
+// PersonDTO represents a discovered person in the People listing.
+type PersonDTO struct {
+	ID             uint   `json:"id"`
+	Name           string `json:"name"`
+	PhotoCount     int    `json:"photoCount"`
+	CoverThumbnail string `json:"coverThumbnail"`
+}
+
+// PeopleResponse is the JSON response for GET /api/people.
+type PeopleResponse struct {
+	People []PersonDTO `json:"people"`
+}
+
+// PersonPhotosResponse is the JSON response for GET /api/people/:id/photos.
+type PersonPhotosResponse struct {
+	Images      []GalleryImageDTO `json:"images"`
+	TotalImages int               `json:"totalImages"`
+	CurrentPage int               `json:"currentPage"`
+	PageSize    int               `json:"pageSize"`
+	TotalPages  int               `json:"totalPages"`
+	HasNextPage bool              `json:"hasNextPage"`
+}
+
+// FaceStatusResponse is the JSON response for GET /api/faces/status.
+type FaceStatusResponse struct {
+	Running   bool `json:"running"`
+	Processed int  `json:"processed"`
+	Total     int  `json:"total"`
 }

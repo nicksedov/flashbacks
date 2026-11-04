@@ -246,6 +246,13 @@
     "resumed": "Tag scan resumed"
   },
 
+  "description_faces": "Face recognition messages",
+  "faces": {
+    "manager_not_available": "Face recognition manager not available",
+    "started": "Face recognition started",
+    "stopped": "Face recognition stopped"
+  },
+
   "description_move_files": "Move files messages",
   "move_files": {
     "target_dir_required": "Target directory is required",

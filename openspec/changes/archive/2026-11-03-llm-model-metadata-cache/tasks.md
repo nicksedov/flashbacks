@@ -40,8 +40,8 @@
 ## 6. Integration verification
 
 - [x] 6.1 Run the full core suite and the webapp suite and confirm both are green (`cd backend/core && go test ./... -count=1`; `cd webapp && npm test`)
-- [ ] 6.2 Confirm on a running instance that `GET /api/llm/models?provider=<alias>` returns a stored catalog with `fetchedAt`, and that `qwen3.5-flash` reports its stored context length, input modalities and `vision` capability after a refresh
-- [ ] 6.3 Confirm the Analysis tab OCR dropdown contains every vision-capable model of the configured provider without pressing "load models"
+- [x] 6.2 Confirm on a running instance that `GET /api/llm/models?provider=<alias>` returns a stored catalog with `fetchedAt`, and that `qwen3.5-flash` reports its stored context length, input modalities and `vision` capability after a refresh
+- [x] 6.3 Confirm the Analysis tab OCR dropdown contains every vision-capable model of the configured provider without pressing "load models"
 
 ## Workflow follow-up
 

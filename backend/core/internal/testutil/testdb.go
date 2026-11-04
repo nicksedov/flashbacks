@@ -63,6 +63,9 @@ func NewTestDB(t *testing.T) (*gorm.DB, func()) {
 		&domain.TagEmbedding{},
 		&domain.ImageProcessingError{},
 		&domain.TrashItem{},
+		&domain.Person{},
+		&domain.Face{},
+		&domain.FaceEmbedding{},
 	); err != nil {
 		t.Fatalf("failed to migrate test database: %v", err)
 	}
@@ -88,8 +91,10 @@ func NewTestDB(t *testing.T) (*gorm.DB, func()) {
 	db.Create(&domain.EmbeddingSettings{ID: 1, Dimension: 1024, BatchSize: 50})
 	syncSchedule := domain.DefaultSchedule(domain.ScheduleGallerySync)
 	tagScanSchedule := domain.DefaultSchedule(domain.ScheduleTagScan)
+	faceRecognitionSchedule := domain.DefaultSchedule(domain.ScheduleFaceRecognition)
 	db.Create(&syncSchedule)
 	db.Create(&tagScanSchedule)
+	db.Create(&faceRecognitionSchedule)
 
 	cleanup := func() {
 		sqlDB, _ := db.DB()

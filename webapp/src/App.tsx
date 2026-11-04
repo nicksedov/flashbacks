@@ -23,9 +23,10 @@ const ExifTab = lazy(() => import("@/components/tabs/ExifTab").then(module => ({
 const AdminSettingsTab = lazy(() => import("@/components/tabs/AdminSettingsTab").then(module => ({ default: module.AdminSettingsTab })))
 const AdminPanel = lazy(() => import("@/components/auth/AdminPanel").then(module => ({ default: module.AdminPanel })))
 const SmartSearchTab = lazy(() => import("@/components/tabs/SmartSearchTab").then(module => ({ default: module.SmartSearchTab })))
+const PeopleTab = lazy(() => import("@/components/tabs/PeopleTab").then(module => ({ default: module.PeopleTab })))
 const AboutTab = lazy(() => import("@/components/tabs/AboutTab").then(module => ({ default: module.AboutTab })))
 
-type TabValue = "settings" | "gallery-all-images" | "gallery-calendar" | "gallery-geolocation" | "gallery-folders" | "gallery-trash" | "deduplication" | "ocr" | "exif" | "smart-search" | "profile" | "admin-settings" | "admin-users" | "about"
+type TabValue = "settings" | "gallery-all-images" | "gallery-calendar" | "gallery-geolocation" | "gallery-folders" | "gallery-trash" | "people" | "deduplication" | "ocr" | "exif" | "smart-search" | "profile" | "admin-settings" | "admin-users" | "about"
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<TabValue>("gallery-all-images")
@@ -202,6 +203,12 @@ export default function App() {
               <TabsContent value="smart-search">
                 <Suspense fallback={<TabLoading />}>
                   <SmartSearchTab />
+                </Suspense>
+              </TabsContent>
+
+              <TabsContent value="people">
+                <Suspense fallback={<TabLoading />}>
+                  <PeopleTab />
                 </Suspense>
               </TabsContent>
 

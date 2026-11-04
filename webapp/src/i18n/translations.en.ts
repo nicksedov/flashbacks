@@ -17,6 +17,7 @@ export const translationsEn = {
   "tabs.exif": "Metadata",
   "tabs.trash": "Trash",
   "tabs.smartSearch": "Smart Search",
+  "tabs.people": "People",
 
   // Trash tab
   "trashTab.empty": "Trash is empty",
@@ -40,6 +41,26 @@ export const translationsEn = {
   "trashTab.restored": "File restored to its original location",
   "trashTab.cleanSuccess": "Trash emptied",
   "trashTab.cleanFailed": "Failed to empty trash",
+
+  // People (face recognition)
+  "people.title": "People",
+  "people.emptyTitle": "No people yet",
+  "people.emptyHint": "Run face recognition to group faces into people.",
+  "people.photoCount": "{count} photos",
+  "people.back": "Back to people",
+  "people.unnamed": "Person {id}",
+
+  // Face recognition settings
+  "faces.title": "Face Recognition",
+  "faces.description": "Group photos by the people in them.",
+  "faces.enabled": "Enable face recognition",
+  "faces.schedule": "Schedule",
+  "faces.start": "Start",
+  "faces.stop": "Stop",
+  "faces.status": "Status",
+  "faces.progress": "{processed} of {total} processed",
+  "faces.started": "Face recognition started",
+  "faces.stopped": "Face recognition stopped",
 
   // Loading
   "common.loading": "Loading...",

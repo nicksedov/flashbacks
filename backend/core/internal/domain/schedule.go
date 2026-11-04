@@ -10,6 +10,8 @@ const (
 	ScheduleGallerySync ScheduleKind = "gallery_sync"
 	// ScheduleTagScan is the automatic image tagging job.
 	ScheduleTagScan ScheduleKind = "tag_scan"
+	// ScheduleFaceRecognition is the automatic face recognition job.
+	ScheduleFaceRecognition ScheduleKind = "face_recognition"
 )
 
 // Schedule is the stored schedule of a recurring background job. Every scheduled
@@ -174,6 +176,16 @@ func DefaultSchedule(kind ScheduleKind) Schedule {
 			StartMinute: 30,
 		}
 	case ScheduleTagScan:
+		return Schedule{
+			Kind:        string(kind),
+			Enabled:     true,
+			Days:        "1,2,3,4,5",
+			StartHour:   22,
+			StartMinute: 0,
+			EndHour:     7,
+			EndMinute:   0,
+		}
+	case ScheduleFaceRecognition:
 		return Schedule{
 			Kind:        string(kind),
 			Enabled:     true,

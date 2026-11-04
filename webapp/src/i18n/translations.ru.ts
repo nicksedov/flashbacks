@@ -17,6 +17,7 @@ export const translationsRu = {
   "tabs.exif": "Метаданные",
   "tabs.trash": "Корзина",
   "tabs.smartSearch": "Умный поиск",
+  "tabs.people": "Люди",
 
   // Trash tab
   "trashTab.empty": "Корзина пуста",
@@ -40,6 +41,26 @@ export const translationsRu = {
   "trashTab.restored": "Файл восстановлен в исходное расположение",
   "trashTab.cleanSuccess": "Корзина очищена",
   "trashTab.cleanFailed": "Не удалось очистить корзину",
+
+  // People (face recognition)
+  "people.title": "Люди",
+  "people.emptyTitle": "Людей пока нет",
+  "people.emptyHint": "Запустите распознавание лиц, чтобы сгруппировать лица в людей.",
+  "people.photoCount": "{count} фото",
+  "people.back": "Назад к людям",
+  "people.unnamed": "Человек {id}",
+
+  // Face recognition settings
+  "faces.title": "Распознавание лиц",
+  "faces.description": "Группировка фотографий по людям на них.",
+  "faces.enabled": "Включить распознавание лиц",
+  "faces.schedule": "Расписание",
+  "faces.start": "Запустить",
+  "faces.stop": "Остановить",
+  "faces.status": "Статус",
+  "faces.progress": "Обработано {processed} из {total}",
+  "faces.started": "Распознавание лиц запущено",
+  "faces.stopped": "Распознавание лиц остановлено",
 
   // Loading
   "common.loading": "Загрузка...",

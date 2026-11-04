@@ -8,6 +8,7 @@ import (
 
 	"github.com/flashbacks/core/internal/application/agent"
 	"github.com/flashbacks/core/internal/application/auth"
+	recognition "github.com/flashbacks/core/internal/application/faces"
 	"github.com/flashbacks/core/internal/application/geo"
 	"github.com/flashbacks/core/internal/application/imaging"
 	catalog "github.com/flashbacks/core/internal/application/llm"
@@ -17,6 +18,7 @@ import (
 	"github.com/flashbacks/core/internal/infrastructure/config"
 	"github.com/flashbacks/core/internal/infrastructure/database"
 	"github.com/flashbacks/core/internal/infrastructure/exifclient"
+	facesclient "github.com/flashbacks/core/internal/infrastructure/faces"
 	"github.com/flashbacks/core/internal/infrastructure/geocoder"
 	"github.com/flashbacks/core/internal/infrastructure/mcpserver"
 	"github.com/flashbacks/core/internal/infrastructure/ocr"
@@ -41,6 +43,7 @@ var CoreSet = wire.NewSet(
 	ProvideDB,
 	ProvideI18nService,
 	ProvideExifClient,
+	ProvideFacesClient,
 	ProvideNominatimClient,
 	ProvideGeolocationService,
 	ProvideOcrClient,
@@ -59,6 +62,8 @@ var CoreSet = wire.NewSet(
 	ProvideUserSettingsRepo,
 	ProvideSyncHistoryRepo,
 	ProvideScheduleRepo,
+	ProvidePersonRepo,
+	ProvideFaceRepo,
 )
 
 // ProvideRegistryBootstrap creates the optional registry client for core.
@@ -94,6 +99,12 @@ func ProvideI18nService() (*i18n.Service, error) {
 func ProvideExifClient(cfg *config.AppConfig, bootstrap *registrybootstrap.Bootstrap) imaging.ExifClient {
 	resolver := bootstrap.NewResolver("exif", cfg.ExifServiceURL)
 	return exifclient.NewHTTPExifClientWithProvider(resolver.URL)
+}
+
+// ProvideFacesClient creates the faces service HTTP client with discovery.
+func ProvideFacesClient(cfg *config.AppConfig, bootstrap *registrybootstrap.Bootstrap) facesclient.Client {
+	resolver := bootstrap.NewResolver("faces", cfg.FacesServiceURL)
+	return facesclient.NewClientWithProvider(resolver.URL)
 }
 
 // ProvideNominatimClient creates the Nominatim geocoding client.
@@ -203,6 +214,16 @@ func ProvideScheduleRepo(db *gorm.DB) repository.ScheduleRepository {
 	return repository.NewScheduleRepository(db)
 }
 
+// ProvidePersonRepo creates the person repository.
+func ProvidePersonRepo(db *gorm.DB) repository.PersonRepository {
+	return repository.NewPersonRepository(db)
+}
+
+// ProvideFaceRepo creates the face repository.
+func ProvideFaceRepo(db *gorm.DB) repository.FaceRepository {
+	return repository.NewFaceRepository(db)
+}
+
 // ProvideUserSettingsRepo creates the user settings repository.
 func ProvideUserSettingsRepo(db *gorm.DB) repository.UserSettingsRepository {
 	return repository.NewUserSettingsRepository(db)
@@ -226,6 +247,7 @@ var AppSet = wire.NewSet(
 	ProvideBackgroundSyncManager,
 	ProvideTagScanManager,
 	ProvideEmbeddingBackfillManager,
+	ProvideFaceRecognitionManager,
 	ProvideClusterStorage,
 	ProvideGalleryAccess,
 	ProvideSettingsLoader,
@@ -284,6 +306,11 @@ func ProvideTagScanManager(
 // ProvideEmbeddingBackfillManager creates the embedding backfill manager.
 func ProvideEmbeddingBackfillManager(db *gorm.DB) *imaging.EmbeddingBackfillManager {
 	return imaging.NewEmbeddingBackfillManager(db)
+}
+
+// ProvideFaceRecognitionManager creates the face recognition manager.
+func ProvideFaceRecognitionManager(db *gorm.DB, client facesclient.Client) *recognition.Manager {
+	return recognition.NewManager(db, client)
 }
 
 // ProvideClusterStorage creates the geo-cluster storage.

@@ -36,6 +36,8 @@ func InitializeApp() (*App, error) {
 	float64_2 := di.ProvideMaxMegapixels(appConfig)
 	tagScanManager := di.ProvideTagScanManager(db, llmOcrService, float64_2)
 	embeddingBackfillManager := di.ProvideEmbeddingBackfillManager(db)
+	facesClient := di.ProvideFacesClient(appConfig, bootstrap)
+	manager := di.ProvideFaceRecognitionManager(db, facesClient)
 	llmCatalogRepository := di.ProvideLlmCatalogRepo(db)
 	service := di.ProvideLlmCatalogService(llmCatalogRepository, appConfig)
 	thumbnailBatch := di.ProvideThumbnailBatch(thumbnailProvider)
@@ -63,6 +65,8 @@ func InitializeApp() (*App, error) {
 	appSettingsRepository := di.ProvideAppSettingsRepo(db)
 	userSettingsRepository := di.ProvideUserSettingsRepo(db)
 	syncHistoryRepository := di.ProvideSyncHistoryRepo(db)
+	personRepository := di.ProvidePersonRepo(db)
+	faceRepository := di.ProvideFaceRepo(db)
 	serverDeps := handler.ServerDeps{
 		DB:                  db,
 		Config:              appConfig,
@@ -72,6 +76,7 @@ func InitializeApp() (*App, error) {
 		BackgroundSync:      backgroundSyncManager,
 		TagScanManager:      tagScanManager,
 		EmbeddingBackfill:   embeddingBackfillManager,
+		FaceRecognition:     manager,
 		LlmCatalog:          service,
 		ThumbnailProvider:   thumbnailProvider,
 		ThumbnailBatch:      thumbnailBatch,
@@ -99,6 +104,8 @@ func InitializeApp() (*App, error) {
 		UserSettingsRepo:    userSettingsRepository,
 		SyncHistoryRepo:     syncHistoryRepository,
 		ScheduleRepo:        scheduleRepository,
+		PersonRepo:          personRepository,
+		FaceRepo:            faceRepository,
 	}
 	server := di.ProvideServer(serverDeps)
 	loginLimiter := di.ProvideLoginRateLimiter()
@@ -123,6 +130,7 @@ func InitializeApp() (*App, error) {
 		BackgroundSync:    backgroundSyncManager,
 		TagScanManager:    tagScanManager,
 		EmbeddingBackfill: embeddingBackfillManager,
+		FaceRecognition:   manager,
 		ThumbnailService:  thumbnailProvider,
 		LoginLimiter:      loginLimiter,
 		SessionCleanup:    sessionCleanupJob,

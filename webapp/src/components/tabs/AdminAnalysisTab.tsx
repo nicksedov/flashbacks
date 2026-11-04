@@ -20,13 +20,16 @@ import {
   fetchTagScanStatus,
   pauseTagScan,
   resumeTagScan,
+  fetchFacesStatus,
+  startFaces,
+  stopFaces,
   updateSettings,
   fetchSettings,
   probeEmbeddingDimension,
   fetchExifServiceStatus,
   fetchLlmModels,
 } from "@/api/endpoints"
-import { Shield, Loader2, Zap, Wand2, Play, Square, RefreshCw, Database } from "lucide-react"
+import { Shield, Loader2, Zap, Wand2, Play, Square, RefreshCw, Database, Users } from "lucide-react"
 import { useTranslation } from "@/i18n"
 import type { TranslationKey } from "@/i18n"
 import { filterModelsForInstrument } from "@/lib/llm-model-filter"
@@ -38,6 +41,7 @@ import type {
   OcrClassificationStatusResponse,
   LlmSettingsResponse,
   TagScanStatusResponse,
+  FaceStatusResponse,
   LlmProviderType,
   LlmInstrumentType,
   LlmModelDTO,
@@ -76,6 +80,7 @@ function formatModelLabel(model: LlmModelDTO): string {
 const EMPTY_SETTINGS: LlmSettingsResponse = {
   instruments: [],
   tagScan: { enabled: false, days: "1,2,3,4,5", startHour: 23, startMinute: 0, endHour: 7, endMinute: 0, timezoneOffset: 0 },
+  faceRecognition: { enabled: false, days: "1,2,3,4,5", startHour: 22, startMinute: 0, endHour: 7, endMinute: 0, timezoneOffset: 0 },
   embedding: { dimension: 1024, batchSize: 50 },
   providers: [],
 }
@@ -166,6 +171,18 @@ export function AdminAnalysisTab() {
   const [isTagScanSaving, setIsTagScanSaving] = useState(false)
   const [isTagScanPausing, setIsTagScanPausing] = useState(false)
   const [tagScanFormDirty, setTagScanFormDirty] = useState(false)
+
+  // Face recognition state
+  const [faceEnabled, setFaceEnabled] = useState(false)
+  const [faceDays, setFaceDays] = useState<boolean[]>([false, true, true, true, true, true, false])
+  const [faceStartHour, setFaceStartHour] = useState(22)
+  const [faceStartMinute, setFaceStartMinute] = useState(0)
+  const [faceEndHour, setFaceEndHour] = useState(7)
+  const [faceEndMinute, setFaceEndMinute] = useState(0)
+  const [faceStatus, setFaceStatus] = useState<FaceStatusResponse | null>(null)
+  const [isFaceSaving, setIsFaceSaving] = useState(false)
+  const [isFaceStarting, setIsFaceStarting] = useState(false)
+  const [faceFormDirty, setFaceFormDirty] = useState(false)
 
   const loadExifStatus = useCallback(async () => {
     try { setIsExifLoading(true); const status = await fetchExifServiceStatus(); setExifStatus(status) }
@@ -304,6 +321,55 @@ export function AdminAnalysisTab() {
     finally { setIsTagScanPausing(false) }
   }, [loadTagScanStatus, t])
 
+  // Face recognition handlers
+  const loadFaceStatus = useCallback(async () => {
+    try { const s = await fetchFacesStatus(); setFaceStatus(s) } catch { setFaceStatus(null) }
+  }, [])
+
+  const handleSaveFaceSchedule = useCallback(async () => {
+    setIsFaceSaving(true)
+    try {
+      await updateLlmSettings({ faceRecognitionEnabled: faceEnabled, faceRecognitionDays: daysToString(faceDays), faceRecognitionStartHour: faceStartHour, faceRecognitionStartMinute: faceStartMinute, faceRecognitionEndHour: faceEndHour, faceRecognitionEndMinute: faceEndMinute, faceRecognitionTimezoneOffset: new Date().getTimezoneOffset() })
+      toast.success(t("tagScan.saved"))
+      setFaceFormDirty(false); await loadFaceStatus()
+    } catch (err) { toast.error(err instanceof Error ? err.message : t("tagScan.saveFailed")) }
+    finally { setIsFaceSaving(false) }
+  }, [faceEnabled, faceDays, faceStartHour, faceStartMinute, faceEndHour, faceEndMinute, loadFaceStatus, t])
+
+  const toggleFaceDay = useCallback((dayIndex: number) => {
+    setFaceDays(prev => {
+      const next = [...prev]
+      next[dayIndex] = !next[dayIndex]
+      return next
+    })
+    setFaceFormDirty(true)
+  }, [])
+
+  const handleFaceFieldChange = useCallback((field: string, value: string | boolean | number) => {
+    switch (field) {
+      case "faceEnabled": setFaceEnabled(value as boolean); break
+      case "faceStartHour": setFaceStartHour(value as number); break
+      case "faceStartMinute": setFaceStartMinute(value as number); break
+      case "faceEndHour": setFaceEndHour(value as number); break
+      case "faceEndMinute": setFaceEndMinute(value as number); break
+    }
+    setFaceFormDirty(true)
+  }, [])
+
+  const handleStartFaces = useCallback(async () => {
+    setIsFaceStarting(true)
+    try { await startFaces(); toast.success(t("faces.started")); await loadFaceStatus() }
+    catch (err) { toast.error(err instanceof Error ? err.message : t("faces.stopped")) }
+    finally { setIsFaceStarting(false) }
+  }, [loadFaceStatus, t])
+
+  const handleStopFaces = useCallback(async () => {
+    setIsFaceStarting(true)
+    try { await stopFaces(); toast.success(t("faces.stopped")); await loadFaceStatus() }
+    catch (err) { toast.error(err instanceof Error ? err.message : t("faces.stopped")) }
+    finally { setIsFaceStarting(false) }
+  }, [loadFaceStatus, t])
+
   // Poll tag scan status
   useEffect(() => {
     let cancelled = false; let timeoutId: ReturnType<typeof setTimeout> | null = null
@@ -341,6 +407,12 @@ export function AdminAnalysisTab() {
         setTagScanStartMinute(s.tagScan?.startMinute ?? 0)
         setTagScanEndHour(s.tagScan?.endHour ?? 7)
         setTagScanEndMinute(s.tagScan?.endMinute ?? 0)
+        setFaceEnabled(s.faceRecognition?.enabled ?? false)
+        setFaceDays(parseDaysString(s.faceRecognition?.days ?? "1,2,3,4,5"))
+        setFaceStartHour(s.faceRecognition?.startHour ?? 22)
+        setFaceStartMinute(s.faceRecognition?.startMinute ?? 0)
+        setFaceEndHour(s.faceRecognition?.endHour ?? 7)
+        setFaceEndMinute(s.faceRecognition?.endMinute ?? 0)
         const embInstr = s.instruments.find(i => i.type === "embedding")
         if (embInstr) {
           setEmbeddingDimension(s.embedding?.dimension || 1024)
@@ -357,6 +429,7 @@ export function AdminAnalysisTab() {
       catch { setLlmSettings(EMPTY_SETTINGS) }
       finally { isInitialLoad.current = false; setIsLlmLoading(false) }
       loadExifStatus()
+      void loadFaceStatus()
       try { const st = await fetchOcrClassificationStatus(); if (st.processing) { setOcrScanning(true); setOcrScanStatus(st) } } catch { /* ignore */ }
     }
     init()
@@ -723,6 +796,61 @@ export function AdminAnalysisTab() {
                   {tagScanStatus.total > 0 && <TagScanProgress status={tagScanStatus} />}
                   {tagScanStatus.currentImage && <p className="text-xs text-muted-foreground">{t("tagScan.currentImage")}: {tagScanStatus.currentImage}</p>}
                   {tagScanStatus.lastError && <p className="text-xs text-destructive">{t("tagScan.lastError")}: {tagScanStatus.lastError}</p>}
+                </div>
+              )}
+            </>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Face Recognition Settings */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2"><Users className="h-5 w-5" />{t("faces.title")}</CardTitle>
+          <CardDescription>{t("faces.description")}</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center space-x-2 rounded-lg bg-muted p-3">
+            <Checkbox id="faces-enabled" checked={faceEnabled} onCheckedChange={checked => handleFaceFieldChange("faceEnabled", checked === true)} />
+            <div className="space-y-0.5"><Label htmlFor="faces-enabled">{t("faces.enabled")}</Label><p className="text-xs text-muted-foreground">{t("faces.description")}</p></div>
+          </div>
+          {faceEnabled && (
+            <>
+              <ScheduleEditor
+                mode="window"
+                idPrefix="faces"
+                days={faceDays}
+                onToggleDay={toggleFaceDay}
+                startHour={faceStartHour}
+                startMinute={faceStartMinute}
+                endHour={faceEndHour}
+                endMinute={faceEndMinute}
+                onStartHourChange={v => handleFaceFieldChange("faceStartHour", v)}
+                onStartMinuteChange={v => handleFaceFieldChange("faceStartMinute", v)}
+                onEndHourChange={v => handleFaceFieldChange("faceEndHour", v)}
+                onEndMinuteChange={v => handleFaceFieldChange("faceEndMinute", v)}
+                action={
+                  <Button onClick={handleSaveFaceSchedule} disabled={isFaceSaving || !faceFormDirty}>
+                    {isFaceSaving ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />{t("common.saving")}</> : t("common.save")}
+                  </Button>
+                }
+              />
+              {faceStatus && (
+                <div className="space-y-2">
+                  <Label>{t("faces.status")}</Label>
+                  <div className="flex items-center gap-4 rounded-lg bg-muted p-3">
+                    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${faceStatus.running ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200" : "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200"}`}>
+                      {faceStatus.running ? t("tagScan.running") : t("tagScan.stopped")}
+                    </span>
+                    <div className="flex-1 text-sm text-muted-foreground">{t("faces.progress", { processed: faceStatus.processed, total: faceStatus.total })}</div>
+                    <div className="flex gap-2">
+                      {faceStatus.running ? (
+                        <Button variant="outline" size="sm" onClick={handleStopFaces} disabled={isFaceStarting}><Square className="mr-1.5 h-3.5 w-3.5" />{t("faces.stop")}</Button>
+                      ) : (
+                        <Button variant="outline" size="sm" onClick={handleStartFaces} disabled={isFaceStarting}><Play className="mr-1.5 h-3.5 w-3.5" />{t("faces.start")}</Button>
+                      )}
+                    </div>
+                  </div>
                 </div>
               )}
             </>

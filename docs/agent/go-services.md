@@ -13,6 +13,7 @@ and win over the root file whenever the two differ.
 | core | `backend/core/` | Core REST API: auth, scan, gallery, OCR orchestration, tags, chat, trash | 5170 | [`backend/core/README.md`](../../backend/core/README.md:1) |
 | exif | `backend/exif/` | EXIF read/write, GPS writing, MCP endpoint | 5172 | [`backend/exif/README.md`](../../backend/exif/README.md:1) |
 | ocr | `backend/ocr/` | Text detection / document classification via Tesseract | 5174 | [`backend/ocr/README.md`](../../backend/ocr/README.md:1) |
+| faces | `backend/faces/` | Face recognition (SCRFD detection, ArcFace embeddings, HDBSCAN clustering) | 5173 | [`backend/faces/README.md`](../../backend/faces/README.md:1) |
 | registry | `backend/registry/` | Service discovery + config KV store (embedded etcd, REST facade) | 5176 | — |
 | shared | `backend/shared/` | Shared domain types (`exif.go`, `ocr.go`) consumed by the services | — | — |
 | embeddings-builder | `tools/embeddings-builder/` | CLI that backfills `tag_embeddings` via pgvector | — | [`tools/embeddings-builder/README.md`](../../tools/embeddings-builder/README.md:1) |
@@ -78,6 +79,7 @@ humans.
 |---|---|---|---|
 | core | `cd backend/core && go test ./internal/application/... -count=1` | `cd backend/core && go vet ./...` | `go build ./...` |
 | exif | `cd backend/exif && go test ./... -count=1` | `cd backend/exif && go vet ./...` | `go build ./...` |
+| faces | `cd backend/faces && python -m pytest` | — | `docker build backend/faces` |
 | ocr | `. ./scripts/toolenv.sh && cd backend/ocr && go test -race -cover ./...` | `. ./scripts/toolenv.sh && cd backend/ocr && golangci-lint run` | `. ./scripts/toolenv.sh && go build -o ocr ./cmd/server` |
 | registry | `cd backend/registry && go test ./... -count=1` | `cd backend/registry && go vet ./...` | `cd backend/registry && go build ./...` |
 | shared | `go build ./...` in every consumer module | `go vet ./...` where consumed | — |

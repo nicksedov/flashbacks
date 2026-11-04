@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/flashbacks/core/internal/application/auth"
+	recognition "github.com/flashbacks/core/internal/application/faces"
 	"github.com/flashbacks/core/internal/application/imaging"
 	"github.com/flashbacks/core/internal/application/thumbnail"
 	"github.com/flashbacks/core/internal/domain"
@@ -34,6 +35,7 @@ type App struct {
 	BackgroundSync    *imaging.BackgroundSyncManager
 	TagScanManager    *imaging.TagScanManager
 	EmbeddingBackfill *imaging.EmbeddingBackfillManager
+	FaceRecognition   *recognition.Manager
 	ThumbnailService  thumbnail.ThumbnailProvider
 	LoginLimiter      di.LoginLimiter
 	SessionCleanup    *auth.SessionCleanupJob
@@ -115,6 +117,10 @@ func (app *App) Init() {
 	// Wire embedding backfill to tag scan manager
 	app.TagScanManager.SetEmbeddingBackfill(app.EmbeddingBackfill)
 
+	// Start the face recognition job from the unified schedules table
+	faceRecognitionSchedule := app.scheduleOrDefault(domain.ScheduleFaceRecognition)
+	app.FaceRecognition.Start(faceRecognitionSchedule)
+
 	// Start session cleanup
 	app.SessionCleanup.Start()
 
@@ -180,6 +186,9 @@ func (app *App) Shutdown() {
 	}
 	if app.TagScanManager != nil {
 		app.TagScanManager.Stop()
+	}
+	if app.FaceRecognition != nil {
+		app.FaceRecognition.Stop()
 	}
 	if app.LoginLimiter.LoginRateLimiter != nil {
 		app.LoginLimiter.Stop()

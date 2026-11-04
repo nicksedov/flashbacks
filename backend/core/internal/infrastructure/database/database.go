@@ -61,6 +61,9 @@ func InitDatabase(cfg *config.AppConfig) (*gorm.DB, error) {
 		&domain.ImageProcessingError{},
 		&domain.SyncHistory{},
 		&domain.TrashItem{},
+		&domain.Person{},
+		&domain.Face{},
+		&domain.FaceEmbedding{},
 	); err != nil {
 		return nil, fmt.Errorf("failed to migrate database: %w", err)
 	}
@@ -179,7 +182,7 @@ func (legacyTagScanSchedule) TableName() string { return "tag_scan_settings" }
 // seedSchedules creates the missing schedule row of every job kind, backfilling
 // from the legacy columns when they are still present.
 func seedSchedules(db *gorm.DB) error {
-	kinds := []domain.ScheduleKind{domain.ScheduleGallerySync, domain.ScheduleTagScan}
+	kinds := []domain.ScheduleKind{domain.ScheduleGallerySync, domain.ScheduleTagScan, domain.ScheduleFaceRecognition}
 
 	for _, kind := range kinds {
 		var count int64

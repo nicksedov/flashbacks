@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -19,8 +20,18 @@ import (
 	"gorm.io/gorm"
 )
 
-// minClusterSize is the default HDBSCAN minClusterSize used by the job.
-const minClusterSize = 5
+// facesScanVersion identifies the current face-analysis pipeline. Images whose
+// stored faces come from another version are analysed again — once — which is
+// how an improved analyser reaches photos that already have faces.
+const facesScanVersion = "analyze-3"
+
+// minClusterSize is the minimum number of faces a person needs before the
+// clustering service groups them into a person. Two is the calibrated floor:
+// an identity photographed twice must still become a person, while the
+// similarity floor inside the faces service keeps different people apart.
+// A higher floor (5 labels every face of a small gallery as noise) leaves the
+// People view empty even though faces were detected and embedded.
+const minClusterSize = 2
 
 // Progress tracks how many photos the job has processed.
 type Progress struct {
@@ -152,12 +163,12 @@ func (m *Manager) scheduleLoop() {
 	}
 }
 
-// runPass processes every unprocessed image, then clusters and assigns people.
+// runPass analyses every image the current analyser has not seen yet, then
+// clusters and assigns people.
 func (m *Manager) runPass(stopCh <-chan struct{}) {
 	var total int64
-	m.db.Table("image_files").
-		Joins("LEFT JOIN faces ON faces.image_file_id = image_files.id").
-		Where("faces.id IS NULL").
+	m.db.Model(&domain.ImageFile{}).
+		Where("faces_scan_version <> ?", facesScanVersion).
 		Count(&total)
 	if total == 0 {
 		return
@@ -176,11 +187,8 @@ func (m *Manager) runPass(stopCh <-chan struct{}) {
 		}
 
 		var imageFile domain.ImageFile
-		err := m.db.Table("image_files").
-			Select("image_files.*").
-			Joins("LEFT JOIN faces ON faces.image_file_id = image_files.id").
-			Where("faces.id IS NULL AND image_files.id > ?", cursor).
-			Order("image_files.id ASC").
+		err := m.db.Where("faces_scan_version <> ? AND id > ?", facesScanVersion, cursor).
+			Order("id ASC").
 			First(&imageFile).Error
 		if err != nil {
 			break
@@ -194,10 +202,106 @@ func (m *Manager) runPass(stopCh <-chan struct{}) {
 		m.mu.Unlock()
 	}
 
-	m.clusterAssign(stopCh)
+	// Detection is finished, so the per-image face counts are final and serve
+	// both the covers of the new clusters and the refresh of stored ones.
+	counts := m.imageFaceCounts()
+	m.clusterAssign(stopCh, counts)
+	m.refreshPersonCovers(counts)
 }
 
-// processImage detects and embeds faces on a single image, persisting each.
+// faceRef identifies one face of a cluster together with the photo it was
+// detected on; choosing a cover needs both.
+type faceRef struct {
+	faceID      uint
+	imageFileID uint
+	confidence  float32
+}
+
+// imageFaceCounts reports how many faces every photo contains. A photo with a
+// single face is the best cover for its person: nothing else shares the tile.
+func (m *Manager) imageFaceCounts() map[uint]int {
+	type row struct {
+		ImageFileID uint
+		FaceCount   int
+	}
+	var rows []row
+	counts := make(map[uint]int)
+	if err := m.db.Table("faces").
+		Select("image_file_id, count(*) AS face_count").
+		Group("image_file_id").
+		Scan(&rows).Error; err != nil {
+		m.setError(fmt.Sprintf("count faces per image: %v", err))
+		return counts
+	}
+	for _, r := range rows {
+		counts[r.ImageFileID] = r.FaceCount
+	}
+	return counts
+}
+
+// chooseCover picks the cover face of one person: a face detected on a solo
+// photo beats a face cropped out of a group shot, then the most confident
+// detection wins, and the lowest face ID (members are ordered by ID) keeps the
+// choice deterministic.
+func chooseCover(members []faceRef, facesPerImage map[uint]int) uint {
+	best := members[0]
+	for _, candidate := range members[1:] {
+		bestSolo := facesPerImage[best.imageFileID] <= 1
+		candidateSolo := facesPerImage[candidate.imageFileID] <= 1
+		switch {
+		case candidateSolo && !bestSolo:
+			best = candidate
+		case candidateSolo == bestSolo && candidate.confidence > best.confidence:
+			best = candidate
+		}
+	}
+	return best.faceID
+}
+
+// refreshPersonCovers re-evaluates stored covers, so people clustered by an
+// earlier version of the job (one that always took the first face) also end up
+// with a solo photo as their cover.
+func (m *Manager) refreshPersonCovers(facesPerImage map[uint]int) {
+	var faces []domain.Face
+	if err := m.db.Where("person_id > 0").Order("id").Find(&faces).Error; err != nil {
+		m.setError(fmt.Sprintf("load assigned faces: %v", err))
+		return
+	}
+	if len(faces) == 0 {
+		return
+	}
+
+	byPerson := make(map[uint][]faceRef, len(faces))
+	for _, face := range faces {
+		byPerson[face.PersonID] = append(byPerson[face.PersonID], faceRef{
+			faceID:      face.ID,
+			imageFileID: face.ImageFileID,
+			confidence:  face.Confidence,
+		})
+	}
+
+	var people []domain.Person
+	if err := m.db.Order("id").Find(&people).Error; err != nil {
+		m.setError(fmt.Sprintf("load people: %v", err))
+		return
+	}
+	for _, person := range people {
+		members := byPerson[person.ID]
+		if len(members) == 0 {
+			continue
+		}
+		cover := chooseCover(members, facesPerImage)
+		if person.CoverFaceID != nil && *person.CoverFaceID == cover {
+			continue
+		}
+		if err := m.db.Model(&domain.Person{}).Where("id = ?", person.ID).
+			Update("cover_face_id", cover).Error; err != nil {
+			m.setError(fmt.Sprintf("refresh cover of person %d: %v", person.ID, err))
+		}
+	}
+}
+
+// processImage analyses a single image in one service call and stores the faces.
 func (m *Manager) processImage(stopCh <-chan struct{}, imageFile domain.ImageFile) {
 	select {
 	case <-stopCh:
@@ -211,22 +315,48 @@ func (m *Manager) processImage(stopCh <-chan struct{}, imageFile domain.ImageFil
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	// One analyse call per image: embedding a face by re-detecting the whole
+	// image costs a full inference each, which a group photo with dozens of
+	// faces cannot afford.
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
-	boxes, err := m.client.Detect(ctx, data)
+	faces, err := m.client.Analyze(ctx, data)
 	if err != nil {
-		m.setError(fmt.Sprintf("detect %s: %v", imageFile.Path, err))
+		// The scan version stays untouched, so the image is retried next pass.
+		m.setError(fmt.Sprintf("analyze %s: %v", imageFile.Path, err))
 		return
 	}
 
-	for _, box := range boxes {
-		vec, err := m.client.Embed(ctx, data, &box)
-		if err != nil {
-			m.setError(fmt.Sprintf("embed %s: %v", imageFile.Path, err))
+	m.replaceFaces(imageFile.ID, faces)
+	m.markScanned(imageFile.ID)
+}
+
+// replaceFaces drops the faces stored for an image and stores the analysed ones,
+// so re-analysing a photo replaces its faces instead of accumulating them.
+func (m *Manager) replaceFaces(imageFileID uint, faces []facesclient.AnalyzedFace) {
+	faceIDs := m.db.Model(&domain.Face{}).Select("id").Where("image_file_id = ?", imageFileID)
+	if err := m.db.Where("face_id IN (?)", faceIDs).Delete(&domain.FaceEmbedding{}).Error; err != nil {
+		m.setError(fmt.Sprintf("clear embeddings of image %d: %v", imageFileID, err))
+		return
+	}
+	if err := m.db.Where("image_file_id = ?", imageFileID).Delete(&domain.Face{}).Error; err != nil {
+		m.setError(fmt.Sprintf("clear faces of image %d: %v", imageFileID, err))
+		return
+	}
+	for _, face := range faces {
+		if len(face.Embedding) == 0 {
 			continue
 		}
-		m.persistFace(imageFile.ID, box, vec)
+		m.persistFace(imageFileID, face.FaceBox, face.Embedding)
+	}
+}
+
+// markScanned records that the current analyser produced this image's faces.
+func (m *Manager) markScanned(imageFileID uint) {
+	if err := m.db.Model(&domain.ImageFile{}).Where("id = ?", imageFileID).
+		Update("faces_scan_version", facesScanVersion).Error; err != nil {
+		m.setError(fmt.Sprintf("mark image %d scanned: %v", imageFileID, err))
 	}
 }
 
@@ -261,8 +391,9 @@ func (m *Manager) persistFace(imageFileID uint, box facesclient.FaceBox, vec []f
 }
 
 // clusterAssign clusters every unassigned embedding and assigns each face to a
-// person (one person per non-noise cluster).
-func (m *Manager) clusterAssign(stopCh <-chan struct{}) {
+// person (one person per non-noise cluster), picking each person's cover with
+// chooseCover.
+func (m *Manager) clusterAssign(stopCh <-chan struct{}, facesPerImage map[uint]int) {
 	select {
 	case <-stopCh:
 		return
@@ -278,7 +409,7 @@ func (m *Manager) clusterAssign(stopCh <-chan struct{}) {
 		return
 	}
 
-	faceIDs := make([]uint, 0, len(unassigned))
+	members := make([]faceRef, 0, len(unassigned))
 	embeddings := make([][]float32, 0, len(unassigned))
 	for _, face := range unassigned {
 		var embedding domain.FaceEmbedding
@@ -289,39 +420,57 @@ func (m *Manager) clusterAssign(stopCh <-chan struct{}) {
 		if len(vec) == 0 {
 			continue
 		}
-		faceIDs = append(faceIDs, face.ID)
+		members = append(members, faceRef{
+			faceID:      face.ID,
+			imageFileID: face.ImageFileID,
+			confidence:  face.Confidence,
+		})
 		embeddings = append(embeddings, vec)
 	}
 	if len(embeddings) == 0 {
 		return
 	}
 
+	solo := make([]bool, len(members))
+	for i, member := range members {
+		solo[i] = facesPerImage[member.imageFileID] <= 1
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
-	labels, err := m.client.Cluster(ctx, embeddings, m.clusterSize)
+	labels, err := m.client.Cluster(ctx, embeddings, m.clusterSize, solo)
 	if err != nil {
 		m.setError(fmt.Sprintf("cluster: %v", err))
 		return
 	}
 
-	personByLabel := make(map[int]uint, len(labels))
+	byLabel := make(map[int][]faceRef, len(labels))
 	for i, label := range labels {
-		if i >= len(faceIDs) || label == -1 {
+		if i >= len(members) || label == -1 {
 			continue
 		}
-		personID, ok := personByLabel[label]
-		if !ok {
-			coverFaceID := faceIDs[i]
-			person := domain.Person{CoverFaceID: &coverFaceID}
-			if err := m.db.Create(&person).Error; err != nil {
-				m.setError(fmt.Sprintf("create person: %v", err))
-				continue
-			}
-			personID = person.ID
-			personByLabel[label] = personID
+		byLabel[label] = append(byLabel[label], members[i])
+	}
+
+	labelIDs := make([]int, 0, len(byLabel))
+	for label := range byLabel {
+		labelIDs = append(labelIDs, label)
+	}
+	sort.Ints(labelIDs)
+
+	for _, label := range labelIDs {
+		cluster := byLabel[label]
+		coverFaceID := chooseCover(cluster, facesPerImage)
+		person := domain.Person{CoverFaceID: &coverFaceID}
+		if err := m.db.Create(&person).Error; err != nil {
+			m.setError(fmt.Sprintf("create person: %v", err))
+			continue
 		}
-		if err := m.db.Model(&domain.Face{}).Where("id = ?", faceIDs[i]).Update("person_id", personID).Error; err != nil {
-			m.setError(fmt.Sprintf("assign person: %v", err))
+		for _, member := range cluster {
+			if err := m.db.Model(&domain.Face{}).Where("id = ?", member.faceID).
+				Update("person_id", person.ID).Error; err != nil {
+				m.setError(fmt.Sprintf("assign person: %v", err))
+			}
 		}
 	}
 }

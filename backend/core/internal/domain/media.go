@@ -11,13 +11,18 @@ import (
 
 // ImageFile represents an image file in the database
 type ImageFile struct {
-	ID        uint      `gorm:"primaryKey" json:"id"`
-	Path      string    `gorm:"uniqueIndex;not null" json:"path"`
-	Size      int64     `gorm:"not null;index:idx_size_hash" json:"size"`
-	Hash      string    `gorm:"not null;index:idx_size_hash" json:"hash"`
-	ModTime   time.Time `gorm:"not null" json:"modTime"`
-	CreatedAt time.Time `json:"createdAt"`
-	UpdatedAt time.Time `json:"updatedAt"`
+	ID      uint      `gorm:"primaryKey" json:"id"`
+	Path    string    `gorm:"uniqueIndex;not null" json:"path"`
+	Size    int64     `gorm:"not null;index:idx_size_hash" json:"size"`
+	Hash    string    `gorm:"not null;index:idx_size_hash" json:"hash"`
+	ModTime time.Time `gorm:"not null" json:"modTime"`
+	// FacesScanVersion records which face-analysis build last produced the
+	// stored faces of this image. The face recognition job re-scans every image
+	// whose version differs, so a photo is analysed exactly once per analyser
+	// (and never over and over again because it contains no face).
+	FacesScanVersion string    `gorm:"not null;default:'';index" json:"-"`
+	CreatedAt        time.Time `json:"createdAt"`
+	UpdatedAt        time.Time `json:"updatedAt"`
 }
 
 // ExifHealthStatus is re-exported from the shared domain package.

@@ -9,10 +9,12 @@ import (
 // MockFacesClient is a mock implementation of faces.Client for testing.
 type MockFacesClient struct {
 	DetectFunc       func(ctx context.Context, image []byte) ([]faces.FaceBox, error)
+	AnalyzeFunc      func(ctx context.Context, image []byte) ([]faces.AnalyzedFace, error)
 	EmbedFunc        func(ctx context.Context, image []byte, box *faces.FaceBox) ([]float32, error)
-	ClusterFunc      func(ctx context.Context, embeddings [][]float32, minClusterSize int) ([]int, error)
+	ClusterFunc      func(ctx context.Context, embeddings [][]float32, minClusterSize int, soloFaces []bool) ([]int, error)
 	ServiceURLValue  string
 	DetectCallCount  int
+	AnalyzeCallCount int
 	EmbedCallCount   int
 	ClusterCallCount int
 }
@@ -31,6 +33,15 @@ func (m *MockFacesClient) Detect(ctx context.Context, image []byte) ([]faces.Fac
 	return nil, nil
 }
 
+// Analyze implements faces.Client.
+func (m *MockFacesClient) Analyze(ctx context.Context, image []byte) ([]faces.AnalyzedFace, error) {
+	m.AnalyzeCallCount++
+	if m.AnalyzeFunc != nil {
+		return m.AnalyzeFunc(ctx, image)
+	}
+	return nil, nil
+}
+
 // Embed implements faces.Client.
 func (m *MockFacesClient) Embed(ctx context.Context, image []byte, box *faces.FaceBox) ([]float32, error) {
 	m.EmbedCallCount++
@@ -41,10 +52,10 @@ func (m *MockFacesClient) Embed(ctx context.Context, image []byte, box *faces.Fa
 }
 
 // Cluster implements faces.Client.
-func (m *MockFacesClient) Cluster(ctx context.Context, embeddings [][]float32, minClusterSize int) ([]int, error) {
+func (m *MockFacesClient) Cluster(ctx context.Context, embeddings [][]float32, minClusterSize int, soloFaces []bool) ([]int, error) {
 	m.ClusterCallCount++
 	if m.ClusterFunc != nil {
-		return m.ClusterFunc(ctx, embeddings, minClusterSize)
+		return m.ClusterFunc(ctx, embeddings, minClusterSize, soloFaces)
 	}
 	return nil, nil
 }
@@ -52,6 +63,11 @@ func (m *MockFacesClient) Cluster(ctx context.Context, embeddings [][]float32, m
 // SingleFaceBoxes returns one deterministic face box.
 func SingleFaceBoxes() []faces.FaceBox {
 	return []faces.FaceBox{{X: 10, Y: 20, Width: 30, Height: 40, Confidence: 0.99}}
+}
+
+// SingleAnalyzedFace returns one deterministic analysed face (box + embedding).
+func SingleAnalyzedFace(embedding []float32) faces.AnalyzedFace {
+	return faces.AnalyzedFace{FaceBox: SingleFaceBoxes()[0], Embedding: embedding}
 }
 
 // Vector512 returns a deterministic 512-d embedding.

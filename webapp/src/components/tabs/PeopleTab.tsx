@@ -4,11 +4,23 @@ import { useTranslation } from "@/i18n"
 import type { PersonDTO, GalleryImageDTO } from "@/types"
 import { fetchPeople, fetchPersonPhotos } from "@/api/endpoints"
 import { EmptyState } from "@/components/EmptyState"
+import { LazyThumbnail } from "@/components/gallery/LazyThumbnail"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
-import { buildImageUrl } from "@/utils/buildImageUrl"
 
-const API_BASE = import.meta.env.VITE_API_URL || ""
+/**
+ * Resolve the file path of a person's cover thumbnail.
+ *
+ * `/api/thumbnail` is a JSON API (`{"thumbnail": "<data URL>"}`), so its URL can
+ * never be used as an `<img src>`; the People view renders thumbnails through
+ * `LazyThumbnail` and therefore needs the raw file path of the cover face.
+ */
+function coverPath(person: PersonDTO): string {
+  if (!person.coverThumbnail) return ""
+  const queryIndex = person.coverThumbnail.indexOf("?")
+  if (queryIndex === -1) return ""
+  return new URLSearchParams(person.coverThumbnail.slice(queryIndex + 1)).get("path") ?? ""
+}
 
 export function PeopleTab() {
   const { t } = useTranslation()
@@ -85,13 +97,8 @@ export function PeopleTab() {
         ) : (
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
             {photos.map((photo) => (
-              <div key={photo.id} className="overflow-hidden rounded-lg border">
-                <img
-                  src={buildImageUrl(photo.path, "/api/thumbnail")}
-                  alt={photo.fileName}
-                  loading="lazy"
-                  className="aspect-square w-full object-cover"
-                />
+              <div key={photo.id} className="aspect-square overflow-hidden rounded-lg border">
+                <LazyThumbnail path={photo.path} fileName={photo.fileName} loadingIcon="spinner" />
               </div>
             ))}
           </div>
@@ -121,12 +128,15 @@ export function PeopleTab() {
               className="group overflow-hidden rounded-lg border text-left"
               onClick={() => handleSelect(person)}
             >
-              <img
-                src={person.coverThumbnail ? `${API_BASE}${person.coverThumbnail}` : undefined}
-                alt={displayName(person)}
-                loading="lazy"
-                className="aspect-square w-full bg-muted object-cover"
-              />
+              <div className="aspect-square w-full bg-muted">
+                {coverPath(person) ? (
+                  <LazyThumbnail
+                    path={coverPath(person)}
+                    fileName={displayName(person)}
+                    loadingIcon="spinner"
+                  />
+                ) : null}
+              </div>
               <div className="p-2">
                 <p className="truncate text-sm font-medium">{displayName(person)}</p>
                 <p className="text-xs text-muted-foreground">{t("people.photoCount", { count: person.photoCount })}</p>

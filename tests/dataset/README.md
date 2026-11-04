@@ -10,12 +10,20 @@ OCR-сервисом, но и интеграционными тестами core
 - **rus** — документы на русском языке
 - **inscription** — короткие фигурные надписи, вывески
 - **image** — картинки, фотографии без текстового содержимого
+- **faces** — фотографии людей (подпапки `politicians/` и `scientists/`) для проверки распознавания лиц
 
 ## Где используется
 
 - [`tests/ocr/integration/`](../ocr/integration) — pytest-тесты OCR-сервиса
   (`TestClassifyEnglish`, `TestClassifyRussian`, `TestClassifyImages`,
   `TestClassifyInscriptions`, `TestDatasetFull`);
+- [`faces/`](faces) — фотографии людей для проверок распознавания лиц: подпапки
+  [`faces/politicians/`](faces/politicians) и [`faces/scientists/`](faces/scientists)
+  (см. [`faces/README.md`](faces/README.md));
+- [`tests/faces/integration/`](../faces/integration) — pytest-тесты распознавания
+  лиц против развёрнутого сервиса `faces` (детекция, эмбеддинги, распознавание
+  в групповых снимках, кластеризация по людям; см.
+  [`tests/faces/README.md`](../faces/README.md));
 - [`tests/webapp/integration/`](../webapp/integration) — Vitest HTTP-интеграционные
   тесты core/webapp: изображения-фикстуры и подкаталоги в роли gallery-корней;
 - [`backend/ocr/README.md`](../../backend/ocr/README.md) — примеры `curl` с

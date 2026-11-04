@@ -34,6 +34,10 @@ BOOTSTRAP := scripts/bootstrap.sh
 PYTEST_VENV := tests/ocr/integration/.venv
 PY          := $(PYTEST_VENV)/bin/python
 
+# Python virtualenv used by the faces integration (pytest) suite
+FACES_PYTEST_VENV := tests/faces/integration/.venv
+FACES_PY          := $(FACES_PYTEST_VENV)/bin/python
+
 # Load .env into the current shell (prefix for recipes that need DB creds)
 LOAD_ENV = set -a; [ -f $(ENVFILE) ] && . ./$(ENVFILE); set +a;
 
@@ -46,12 +50,12 @@ YELLOW := \033[1;33m
 RED    := \033[0;31m
 NC     := \033[0m
 
-.PHONY: help all doctor env setup setup-env setup-webapp setup-pytest setup-faces deps tools tools-exiftool tools-tesseract \
+.PHONY: help all doctor env setup setup-env setup-webapp setup-pytest setup-faces setup-faces-pytest deps tools tools-exiftool tools-tesseract \
         build build-core build-exif build-ocr build-registry build-faces \
         up start down stop restart status logs \
         run-core run-exif run-ocr run-registry run-webapp run-faces \
         dev-core dev-exif dev-ocr dev-registry dev-webapp dev-faces \
-        test test-all test-go test-core test-exif test-ocr test-registry test-webapp test-faces test-webapp-integration test-ocr-integration test-pytest \
+        test test-all test-go test-core test-exif test-ocr test-registry test-webapp test-faces test-webapp-integration test-ocr-integration test-faces-integration test-pytest \
         lint lint-all lint-core lint-exif lint-ocr lint-registry lint-webapp \
         db-migrate db-shell generate-types generate-go clean clean-tools
 
@@ -108,6 +112,16 @@ setup-pytest: ## Create the pytest virtualenv and install its requirements
 
 setup-faces: ## Create the faces Python venv and install its dependencies
 	@$(BOOTSTRAP) faces
+
+setup-faces-pytest: ## Create the pytest virtualenv used by the faces integration suite
+	@if [ -x "$(FACES_PY)" ]; then \
+	  echo "${YELLOW}$(FACES_PYTEST_VENV) already exists — leaving it untouched.${NC}"; \
+	else \
+	  echo "${GREEN}Creating $(FACES_PYTEST_VENV)…${NC}"; \
+	  python3 -m venv $(FACES_PYTEST_VENV); \
+	  $(FACES_PY) -m pip install --quiet --upgrade pip; \
+	  $(FACES_PY) -m pip install --quiet -r tests/faces/integration/requirements.txt; \
+	fi
 
 deps: ## Download Go module dependencies for every service
 	@$(BOOTSTRAP) godeps
@@ -203,7 +217,7 @@ dev-faces: ## Run the faces service in the foreground
 
 ##@ Testing
 
-test: ## Run unit tests (SERVICE=<core|exif|ocr|webapp|ocr-integration>)
+test: ## Run unit tests (SERVICE=<core|exif|ocr|registry|webapp|faces|ocr-integration|faces-integration>)
 ifeq ($(SERVICE),core)
 	@$(MAKE) --no-print-directory test-core
 else ifeq ($(SERVICE),exif)
@@ -214,8 +228,12 @@ else ifeq ($(SERVICE),registry)
 	@$(MAKE) --no-print-directory test-registry
 else ifeq ($(SERVICE),webapp)
 	@$(MAKE) --no-print-directory test-webapp
+else ifeq ($(SERVICE),faces)
+	@$(MAKE) --no-print-directory test-faces
 else ifeq ($(SERVICE),ocr-integration)
 	@$(MAKE) --no-print-directory test-ocr-integration
+else ifeq ($(SERVICE),faces-integration)
+	@$(MAKE) --no-print-directory test-faces-integration
 else
 	@echo "${RED}Unknown service: $(SERVICE)${NC}"; exit 1
 endif
@@ -265,6 +283,18 @@ test-ocr-integration: ## Run OCR HTTP integration tests (pytest) against the run
 	@$(DEV_TEST) status ocr | grep -q running || { echo "${YELLOW}Starting OCR service…${NC}"; $(DEV_TEST) start ocr; }
 	@$(LOAD_TEST_ENV) $(PY) -m pytest tests/ocr/integration \
 	  --base-url "$${OCR_SERVICE_URL:-http://localhost:5174}" -v
+
+test-faces-integration: ## Run faces HTTP recognition tests (pytest) over tests/dataset/faces
+	@if [ ! -x "$(FACES_PY)" ]; then \
+	  echo "${YELLOW}faces pytest venv missing — creating it…${NC}"; \
+	  $(MAKE) --no-print-directory setup-faces-pytest; \
+	fi
+	@if [ ! -x backend/faces/.venv/bin/uvicorn ]; then \
+	  echo "${RED}faces service venv missing — run: make setup-faces${NC}"; exit 1; \
+	fi
+	@$(DEV_TEST) status faces | grep -q running || { echo "${YELLOW}Starting faces service…${NC}"; $(DEV_TEST) start faces; }
+	@$(LOAD_TEST_ENV) $(FACES_PY) -m pytest tests/faces/integration \
+	  --base-url "$${FACES_SERVICE_URL:-http://localhost:5173}" -v
 
 test-pytest: test-ocr-integration ## Alias for 'test-ocr-integration'
 
@@ -340,7 +370,7 @@ clean: ## Remove build artifacts, runtime state and caches
 	@cd backend/core && rm -f coverage.out
 	@echo "${GREEN}Cleanup complete.${NC}"
 
-clean-tools: ## Remove locally bootstrapped tools (.tools/) and the pytest venv
-	@echo "${YELLOW}Removing .tools/ and the pytest virtualenv…${NC}"
-	@rm -rf .tools tests/ocr/integration/.venv
+clean-tools: ## Remove locally bootstrapped tools (.tools/) and the pytest venvs
+	@echo "${YELLOW}Removing .tools/ and the pytest virtualenvs…${NC}"
+	@rm -rf .tools $(PYTEST_VENV) $(FACES_PYTEST_VENV)
 	@echo "${GREEN}Done.${NC}"

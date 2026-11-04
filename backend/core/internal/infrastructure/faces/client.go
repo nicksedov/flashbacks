@@ -22,18 +22,31 @@ type FaceBox struct {
 	Confidence float32 `json:"confidence"`
 }
 
+// AnalyzedFace is one face returned by /faces/analyze: its box, detection
+// confidence and embedding, all computed in a single model pass.
+type AnalyzedFace struct {
+	FaceBox
+	Embedding []float32 `json:"embedding"`
+}
+
 // Client is the typed REST interface of the faces microservice.
 type Client interface {
 	// ServiceURL returns the peer base URL this client currently targets.
 	ServiceURL() string
 	// Detect runs SCRFD-10G face detection and returns the detected boxes.
 	Detect(ctx context.Context, image []byte) ([]FaceBox, error)
-	// Embed runs ArcFace embedding on a full image (or a box crop) and returns
-	// the 512-d vector.
+	// Analyze detects and embeds every face of an image in a single model pass.
+	// It is the call the recognition job uses: re-detecting the whole image once
+	// per face costs a full inference each and made group photos exceed the
+	// request budget, dropping most of their faces.
+	Analyze(ctx context.Context, image []byte) ([]AnalyzedFace, error)
+	// Embed runs ArcFace embedding on a full image and returns the 512-d vector
+	// of one detected face; box selects which detected face to embed.
 	Embed(ctx context.Context, image []byte, box *FaceBox) ([]float32, error)
-	// Cluster runs HDBSCAN clustering and returns one label per embedding
-	// (-1 for noise).
-	Cluster(ctx context.Context, embeddings [][]float32, minClusterSize int) ([]int, error)
+	// Cluster groups embeddings into people and returns one label per embedding
+	// (-1 for noise). soloFaces marks embeddings that are the only face of their
+	// photo: such a portrait may anchor a person for a face from a group shot.
+	Cluster(ctx context.Context, embeddings [][]float32, minClusterSize int, soloFaces []bool) ([]int, error)
 }
 
 type clientImpl struct {
@@ -108,7 +121,21 @@ func (c *clientImpl) Detect(ctx context.Context, image []byte) ([]FaceBox, error
 	return resp.Boxes, nil
 }
 
-// Embed runs ArcFace embedding over a full image or a box crop.
+// Analyze detects and embeds every face of an image in one service call.
+func (c *clientImpl) Analyze(ctx context.Context, image []byte) ([]AnalyzedFace, error) {
+	var resp struct {
+		Faces []AnalyzedFace `json:"faces"`
+	}
+	body := map[string]string{"image": base64.StdEncoding.EncodeToString(image)}
+	if err := c.post(ctx, "/faces/analyze", body, &resp); err != nil {
+		return nil, err
+	}
+	return resp.Faces, nil
+}
+
+// Embed runs ArcFace embedding for one detected face of a full image: the
+// optional box selects the detected face to embed (highest IoU), otherwise the
+// largest detected face is embedded.
 func (c *clientImpl) Embed(ctx context.Context, image []byte, box *FaceBox) ([]float32, error) {
 	var resp struct {
 		Embedding []float32 `json:"embedding"`
@@ -123,14 +150,17 @@ func (c *clientImpl) Embed(ctx context.Context, image []byte, box *FaceBox) ([]f
 	return resp.Embedding, nil
 }
 
-// Cluster runs HDBSCAN clustering over a batch of embeddings.
-func (c *clientImpl) Cluster(ctx context.Context, embeddings [][]float32, minClusterSize int) ([]int, error) {
+// Cluster groups a batch of embeddings into people (one label per embedding).
+func (c *clientImpl) Cluster(ctx context.Context, embeddings [][]float32, minClusterSize int, soloFaces []bool) ([]int, error) {
 	var resp struct {
 		Labels []int `json:"labels"`
 	}
 	body := map[string]any{
 		"embeddings":     embeddings,
 		"minClusterSize": minClusterSize,
+	}
+	if len(soloFaces) > 0 {
+		body["soloFaces"] = soloFaces
 	}
 	if err := c.post(ctx, "/faces/cluster", body, &resp); err != nil {
 		return nil, err

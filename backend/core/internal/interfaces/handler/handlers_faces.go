@@ -24,8 +24,10 @@ func (s *Server) handleGetPeople(c *gin.Context) {
 	dtos := make([]dto.PersonDTO, 0, len(people))
 	for _, person := range people {
 		photoCount, err := s.faceRepo.CountImageFilesByPersonID(person.ID)
-		if err != nil {
-			photoCount = 0
+		if err != nil || photoCount == 0 {
+			// A person whose faces were re-scanned away stays in the table but is
+			// hidden from the listing: an empty tile helps nobody.
+			continue
 		}
 		dtos = append(dtos, dto.PersonDTO{
 			ID:             person.ID,

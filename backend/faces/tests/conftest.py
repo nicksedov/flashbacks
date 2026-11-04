@@ -35,8 +35,26 @@ class FakeEngine:
         FaceEngine.decode_image(image_b64)
         return [0.01] * EMBEDDING_DIM
 
-    def cluster(self, embeddings: list[list[float]], min_cluster_size: int = 5) -> list[int]:
-        return FaceEngine.cluster(embeddings, min_cluster_size)
+    def analyze(self, image_b64: str) -> list[dict]:
+        FaceEngine.decode_image(image_b64)
+        return [
+            {
+                "x": 10.0,
+                "y": 12.0,
+                "width": 30.0,
+                "height": 32.0,
+                "confidence": 0.99,
+                "embedding": [0.01] * EMBEDDING_DIM,
+            }
+        ]
+
+    def cluster(
+        self,
+        embeddings: list[list[float]],
+        min_cluster_size: int = 2,
+        solo_faces: list[bool] | None = None,
+    ) -> list[int]:
+        return FaceEngine.cluster(embeddings, min_cluster_size, solo_faces)
 
 
 @pytest.fixture()

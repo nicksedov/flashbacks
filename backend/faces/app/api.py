@@ -26,6 +26,23 @@ class DetectResponse(BaseModel):
     boxes: list[FaceBox]
 
 
+class AnalyzedFace(BaseModel):
+    x: float
+    y: float
+    width: float
+    height: float
+    confidence: float = 0.0
+    embedding: list[float]
+
+
+class AnalyzeRequest(BaseModel):
+    image: str = Field(description="Base64-encoded image bytes.")
+
+
+class AnalyzeResponse(BaseModel):
+    faces: list[AnalyzedFace]
+
+
 class EmbedRequest(BaseModel):
     image: str = Field(description="Base64-encoded image bytes.")
     box: Optional[FaceBox] = None
@@ -37,7 +54,12 @@ class EmbedResponse(BaseModel):
 
 class ClusterRequest(BaseModel):
     embeddings: list[list[float]]
-    minClusterSize: int = 5
+    # Two is the calibrated floor: a person photographed twice must still form a
+    # cluster. Requiring more faces labels whole small galleries as noise.
+    minClusterSize: int = 2
+    # One flag per embedding: true when the face is the sole face of its photo.
+    # Such a portrait may anchor a person for a face matched from a group shot.
+    soloFaces: Optional[list[bool]] = None
 
 
 class ClusterResponse(BaseModel):
@@ -51,6 +73,18 @@ def _engine(request: Request):
 @router.get("/faces/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@router.post("/faces/analyze", response_model=AnalyzeResponse)
+def analyze(req: AnalyzeRequest, request: Request) -> AnalyzeResponse:
+    """Detect and embed every face of an image in a single model pass."""
+    try:
+        faces = _engine(request).analyze(req.image)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001 - surface a uniform server error
+        raise HTTPException(status_code=500, detail=f"analysis failed: {exc}") from exc
+    return AnalyzeResponse(faces=[AnalyzedFace(**face) for face in faces])
 
 
 @router.post("/faces/detect", response_model=DetectResponse)
@@ -79,7 +113,7 @@ def embed(req: EmbedRequest, request: Request) -> EmbedResponse:
 @router.post("/faces/cluster", response_model=ClusterResponse)
 def cluster(req: ClusterRequest, request: Request) -> ClusterResponse:
     try:
-        labels = _engine(request).cluster(req.embeddings, req.minClusterSize)
+        labels = _engine(request).cluster(req.embeddings, req.minClusterSize, req.soloFaces)
     except Exception as exc:  # noqa: BLE001 - surface a uniform server error
         raise HTTPException(status_code=500, detail=f"clustering failed: {exc}") from exc
     return ClusterResponse(labels=labels)

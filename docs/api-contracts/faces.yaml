@@ -4,7 +4,7 @@ info:
   version: "0.1.0"
   description: |
     Face recognition microservice for Flashbacks. Runs SCRFD-10G detection,
-    ArcFace (w600k_r50) embeddings, and HDBSCAN clustering over REST.
+    ArcFace (w600k_r50) embeddings, and DBSCAN clustering over REST.
 
 servers:
   - url: http://localhost:5173
@@ -43,9 +43,41 @@ paths:
         "400":
           description: Invalid image payload
 
+  /faces/analyze:
+    post:
+      summary: Detect and embed every face of an image
+      description: |
+        One model pass: returns every detected face with its box, detection
+        confidence and embedding. This is the call the face recognition job uses,
+        because embedding a face one request at a time re-runs detection over the
+        whole image and made group photos exceed the request budget. Faces
+        narrower than 64 px are re-embedded from an upscaled padded crop to keep
+        small faces recognisable.
+      operationId: analyzeFaces
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AnalyzeRequest"
+      responses:
+        "200":
+          description: Every detected face with its embedding
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnalyzeResponse"
+        "400":
+          description: Invalid image payload
+
   /faces/embed:
     post:
-      summary: Embed a face crop
+      summary: Embed a detected face
+      description: |
+        Faces are detected on the whole image; the optional `box` selects which
+        detected face to embed (highest IoU with the box). Without a box the
+        largest detected face is used. An empty `embedding` means no face was
+        detected in the image or inside the requested box.
       operationId: embedFace
       requestBody:
         required: true
@@ -120,6 +152,33 @@ components:
           items:
             $ref: "#/components/schemas/FaceBox"
 
+    AnalyzedFace:
+      allOf:
+        - $ref: "#/components/schemas/FaceBox"
+        - type: object
+          properties:
+            embedding:
+              type: array
+              items:
+                type: number
+
+    AnalyzeRequest:
+      type: object
+      required:
+        - image
+      properties:
+        image:
+          type: string
+          description: Base64-encoded image bytes.
+
+    AnalyzeResponse:
+      type: object
+      properties:
+        faces:
+          type: array
+          items:
+            $ref: "#/components/schemas/AnalyzedFace"
+
     EmbedRequest:
       type: object
       required:
@@ -129,7 +188,11 @@ components:
           type: string
           description: Base64-encoded image bytes.
         box:
-          $ref: "#/components/schemas/FaceBox"
+          allOf:
+            - $ref: "#/components/schemas/FaceBox"
+          description: |
+            Selects the detected face to embed — the one with the highest IoU
+            against this box. Omit it to embed the largest detected face.
 
     EmbedResponse:
       type: object
@@ -152,6 +215,14 @@ components:
               type: number
         minClusterSize:
           type: integer
+        soloFaces:
+          type: array
+          description: |
+            One flag per embedding: true when the face is the only face of its
+            photo. Such a portrait may anchor a new person for a face recognised
+            from a group shot; a group-shot face alone never creates a person.
+          items:
+            type: boolean
 
     ClusterResponse:
       type: object

@@ -1,13 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { render, screen, waitFor } from "@testing-library/react"
+import { fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { PeopleTab } from "./PeopleTab"
 
 // Controls which locale the mocked translator resolves.
 const languageState = vi.hoisted(() => ({ language: "en" as "en" | "ru" }))
 
+const THUMBNAIL_DATA_URL = "data:image/webp;base64,UklGRhIAAABXRUJQVlA4"
+
 const endpoints = vi.hoisted(() => ({
   fetchPeople: vi.fn(),
-  fetchPersonPhotos: vi.fn(() => Promise.resolve({ images: [], totalImages: 0, currentPage: 1, pageSize: 50, totalPages: 1, hasNextPage: false })),
+  fetchPersonPhotos: vi.fn(),
+  fetchThumbnail: vi.fn(),
 }))
 
 vi.mock("@/api/endpoints", () => endpoints)
@@ -30,7 +33,17 @@ vi.mock("@/i18n", async () => {
 beforeEach(() => {
   languageState.language = "en"
   endpoints.fetchPeople.mockReset()
-  endpoints.fetchPersonPhotos.mockClear()
+  endpoints.fetchPersonPhotos.mockReset()
+  endpoints.fetchPersonPhotos.mockResolvedValue({
+    images: [],
+    totalImages: 0,
+    currentPage: 1,
+    pageSize: 50,
+    totalPages: 1,
+    hasNextPage: false,
+  })
+  endpoints.fetchThumbnail.mockReset()
+  endpoints.fetchThumbnail.mockResolvedValue({ thumbnail: THUMBNAIL_DATA_URL })
 })
 
 describe("PeopleTab", () => {
@@ -48,7 +61,49 @@ describe("PeopleTab", () => {
     expect(container.querySelectorAll('[data-slot="person-tile"]')).toHaveLength(2)
     expect(screen.getByText("Alice")).toBeTruthy()
     expect(screen.getByText("Bob")).toBeTruthy()
-    expect(container.querySelectorAll('[data-slot="person-tile"] img')).toHaveLength(2)
+    await waitFor(() => expect(container.querySelectorAll('[data-slot="person-tile"] img')).toHaveLength(2))
+    expect(endpoints.fetchThumbnail).toHaveBeenCalledWith("/gallery/a.jpg")
+    expect(endpoints.fetchThumbnail).toHaveBeenCalledWith("/gallery/b.jpg")
+  })
+
+  it("renders cover thumbnails from the JSON thumbnail API as image data URLs", async () => {
+    endpoints.fetchPeople.mockResolvedValue({
+      people: [
+        { id: 1, name: "Alice", photoCount: 3, coverThumbnail: "/api/thumbnail?path=%2Fgallery%2Fa.jpg" },
+      ],
+    })
+
+    const { container } = render(<PeopleTab />)
+
+    // `/api/thumbnail` answers with JSON, so an <img> must never point at it.
+    await waitFor(() => expect(container.querySelector('[data-slot="person-tile"] img')).toBeTruthy())
+    const cover = container.querySelector('[data-slot="person-tile"] img') as HTMLImageElement
+    expect(cover.getAttribute("src")).toBe(THUMBNAIL_DATA_URL)
+  })
+
+  it("renders a person's photos through the thumbnail API", async () => {
+    endpoints.fetchPeople.mockResolvedValue({
+      people: [
+        { id: 1, name: "Alice", photoCount: 1, coverThumbnail: "/api/thumbnail?path=%2Fgallery%2Fa.jpg" },
+      ],
+    })
+    endpoints.fetchPersonPhotos.mockResolvedValue({
+      images: [{ id: 7, path: "/gallery/a.jpg", fileName: "a.jpg" }],
+      totalImages: 1,
+      currentPage: 1,
+      pageSize: 50,
+      totalPages: 1,
+      hasNextPage: false,
+    })
+
+    const { container } = render(<PeopleTab />)
+
+    await waitFor(() => expect(container.querySelector('[data-slot="person-tile"]')).toBeTruthy())
+    fireEvent.click(container.querySelector('[data-slot="person-tile"]') as HTMLElement)
+
+    await waitFor(() => expect(container.querySelector('[data-slot="people-detail"] img')).toBeTruthy())
+    expect(endpoints.fetchPersonPhotos).toHaveBeenCalledWith(1, 1, 200)
+    expect((container.querySelector('[data-slot="people-detail"] img') as HTMLImageElement).getAttribute("src")).toBe(THUMBNAIL_DATA_URL)
   })
 
   it("shows the empty-state title and hint when no people have been discovered", async () => {

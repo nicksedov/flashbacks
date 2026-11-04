@@ -1285,6 +1285,91 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/people": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List discovered people */
+        get: operations["getPeople"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/people/{id}/photos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List a person's photos */
+        get: operations["getPersonPhotos"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/faces/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get face recognition status */
+        get: operations["getFacesStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/faces/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start face recognition */
+        post: operations["startFaces"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/faces/stop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Stop face recognition */
+        post: operations["stopFaces"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/embedding/status": {
         parameters: {
             query?: never;
@@ -2075,6 +2160,7 @@ export interface components {
             instruments?: components["schemas"]["LlmInstrumentDTO"][];
             providers?: components["schemas"]["LlmProviderDTO"][];
             tagScan?: components["schemas"]["TagScanSettingsDTO"];
+            faceRecognition?: components["schemas"]["FaceRecognitionSettingsDTO"];
             embedding?: components["schemas"]["EmbeddingSettingsDTO"];
         };
         LlmInstrumentDTO: {
@@ -2099,6 +2185,16 @@ export interface components {
             endMinute?: number;
             timezoneOffset?: number;
         };
+        FaceRecognitionSettingsDTO: {
+            enabled?: boolean;
+            /** @description Comma-separated weekday numbers (0=Sunday ... 6=Saturday) face recognition may run on; an empty string disables the schedule. */
+            days?: string;
+            startHour?: number;
+            startMinute?: number;
+            endHour?: number;
+            endMinute?: number;
+            timezoneOffset?: number;
+        };
         EmbeddingSettingsDTO: {
             dimension?: number;
             batchSize?: number;
@@ -2109,6 +2205,14 @@ export interface components {
             };
             /** @description Comma-separated weekday numbers (0=Sunday ... 6=Saturday) the tag scan schedule runs on; an empty string disables it. */
             tagScanDays?: string;
+            faceRecognitionEnabled?: boolean;
+            /** @description Comma-separated weekday numbers (0=Sunday ... 6=Saturday) the face recognition schedule runs on; an empty string disables it. */
+            faceRecognitionDays?: string;
+            faceRecognitionStartHour?: number;
+            faceRecognitionStartMinute?: number;
+            faceRecognitionEndHour?: number;
+            faceRecognitionEndMinute?: number;
+            faceRecognitionTimezoneOffset?: number;
             embedding?: {
                 dimension?: number;
                 batchSize?: number;
@@ -2216,6 +2320,28 @@ export interface components {
             total?: number;
             currentImage?: string;
             lastError?: string;
+        };
+        FaceStatusResponse: {
+            running?: boolean;
+            processed?: number;
+            total?: number;
+        };
+        PersonDTO: {
+            id?: number;
+            name?: string;
+            photoCount?: number;
+            coverThumbnail?: string;
+        };
+        PeopleResponse: {
+            people?: components["schemas"]["PersonDTO"][];
+        };
+        PersonPhotosResponse: {
+            images?: components["schemas"]["GalleryImageDTO"][];
+            totalImages?: number;
+            currentPage?: number;
+            pageSize?: number;
+            totalPages?: number;
+            hasNextPage?: boolean;
         };
         EmbeddingStatusResponse: {
             running?: boolean;
@@ -4192,6 +4318,111 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Tag scan resumed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getPeople: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description People discovered by face recognition */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PeopleResponse"];
+                };
+            };
+        };
+    };
+    getPersonPhotos: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Paginated photos of the person */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonPhotosResponse"];
+                };
+            };
+            /** @description Person not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getFacesStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Face recognition job status */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FaceStatusResponse"];
+                };
+            };
+        };
+    };
+    startFaces: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Face recognition started */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    stopFaces: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Face recognition stopped */
             200: {
                 headers: {
                     [name: string]: unknown;

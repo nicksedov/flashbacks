@@ -62,6 +62,9 @@ import type {
   LlmModelsResponse,
   ThumbnailCacheStatsResponse,
   TagScanStatusResponse,
+  PeopleResponse,
+  PersonPhotosResponse,
+  FaceStatusResponse,
   GeocodeSearchResponse,
   UpdateGpsRequest,
   UpdateGpsResponse,
@@ -555,6 +558,31 @@ export function pauseTagScan(): Promise<{ message: string }> {
 
 export function resumeTagScan(): Promise<{ message: string }> {
   return apiPost<{ message: string }>("/api/tag-scan/resume", {})
+}
+
+// --- Face Recognition ---
+
+export function fetchPeople(): Promise<PeopleResponse> {
+  return apiGet<PeopleResponse>("/api/people")
+}
+
+export function fetchPersonPhotos(id: number, page: number, pageSize: number): Promise<PersonPhotosResponse> {
+  return apiGet<PersonPhotosResponse>(`/api/people/${id}/photos`, {
+    page: String(page),
+    pageSize: String(pageSize),
+  })
+}
+
+export function fetchFacesStatus(): Promise<FaceStatusResponse> {
+  return apiGet<FaceStatusResponse>("/api/faces/status")
+}
+
+export function startFaces(): Promise<{ message: string }> {
+  return apiPost<{ message: string }>("/api/faces/start", {})
+}
+
+export function stopFaces(): Promise<{ message: string }> {
+  return apiPost<{ message: string }>("/api/faces/stop", {})
 }
 
 // --- Thumbnail Cache Management ---

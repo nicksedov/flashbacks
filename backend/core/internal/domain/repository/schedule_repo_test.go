@@ -55,7 +55,7 @@ func TestScheduleRepositoryUpsertCreatesAndUpdates(t *testing.T) {
 
 	all, err := repo.GetAll()
 	require.NoError(t, err)
-	assert.Len(t, all, 2, "the fixture seeds the gallery sync and tag scan kinds")
+	assert.Len(t, all, 3, "the fixture seeds the gallery sync, tag scan, and face recognition kinds")
 }
 
 func TestScheduleRepositoryUpsertKeepsEmptyDays(t *testing.T) {

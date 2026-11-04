@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/flashbacks/core/internal/application/agent"
+	recognition "github.com/flashbacks/core/internal/application/faces"
 	"github.com/flashbacks/core/internal/application/geo"
 	"github.com/flashbacks/core/internal/application/imaging"
 	catalog "github.com/flashbacks/core/internal/application/llm"
@@ -36,6 +37,7 @@ type ServerDeps struct {
 	BackgroundSync      *imaging.BackgroundSyncManager
 	TagScanManager      *imaging.TagScanManager
 	EmbeddingBackfill   *imaging.EmbeddingBackfillManager
+	FaceRecognition     *recognition.Manager
 	LlmCatalog          *catalog.Service
 	ThumbnailProvider   thumbnail.ThumbnailProvider
 	ThumbnailBatch      *helpers.ThumbnailBatch
@@ -65,6 +67,8 @@ type ServerDeps struct {
 	UserSettingsRepo  repository.UserSettingsRepository
 	SyncHistoryRepo   repository.SyncHistoryRepository
 	ScheduleRepo      repository.ScheduleRepository
+	PersonRepo        repository.PersonRepository
+	FaceRepo          repository.FaceRepository
 }
 
 // Server holds the application state
@@ -78,6 +82,7 @@ type Server struct {
 	backgroundSync      *imaging.BackgroundSyncManager
 	tagScanManager      *imaging.TagScanManager
 	embeddingBackfill   *imaging.EmbeddingBackfillManager
+	faceRecognition     *recognition.Manager
 	llmCatalog          *catalog.Service
 	config              *config.AppConfig
 	ocrClient           ocr.Client
@@ -106,6 +111,8 @@ type Server struct {
 	userSettingsRepo  repository.UserSettingsRepository
 	syncHistoryRepo   repository.SyncHistoryRepository
 	scheduleRepo      repository.ScheduleRepository
+	personRepo        repository.PersonRepository
+	faceRepo          repository.FaceRepository
 }
 
 // NewServer creates a new server instance from a dependency struct.
@@ -121,6 +128,7 @@ func NewServer(deps ServerDeps) *Server {
 		backgroundSync:      deps.BackgroundSync,
 		tagScanManager:      deps.TagScanManager,
 		embeddingBackfill:   deps.EmbeddingBackfill,
+		faceRecognition:     deps.FaceRecognition,
 		llmCatalog:          deps.LlmCatalog,
 		config:              deps.Config,
 		ocrClient:           deps.OcrClient,
@@ -147,6 +155,8 @@ func NewServer(deps ServerDeps) *Server {
 		userSettingsRepo:    deps.UserSettingsRepo,
 		syncHistoryRepo:     deps.SyncHistoryRepo,
 		scheduleRepo:        deps.ScheduleRepo,
+		personRepo:          deps.PersonRepo,
+		faceRepo:            deps.FaceRepo,
 	}
 }
 

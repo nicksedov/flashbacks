@@ -146,6 +146,13 @@ func (s *Server) SetupRouter(authMiddleware *middleware.AuthMiddleware, csrfProt
 			protected.POST("/tag-scan/pause", s.handleTagScanPause)
 			protected.POST("/tag-scan/resume", s.handleTagScanResume)
 
+			// Face recognition endpoints
+			protected.GET("/people", s.handleGetPeople)
+			protected.GET("/people/:id/photos", s.handleGetPersonPhotos)
+			protected.GET("/faces/status", s.handleGetFacesStatus)
+			protected.POST("/faces/start", s.handleStartFaces)
+			protected.POST("/faces/stop", s.handleStopFaces)
+
 			// Embedding backfill endpoints
 			protected.GET("/embedding/status", s.handleEmbeddingStatus)
 			protected.POST("/embedding/start", s.handleEmbeddingStart)

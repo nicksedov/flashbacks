@@ -59,6 +59,9 @@ type AppConfig struct {
 
 	// EXIF service configuration
 	ExifServiceURL string
+
+	// Faces service configuration
+	FacesServiceURL string
 }
 
 // LoadConfig reads configuration from environment variables
@@ -116,6 +119,7 @@ func LoadConfig() *AppConfig {
 		LlmModelsCacheTTL:           getEnvDuration("LLM_MODELS_CACHE_TTL", 24*time.Hour),
 		AgentMaxConversationTokens:  getEnvInt("AGENT_MAX_CONVERSATION_TOKENS", 128000),
 		ExifServiceURL:              getEnv("EXIF_SERVICE_URL", "http://localhost:5172"),
+		FacesServiceURL:             getEnv("FACES_SERVICE_URL", "http://localhost:5173"),
 	}
 }
 
@@ -149,6 +153,7 @@ func (c *AppConfig) RegistryDefaults() map[string]string {
 		"LLM_MODELS_CACHE_TTL":            c.LlmModelsCacheTTL.String(),
 		"AGENT_MAX_CONVERSATION_TOKENS":   strconv.Itoa(c.AgentMaxConversationTokens),
 		"EXIF_SERVICE_URL":                c.ExifServiceURL,
+		"FACES_SERVICE_URL":               c.FacesServiceURL,
 	}
 }
 
@@ -191,6 +196,7 @@ func (c *AppConfig) ApplyRegistry(values map[string]string) {
 	applyString("BOOTSTRAP_LOGIN", &c.BootstrapLogin)
 	applyString("THUMBNAIL_CACHE_PATH", &c.ThumbnailCachePath)
 	applyString("EXIF_SERVICE_URL", &c.ExifServiceURL)
+	applyString("FACES_SERVICE_URL", &c.FacesServiceURL)
 
 	if value, ok := values["CORS_ORIGINS"]; ok {
 		origins := strings.Split(value, ",")

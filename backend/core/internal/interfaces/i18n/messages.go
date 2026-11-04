@@ -202,6 +202,11 @@ const (
 	MsgTagScanPaused              MessageKey = "tag_scan.paused"
 	MsgTagScanResumed             MessageKey = "tag_scan.resumed"
 
+	// Face recognition messages
+	MsgFacesManagerNotAvailable MessageKey = "faces.manager_not_available"
+	MsgFacesStarted             MessageKey = "faces.started"
+	MsgFacesStopped             MessageKey = "faces.stopped"
+
 	// Move files messages
 	MsgMoveFilesTargetDirRequired MessageKey = "move_files.target_dir_required"
 	MsgMoveFilesNoFilesSelected   MessageKey = "move_files.no_files_selected"

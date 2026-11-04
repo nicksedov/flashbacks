@@ -79,6 +79,7 @@ export function Sidebar({
   const isGalleryActive = activeTab.startsWith("gallery")
   const isToolsActive = ["deduplication", "ocr", "exif", "smart-search"].includes(activeTab)
   const isTrashActive = activeTab === "gallery-trash"
+  const isPeopleActive = activeTab === "people"
   const isAdminActive = activeTab === "admin-users" || activeTab === "admin-settings"
   const isAboutActive = activeTab === "about"
 
@@ -253,6 +254,20 @@ export function Sidebar({
 
             <div className="space-y-1 mt-2">
               <Button
+                variant={isPeopleActive ? "default" : "ghost"}
+                className={cn(
+                  "w-full justify-center gap-0 h-10",
+                  isPeopleActive && "bg-primary text-primary-foreground hover:bg-primary/90"
+                )}
+                title={t("tabs.people")}
+                onClick={() => handleSelect("people")}
+              >
+                <Users className="h-5 w-5 flex-shrink-0" />
+              </Button>
+            </div>
+
+            <div className="space-y-1 mt-2">
+              <Button
                 variant={isTrashActive ? "default" : "ghost"}
                 className={cn(
                   "w-full justify-center gap-0 h-10",
@@ -305,6 +320,21 @@ export function Sidebar({
               {groups.map((group) =>
                 renderGroupExpanded(group, isExpanded(group.id), handleSelect)
               )}
+            </div>
+
+            {/* People */}
+            <div className="space-y-1 mt-4">
+              <Button
+                variant={isPeopleActive ? "default" : "ghost"}
+                className={cn(
+                  "w-full justify-start gap-3 h-9",
+                  isPeopleActive && "bg-primary text-primary-foreground hover:bg-primary/90"
+                )}
+                onClick={() => handleSelect("people")}
+              >
+                <Users className="h-4 w-4 flex-shrink-0" />
+                <span className="flex-1 font-medium text-left">{t("tabs.people")}</span>
+              </Button>
             </div>
 
             {/* Trash */}

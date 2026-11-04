@@ -614,6 +614,19 @@ export interface TagScanSettingsDTO {
   timezoneOffset: number
 }
 
+// FaceRecognitionSettingsDTO represents face recognition schedule settings.
+export interface FaceRecognitionSettingsDTO {
+  enabled: boolean
+  // days lists the weekdays face recognition may run on as comma-separated
+  // numbers (0=Sunday ... 6=Saturday); an empty string means disabled.
+  days: string
+  startHour: number
+  startMinute: number
+  endHour: number
+  endMinute: number
+  timezoneOffset: number
+}
+
 // EmbeddingSettingsDTO represents embedding engine parameters.
 export interface EmbeddingSettingsDTO {
   dimension: number
@@ -623,6 +636,7 @@ export interface EmbeddingSettingsDTO {
 export interface LlmSettingsResponse {
   instruments: LlmInstrumentDTO[]
   tagScan: TagScanSettingsDTO
+  faceRecognition: FaceRecognitionSettingsDTO
   embedding: EmbeddingSettingsDTO
   providers: LlmProviderDTO[]
 }
@@ -642,9 +656,45 @@ export interface UpdateLlmSettingsRequest {
   tagScanEndMinute?: number
   tagScanTimezoneOffset?: number
 
+  // Face recognition settings
+  faceRecognitionEnabled?: boolean
+  faceRecognitionDays?: string
+  faceRecognitionStartHour?: number
+  faceRecognitionStartMinute?: number
+  faceRecognitionEndHour?: number
+  faceRecognitionEndMinute?: number
+  faceRecognitionTimezoneOffset?: number
+
   // Embedding settings
   embeddingDimension?: number
   embeddingBatchSize?: number
+}
+
+// PersonDTO represents a discovered person in the People listing.
+export interface PersonDTO {
+  id: number
+  name: string
+  photoCount: number
+  coverThumbnail: string
+}
+
+export interface PeopleResponse {
+  people: PersonDTO[]
+}
+
+export interface PersonPhotosResponse {
+  images: GalleryImageDTO[]
+  totalImages: number
+  currentPage: number
+  pageSize: number
+  totalPages: number
+  hasNextPage: boolean
+}
+
+export interface FaceStatusResponse {
+  running: boolean
+  processed: number
+  total: number
 }
 
 export interface TagScanStatusResponse {

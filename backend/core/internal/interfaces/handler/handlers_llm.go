@@ -58,6 +58,20 @@ func buildTagScanDTO(schedule domain.Schedule) dto.TagScanSettingsDTO {
 	}
 }
 
+// buildFaceRecognitionDTO builds a FaceRecognitionSettingsDTO from the face
+// recognition schedule.
+func buildFaceRecognitionDTO(schedule domain.Schedule) dto.FaceRecognitionSettingsDTO {
+	return dto.FaceRecognitionSettingsDTO{
+		Enabled:        schedule.Enabled,
+		Days:           schedule.Days,
+		StartHour:      schedule.StartHour,
+		StartMinute:    schedule.StartMinute,
+		EndHour:        schedule.EndHour,
+		EndMinute:      schedule.EndMinute,
+		TimezoneOffset: schedule.TimezoneOffset,
+	}
+}
+
 // buildEmbeddingDTO builds an EmbeddingSettingsDTO from a domain EmbeddingSettings.
 func buildEmbeddingDTO(es domain.EmbeddingSettings) dto.EmbeddingSettingsDTO {
 	return dto.EmbeddingSettingsDTO{
@@ -102,6 +116,7 @@ func (s *Server) handleGetLlmSettings(c *gin.Context) {
 	providers := s.settingsLoader.AllLlmProviders()
 	instruments := s.settingsLoader.AllLlmInstruments()
 	tagScan := s.settingsLoader.Schedule(domain.ScheduleTagScan)
+	faceRecognition := s.settingsLoader.Schedule(domain.ScheduleFaceRecognition)
 	embedding := s.settingsLoader.EmbeddingSettings()
 
 	cacheMap := make(map[string][]dto.LlmModelDTO)
@@ -134,10 +149,11 @@ func (s *Server) handleGetLlmSettings(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, dto.LlmSettingsResponse{
-		Instruments: instrumentDTOs,
-		TagScan:     buildTagScanDTO(tagScan),
-		Embedding:   buildEmbeddingDTO(embedding),
-		Providers:   providerDTOs,
+		Instruments:     instrumentDTOs,
+		TagScan:         buildTagScanDTO(tagScan),
+		FaceRecognition: buildFaceRecognitionDTO(faceRecognition),
+		Embedding:       buildEmbeddingDTO(embedding),
+		Providers:       providerDTOs,
 	})
 }
 
@@ -217,6 +233,47 @@ func (s *Server) handleUpdateLlmSettings(c *gin.Context) {
 		// Update tag scan manager schedule
 		if s.tagScanManager != nil && s.tagScanManager.IsRunning() {
 			s.tagScanManager.UpdateSchedule(schedule)
+		}
+	}
+
+	// --- Handle face recognition settings update ---
+	faceDirty := req.FaceRecognitionEnabled != nil ||
+		req.FaceRecognitionDays != nil ||
+		req.FaceRecognitionStartHour != nil ||
+		req.FaceRecognitionStartMinute != nil ||
+		req.FaceRecognitionEndHour != nil ||
+		req.FaceRecognitionEndMinute != nil ||
+		req.FaceRecognitionTimezoneOffset != nil
+
+	if faceDirty {
+		schedule := s.settingsLoader.Schedule(domain.ScheduleFaceRecognition)
+		if req.FaceRecognitionEnabled != nil {
+			schedule.Enabled = *req.FaceRecognitionEnabled
+		}
+		if req.FaceRecognitionDays != nil {
+			schedule.Days = *req.FaceRecognitionDays
+		}
+		if req.FaceRecognitionStartHour != nil {
+			schedule.StartHour = *req.FaceRecognitionStartHour
+		}
+		if req.FaceRecognitionStartMinute != nil {
+			schedule.StartMinute = *req.FaceRecognitionStartMinute
+		}
+		if req.FaceRecognitionEndHour != nil {
+			schedule.EndHour = *req.FaceRecognitionEndHour
+		}
+		if req.FaceRecognitionEndMinute != nil {
+			schedule.EndMinute = *req.FaceRecognitionEndMinute
+		}
+		if req.FaceRecognitionTimezoneOffset != nil {
+			schedule.TimezoneOffset = *req.FaceRecognitionTimezoneOffset
+		}
+		if err := s.scheduleRepo.Upsert(&schedule); err != nil {
+			c.JSON(http.StatusInternalServerError, i18n.ErrorResponse(i18n.MsgLlmOcrSettingsSaveFailed))
+			return
+		}
+		if s.faceRecognition != nil && s.faceRecognition.IsRunning() {
+			s.faceRecognition.UpdateSchedule(schedule)
 		}
 	}
 

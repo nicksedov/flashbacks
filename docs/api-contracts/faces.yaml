@@ -1,0 +1,162 @@
+openapi: "3.1.0"
+info:
+  title: Flashbacks Faces Service
+  version: "0.1.0"
+  description: |
+    Face recognition microservice for Flashbacks. Runs SCRFD-10G detection,
+    ArcFace (w600k_r50) embeddings, and HDBSCAN clustering over REST.
+
+servers:
+  - url: http://localhost:5173
+    description: Local development
+
+paths:
+  /faces/health:
+    get:
+      summary: Service health check
+      operationId: getFacesHealth
+      responses:
+        "200":
+          description: Service health status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+
+  /faces/detect:
+    post:
+      summary: Detect faces in an image
+      operationId: detectFaces
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DetectRequest"
+      responses:
+        "200":
+          description: Detected face boxes
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DetectResponse"
+        "400":
+          description: Invalid image payload
+
+  /faces/embed:
+    post:
+      summary: Embed a face crop
+      operationId: embedFace
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EmbedRequest"
+      responses:
+        "200":
+          description: 512-d embedding vector
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmbedResponse"
+        "400":
+          description: Invalid image payload
+
+  /faces/cluster:
+    post:
+      summary: Cluster face embeddings
+      operationId: clusterFaces
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ClusterRequest"
+      responses:
+        "200":
+          description: One cluster label per embedding (-1 for noise)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ClusterResponse"
+
+components:
+  schemas:
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+
+    FaceBox:
+      type: object
+      properties:
+        x:
+          type: number
+        y:
+          type: number
+        width:
+          type: number
+        height:
+          type: number
+        confidence:
+          type: number
+
+    DetectRequest:
+      type: object
+      required:
+        - image
+      properties:
+        image:
+          type: string
+          description: Base64-encoded image bytes.
+
+    DetectResponse:
+      type: object
+      properties:
+        boxes:
+          type: array
+          items:
+            $ref: "#/components/schemas/FaceBox"
+
+    EmbedRequest:
+      type: object
+      required:
+        - image
+      properties:
+        image:
+          type: string
+          description: Base64-encoded image bytes.
+        box:
+          $ref: "#/components/schemas/FaceBox"
+
+    EmbedResponse:
+      type: object
+      properties:
+        embedding:
+          type: array
+          items:
+            type: number
+
+    ClusterRequest:
+      type: object
+      required:
+        - embeddings
+      properties:
+        embeddings:
+          type: array
+          items:
+            type: array
+            items:
+              type: number
+        minClusterSize:
+          type: integer
+
+    ClusterResponse:
+      type: object
+      properties:
+        labels:
+          type: array
+          items:
+            type: integer

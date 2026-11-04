@@ -83,6 +83,7 @@ const settings: LlmSettingsResponse = {
     { type: "embedding", providerId: 1, model: "qwen3-embedding:4b", providerAlias: "ollama_1", providerName: "ollama" },
   ],
   tagScan: { enabled: false, days: "1,2,3", startHour: 23, startMinute: 0, endHour: 7, endMinute: 0, timezoneOffset: 0 },
+  faceRecognition: { enabled: false, days: "1,2,3,4,5", startHour: 22, startMinute: 0, endHour: 7, endMinute: 0, timezoneOffset: 0 },
   embedding: { dimension: 1024, batchSize: 50 },
   providers: [
     { id: 1, alias: "ollama_1", name: "ollama", apiUrl: "http://localhost:11434", apiKey: "", cachedModels: null },

@@ -33,6 +33,60 @@ const facesScanVersion = "analyze-3"
 // People view empty even though faces were detected and embedded.
 const minClusterSize = 2
 
+// fallbackRecognitionSimilarity is the calibrated relaxed floor used when the
+// faces service does not advertise its thresholds (an older service).
+const fallbackRecognitionSimilarity = 0.25
+
+// Options configures how the recognition job talks to the faces service.
+type Options struct {
+	// BatchSize is the maximum number of images one analysis request carries.
+	BatchSize int
+	// AnalyzeTimeout bounds a single batch analysis request.
+	AnalyzeTimeout time.Duration
+	// ClusterMode selects the clustering strategy: auto, store or memory.
+	ClusterMode string
+	// ClusterNeighbours caps the candidates per face in the store path.
+	ClusterNeighbours int
+}
+
+// Dependencies are the optional stores the job consults when a clustering
+// strategy needs them.
+type Dependencies struct {
+	// Neighbours answers face nearest-neighbour queries; nil keeps the
+	// in-memory clustering path.
+	Neighbours NeighbourSource
+	// Indexes ensures the neighbour index after an analysis pass; nil skips it.
+	Indexes IndexMaintainer
+}
+
+// DefaultOptions returns the documented defaults (eight images per request,
+// five minutes per request, automatic clustering with sixteen candidates).
+func DefaultOptions() Options {
+	return Options{
+		BatchSize:         8,
+		AnalyzeTimeout:    300 * time.Second,
+		ClusterMode:       domain.FacesClusterModeAuto,
+		ClusterNeighbours: 16,
+	}
+}
+
+func (o Options) normalized() Options {
+	defaults := DefaultOptions()
+	if o.BatchSize <= 0 {
+		o.BatchSize = defaults.BatchSize
+	}
+	if o.AnalyzeTimeout <= 0 {
+		o.AnalyzeTimeout = defaults.AnalyzeTimeout
+	}
+	if o.ClusterMode != domain.FacesClusterModeStore && o.ClusterMode != domain.FacesClusterModeMemory {
+		o.ClusterMode = defaults.ClusterMode
+	}
+	if o.ClusterNeighbours <= 0 {
+		o.ClusterNeighbours = defaults.ClusterNeighbours
+	}
+	return o
+}
+
 // Progress tracks how many photos the job has processed.
 type Progress struct {
 	Total     int    `json:"total"`
@@ -55,24 +109,52 @@ type Status struct {
 // images).
 type Manager struct {
 	*background.Manager
-	mu          sync.Mutex
-	db          *gorm.DB
-	client      facesclient.Client
-	schedule    domain.Schedule
-	scheduleCh  chan struct{}
-	progress    Progress
-	clusterSize int
+	mu                sync.Mutex
+	db                *gorm.DB
+	client            facesclient.Client
+	schedule          domain.Schedule
+	scheduleCh        chan struct{}
+	progress          Progress
+	clusterSize       int
+	batchSize         int
+	analyzeTimeout    time.Duration
+	clusterMode       string
+	clusterNeighbours int
+	neighbours        NeighbourSource
+	indexes           IndexMaintainer
 }
 
-// NewManager creates a face recognition manager.
+// NewManager creates a face recognition manager with the default batching
+// options and no optional stores.
 func NewManager(db *gorm.DB, client facesclient.Client) *Manager {
+	return NewManagerWithDependencies(db, client, Dependencies{}, DefaultOptions())
+}
+
+// NewManagerWithOptions creates a face recognition manager with explicit
+// batching options and no optional stores.
+func NewManagerWithOptions(db *gorm.DB, client facesclient.Client, options Options) *Manager {
+	return NewManagerWithDependencies(db, client, Dependencies{}, options)
+}
+
+// NewManagerWithDependencies creates a face recognition manager with explicit
+// stores and batching options.
+func NewManagerWithDependencies(
+	db *gorm.DB, client facesclient.Client, dependencies Dependencies, options Options,
+) *Manager {
+	options = options.normalized()
 	return &Manager{
-		Manager:     background.New("face-recognition"),
-		db:          db,
-		client:      client,
-		schedule:    domain.DefaultSchedule(domain.ScheduleFaceRecognition),
-		scheduleCh:  make(chan struct{}),
-		clusterSize: minClusterSize,
+		Manager:           background.New("face-recognition"),
+		db:                db,
+		client:            client,
+		schedule:          domain.DefaultSchedule(domain.ScheduleFaceRecognition),
+		scheduleCh:        make(chan struct{}),
+		clusterSize:       minClusterSize,
+		batchSize:         options.BatchSize,
+		analyzeTimeout:    options.AnalyzeTimeout,
+		clusterMode:       options.ClusterMode,
+		clusterNeighbours: options.ClusterNeighbours,
+		neighbours:        dependencies.Neighbours,
+		indexes:           dependencies.Indexes,
 	}
 }
 
@@ -179,34 +261,114 @@ func (m *Manager) runPass(stopCh <-chan struct{}) {
 	m.mu.Unlock()
 
 	cursor := uint(0)
-	for {
+	exhausted := false
+	for !exhausted {
 		select {
 		case <-stopCh:
 			return
 		default:
 		}
 
-		var imageFile domain.ImageFile
-		err := m.db.Where("faces_scan_version <> ? AND id > ?", facesScanVersion, cursor).
-			Order("id ASC").
-			First(&imageFile).Error
-		if err != nil {
-			break
+		batch := make([]batchImage, 0, m.batchSize)
+		for len(batch) < m.batchSize {
+			var imageFile domain.ImageFile
+			err := m.db.Where("faces_scan_version <> ? AND id > ?", facesScanVersion, cursor).
+				Order("id ASC").
+				First(&imageFile).Error
+			if err != nil {
+				exhausted = true
+				break
+			}
+			cursor = imageFile.ID
+
+			select {
+			case <-stopCh:
+				return
+			default:
+			}
+
+			data, err := os.ReadFile(imageFile.Path)
+			m.mu.Lock()
+			m.progress.Processed++
+			m.mu.Unlock()
+			if err != nil {
+				// The scan version stays untouched, so the next pass retries it.
+				m.setError(fmt.Sprintf("read %s: %v", imageFile.Path, err))
+				continue
+			}
+			batch = append(batch, batchImage{file: imageFile, data: data})
 		}
 
-		m.processImage(stopCh, imageFile)
-		cursor = imageFile.ID
-
-		m.mu.Lock()
-		m.progress.Processed++
-		m.mu.Unlock()
+		if len(batch) > 0 {
+			m.processBatch(batch)
+		}
 	}
+
+	// The new faces are stored, so the neighbour index can be (re)built before
+	// clustering reads it. Building it after the analysis loop means inserts
+	// during the scan hit a heap-only table.
+	m.ensureNeighbourIndex()
 
 	// Detection is finished, so the per-image face counts are final and serve
 	// both the covers of the new clusters and the refresh of stored ones.
 	counts := m.imageFaceCounts()
 	m.clusterAssign(stopCh, counts)
 	m.refreshPersonCovers(counts)
+}
+
+// ensureNeighbourIndex asks the store to (re)build the face neighbour index
+// once per pass, before person assignment reads it.
+func (m *Manager) ensureNeighbourIndex() {
+	if m.indexes == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	if _, err := m.indexes.EnsureNeighbourIndex(ctx); err != nil {
+		m.setError(fmt.Sprintf("ensure face embedding index: %v", err))
+	}
+}
+
+// batchImage is one photo queued for a batch analysis request.
+type batchImage struct {
+	file domain.ImageFile
+	data []byte
+}
+
+// processBatch sends up to one batch of images to the faces service and stores
+// each successful entry.
+//
+// A request-level failure leaves the whole batch unmarked so the next pass
+// analyses it again. A per-entry failure is recorded and also left unmarked,
+// so one unreadable photo never blocks the images that succeeded.
+func (m *Manager) processBatch(images []batchImage) {
+	payload := make([][]byte, len(images))
+	for i, image := range images {
+		payload[i] = image.data
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), m.analyzeTimeout)
+	defer cancel()
+
+	results, err := m.client.AnalyzeBatch(ctx, payload)
+	if err != nil {
+		m.setError(fmt.Sprintf("analyze batch of %d: %v", len(images), err))
+		return
+	}
+
+	for i, image := range images {
+		if i >= len(results) {
+			m.setError(fmt.Sprintf("analyze batch: service returned %d entries for %d images",
+				len(results), len(images)))
+			return
+		}
+		if results[i].Error != "" {
+			m.setError(fmt.Sprintf("analyze %s: %s", image.file.Path, results[i].Error))
+			continue
+		}
+		m.replaceFaces(image.file.ID, results[i].Faces)
+		m.markScanned(image.file.ID)
+	}
 }
 
 // faceRef identifies one face of a cluster together with the photo it was
@@ -299,37 +461,6 @@ func (m *Manager) refreshPersonCovers(facesPerImage map[uint]int) {
 			m.setError(fmt.Sprintf("refresh cover of person %d: %v", person.ID, err))
 		}
 	}
-}
-
-// processImage analyses a single image in one service call and stores the faces.
-func (m *Manager) processImage(stopCh <-chan struct{}, imageFile domain.ImageFile) {
-	select {
-	case <-stopCh:
-		return
-	default:
-	}
-
-	data, err := os.ReadFile(imageFile.Path)
-	if err != nil {
-		m.setError(fmt.Sprintf("read %s: %v", imageFile.Path, err))
-		return
-	}
-
-	// One analyse call per image: embedding a face by re-detecting the whole
-	// image costs a full inference each, which a group photo with dozens of
-	// faces cannot afford.
-	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
-	defer cancel()
-
-	faces, err := m.client.Analyze(ctx, data)
-	if err != nil {
-		// The scan version stays untouched, so the image is retried next pass.
-		m.setError(fmt.Sprintf("analyze %s: %v", imageFile.Path, err))
-		return
-	}
-
-	m.replaceFaces(imageFile.ID, faces)
-	m.markScanned(imageFile.ID)
 }
 
 // replaceFaces drops the faces stored for an image and stores the analysed ones,
@@ -438,7 +569,7 @@ func (m *Manager) clusterAssign(stopCh <-chan struct{}, facesPerImage map[uint]i
 
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
-	labels, err := m.client.Cluster(ctx, embeddings, m.clusterSize, solo)
+	labels, err := m.clusterLabels(ctx, members, embeddings, solo)
 	if err != nil {
 		m.setError(fmt.Sprintf("cluster: %v", err))
 		return
@@ -473,6 +604,86 @@ func (m *Manager) clusterAssign(stopCh <-chan struct{}, facesPerImage map[uint]i
 			}
 		}
 	}
+}
+
+// clusterLabels decides the person labels of the unassigned faces.
+//
+// The store path sends one candidate graph built from kNN answers; the memory
+// path keeps the all-pairs call the service has always accepted. A failing
+// store query degrades to the memory path, because the graph is an optimisation
+// and people must still be produced.
+func (m *Manager) clusterLabels(
+	ctx context.Context, members []faceRef, embeddings [][]float32, solo []bool,
+) ([]int, error) {
+	if m.useStoreCandidates(ctx) {
+		labels, err := m.clusterFromNeighbours(ctx, members, solo)
+		if err == nil {
+			return labels, nil
+		}
+		m.setError(fmt.Sprintf("cluster from store: %v", err))
+	}
+	return m.client.Cluster(ctx, embeddings, m.clusterSize, solo)
+}
+
+// useStoreCandidates reports whether this pass should ask the vector store for
+// candidates instead of sending every embedding.
+func (m *Manager) useStoreCandidates(ctx context.Context) bool {
+	if m.neighbours == nil {
+		return false
+	}
+	switch m.clusterMode {
+	case domain.FacesClusterModeMemory:
+		return false
+	case domain.FacesClusterModeStore:
+		return true
+	default:
+		return m.neighbours.Supported(ctx)
+	}
+}
+
+// clusterFromNeighbours reads each face's neighbourhood inside the service's
+// recognition radius and asks the service to label the resulting graph.
+func (m *Manager) clusterFromNeighbours(
+	ctx context.Context, members []faceRef, solo []bool,
+) ([]int, error) {
+	seeds := make([]uint, len(members))
+	for i, member := range members {
+		seeds[i] = member.faceID
+	}
+
+	candidates, err := m.neighbours.Neighbours(
+		ctx, seeds, m.recognitionSimilarity(ctx), m.clusterNeighbours,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	edges := make([]facesclient.FaceLink, 0, len(candidates))
+	for _, seed := range seeds {
+		for _, neighbour := range candidates[seed] {
+			edges = append(edges, facesclient.FaceLink{
+				FaceID:      seed,
+				CandidateID: neighbour.FaceID,
+				Similarity:  neighbour.Similarity,
+			})
+		}
+	}
+	return m.client.ClusterGraph(ctx, seeds, edges, solo)
+}
+
+// recognitionSimilarity asks the faces service for its recognition floor, so the
+// candidate radius stays owned by the component that calibrated it. A service
+// that does not report the field falls back to the calibrated 0.25.
+func (m *Manager) recognitionSimilarity(ctx context.Context) float64 {
+	health, err := m.client.Health(ctx)
+	if err != nil {
+		log.Printf("Face recognition: read faces health: %v", err)
+		return fallbackRecognitionSimilarity
+	}
+	if health.Thresholds.RecognitionMinSimilarity <= 0 {
+		return fallbackRecognitionSimilarity
+	}
+	return health.Thresholds.RecognitionMinSimilarity
 }
 
 // setError records the last error without aborting the pass.

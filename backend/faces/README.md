@@ -26,16 +26,59 @@ Runs the Flashbacks face recognition ML pipeline over HTTP:
 
 | Method | Path | Description |
 |---|---|---|
-| GET | `/faces/health` | Health probe (`{"status": "ok"}`). |
+| GET | `/faces/health` | Health probe: `status`, `activeProvider`, `requestedProviders` and the calibrated `thresholds`. |
 | POST | `/faces/analyze` | `{"image": "<base64>"}` → `{"faces": [{x,y,width,height,confidence,embedding}]}` |
+| POST | `/faces/analyze-batch` | `{"images": ["<base64>", ...]}` → `{"results": [{"faces": [...]} \| {"error": "..."}]}`, one entry per image in request order. |
 | POST | `/faces/detect` | `{"image": "<base64>"}` → `{"boxes": [{x,y,width,height,confidence}]}` |
 | POST | `/faces/embed` | `{"image": "<base64>", "box": {...}?}` → `{"embedding": [512 floats]}` |
 | POST | `/faces/cluster` | `{"embeddings": [[...], ...], "minClusterSize": 2}` → `{"labels": [int]}` |
+| POST | `/faces/cluster-graph` | `{"faceIds": [...], "soloFaces": [...], "edges": [{faceId,candidateId,similarity}]}` → `{"labels": [int]}`, one label per face id. |
 
-`/faces/analyze` is the call the recognition job uses: one model pass returns
-every face of the image with its embedding. Asking `/faces/embed` once per face
-instead costs a full detection pass each — a 27-face group photo needed ~180 s
-of CPU and its later faces were dropped by the caller's request timeout.
+`/faces/health` never loads a model, so it is cheap enough to be the container
+health probe and still answers "is the GPU path live?". `activeProvider` is the
+short name (`cpu`, `cuda`, `tensorrt`) of the provider the model session actually
+uses, and `thresholds` reports the calibrated similarities so callers do not
+have to keep their own copies.
+
+## Execution providers
+
+`FACES_PROVIDERS` is an ordered, comma-separated list of ONNX Runtime providers
+accepting both shorthands (`cpu`, `cuda`, `tensorrt`, `openvino`, `directml`,
+`coreml`) and full names (`CPUExecutionProvider`, `CUDAExecutionProvider`, ...).
+It defaults to `cpu`: accelerating a host is an operator decision, because the
+ollama containers already own most of the VRAM.
+
+The request is intersected with `onnxruntime.get_available_providers()` at the
+first inference or health call:
+
+- a provider that is not offered is dropped and a warning naming both lists is
+  logged, so `cuda,cpu` on a CPU-only host runs on `cpu` instead of failing;
+- when nothing requested is available the service falls back to
+  `CPUExecutionProvider` with a warning;
+- `ctx_id` is derived from the resolved list — a CUDA provider first passes
+  `FACES_GPU_ID` (default `0`) as the device, anything else passes `-1` (CPU).
+
+The same decision is logged at startup (`execution providers: requested=...
+available=... active=... ctx_id=...`), so a CUDA/cuDNN mismatch shows up as a
+warning plus `cpu` rather than a crash.
+
+`/faces/analyze-batch` is the call the recognition job uses: one request covers
+several photos, and small-face recognition crops are collected and sent through
+the recognizer in chunks of `FACES_RECOGNITION_BATCH` (see below), so one GPU
+submission covers many faces. Requests over `FACES_MAX_BATCH` are rejected with
+`422` before any model work, and an image that cannot be decoded produces an
+`error` entry instead of failing its whole batch. `/faces/analyze` remains the
+single-image call and runs the same code path.
+
+Asking `/faces/embed` once per face instead costs a full detection pass each — a
+27-face group photo needed ~180 s of CPU and its later faces were dropped by the
+caller's request timeout.
+
+`/faces/cluster` groups embeddings the service received in full. When the vector
+store can answer nearest-neighbour queries, core instead posts the candidate
+similarity graph to `/faces/cluster-graph`: only the links inside the clustering
+radius travel, while the strict floor (0.40), the recognition floor (0.25) and
+the runner-up margin (0.05) stay in this service.
 
 `/faces/embed` always detects faces on the **whole** image — SCRFD needs the
 context around a face and finds nothing in a tight crop of a detection box. The
@@ -86,6 +129,13 @@ scenarios and the cosine thresholds.
 | Env | Default | Purpose |
 |---|---|---|
 | `FACES_PORT` | `5173` | HTTP listen port. |
+| `FACES_PROVIDERS` | `cpu` | Ordered ONNX Runtime providers (shorthands or full names); unavailable ones degrade to CPU with a warning. |
+| `FACES_GPU_ID` | `0` | CUDA device id passed as InsightFace `ctx_id` when a CUDA provider is active. |
+| `FACES_MAX_BATCH` | `16` | Maximum images one `/faces/analyze-batch` request may carry (larger requests are rejected with `422`). |
+| `FACES_RECOGNITION_BATCH` | `32` | Aligned small-face crops sent through the recognizer per forward pass; `1` keeps the per-image path. |
+| `FACES_MAX_CONCURRENCY` | `1` | Concurrent batch analyses; one GPU is kept busy by one batch, so more only duplicates VRAM use. |
+| `FACES_CLUSTER_MODE` | `auto` | Read by **core**, not this service: clustering strategy (`auto`, `store`, `memory`) for the recognition job's candidate graph. |
+| `FACES_CLUSTER_NEIGHBOURS` | `16` | Read by **core**, not this service: candidates per unassigned face when it queries the store for neighbours. |
 | `REGISTRY_URL` | (empty) | Registry facade URL; empty disables registration. |
 | `SERVICE_HOST` | `localhost` | Host peers use to reach this service. |
 | `SERVICE_ID` | `<host>-<pid>` | Unique instance id. |

@@ -62,6 +62,17 @@ type AppConfig struct {
 
 	// Faces service configuration
 	FacesServiceURL string
+	// FacesClusterMode selects the clustering strategy: "auto" uses the vector
+	// store when it can answer kNN queries, "store" forces it, "memory" forces
+	// the all-pairs path.
+	FacesClusterMode string
+	// FacesClusterNeighbours caps the candidates per face in the store path.
+	FacesClusterNeighbours int
+	// FacesBatchSize is how many images one faces-service analysis request
+	// carries (default: 8). One batching degenerates to one request per photo.
+	FacesBatchSize int
+	// FacesAnalyzeTimeout bounds a single batch analysis request (default: 300s).
+	FacesAnalyzeTimeout time.Duration
 }
 
 // LoadConfig reads configuration from environment variables
@@ -77,6 +88,20 @@ func LoadConfig() *AppConfig {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
 			scanWorkers = n
 		}
+	}
+
+	facesClusterMode := getEnv("FACES_CLUSTER_MODE", "")
+	if facesClusterMode == "" {
+		facesClusterMode = domain.FacesClusterModeAuto
+	}
+	switch facesClusterMode {
+	case domain.FacesClusterModeAuto, domain.FacesClusterModeStore, domain.FacesClusterModeMemory:
+	default:
+		log.Fatalf("invalid FACES_CLUSTER_MODE %q: must be one of %q, %q, %q",
+			facesClusterMode,
+			domain.FacesClusterModeAuto,
+			domain.FacesClusterModeStore,
+			domain.FacesClusterModeMemory)
 	}
 
 	accountCreationMode := getEnv("ACCOUNT_CREATION_MODE", domain.AccountCreationModeAdminOnly)
@@ -120,6 +145,10 @@ func LoadConfig() *AppConfig {
 		AgentMaxConversationTokens:  getEnvInt("AGENT_MAX_CONVERSATION_TOKENS", 128000),
 		ExifServiceURL:              getEnv("EXIF_SERVICE_URL", "http://localhost:5172"),
 		FacesServiceURL:             getEnv("FACES_SERVICE_URL", "http://localhost:5173"),
+		FacesBatchSize:              getEnvInt("FACES_BATCH_SIZE", 8),
+		FacesAnalyzeTimeout:         getEnvDuration("FACES_ANALYZE_TIMEOUT", 300*time.Second),
+		FacesClusterMode:            facesClusterMode,
+		FacesClusterNeighbours:      getEnvInt("FACES_CLUSTER_NEIGHBOURS", 16),
 	}
 }
 
@@ -154,6 +183,10 @@ func (c *AppConfig) RegistryDefaults() map[string]string {
 		"AGENT_MAX_CONVERSATION_TOKENS":   strconv.Itoa(c.AgentMaxConversationTokens),
 		"EXIF_SERVICE_URL":                c.ExifServiceURL,
 		"FACES_SERVICE_URL":               c.FacesServiceURL,
+		"FACES_BATCH_SIZE":                strconv.Itoa(c.FacesBatchSize),
+		"FACES_ANALYZE_TIMEOUT":           c.FacesAnalyzeTimeout.String(),
+		"FACES_CLUSTER_MODE":              c.FacesClusterMode,
+		"FACES_CLUSTER_NEIGHBOURS":        strconv.Itoa(c.FacesClusterNeighbours),
 	}
 }
 
@@ -214,6 +247,15 @@ func (c *AppConfig) ApplyRegistry(values map[string]string) {
 	applyPositiveInt("THUMBNAIL_CACHE_MAX_SIZE", &c.ThumbnailCacheMaxSize)
 	applyPositiveInt("THUMBNAIL_CACHE_QUALITY", &c.ThumbnailCacheQuality)
 	applyPositiveInt("AGENT_MAX_CONVERSATION_TOKENS", &c.AgentMaxConversationTokens)
+	applyPositiveInt("FACES_BATCH_SIZE", &c.FacesBatchSize)
+	applyPositiveInt("FACES_CLUSTER_NEIGHBOURS", &c.FacesClusterNeighbours)
+
+	if value, ok := values["FACES_CLUSTER_MODE"]; ok {
+		switch value {
+		case domain.FacesClusterModeAuto, domain.FacesClusterModeStore, domain.FacesClusterModeMemory:
+			c.FacesClusterMode = value
+		}
+	}
 
 	applyBool("OCR_ENABLED", &c.OCREnabled)
 	applyBool("THUMBNAIL_CACHE_ENABLED", &c.ThumbnailCacheEnabled)
@@ -225,6 +267,12 @@ func (c *AppConfig) ApplyRegistry(values map[string]string) {
 	if value, ok := values["LLM_MODELS_CACHE_TTL"]; ok {
 		if parsed, err := time.ParseDuration(value); err == nil && parsed > 0 {
 			c.LlmModelsCacheTTL = parsed
+		}
+	}
+
+	if value, ok := values["FACES_ANALYZE_TIMEOUT"]; ok {
+		if parsed, err := time.ParseDuration(value); err == nil && parsed > 0 {
+			c.FacesAnalyzeTimeout = parsed
 		}
 	}
 

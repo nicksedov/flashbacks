@@ -2,12 +2,16 @@ package faces
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
+	"time"
 
 	"github.com/flashbacks/core/internal/domain"
 	facesclient "github.com/flashbacks/core/internal/infrastructure/faces"
+	"github.com/flashbacks/core/internal/infrastructure/llm"
 	"github.com/flashbacks/core/internal/testutil"
 	"github.com/flashbacks/core/internal/testutil/mocks"
 
@@ -24,20 +28,103 @@ type fakeFacesClient struct {
 func newFakeFacesClient() *fakeFacesClient {
 	mock := &mocks.MockFacesClient{}
 	mock.AnalyzeFunc = func(ctx context.Context, image []byte) ([]facesclient.AnalyzedFace, error) {
-		if string(image) == "noface" {
-			return nil, nil
-		}
-		vec := make([]float32, 512)
-		switch string(image) {
-		case "person-a-1", "person-a-2":
-			vec[0] = 1
-		case "person-b":
-			vec[0] = 2
-		}
-		return []facesclient.AnalyzedFace{mocks.SingleAnalyzedFace(vec)}, nil
+		return analyzedFacesFor(image), nil
+	}
+	mock.AnalyzeBatchFunc = func(ctx context.Context, images [][]byte) ([]facesclient.BatchResult, error) {
+		return batchResults(images), nil
 	}
 	mock.ClusterFunc = clusterByFirstComponent()
 	return &fakeFacesClient{MockFacesClient: mock}
+}
+
+// analyzedFacesFor maps fixture file content to a deterministic identity.
+func analyzedFacesFor(image []byte) []facesclient.AnalyzedFace {
+	if string(image) == "noface" {
+		return nil
+	}
+	vec := make([]float32, 512)
+	switch string(image) {
+	case "person-a-1", "person-a-2":
+		vec[0] = 1
+	case "person-b":
+		vec[0] = 2
+	}
+	return []facesclient.AnalyzedFace{mocks.SingleAnalyzedFace(vec)}
+}
+
+// batchResults answers one entry per image, mirroring the service contract.
+func batchResults(images [][]byte) []facesclient.BatchResult {
+	results := make([]facesclient.BatchResult, len(images))
+	for i, image := range images {
+		results[i] = facesclient.BatchResult{Faces: analyzedFacesFor(image)}
+	}
+	return results
+}
+
+// totalImagesAnalyzed counts the images the fake saw across single and batch
+// requests.
+func totalImagesAnalyzed(client *fakeFacesClient) int {
+	total := client.AnalyzeCallCount
+	for _, size := range client.AnalyzeBatchSizes {
+		total += size
+	}
+	return total
+}
+
+// batchManager builds a manager whose requests carry at most batchSize images.
+func batchManager(db *gorm.DB, client *fakeFacesClient, batchSize int) *Manager {
+	return NewManagerWithOptions(db, client, Options{
+		BatchSize:      batchSize,
+		AnalyzeTimeout: 30 * time.Second,
+	})
+}
+
+// seedFace stores one detected face with a deterministic embedding, for tests
+// that start from an existing unassigned face instead of a full scan.
+func seedFace(t *testing.T, db *gorm.DB, imageFileID uint) *domain.Face {
+	t.Helper()
+	face := domain.Face{ImageFileID: imageFileID, Confidence: 0.9}
+	if err := db.Create(&face).Error; err != nil {
+		t.Fatalf("create face: %v", err)
+	}
+	vec := make([]float32, 512)
+	vec[0] = 1
+	embedding := domain.FaceEmbedding{
+		FaceID:    face.ID,
+		Dimension: len(vec),
+		Embedding: llm.Float32SliceToPgVector(vec),
+		Model:     domain.FaceEmbeddingModel,
+	}
+	if err := db.Create(&embedding).Error; err != nil {
+		t.Fatalf("create embedding: %v", err)
+	}
+	return &face
+}
+
+// fakeNeighbours is a controllable NeighbourSource.
+type fakeNeighbours struct {
+	supported  bool
+	err        error
+	result     map[uint][]Neighbour
+	calls      int
+	seeds      []uint
+	similarity float64
+	limit      int
+}
+
+func (f *fakeNeighbours) Supported(context.Context) bool { return f.supported }
+
+func (f *fakeNeighbours) Neighbours(
+	_ context.Context, seeds []uint, minSimilarity float64, limit int,
+) (map[uint][]Neighbour, error) {
+	f.calls++
+	f.seeds = seeds
+	f.similarity = minSimilarity
+	f.limit = limit
+	if f.err != nil {
+		return nil, f.err
+	}
+	return f.result, nil
 }
 
 // clusterByFirstComponent labels every embedding by its first component, which
@@ -225,6 +312,17 @@ func newGroupAwareFacesClient() *mocks.MockFacesClient {
 		}
 		return []facesclient.AnalyzedFace{mocks.SingleAnalyzedFace(vec)}, nil
 	}
+	mock.AnalyzeBatchFunc = func(ctx context.Context, images [][]byte) ([]facesclient.BatchResult, error) {
+		results := make([]facesclient.BatchResult, len(images))
+		for i, image := range images {
+			faces, err := mock.AnalyzeFunc(ctx, image)
+			if err != nil {
+				return nil, err
+			}
+			results[i] = facesclient.BatchResult{Faces: faces}
+		}
+		return results, nil
+	}
 	mock.ClusterFunc = clusterByFirstComponent()
 	return mock
 }
@@ -272,14 +370,14 @@ func TestFaceRecognitionManager_AnalysesEachImageOnce(t *testing.T) {
 	m := NewManager(db, client)
 
 	m.runPass(nil)
-	firstPass := client.AnalyzeCallCount
+	firstPass := totalImagesAnalyzed(client)
 	if firstPass != 2 {
-		t.Fatalf("analyses = %d, want 2 (one per image)", firstPass)
+		t.Fatalf("analysed images = %d, want 2 (one per image)", firstPass)
 	}
 
 	m.runPass(nil)
-	if client.AnalyzeCallCount != firstPass {
-		t.Errorf("re-analysed %d already scanned image(s)", client.AnalyzeCallCount-firstPass)
+	if totalImagesAnalyzed(client) != firstPass {
+		t.Errorf("re-analysed %d already scanned image(s)", totalImagesAnalyzed(client)-firstPass)
 	}
 
 	// A new analyser version re-scans the image and replaces its faces.
@@ -294,6 +392,314 @@ func TestFaceRecognitionManager_AnalysesEachImageOnce(t *testing.T) {
 	db.Model(&domain.Face{}).Where("image_file_id = ?", faceImage.ID).Count(&faces)
 	if faces != 1 {
 		t.Errorf("face count after re-scan = %d, want 1 (faces must be replaced, not duplicated)", faces)
+	}
+}
+
+// TestFaceRecognitionManager_AnalyzesInBatches guards the batch contract: five
+// images with a batch size of two reach the faces service as three requests
+// (2 + 2 + 1), and every image — including one without a face — is marked
+// scanned.
+func TestFaceRecognitionManager_AnalyzesInBatches(t *testing.T) {
+	db, cleanup := testutil.NewTestDB(t)
+	defer cleanup()
+
+	for _, content := range []string{"person-a-1", "person-a-2", "person-b", "solo", "noface"} {
+		seedImage(t, db, content)
+	}
+	client := newFakeFacesClient()
+
+	batchManager(db, client, 2).runPass(nil)
+
+	if want := []int{2, 2, 1}; !reflect.DeepEqual(client.AnalyzeBatchSizes, want) {
+		t.Fatalf("batch sizes = %v, want %v", client.AnalyzeBatchSizes, want)
+	}
+	if client.AnalyzeCallCount != 0 {
+		t.Errorf("single-image analyses = %d, want 0 (the job must batch)", client.AnalyzeCallCount)
+	}
+
+	var scanned int64
+	db.Model(&domain.ImageFile{}).
+		Where("faces_scan_version = ?", facesScanVersion).
+		Count(&scanned)
+	if scanned != 5 {
+		t.Errorf("scanned images = %d, want 5", scanned)
+	}
+}
+
+// TestFaceRecognitionManager_FailedBatchRetried guards the retry contract: a
+// failed batch request leaves every image of the batch unmarked, so the next
+// pass analyses them again.
+func TestFaceRecognitionManager_FailedBatchRetried(t *testing.T) {
+	db, cleanup := testutil.NewTestDB(t)
+	defer cleanup()
+
+	first := seedImage(t, db, "person-a-1")
+	second := seedImage(t, db, "person-a-2")
+
+	client := newFakeFacesClient()
+	client.AnalyzeBatchFunc = func(context.Context, [][]byte) ([]facesclient.BatchResult, error) {
+		return nil, fmt.Errorf("faces service unavailable")
+	}
+	m := batchManager(db, client, 2)
+
+	m.runPass(nil)
+
+	for _, image := range []*domain.ImageFile{first, second} {
+		var stored domain.ImageFile
+		if err := db.First(&stored, image.ID).Error; err != nil {
+			t.Fatalf("load image %d: %v", image.ID, err)
+		}
+		if stored.FacesScanVersion == facesScanVersion {
+			t.Errorf("image %d was marked scanned although its batch failed", image.ID)
+		}
+	}
+
+	// The service recovers: the next pass analyses both images again.
+	client.AnalyzeBatchFunc = func(_ context.Context, images [][]byte) ([]facesclient.BatchResult, error) {
+		return batchResults(images), nil
+	}
+	m.runPass(nil)
+
+	var scanned int64
+	db.Model(&domain.ImageFile{}).
+		Where("faces_scan_version = ?", facesScanVersion).
+		Count(&scanned)
+	if scanned != 2 {
+		t.Errorf("scanned images after retry = %d, want 2", scanned)
+	}
+}
+
+// fakeIndexer records neighbour-index maintenance calls and their order
+// relative to clustering.
+type fakeIndexer struct {
+	calls  int
+	events *[]string
+}
+
+func (f *fakeIndexer) EnsureNeighbourIndex(context.Context) (bool, error) {
+	f.calls++
+	*f.events = append(*f.events, "index")
+	return true, nil
+}
+
+// TestFaceRecognitionManager_EnsuresIndexBeforeClustering guards the index
+// policy: one ensure call per pass, after the faces are stored and before
+// people are assigned — never once per face insert.
+func TestFaceRecognitionManager_EnsuresIndexBeforeClustering(t *testing.T) {
+	db, cleanup := testutil.NewTestDB(t)
+	defer cleanup()
+
+	seedImage(t, db, "person-a-1")
+	seedImage(t, db, "person-a-2")
+
+	client := newFakeFacesClient()
+	events := []string{}
+	inner := client.ClusterFunc
+	client.ClusterFunc = func(ctx context.Context, embeddings [][]float32, minClusterSize int, soloFaces []bool) ([]int, error) {
+		events = append(events, "cluster")
+		return inner(ctx, embeddings, minClusterSize, soloFaces)
+	}
+	indexer := &fakeIndexer{events: &events}
+
+	m := NewManagerWithDependencies(db, client, Dependencies{Indexes: indexer}, DefaultOptions())
+	m.runPass(nil)
+
+	if indexer.calls != 1 {
+		t.Fatalf("EnsureNeighbourIndex calls = %d, want 1 per pass", indexer.calls)
+	}
+	if want := []string{"index", "cluster"}; !reflect.DeepEqual(events, want) {
+		t.Fatalf("call order = %v, want %v (index before person assignment)", events, want)
+	}
+
+	var faces int64
+	db.Model(&domain.Face{}).Count(&faces)
+	if faces != 2 {
+		t.Fatalf("stored faces = %d, want 2", faces)
+	}
+	if indexer.calls != 1 {
+		t.Errorf("index ensured %d times for %d faces, want once", indexer.calls, faces)
+	}
+}
+
+// TestClusterAssignUsesStoreCandidates guards the store path: core asks the
+// vector store for candidates at the service's advertised recognition floor and
+// sends the links instead of every embedding.
+func TestClusterAssignUsesStoreCandidates(t *testing.T) {
+	db, cleanup := testutil.NewTestDB(t)
+	defer cleanup()
+
+	imageA := seedImage(t, db, "person-a-1")
+	imageB := seedImage(t, db, "person-a-2")
+	faceA := seedFace(t, db, imageA.ID)
+	faceB := seedFace(t, db, imageB.ID)
+
+	client := newFakeFacesClient()
+	client.HealthFunc = func(context.Context) (facesclient.Health, error) {
+		return facesclient.Health{
+			Thresholds: facesclient.Thresholds{RecognitionMinSimilarity: 0.31},
+		}, nil
+	}
+	var gotSeeds []uint
+	var gotEdges []facesclient.FaceLink
+	client.ClusterGraphFunc = func(
+		_ context.Context, faceIDs []uint, edges []facesclient.FaceLink, _ []bool,
+	) ([]int, error) {
+		gotSeeds = faceIDs
+		gotEdges = edges
+		return []int{0, 0}, nil
+	}
+	neighbours := &fakeNeighbours{
+		supported: true,
+		result: map[uint][]Neighbour{
+			faceA.ID: {{FaceID: faceB.ID, Similarity: 0.9}},
+			faceB.ID: {{FaceID: faceA.ID, Similarity: 0.9}},
+		},
+	}
+
+	m := NewManagerWithDependencies(db, client, Dependencies{Neighbours: neighbours}, Options{
+		ClusterMode: domain.FacesClusterModeAuto,
+	})
+	m.clusterAssign(nil, map[uint]int{})
+
+	if neighbours.calls != 1 {
+		t.Fatalf("neighbour queries = %d, want 1", neighbours.calls)
+	}
+	if neighbours.similarity != 0.31 {
+		t.Errorf("minSimilarity = %v, want the service's advertised 0.31", neighbours.similarity)
+	}
+	if neighbours.limit != 16 {
+		t.Errorf("neighbour limit = %d, want the default 16", neighbours.limit)
+	}
+	if len(gotSeeds) != 2 {
+		t.Fatalf("cluster graph faces = %d, want 2", len(gotSeeds))
+	}
+	if len(gotEdges) != 2 || gotEdges[0].FaceID != faceA.ID || gotEdges[0].CandidateID != faceB.ID {
+		t.Errorf("candidate edges = %+v, want the two queried links", gotEdges)
+	}
+	if client.ClusterCallCount != 0 {
+		t.Errorf("memory clustering called %d times, want 0 on the store path", client.ClusterCallCount)
+	}
+
+	var assignedA, assignedB domain.Face
+	db.First(&assignedA, faceA.ID)
+	db.First(&assignedB, faceB.ID)
+	if assignedA.PersonID == 0 || assignedA.PersonID != assignedB.PersonID {
+		t.Errorf("person ids = %d and %d, want one shared person",
+			assignedA.PersonID, assignedB.PersonID)
+	}
+}
+
+// TestClusterAssignFallsBackInMemory guards that clustering still produces
+// people when the store cannot answer kNN queries or the query fails.
+func TestClusterAssignFallsBackInMemory(t *testing.T) {
+	cases := []struct {
+		name       string
+		neighbours *fakeNeighbours
+	}{
+		{
+			name:       "store reports unsupported",
+			neighbours: &fakeNeighbours{supported: false},
+		},
+		{
+			name: "neighbour query fails",
+			neighbours: &fakeNeighbours{
+				supported: true,
+				err:       fmt.Errorf("query face neighbours: connection reset"),
+			},
+		},
+	}
+
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			db, cleanup := testutil.NewTestDB(t)
+			defer cleanup()
+
+			imageA := seedImage(t, db, "person-a-1")
+			imageB := seedImage(t, db, "person-a-2")
+			seedFace(t, db, imageA.ID)
+			seedFace(t, db, imageB.ID)
+
+			client := newFakeFacesClient()
+			client.ClusterGraphFunc = func(
+				context.Context, []uint, []facesclient.FaceLink, []bool,
+			) ([]int, error) {
+				t.Error("cluster graph must not be used on the in-memory path")
+				return nil, nil
+			}
+
+			m := NewManagerWithDependencies(db, client, Dependencies{
+				Neighbours: testCase.neighbours,
+			}, Options{ClusterMode: domain.FacesClusterModeAuto})
+			m.clusterAssign(nil, map[uint]int{})
+
+			if client.ClusterCallCount != 1 {
+				t.Fatalf("memory clustering calls = %d, want 1", client.ClusterCallCount)
+			}
+			var assigned int64
+			db.Model(&domain.Face{}).Where("person_id > 0").Count(&assigned)
+			if assigned != 2 {
+				t.Errorf("faces assigned to a person = %d, want 2", assigned)
+			}
+		})
+	}
+}
+
+// TestClusterAssignHonoursMode guards the FACES_CLUSTER_MODE lever: memory
+// forces the all-pairs path, store forces the candidate graph.
+func TestClusterAssignHonoursMode(t *testing.T) {
+	cases := []struct {
+		name            string
+		mode            string
+		supported       bool
+		wantGraphCalls  int
+		wantMemoryCalls int
+	}{
+		{
+			name:            "memory forces the in-memory path",
+			mode:            domain.FacesClusterModeMemory,
+			supported:       true,
+			wantGraphCalls:  0,
+			wantMemoryCalls: 1,
+		},
+		{
+			name:            "store forces the candidate graph",
+			mode:            domain.FacesClusterModeStore,
+			supported:       false,
+			wantGraphCalls:  1,
+			wantMemoryCalls: 0,
+		},
+	}
+
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			db, cleanup := testutil.NewTestDB(t)
+			defer cleanup()
+
+			seedFace(t, db, seedImage(t, db, "person-a-1").ID)
+			seedFace(t, db, seedImage(t, db, "person-a-2").ID)
+
+			client := newFakeFacesClient()
+			client.ClusterGraphFunc = func(
+				_ context.Context, faceIDs []uint, _ []facesclient.FaceLink, _ []bool,
+			) ([]int, error) {
+				labels := make([]int, len(faceIDs))
+				return labels, nil
+			}
+
+			m := NewManagerWithDependencies(db, client, Dependencies{
+				Neighbours: &fakeNeighbours{supported: testCase.supported},
+			}, Options{ClusterMode: testCase.mode})
+			m.clusterAssign(nil, map[uint]int{})
+
+			if client.ClusterGraphCallCount != testCase.wantGraphCalls {
+				t.Errorf("cluster graph calls = %d, want %d",
+					client.ClusterGraphCallCount, testCase.wantGraphCalls)
+			}
+			if client.ClusterCallCount != testCase.wantMemoryCalls {
+				t.Errorf("memory clustering calls = %d, want %d",
+					client.ClusterCallCount, testCase.wantMemoryCalls)
+			}
+		})
 	}
 }
 

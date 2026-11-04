@@ -5,6 +5,17 @@ import "time"
 // FaceEmbeddingModel identifies the ArcFace model that produced an embedding.
 const FaceEmbeddingModel = "arcface_w600k_r50"
 
+// Face clustering strategies selected by FACES_CLUSTER_MODE.
+const (
+	// FacesClusterModeAuto asks the vector store for candidates when it can
+	// answer nearest-neighbour queries, and clusters in memory otherwise.
+	FacesClusterModeAuto = "auto"
+	// FacesClusterModeStore always asks the vector store for candidates.
+	FacesClusterModeStore = "store"
+	// FacesClusterModeMemory keeps the in-memory all-pairs call (rollback lever).
+	FacesClusterModeMemory = "memory"
+)
+
 // Person represents a cluster of faces that identify one (unnamed) person.
 type Person struct {
 	ID uint `gorm:"primaryKey" json:"id"`

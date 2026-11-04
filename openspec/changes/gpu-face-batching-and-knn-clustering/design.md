@@ -190,12 +190,16 @@ parses to ≥ 0.7 (`halfvec` support).
 ### D7 — Deploy surface
 
 - **Image**: `backend/faces/Dockerfile` becomes two targets — `cpu` (today's
-  `python:3.11-slim` + `onnxruntime`, the default) and `gpu` (CUDA 12/cuDNN 9
-  base from the local cache, pinned as `ARG FACES_CUDA_BASE`, + `onnxruntime-gpu`).
-  The apply step resolves the base tag with
-  `docker images | grep -Ei 'cuda|cudnn|code-server'` and records it in the
-  Dockerfile `ARG` default and the README. Both targets keep `USER app` and a
-  `HEALTHCHECK` (start period raised for CUDA init on the GPU target).
+  `python:3.11-slim` + `onnxruntime`, the default) and `gpu`, whose base is
+  **forced** to `nvidia/cuda:13.4.2-cudnn-runtime-ubuntu24.04` (CUDA 13 / cuDNN 9)
+  through `ARG FACES_CUDA_BASE`, whose default is exactly that tag — no
+  local-cache tag resolution and no CUDA 12 fallback, so a missing tag fails the
+  build loudly instead of silently changing the CUDA major. The GPU stage installs
+  Python 3.11 explicitly (the 24.04 base ships 3.12) so both targets run the
+  interpreter `requires-python = ">=3.11"` was validated on, and pins
+  `onnxruntime-gpu` to a wheel built for CUDA 13. Both targets keep `USER app`
+  (uid 10001) and a `HEALTHCHECK` (start period raised for CUDA init on the GPU
+  target).
 - **Compose (staging + production, `.roo/skills/deploy-*/deploy/docker-compose.yml`)**:
   faces service block gains
   `deploy.resources.reservations.devices: [{driver: nvidia, device_ids: ["${FACES_GPU_ID:-0}"], capabilities: [gpu]}]`,
@@ -220,11 +224,14 @@ dependencies → `wire.go` and `wire_gen.go` are regenerated with
 
 ## Risks / Trade-offs
 
-- **CUDA/cuDNN mismatch at build or run time** (onnxruntime-gpu needs cuDNN 9 with
-  CUDA 12; a cached base may carry an older cuDNN) → pin both the base tag and
-  `onnxruntime-gpu`, and log `get_available_providers()` at startup so a wrong
-  pairing shows up as a warning + `cpu` rather than a crash; the compose deploy
-  is verified by reading `/faces/health.activeProvider` after rollout.
+- **CUDA/cuDNN mismatch at build or run time** (the forced base is CUDA 13 /
+  cuDNN 9 while published `onnxruntime-gpu` wheels target a specific CUDA major)
+  → pin both the base tag and the `onnxruntime-gpu` wheel, prove the pairing at
+  image-build time (`get_available_providers()` must list
+  `CUDAExecutionProvider` before the image is accepted), and log the same call at
+  startup so a wrong pairing shows up as a warning + `cpu` rather than a crash;
+  the compose deploy is verified by reading `/faces/health.activeProvider` after
+  rollout.
 - **No compile-free guarantee that GPU is faster on the target host** → the
   change proves the *path* is live and batched (health + integration suite +
   documented benchmark command); the 10–30× figure is measured by the operator

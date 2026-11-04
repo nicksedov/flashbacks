@@ -25,8 +25,9 @@ rows can answer nearest-neighbour queries instead of being re-read into Python.
   recognition job sends images in batches of `FACES_BATCH_SIZE` instead of one
   request per photo; `POST /faces/analyze` stays as the single-image call.
 - **GPU image variant.** `backend/faces/Dockerfile` gains a GPU build stage on a
-  CUDA 12 / cuDNN 9 base with `onnxruntime-gpu`; the default stage stays CPU-only
-  on `python:3.11-slim`. Deploy stacks reserve the GPU device
+  forced `nvidia/cuda:13.4.2-cudnn-runtime-ubuntu24.04` base (CUDA 13 / cuDNN 9)
+  with `onnxruntime-gpu`; the default stage stays CPU-only on `python:3.11-slim`.
+  Deploy stacks reserve the GPU device
   (`deploy.resources.reservations.devices` + NVIDIA container toolkit) and cap
   VRAM use so ollama keeps its share.
 - **Clustering decides on a kNN candidate graph.** When the store supports it,

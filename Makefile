@@ -212,7 +212,7 @@ dev-registry: ## Run registry in the foreground
 dev-webapp: ## Run the webapp dev server in the foreground
 	@$(DEV) run webapp
 
-dev-faces: ## Run the faces service in the foreground
+dev-faces: ## Run the faces service in the foreground (FACES_PROVIDERS/FACES_GPU_ID pick the execution provider; FACES_BATCH_SIZE/FACES_CLUSTER_MODE tune the recognition job)
 	@$(DEV) run faces
 
 ##@ Testing
@@ -258,7 +258,7 @@ test-webapp: ## Run webapp unit tests (Vitest)
 	@echo "${GREEN}Testing webapp…${NC}"
 	@cd webapp && npm test
 
-test-faces: ## Run the faces pytest suite
+test-faces: ## Run the faces unit pytest suite (fake engine, no models; provider/batching/cluster-graph tests included)
 	@if [ -x backend/faces/.venv/bin/python ]; then \
 	  echo "${GREEN}Testing faces…${NC}"; \
 	  cd backend/faces && .venv/bin/python -m pytest; \

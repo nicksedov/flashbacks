@@ -888,3 +888,46 @@ scopes:
     service-deployment.faces-image-healthcheck:
       evidence:
         - pytest::tests/deploy/test_service_deployment.py::test_faces_image_healthcheck_and_user
+    face-analysis.provider-configurable:
+      evidence:
+        - facespytest::backend/faces/tests/test_engine_providers.py::test_gpu_provider_selected_when_available
+    face-analysis.provider-cpu-default:
+      evidence:
+        - facespytest::backend/faces/tests/test_engine_providers.py::test_cpu_provider_default
+    face-analysis.provider-fallback:
+      evidence:
+        - facespytest::backend/faces/tests/test_engine_providers.py::test_cuda_unavailable_falls_back
+    face-analysis.health-reports-provider:
+      evidence:
+        - facespytest::backend/faces/tests/test_health.py::test_health_reports_provider
+    face-analysis.batch-entry-per-image:
+      evidence:
+        - facespytest::backend/faces/tests/test_analyze_batch.py::test_batch_returns_entry_per_image
+    face-analysis.batch-image-isolated:
+      evidence:
+        - facespytest::backend/faces/tests/test_analyze_batch.py::test_undecodable_image_isolated
+    face-analysis.job-batch-size:
+      evidence:
+        - go::./internal/application/faces::TestFaceRecognitionManager_AnalyzesInBatches
+    face-analysis.failed-batch-retried:
+      evidence:
+        - go::./internal/application/faces::TestFaceRecognitionManager_FailedBatchRetried
+    face-clustering.candidates-scope-the-graph:
+      evidence:
+        - facespytest::backend/faces/tests/test_cluster_graph.py::test_candidates_scope_graph
+    face-clustering.same-person-linked:
+      evidence:
+        - go::./internal/application/faces::TestClusterAssignUsesStoreCandidates
+    face-clustering.recognition-threshold-applied:
+      evidence:
+        - facespytest::backend/faces/tests/test_cluster_graph.py::test_relaxed_candidate_joins_group
+    face-clustering.ambiguous-candidate-unassigned:
+      evidence:
+        - facespytest::backend/faces/tests/test_cluster_graph.py::test_ambiguous_candidate_stays_unassigned
+    face-clustering.in-memory-fallback:
+      evidence:
+        - go::./internal/application/faces::TestClusterAssignFallsBackInMemory
+        - go::./internal/application/faces::TestClusterAssignHonoursMode
+    face-clustering.index-after-pass:
+      evidence:
+        - go::./internal/application/faces::TestFaceRecognitionManager_EnsuresIndexBeforeClustering

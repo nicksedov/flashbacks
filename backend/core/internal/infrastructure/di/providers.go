@@ -248,6 +248,8 @@ var AppSet = wire.NewSet(
 	ProvideTagScanManager,
 	ProvideEmbeddingBackfillManager,
 	ProvideFaceRecognitionManager,
+	ProvideFaceNeighbours,
+	ProvideFaceIndexMaintainer,
 	ProvideClusterStorage,
 	ProvideGalleryAccess,
 	ProvideSettingsLoader,
@@ -308,9 +310,34 @@ func ProvideEmbeddingBackfillManager(db *gorm.DB) *imaging.EmbeddingBackfillMana
 	return imaging.NewEmbeddingBackfillManager(db)
 }
 
-// ProvideFaceRecognitionManager creates the face recognition manager.
-func ProvideFaceRecognitionManager(db *gorm.DB, client facesclient.Client) *recognition.Manager {
-	return recognition.NewManager(db, client)
+// ProvideFaceRecognitionManager creates the face recognition manager with the
+// configured batching and clustering options.
+func ProvideFaceRecognitionManager(
+	db *gorm.DB,
+	client facesclient.Client,
+	neighbours recognition.NeighbourSource,
+	indexes recognition.IndexMaintainer,
+	cfg *config.AppConfig,
+) *recognition.Manager {
+	return recognition.NewManagerWithDependencies(db, client, recognition.Dependencies{
+		Neighbours: neighbours,
+		Indexes:    indexes,
+	}, recognition.Options{
+		BatchSize:         cfg.FacesBatchSize,
+		AnalyzeTimeout:    cfg.FacesAnalyzeTimeout,
+		ClusterMode:       cfg.FacesClusterMode,
+		ClusterNeighbours: cfg.FacesClusterNeighbours,
+	})
+}
+
+// ProvideFaceNeighbours creates the pgvector-backed face neighbour source.
+func ProvideFaceNeighbours(db *gorm.DB) recognition.NeighbourSource {
+	return database.NewFaceNeighbours(db)
+}
+
+// ProvideFaceIndexMaintainer creates the maintainer of the face neighbour index.
+func ProvideFaceIndexMaintainer(db *gorm.DB) recognition.IndexMaintainer {
+	return database.NewFaceNeighbours(db)
 }
 
 // ProvideClusterStorage creates the geo-cluster storage.

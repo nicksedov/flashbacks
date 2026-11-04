@@ -16,6 +16,7 @@ from PIL import Image
 
 from app.config import (
     CLUSTER_MIN_SIMILARITY,
+    CUDA_PROVIDERS,
     EMBEDDING_DIM,
     RECOGNITION_MARGIN,
     RECOGNITION_MIN_SIMILARITY,
@@ -203,9 +204,18 @@ class FaceEngine:
         # heavy ML dependencies until a real inference runs.
         from insightface.app import FaceAnalysis
 
-        app = FaceAnalysis(name=self._name, providers=list(selection.active))
-        # In InsightFace ``ctx_id >= 0`` selects a GPU device and ``ctx_id < 0``
-        # selects CPU, so it is derived from the resolved provider list.
+        providers = list(selection.active)
+        kwargs: dict[str, Any] = {"name": self._name, "providers": providers}
+        if selection.device_id >= 0:
+            # InsightFace's ``prepare(ctx_id=...)`` only switches CPU vs CUDA;
+            # the card itself is chosen by ONNX Runtime's provider options, so
+            # the device id must be passed when the sessions are created.
+            kwargs["provider_options"] = [
+                {"device_id": selection.device_id} if provider in CUDA_PROVIDERS else {}
+                for provider in providers
+            ]
+        app = FaceAnalysis(**kwargs)
+        # ``ctx_id >= 0`` keeps InsightFace on the CUDA path; -1 uses CPU sessions.
         app.prepare(ctx_id=selection.device_id, det_size=(640, 640))
         logger.info(
             "face models loaded: %s on %s (device %d)",

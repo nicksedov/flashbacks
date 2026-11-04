@@ -63,6 +63,31 @@ def test_single_gpu_id_remains_supported() -> None:
     assert settings.gpu_ids == (1,)
 
 
+def test_sessions_are_pinned_to_their_device(monkeypatch) -> None:
+    """InsightFace only switches CPU/CUDA on ctx_id; the card needs options."""
+    created: list[dict] = []
+
+    class FakeAnalysis:
+        def __init__(self, **kwargs) -> None:
+            self.kwargs = kwargs
+
+        def prepare(self, ctx_id, det_size) -> None:  # noqa: ARG002
+            self.kwargs["ctx_id"] = ctx_id
+            created.append(self.kwargs)
+
+    monkeypatch.setattr("insightface.app.FaceAnalysis", FakeAnalysis)
+
+    engine = FaceEngine(
+        settings=FaceSettings(providers=(CUDA, CPU), gpu_ids=(1,)),
+        available=(CUDA, CPU),
+    )
+    engine._load_analysis(engine.provider_selection())
+
+    assert created[0]["providers"] == [CUDA, CPU]
+    assert created[0]["provider_options"] == [{"device_id": 1}, {}]
+    assert created[0]["ctx_id"] == 1
+
+
 def test_pool_reports_every_device() -> None:
     engine = FaceEngine(
         settings=FaceSettings(providers=(CUDA, CPU), gpu_ids=(0, 1)),

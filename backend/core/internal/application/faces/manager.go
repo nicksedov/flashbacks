@@ -934,6 +934,13 @@ func (m *Manager) resetGeneratedPeople() {
 		} else if err := m.personRefs.DeleteByPersonIDs(generatedIDs); err != nil {
 			m.setError(fmt.Sprintf("reset person references: %v", err))
 		}
+		// A previous interrupted reset may have left references whose person no
+		// longer exists; they must not match a new cluster against a ghost id.
+		if err := m.db.Where("person_id NOT IN (?)",
+			m.db.Model(&domain.Person{}).Select("id")).
+			Delete(&domain.PersonReference{}).Error; err != nil {
+			m.setError(fmt.Sprintf("drop orphan person references: %v", err))
+		}
 	}
 
 	if err := m.db.Where("name = ?", "").Delete(&domain.Person{}).Error; err != nil {

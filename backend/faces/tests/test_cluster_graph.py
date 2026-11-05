@@ -162,6 +162,43 @@ def test_burst_sequence_yields_one_person_not_several() -> None:
     assert labels[6:] == [-1, -1, -1, -1], labels[6:]
 
 
+def _merge_graph(first: list[int], second: list[int]):
+    """Two star-shaped groups whose hubs are clear medoids."""
+    links: dict[tuple[int, int], float] = {}
+    directed: set[tuple[int, int]] = set()
+
+    def add(left: int, right: int, similarity: float) -> None:
+        key = (min(left, right), max(left, right))
+        links[key] = max(links.get(key, 0.0), similarity)
+        directed.add((left, right))
+        directed.add((right, left))
+
+    for members in (first, second):
+        hub = members[0]
+        for member in members[1:]:
+            add(hub, member, 0.9)
+    for left in first[:5]:
+        for right in second[:5]:
+            add(left, right, 0.7)
+    return links, directed
+
+
+def test_merge_stage_respects_the_gallery_share_cap() -> None:
+    """Two 200-face groups are one identity by evidence but exceed 10% here."""
+    from app.engine import FaceEngine
+
+    first = list(range(1, 201))
+    second = list(range(201, 401))
+    links, directed = _merge_graph(first, second)
+    photos = list(range(1, 401))
+
+    groups = FaceEngine._merge_groups(
+        [first, second], links, directed, photos, 0.5, 2, 0.4
+    )
+
+    assert len(groups) == 2, [len(group) for group in groups]
+
+
 def test_merge_stage_rejoins_the_pieces_of_one_person() -> None:
     """Two components the core stage kept apart merge on medoid and support.
 

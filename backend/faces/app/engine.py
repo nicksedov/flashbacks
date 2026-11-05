@@ -1106,6 +1106,13 @@ class FaceEngine:
                     if similarity > medoid_score.get(key, 0.0):
                         medoid_score[key] = similarity
 
+            # The gallery-share cap stays a diagnostic and a fallback split; it
+            # also bounds the merge stage, so no chain of lookalikes can grow a
+            # person past a plausible share of the gallery.
+            max_group = max(
+                CLUSTER_MAX_FACES_MIN, int(len(photo_of) * CLUSTER_MAX_SHARE)
+            )
+
             best: dict[int, tuple[float, int]] = {}
             for key, score in medoid_score.items():
                 if score < merge_floor:
@@ -1113,6 +1120,11 @@ class FaceEngine:
                 if pair_support.get(key, 0) < support_needed:
                     continue
                 left_group, right_group = key
+                if (
+                    len(groups_by_id[left_group]) + len(groups_by_id[right_group])
+                    > max_group
+                ):
+                    continue
                 if score > best.get(left_group, (0.0, -1))[0]:
                     best[left_group] = (score, right_group)
                 if score > best.get(right_group, (0.0, -1))[0]:

@@ -124,6 +124,9 @@ Desktop.ini
 # overlay (test.env) is tracked: it only carries non-secret test overrides.
 .env
 
+# Kaggle credentials (access token used by tools/lfw_calibration.py)
+.kaggle/
+
 # ===========================
 # Generated files
 # ===========================

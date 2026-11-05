@@ -337,10 +337,16 @@ class FaceEngine:
         batch = max(1, self._settings.recognition_batch)
         for start in range(0, len(refinements), batch):
             chunk = refinements[start : start + batch]
-            crops = np.stack(
-                [face_align.norm_crop(crop, candidate.kps) for _, crop, candidate in chunk]
+            crops = [
+                face_align.norm_crop(crop, candidate.kps)
+                for _, crop, candidate in chunk
+            ]
+            # ``get_feat`` wraps a non-list argument into a one-element list, so
+            # a stacked ndarray reaches OpenCV as a single four-dimensional
+            # image and ``blobFromImages`` rejects it. Pass the crops as a list.
+            features = _l2_normalize(
+                np.asarray(recognizer.get_feat(crops), dtype=float)
             )
-            features = _l2_normalize(np.asarray(recognizer.get_feat(crops), dtype=float))
             for (index, _, _), embedding in zip(chunk, features):
                 descriptions[index]["embedding"] = [float(v) for v in embedding]
 

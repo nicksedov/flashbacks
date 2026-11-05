@@ -58,6 +58,26 @@ class FakeRecognition:
         return np.stack([UNIT.copy() for _ in range(len(crops))])
 
 
+class InsightFaceRecognition(FakeRecognition):
+    """Mimics the real ``insightface`` ``ArcFaceONNX.get_feat`` contract.
+
+    The installed recognizer wraps any non-list argument into a one-element
+    list, so a stacked ndarray reaches OpenCV as a single four-dimensional
+    image and ``cv2.dnn.blobFromImages`` rejects it. This fake fails the same
+    way, which keeps the engine's call shape honest.
+    """
+
+    def get_feat(self, crops) -> np.ndarray:
+        if not isinstance(crops, (list, tuple)):
+            raise TypeError(
+                "get_feat expects a list of aligned crops, "
+                f"got a single {type(crops).__name__}"
+            )
+        for crop in crops:
+            assert getattr(crop, "ndim", None) == 3, "each crop must be HxWxC"
+        return super().get_feat(crops)
+
+
 class FakeAnalysis:
     """Detects the configured boxes on the frame and one face per crop."""
 
@@ -96,6 +116,17 @@ def test_aligned_crops_are_chunked_by_the_configured_batch() -> None:
     assert analysis.models["recognition"].calls == [2, 1]
     for face in faces:
         assert face["embedding"] == pytest.approx(UNIT.tolist())
+
+
+def test_refined_crops_reach_the_recognizer_as_a_list() -> None:
+    analysis = FakeAnalysis(SMALL_BOXES)
+    analysis.models["recognition"] = InsightFaceRecognition()
+    engine = _engine(analysis, recognition_batch=32)
+
+    faces = engine.analyze(_frame_b64())
+
+    assert len(faces) == 3
+    assert analysis.models["recognition"].calls == [3]
 
 
 def test_batch_size_one_matches_the_batched_embeddings() -> None:

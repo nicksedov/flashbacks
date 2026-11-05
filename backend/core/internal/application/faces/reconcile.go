@@ -11,12 +11,16 @@ import (
 )
 
 // reconcileMaxShare/reconcileMaxFacesMin bound how large one merge may grow a
-// person during reconcile. A person above this share of the assigned gallery is
-// implausible, so the merge is refused: the guard stops a lookalike chain from
-// collapsing the library into one person. It is a safety valve, not the
-// splitting mechanism.
+// person during reconcile. A person above this share of the assigned gallery
+// would be implausible, so the merge is refused: the guard stops a lookalike
+// chain from collapsing the library into one person. It is a safety valve, not
+// the splitting mechanism.
+//
+// 15% leaves room for a large real identity (the production gallery's main
+// person holds ~14% of its faces) while still refusing a chain reaction; the
+// faces service clusters a single component under its own 10% cap first.
 const (
-	reconcileMaxShare    = 0.10
+	reconcileMaxShare    = 0.15
 	reconcileMaxFacesMin = 250
 )
 

@@ -33,6 +33,45 @@ scopes:
     face-recognition.people-localized:
       evidence:
         - vitest::webapp/src/components/tabs/PeopleTab.test.tsx::PeopleTab > renders People labels in the selected language without falling back to a raw key
+    face-recognition.image-faces-returned:
+      evidence:
+        - go::./internal/interfaces/handler::TestHandleGetImageFaces_ListsDetectedFaces
+    face-recognition.image-face-person:
+      evidence:
+        - go::./internal/interfaces/handler::TestHandleGetImageFaces_ReportsPersonName
+    face-recognition.image-face-unassigned:
+      evidence:
+        - go::./internal/interfaces/handler::TestHandleGetImageFaces_UnassignedFaceHasNoPerson
+    face-recognition.image-faces-empty:
+      evidence:
+        - go::./internal/interfaces/handler::TestHandleGetImageFaces_EmptyWithoutFaces
+    face-recognition.image-face-box-scaled:
+      evidence:
+        - vitest::webapp/src/components/gallery/lightbox/PeopleImagePanel.test.tsx::PeopleImagePanel > scales every box with the rendered image
+    face-recognition.lightbox-people-tab-order:
+      evidence:
+        - vitest::webapp/src/components/gallery/UnifiedLightbox.test.tsx::UnifiedLightbox > places the People tab immediately before the Tags tab
+    face-recognition.lightbox-people-box-per-face:
+      evidence:
+        - vitest::webapp/src/components/gallery/lightbox/PeopleImagePanel.test.tsx::PeopleImagePanel > draws one box per detected face
+    face-recognition.lightbox-people-face-numbered:
+      evidence:
+        - vitest::webapp/src/components/gallery/lightbox/PeopleImagePanel.test.tsx::PeopleImagePanel > labels a person's face with the person's number
+    face-recognition.lightbox-people-unassigned-unnumbered:
+      evidence:
+        - vitest::webapp/src/components/gallery/lightbox/PeopleImagePanel.test.tsx::PeopleImagePanel > draws an unassigned face without a number
+    face-recognition.lightbox-people-list:
+      evidence:
+        - vitest::webapp/src/components/gallery/lightbox/PeoplePanel.test.tsx::PeoplePanel > lists each person once with the number drawn on the image
+    face-recognition.lightbox-people-name-fallback:
+      evidence:
+        - vitest::webapp/src/components/gallery/lightbox/PeoplePanel.test.tsx::PeoplePanel > renders the placeholder for an unnamed person
+    face-recognition.lightbox-people-empty:
+      evidence:
+        - vitest::webapp/src/components/gallery/lightbox/PeoplePanel.test.tsx::PeoplePanel > shows the empty state when the image has no faces
+    face-recognition.lightbox-people-localized:
+      evidence:
+        - vitest::webapp/src/components/gallery/lightbox/PeoplePanel.test.tsx::PeoplePanel > renders Russian labels under the Russian interface
     llm-model-metadata.capabilities-deduplicated:
       evidence:
         - go::./internal/infrastructure/llm::TestAlibabaCapabilitiesDeduplicated

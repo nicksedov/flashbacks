@@ -270,6 +270,7 @@ export const translationsRu = {
   "lightbox.tab.ai": "ИИ-ассистент",
   "lightbox.tab.exif": "Детали",
   "lightbox.tab.ocr": "OCR",
+  "lightbox.tab.people": "Люди",
   "lightbox.tab.tags": "Теги",
   "lightbox.panel.show": "Показать детали",
   "lightbox.panel.hide": "Скрыть детали",
@@ -555,6 +556,9 @@ export const translationsRu = {
   // OCR lightbox
   "lightbox.ocr.loading": "Загрузка...",
   "lightbox.ocr.loadingImage": "Загрузка изображения...",
+  "lightbox.people.emptyTitle": "На этом фото нет лиц",
+  "lightbox.people.emptyHint": "Распознавание лиц не нашло здесь лиц. Запустите его в настройках анализа, если галерея ещё не просканирована.",
+  "lightbox.people.loadFailed": "Не удалось загрузить лица на этом фото",
   "lightbox.ocr.preparing": "Подготовка изображения...",
 
   // API OCR messages

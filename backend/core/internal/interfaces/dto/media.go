@@ -911,3 +911,22 @@ type FaceStatusResponse struct {
 	// can tell a stalled clustering pass from an idle one.
 	LastError string `json:"lastError,omitempty"`
 }
+
+// ImageFaceDTO is one face detected on a single image. The box values are pixels
+// in the analysed image's own frame, the same frame /api/image serves unchanged,
+// so a client can scale them to whatever size it renders the image at.
+type ImageFaceDTO struct {
+	ID         uint    `json:"id"`
+	PersonID   uint    `json:"personId"`
+	PersonName string  `json:"personName"`
+	X          float32 `json:"x"`
+	Y          float32 `json:"y"`
+	Width      float32 `json:"width"`
+	Height     float32 `json:"height"`
+	Confidence float32 `json:"confidence"`
+}
+
+// ImageFacesResponse is the JSON response for GET /api/image-faces.
+type ImageFacesResponse struct {
+	Faces []ImageFaceDTO `json:"faces"`
+}

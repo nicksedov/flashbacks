@@ -270,6 +270,7 @@ export const translationsEn = {
   "lightbox.tab.ai": "AI Assistant",
   "lightbox.tab.exif": "Details",
   "lightbox.tab.ocr": "OCR",
+  "lightbox.tab.people": "People",
   "lightbox.tab.tags": "Tags",
   "lightbox.panel.show": "Show details",
   "lightbox.panel.hide": "Hide details",
@@ -555,6 +556,9 @@ export const translationsEn = {
   // OCR lightbox
   "lightbox.ocr.loading": "Loading...",
   "lightbox.ocr.loadingImage": "Loading image...",
+  "lightbox.people.emptyTitle": "No faces on this photo",
+  "lightbox.people.emptyHint": "Face recognition found no faces here. Run it from the analysis settings if the gallery has not been scanned yet.",
+  "lightbox.people.loadFailed": "Could not load the faces of this photo",
   "lightbox.ocr.preparing": "Preparing image...",
 
   // API OCR messages

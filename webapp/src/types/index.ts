@@ -697,6 +697,26 @@ export interface FaceStatusResponse {
   total: number
 }
 
+// ImageFaceDTO is one face detected on a single image. The box values are pixels
+// of the analysed image — the same frame /api/image serves — so the lightbox
+// scales them by the rendered/natural size of the image it displays.
+export interface ImageFaceDTO {
+  id: number
+  // personId is 0 for a face no person claims (clustering noise).
+  personId: number
+  // personName is empty while the person is unnamed.
+  personName: string
+  x: number
+  y: number
+  width: number
+  height: number
+  confidence: number
+}
+
+export interface ImageFacesResponse {
+  faces: ImageFaceDTO[]
+}
+
 export interface TagScanStatusResponse {
   running: boolean
   paused: boolean

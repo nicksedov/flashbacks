@@ -65,6 +65,7 @@ import type {
   PeopleResponse,
   PersonPhotosResponse,
   FaceStatusResponse,
+  ImageFacesResponse,
   GeocodeSearchResponse,
   UpdateGpsRequest,
   UpdateGpsResponse,
@@ -575,6 +576,11 @@ export function fetchPersonPhotos(id: number, page: number, pageSize: number): P
 
 export function fetchFacesStatus(): Promise<FaceStatusResponse> {
   return apiGet<FaceStatusResponse>("/api/faces/status")
+}
+
+/** Faces detected on one image, with their boxes and the person they belong to. */
+export function fetchImageFaces(imagePath: string): Promise<ImageFacesResponse> {
+  return apiGet<ImageFacesResponse>("/api/image-faces", { path: imagePath })
 }
 
 export function startFaces(): Promise<{ message: string }> {

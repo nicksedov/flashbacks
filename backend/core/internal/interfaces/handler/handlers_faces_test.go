@@ -136,6 +136,97 @@ func TestHandleFacesSettingsPersisted(t *testing.T) {
 	require.Equal(t, 7, schedule.EndHour)
 }
 
+// newImageFacesServer builds the faces test server with gallery access, so the
+// per-image faces handler can verify the requested path.
+func newImageFacesServer(t *testing.T) (*Server, *gorm.DB, func()) {
+	t.Helper()
+	svc, db, cleanup := newFacesTestServer(t)
+	svc.galleryAccess = helpers.NewGalleryAccess(db)
+	testutil.SeedGalleryFolder(t, db, "/gallery")
+	return svc, db, cleanup
+}
+
+// TestHandleGetImageFaces_ListsDetectedFaces guards that the endpoint answers one
+// entry per detected face on the requested image.
+func TestHandleGetImageFaces_ListsDetectedFaces(t *testing.T) {
+	svc, db, cleanup := newImageFacesServer(t)
+	defer cleanup()
+
+	img := testutil.SeedImageFile(t, db, "/gallery/group.jpg", "h1", 10)
+	first := domain.Face{ImageFileID: img.ID, X: 1, Y: 2, Width: 3, Height: 4, Confidence: 0.9}
+	second := domain.Face{ImageFileID: img.ID, X: 5, Y: 6, Width: 7, Height: 8, Confidence: 0.8}
+	require.NoError(t, svc.faceRepo.Create(&first))
+	require.NoError(t, svc.faceRepo.Create(&second))
+
+	w := serveHandler(svc.handleGetImageFaces, http.MethodGet, "/api/image-faces?path=/gallery/group.jpg", nil)
+	require.Equal(t, http.StatusOK, w.Code, "body: %s", w.Body.String())
+
+	var resp dto.ImageFacesResponse
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	require.Len(t, resp.Faces, 2)
+	require.Equal(t, first.ID, resp.Faces[0].ID)
+	require.Equal(t, second.ID, resp.Faces[1].ID)
+}
+
+// TestHandleGetImageFaces_ReportsPersonName guards that a clustered face reports
+// the person it belongs to, name included.
+func TestHandleGetImageFaces_ReportsPersonName(t *testing.T) {
+	svc, db, cleanup := newImageFacesServer(t)
+	defer cleanup()
+
+	person := domain.Person{Name: "Anna"}
+	require.NoError(t, svc.personRepo.Create(&person))
+	img := testutil.SeedImageFile(t, db, "/gallery/anna.jpg", "h2", 20)
+	face := domain.Face{ImageFileID: img.ID, X: 1, Y: 1, Width: 2, Height: 2, Confidence: 0.95}
+	require.NoError(t, svc.faceRepo.Create(&face))
+	require.NoError(t, svc.faceRepo.SetPersonID(face.ID, person.ID))
+
+	w := serveHandler(svc.handleGetImageFaces, http.MethodGet, "/api/image-faces?path=/gallery/anna.jpg", nil)
+	require.Equal(t, http.StatusOK, w.Code, "body: %s", w.Body.String())
+
+	var resp dto.ImageFacesResponse
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	require.Len(t, resp.Faces, 1)
+	require.Equal(t, person.ID, resp.Faces[0].PersonID)
+	require.Equal(t, "Anna", resp.Faces[0].PersonName)
+}
+
+// TestHandleGetImageFaces_UnassignedFaceHasNoPerson guards the noise case: a face
+// no person claims reports person id 0, which the client draws unnumbered.
+func TestHandleGetImageFaces_UnassignedFaceHasNoPerson(t *testing.T) {
+	svc, db, cleanup := newImageFacesServer(t)
+	defer cleanup()
+
+	img := testutil.SeedImageFile(t, db, "/gallery/crowd.jpg", "h3", 30)
+	face := domain.Face{ImageFileID: img.ID, X: 1, Y: 1, Width: 2, Height: 2, Confidence: 0.7}
+	require.NoError(t, svc.faceRepo.Create(&face))
+
+	w := serveHandler(svc.handleGetImageFaces, http.MethodGet, "/api/image-faces?path=/gallery/crowd.jpg", nil)
+	require.Equal(t, http.StatusOK, w.Code, "body: %s", w.Body.String())
+
+	var resp dto.ImageFacesResponse
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	require.Len(t, resp.Faces, 1)
+	require.Zero(t, resp.Faces[0].PersonID)
+	require.Empty(t, resp.Faces[0].PersonName)
+}
+
+// TestHandleGetImageFaces_EmptyWithoutFaces guards that an image the analyser
+// found no faces on answers an empty list rather than an error.
+func TestHandleGetImageFaces_EmptyWithoutFaces(t *testing.T) {
+	svc, db, cleanup := newImageFacesServer(t)
+	defer cleanup()
+
+	testutil.SeedImageFile(t, db, "/gallery/landscape.jpg", "h4", 40)
+
+	w := serveHandler(svc.handleGetImageFaces, http.MethodGet, "/api/image-faces?path=/gallery/landscape.jpg", nil)
+	require.Equal(t, http.StatusOK, w.Code, "body: %s", w.Body.String())
+
+	var resp dto.ImageFacesResponse
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	require.Empty(t, resp.Faces)
+}
+
 // TestHandleFacesStart_JobStarted guards that launching face recognition
 // reports the job as running.
 func TestHandleFacesStart_JobStarted(t *testing.T) {

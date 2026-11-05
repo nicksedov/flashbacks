@@ -149,6 +149,7 @@ func (s *Server) SetupRouter(authMiddleware *middleware.AuthMiddleware, csrfProt
 			// Face recognition endpoints
 			protected.GET("/people", s.handleGetPeople)
 			protected.GET("/people/:id/photos", s.handleGetPersonPhotos)
+			protected.GET("/image-faces", s.handleGetImageFaces)
 			protected.GET("/faces/status", s.handleGetFacesStatus)
 			protected.POST("/faces/start", s.handleStartFaces)
 			protected.POST("/faces/stop", s.handleStopFaces)

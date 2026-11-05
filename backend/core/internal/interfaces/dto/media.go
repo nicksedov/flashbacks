@@ -907,4 +907,7 @@ type FaceStatusResponse struct {
 	Running   bool `json:"running"`
 	Processed int  `json:"processed"`
 	Total     int  `json:"total"`
+	// LastError is the last error the recognition job recorded, so an operator
+	// can tell a stalled clustering pass from an idle one.
+	LastError string `json:"lastError,omitempty"`
 }

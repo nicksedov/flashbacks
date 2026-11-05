@@ -152,3 +152,29 @@ func TestSessionRepository_CleanupExpiredSessions(t *testing.T) {
 	repo.db.Model(&domain.Session{}).Count(&count)
 	assert.Equal(t, int64(1), count)
 }
+
+func TestSessionRepository_UpdateLastSeenIsThrottled(t *testing.T) {
+	repo, cleanup := setupSessionRepository(t)
+	defer cleanup()
+	user := testutil.SeedUserWithHash(t, repo.db, "user", "user", domain.RoleUser, true, "hashed")
+	token, err := repo.CreateSession(context.Background(), user.ID, "127.0.0.1", "test-agent")
+	require.NoError(t, err)
+
+	// A recent timestamp is not rewritten: a page fires hundreds of requests
+	// that would otherwise serialize on this row.
+	recent := time.Now().Add(-10 * time.Second)
+	require.NoError(t, repo.db.Model(&domain.Session{}).Where("user_id = ?", user.ID).
+		Update("last_seen_at", recent).Error)
+	require.NoError(t, repo.UpdateLastSeen(context.Background(), token))
+	var session domain.Session
+	require.NoError(t, repo.db.Where("user_id = ?", user.ID).First(&session).Error)
+	assert.WithinDuration(t, recent, session.LastSeenAt, time.Second)
+
+	// After the throttle window the write is applied.
+	stale := time.Now().Add(-2 * time.Minute)
+	require.NoError(t, repo.db.Model(&domain.Session{}).Where("user_id = ?", user.ID).
+		Update("last_seen_at", stale).Error)
+	require.NoError(t, repo.UpdateLastSeen(context.Background(), token))
+	require.NoError(t, repo.db.Where("user_id = ?", user.ID).First(&session).Error)
+	assert.True(t, session.LastSeenAt.After(stale.Add(time.Minute)))
+}

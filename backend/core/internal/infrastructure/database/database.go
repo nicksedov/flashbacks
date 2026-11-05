@@ -3,6 +3,7 @@ package database
 import (
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/flashbacks/core/internal/domain"
 	"github.com/flashbacks/core/internal/infrastructure/config"
@@ -28,6 +29,18 @@ func InitDatabase(cfg *config.AppConfig) (*gorm.DB, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to database: %w", err)
 	}
+
+	// Bound the pool: PostgreSQL allows 100 connections in this deployment and
+	// the UI can fire hundreds of authenticated requests at once (the People
+	// grid loads one thumbnail per tile). Letting the pool grow past the server
+	// limit fails session lookups, which the middleware reports as a logout.
+	sqlDB, err := db.DB()
+	if err != nil {
+		return nil, fmt.Errorf("failed to access database handle: %w", err)
+	}
+	sqlDB.SetMaxOpenConns(25)
+	sqlDB.SetMaxIdleConns(5)
+	sqlDB.SetConnMaxLifetime(30 * time.Minute)
 
 	// Enable pgvector extension BEFORE AutoMigrate needs the vector type
 	if err := db.Exec("CREATE EXTENSION IF NOT EXISTS vector").Error; err != nil {

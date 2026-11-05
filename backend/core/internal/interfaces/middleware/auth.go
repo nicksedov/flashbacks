@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"errors"
 	"net/http"
 
 	"github.com/flashbacks/core/internal/application/auth"
@@ -8,6 +9,7 @@ import (
 	"github.com/flashbacks/core/internal/interfaces/i18n"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 const (
@@ -55,7 +57,14 @@ func (m *AuthMiddleware) RequireAuth() gin.HandlerFunc {
 
 		user, err := m.authService.GetCurrentUser(c.Request.Context(), token)
 		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": m.resolveMessage(i18n.MsgMiddlewareUnauthorized)})
+			// Only a genuinely invalid session is a 401. A transient store
+			// failure (a connection-pool timeout under a burst of requests) must
+			// not sign the user out and redirect the whole UI to the login page.
+			if errors.Is(err, gorm.ErrRecordNotFound) || errors.Is(err, domain.ErrUserDeactivated) {
+				c.JSON(http.StatusUnauthorized, gin.H{"error": m.resolveMessage(i18n.MsgMiddlewareUnauthorized)})
+			} else {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": m.resolveMessage(i18n.MsgAuthInternalError)})
+			}
 			c.Abort()
 			return
 		}

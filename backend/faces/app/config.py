@@ -82,6 +82,48 @@ CLUSTER_MAX_FACES_MIN = 250
 CLUSTER_SPLIT_STEP = 0.05
 CLUSTER_SPLIT_MAX_SIMILARITY = 0.9
 
+#: Labelling algorithm revision. ``graph-v1`` keeps today's single-linkage
+#: behaviour and is the default until the calibrated ``graph-v2`` variant is
+#: enabled with ``FACES_CLUSTER_ALGO=graph-v2``.
+CLUSTER_ALGO = "graph-v1"
+CLUSTER_ALGOS = ("graph-v1", "graph-v2")
+
+#: ``graph-v2``: floor of the hub-corrected (CSLS) similarity between two
+#: *mutual* candidates for the edge to join a component. The scale differs from
+#: a raw cosine: a pair at its own neighbourhood mean scores 0, so the floor sits
+#: on that mean rather than near the raw 0.40 floor.
+CLUSTER_CORE_SIMILARITY = 0.0
+
+#: ``graph-v2``: mutual neighbours at ``CLUSTER_CORE_SIMILARITY`` a face needs
+#: before it may form (or join) a component. A face below it cannot bridge two
+#: identities; it is assigned to a component later or stays unassigned.
+CLUSTER_CORE_NEIGHBOURS = 3
+
+#: ``graph-v2``: similarity floor for assigning a non-core face to an already
+#: formed component, and the floor core uses to match a face against an existing
+#: person's reference set. The runner-up margin (``RECOGNITION_MARGIN``) applies
+#: on top, so an ambiguous match stays unassigned.
+CLUSTER_ASSIGN_SIMILARITY = 0.30
+
+#: ``graph-v2``: medoid similarity two components need before the merge stage
+#: joins them.
+CLUSTER_MERGE_SIMILARITY = 0.50
+
+#: ``graph-v2``: number of mutual, photo-distinct cross-component pairs that must
+#: clear ``CLUSTER_MERGE_SUPPORT_SIMILARITY`` before two components merge.
+CLUSTER_MERGE_SUPPORT = 2
+
+#: ``graph-v2``: similarity floor of one supporting cross-component pair.
+CLUSTER_MERGE_SUPPORT_SIMILARITY = CLUSTER_MIN_SIMILARITY
+
+#: ``graph-v2``: candidate faces kept per source photo in one neighbour list, so
+#: a burst sequence cannot fill the candidate budget.
+CLUSTER_CANDIDATES_PER_PHOTO = 2
+
+#: ``graph-v2``: distinct photos a person must span. A cluster made of one
+#: photo's burst is not a person.
+CLUSTER_MIN_PHOTOS = 2
+
 #: The always-available provider every host runs on.
 CPU_PROVIDER = "CPUExecutionProvider"
 
@@ -130,6 +172,8 @@ class FaceSettings:
     recognition_batch: int = 32
     #: Concurrent analyses allowed per device (each device holds its own session).
     max_concurrency: int = 1
+    #: Labelling algorithm revision: ``graph-v1`` or ``graph-v2``.
+    cluster_algo: str = CLUSTER_ALGO
 
     @classmethod
     def from_env(cls, environ: Optional[Mapping[str, str]] = None) -> "FaceSettings":
@@ -149,6 +193,9 @@ class FaceSettings:
             max_batch=_env_int(source, "FACES_MAX_BATCH", 16, minimum=1),
             recognition_batch=_env_int(source, "FACES_RECOGNITION_BATCH", 32, minimum=1),
             max_concurrency=_env_int(source, "FACES_MAX_CONCURRENCY", 1, minimum=1),
+            cluster_algo=_env_choice(
+                source, "FACES_CLUSTER_ALGO", CLUSTER_ALGO, CLUSTER_ALGOS
+            ),
         )
 
 
@@ -167,6 +214,19 @@ def _env_int_list(environ: Mapping[str, str], name: str) -> tuple[int, ...]:
         except ValueError:
             logger.warning("invalid %s entry %r; ignoring", name, part)
     return tuple(values)
+
+
+def _env_choice(
+    environ: Mapping[str, str], name: str, default: str, choices: Sequence[str]
+) -> str:
+    """Return the configured choice, falling back to *default* when invalid."""
+    raw = environ.get(name, "").strip()
+    if not raw:
+        return default
+    if raw not in choices:
+        logger.warning("invalid %s=%r; using %s", name, raw, default)
+        return default
+    return raw
 
 
 def _env_int(

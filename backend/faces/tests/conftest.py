@@ -72,8 +72,9 @@ class FakeEngine:
         embeddings: list[list[float]],
         min_cluster_size: int = 2,
         solo_faces: list[bool] | None = None,
+        photo_ids: list[int] | None = None,
     ) -> list[int]:
-        return FaceEngine.cluster(embeddings, min_cluster_size, solo_faces)
+        return FaceEngine.cluster(embeddings, min_cluster_size, solo_faces, photo_ids)
 
     def cluster_graph(
         self,
@@ -81,8 +82,11 @@ class FakeEngine:
         edges: list[tuple[int, int, float]],
         solo_faces: list[bool] | None = None,
         min_cluster_size: int = 2,
+        **kwargs,
     ) -> list[int]:
-        return FaceEngine.cluster_graph(face_ids, edges, solo_faces, min_cluster_size)
+        return FaceEngine.cluster_graph(
+            face_ids, edges, solo_faces, min_cluster_size, **kwargs
+        )
 
 
 @pytest.fixture()

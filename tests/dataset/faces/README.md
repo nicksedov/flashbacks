@@ -1,22 +1,18 @@
 # Faces dataset
 
 Photo sets for exercising the `faces` microservice and the core face-recognition
-job: face detection, embedding, and clustering into people. The `politicians`
-and `scientists` sets are freely licensed; `dima` is a private calibration set
-cut from the production gallery and must not be published.
+job: face detection, embedding, and clustering into people. Both sets are
+freely licensed.
 
 | Subfolder | Content | Photos |
 |---|---|---|
 | [`politicians/`](politicians/README.md) | Political figures (Obama, Biden, Merkel, Macron, G7 leaders) | 7 |
 | [`scientists/`](scientists/README.md) | Physicists (Einstein, Curie, Bohr; Solvay 1911 and 1927) | 7 |
-| [`dima/`](dima/README.md) | Labelled identity that production clustering split into six people; includes a `manifest.csv` with face boxes | 64 |
 
 Each subfolder has its own README with the per-file Wikimedia Commons source,
 author and license, plus the coverage of the intended face-recognition checks
 (same person in several photos, a person in both a group and an individual
-photo, a person from different angles). Images are downscaled to ≤1280 px,
-except in `dima/`, which keeps the originals so the manifest boxes stay in the
-production pixel space.
+photo, a person from different angles). Images are downscaled to ≤1280 px.
 
 ## Automated checks
 

@@ -97,12 +97,18 @@ func (r *SessionRepository) GetSession(ctx context.Context, token string) (*doma
 	return &session, nil
 }
 
-// UpdateLastSeen updates the last_seen_at timestamp for a session
+// UpdateLastSeen updates the last_seen_at timestamp for a session.
+//
+// The write is throttled to once a minute per session: every authenticated
+// request updates this row, and a page that fires hundreds of requests at once
+// (the People grid loads a thumbnail per tile) would otherwise serialize all of
+// them on one row and exhaust the connection pool.
 func (r *SessionRepository) UpdateLastSeen(ctx context.Context, token string) error {
 	tokenHash := fmt.Sprintf("%x", sha256.Sum256([]byte(token)))
+	now := time.Now()
 	return r.db.Model(&domain.Session{}).
-		Where("session_token = ? AND revoked_at IS NULL", tokenHash).
-		Update("last_seen_at", time.Now()).Error
+		Where("session_token = ? AND revoked_at IS NULL AND last_seen_at < ?", tokenHash, now.Add(-time.Minute)).
+		Update("last_seen_at", now).Error
 }
 
 // RevokeSession marks a session as revoked

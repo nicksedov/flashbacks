@@ -9,6 +9,18 @@ scopes:
     face-recognition.no-face-skipped:
       evidence:
         - go::./internal/application/faces::TestFaceRecognitionManager_NoFaceSkipped
+    face-recognition.identity-stable-across-passes:
+      evidence:
+        - go::./internal/application/faces::TestFaceRecognitionManager_IdentityStableAcrossPasses
+    face-recognition.people-reconciled:
+      evidence:
+        - go::./internal/application/faces::TestFaceRecognitionManager_PeopleReconciled
+    face-recognition.ambiguous-face-unassigned:
+      evidence:
+        - go::./internal/application/faces::TestFaceRecognitionManager_AmbiguousFaceUnassigned
+    face-recognition.distinct-identities-stay-separate:
+      evidence:
+        - facespytest::backend/faces/tests/test_clustering_quality.py::test_distinct_identities_stay_separate
     face-recognition.status-progress:
       evidence:
         - go::./internal/application/faces::TestFaceRecognitionManager_StatusProgress
@@ -970,3 +982,42 @@ scopes:
     face-clustering.index-after-pass:
       evidence:
         - go::./internal/application/faces::TestFaceRecognitionManager_EnsuresIndexBeforeClustering
+    face-recognition.lfw-verification-accuracy:
+      evidence:
+        - facespytest::backend/faces/tests/test_lfw_calibration.py::test_calibration_reports_per_fold_accuracy
+    face-recognition.lfw-verification-below-floor:
+      evidence:
+        - facespytest::backend/faces/tests/test_lfw_calibration.py::test_below_floor_run_fails_and_writes_no_config
+    face-recognition.lfw-undetected-pair:
+      evidence:
+        - facespytest::backend/faces/tests/test_lfw_calibration.py::test_undetected_face_counts_as_a_non_match
+    face-recognition.lfw-fold-mean:
+      evidence:
+        - facespytest::backend/faces/tests/test_lfw_calibration.py::test_reported_accuracy_is_the_unweighted_fold_mean
+    face-recognition.lfw-ab-table:
+      evidence:
+        - facespytest::backend/faces/tests/test_lfw_calibration.py::test_ab_table_scores_candidates_on_identical_pairs
+    face-recognition.lfw-threshold-selected:
+      evidence:
+        - facespytest::backend/faces/tests/test_lfw_calibration.py::test_calibration_reports_the_selected_threshold
+    face-recognition.lfw-threshold-reported:
+      evidence:
+        - facespytest::backend/faces/tests/test_health.py::test_health_returns_ok
+        - go::./internal/application/faces::TestClusterAssignUsesStoreCandidates
+    face-recognition.lfw-floors-ordered:
+      evidence:
+        - facespytest::backend/faces/tests/test_threshold_ordering.py::test_no_clustering_floor_sits_below_the_recognition_threshold
+    face-recognition.lfw-downloaded-on-demand:
+      evidence:
+        - facespytest::backend/faces/tests/test_lfw_calibration.py::test_calibration_downloads_when_no_dataset_exists
+    face-recognition.lfw-dataset-removed:
+      evidence:
+        - facespytest::backend/faces/tests/test_lfw_calibration.py::test_successful_run_removes_the_work_directory
+    face-recognition.lfw-dataset-retained-on-failure:
+      evidence:
+        - facespytest::backend/faces/tests/test_lfw_calibration.py::test_failed_run_retains_the_work_directory
+    face-recognition.lfw-threshold-unavailable:
+      evidence:
+        - go::./internal/application/faces::TestThresholdsRequireTheServicesValues
+        - go::./internal/application/faces::TestClusterAssignDegradesWithoutThresholds
+        - go::./internal/application/faces::TestReconcileSkipsWithoutThresholds

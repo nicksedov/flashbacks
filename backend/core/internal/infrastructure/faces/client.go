@@ -43,6 +43,12 @@ type Thresholds struct {
 	ClusterMinSimilarity     float64 `json:"clusterMinSimilarity"`
 	RecognitionMinSimilarity float64 `json:"recognitionMinSimilarity"`
 	RecognitionMargin        float64 `json:"recognitionMargin"`
+	// Assignment of a face (or a new cluster) to an existing person.
+	ClusterAssignSimilarity float64 `json:"clusterAssignSimilarity"`
+	// Merge of two people whose medoids and cross support agree.
+	ClusterMergeSimilarity        float64 `json:"clusterMergeSimilarity"`
+	ClusterMergeSupport           int     `json:"clusterMergeSupport"`
+	ClusterMergeSupportSimilarity float64 `json:"clusterMergeSupportSimilarity"`
 }
 
 // Health is the /faces/health payload.
@@ -58,6 +64,15 @@ type FaceLink struct {
 	FaceID      uint    `json:"faceId"`
 	CandidateID uint    `json:"candidateId"`
 	Similarity  float64 `json:"similarity"`
+}
+
+// FaceFacts are the per-face facts the clustering service needs beside the
+// candidate links, aligned with the submitted face ids. The service owns the
+// semantics (photo diversity, density, quality); core only reports the facts.
+type FaceFacts struct {
+	PhotoIDs  []uint    `json:"photoIds,omitempty"`
+	Widths    []float32 `json:"widths,omitempty"`
+	Qualities []float32 `json:"qualities,omitempty"`
 }
 
 // Client is the typed REST interface of the faces microservice.
@@ -83,8 +98,10 @@ type Client interface {
 	// photo: such a portrait may anchor a person for a face from a group shot.
 	Cluster(ctx context.Context, embeddings [][]float32, minClusterSize int, soloFaces []bool) ([]int, error)
 	// ClusterGraph groups faces from the candidate links of a vector-store kNN
-	// query, returning one label per face id (-1 for unassigned).
-	ClusterGraph(ctx context.Context, faceIDs []uint, edges []FaceLink, soloFaces []bool) ([]int, error)
+	// query, returning one label per face id (-1 for unassigned). facts carries
+	// the aligned photo/width/quality arrays the service uses for photo
+	// diversity and density.
+	ClusterGraph(ctx context.Context, faceIDs []uint, edges []FaceLink, soloFaces []bool, facts FaceFacts) ([]int, error)
 	// Health reports the service liveness, active provider and thresholds.
 	Health(ctx context.Context) (Health, error)
 }
@@ -107,7 +124,10 @@ func NewClientWithProvider(provider func() string) Client {
 	}
 	return &clientImpl{
 		urlProvider: provider,
-		httpClient:  &http.Client{Timeout: 60 * time.Second},
+		// One clustering request can legitimately exceed a minute on a large
+		// gallery (the core budget is FACES_CLUSTER_TIMEOUT, 10m); shorter calls
+		// stay bounded by their own request contexts.
+		httpClient: &http.Client{Timeout: 10 * time.Minute},
 	}
 }
 
@@ -255,7 +275,13 @@ func (c *clientImpl) Cluster(ctx context.Context, embeddings [][]float32, minClu
 }
 
 // ClusterGraph groups faces from candidate links answered by the vector store.
-func (c *clientImpl) ClusterGraph(ctx context.Context, faceIDs []uint, edges []FaceLink, soloFaces []bool) ([]int, error) {
+func (c *clientImpl) ClusterGraph(
+	ctx context.Context,
+	faceIDs []uint,
+	edges []FaceLink,
+	soloFaces []bool,
+	facts FaceFacts,
+) ([]int, error) {
 	var resp struct {
 		Labels []int `json:"labels"`
 	}
@@ -265,6 +291,15 @@ func (c *clientImpl) ClusterGraph(ctx context.Context, faceIDs []uint, edges []F
 	}
 	if len(soloFaces) > 0 {
 		body["soloFaces"] = soloFaces
+	}
+	if len(facts.PhotoIDs) > 0 {
+		body["photoIds"] = facts.PhotoIDs
+	}
+	if len(facts.Widths) > 0 {
+		body["widths"] = facts.Widths
+	}
+	if len(facts.Qualities) > 0 {
+		body["qualities"] = facts.Qualities
 	}
 	if err := c.post(ctx, "/faces/cluster-graph", body, &resp); err != nil {
 		return nil, err

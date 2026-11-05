@@ -11,6 +11,15 @@ from conftest import FakeEngine
 from fastapi.testclient import TestClient
 
 from app.config import (
+    CLUSTER_ALGO,
+    CLUSTER_ASSIGN_SIMILARITY,
+    CLUSTER_CANDIDATES_PER_PHOTO,
+    CLUSTER_CORE_NEIGHBOURS,
+    CLUSTER_CORE_SIMILARITY,
+    CLUSTER_MERGE_SIMILARITY,
+    CLUSTER_MERGE_SUPPORT,
+    CLUSTER_MERGE_SUPPORT_SIMILARITY,
+    CLUSTER_MIN_PHOTOS,
     CLUSTER_MIN_SIMILARITY,
     RECOGNITION_MARGIN,
     RECOGNITION_MIN_SIMILARITY,
@@ -26,6 +35,15 @@ def test_health_returns_ok(client) -> None:
         "clusterMinSimilarity": CLUSTER_MIN_SIMILARITY,
         "recognitionMinSimilarity": RECOGNITION_MIN_SIMILARITY,
         "recognitionMargin": RECOGNITION_MARGIN,
+        "clusterAlgo": CLUSTER_ALGO,
+        "clusterCoreSimilarity": CLUSTER_CORE_SIMILARITY,
+        "clusterCoreNeighbours": CLUSTER_CORE_NEIGHBOURS,
+        "clusterAssignSimilarity": CLUSTER_ASSIGN_SIMILARITY,
+        "clusterMergeSimilarity": CLUSTER_MERGE_SIMILARITY,
+        "clusterMergeSupport": CLUSTER_MERGE_SUPPORT,
+        "clusterMergeSupportSimilarity": CLUSTER_MERGE_SUPPORT_SIMILARITY,
+        "clusterCandidatesPerPhoto": CLUSTER_CANDIDATES_PER_PHOTO,
+        "clusterMinPhotos": CLUSTER_MIN_PHOTOS,
     }
 
 

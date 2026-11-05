@@ -58,6 +58,25 @@ link is what a lookalike bridge looks like. On the same library this yields
 2,837 people, 60% of the faces in a person, and the largest person at 8.4% of
 the gallery.
 
+### Clustering revisions
+
+`FACES_CLUSTER_ALGO` selects the labelling revision:
+
+- `graph-v1` (default) — the behaviour above.
+- `graph-v2` — density-aware labelling: mutual, hub-corrected (CSLS) links; a
+  core point needs `CLUSTER_CORE_NEIGHBOURS` mutual neighbours at
+  `CLUSTER_CORE_SIMILARITY`; a candidate list keeps at most
+  `CLUSTER_CANDIDATES_PER_PHOTO` faces per source photo; a person spans at least
+  `CLUSTER_MIN_PHOTOS` photos; and after the cap-driven split, components merge
+  when their medoid similarity clears `CLUSTER_MERGE_SIMILARITY` with
+  `CLUSTER_MERGE_SUPPORT` mutual cross-component pairs at
+  `CLUSTER_MERGE_SUPPORT_SIMILARITY`.
+
+`/faces/health` reports the effective thresholds. The clustering requests
+accept optional arrays aligned with the face ids — `photoIds` (used by
+`graph-v2`; absent means one unique photo per face), `widths` and `qualities`
+(accepted for quality-aware rules). That keeps an older core working unchanged.
+
 ## Execution providers
 
 `FACES_PROVIDERS` is an ordered, comma-separated list of ONNX Runtime providers
@@ -149,6 +168,91 @@ make test-faces-integration
 See [`tests/faces/README.md`](../../tests/faces/README.md) for the covered
 scenarios and the cosine thresholds.
 
+## Verification calibration (LFW)
+
+[`tools/lfw_calibration.py`](tools/lfw_calibration.py) measures 1:1 face
+verification on the Labelled Faces in the Wild benchmark with the engine the
+service itself runs — detection, alignment and ArcFace, including the small-face
+refinement — so a threshold, model or algorithm change can be judged against a
+public, reproducible number instead of a private fixture.
+
+The protocol is the official one: 6,000 pairs in 10 folds, 300 same-person and
+300 different-person pairs per fold. A pair is a match when the cosine
+similarity of its two embeddings is at least the scored threshold; accuracy per
+fold is the share of its 600 pairs decided correctly, and the reported accuracy
+is the unweighted mean of the ten folds. When either image of a pair yields no
+detectable face the pair is scored as a non-match instead of being dropped, so
+detector failures cannot inflate the number.
+
+The dataset is downloaded from Kaggle — `atulanandjha/lfwpeople`, which carries
+both the official `pairs.txt` and `lfw-funneled.tgz` — with a Kaggle access
+token read from `--kaggle-token-file`, then `KAGGLE_API_TOKEN` /
+`KAGGLE_ACCESS_TOKEN`, then the repository's `.kaggle/access_token`. The token
+is resolved lazily, so scoring a prepared work directory works offline.
+
+```bash
+cd backend/faces
+
+# the four commands
+.venv/bin/python -m tools.lfw_calibration --help
+
+# fetch, extract and validate the dataset (kept until cleaned)
+.venv/bin/python -m tools.lfw_calibration download
+.venv/bin/python -m tools.lfw_calibration verify --work-dir /tmp/flashbacks-lfw
+
+# score the protocol, sweep the threshold, enforce the 0.90 floor
+.venv/bin/python -m tools.lfw_calibration calibrate --work-dir /tmp/flashbacks-lfw
+
+# adopt the selected threshold in the service configuration
+.venv/bin/python -m tools.lfw_calibration calibrate --apply-config app/config.py
+
+# remove a work directory kept after a failed run
+.venv/bin/python -m tools.lfw_calibration clean --work-dir /tmp/flashbacks-lfw
+```
+
+| Flag | Applies to | Purpose |
+|---|---|---|
+| `--work-dir PATH` | all | Dataset work directory; also `LFW_WORK_DIR`. Without it a fresh `tempfile.mkdtemp(prefix="flashbacks-lfw-")` outside the repository is used. |
+| `--kaggle-token-file PATH` | `download`, `calibrate` | Kaggle access token file; defaults to `$KAGGLE_API_TOKEN` / `$KAGGLE_ACCESS_TOKEN`, then `<repo>/.kaggle/access_token`. |
+| `--refresh` | `download` | Re-download even when an extracted copy exists. |
+| `--keep` | `calibrate` | Keep the work directory after a successful run. |
+| `--apply-config PATH` | `calibrate` | Rewrite `RECOGNITION_MIN_SIMILARITY` in `PATH` with the selected threshold, only when the run is accepted. |
+| `--shipped-threshold TAU` | `calibrate` | Baseline threshold to score (defaults to the configured `RECOGNITION_MIN_SIMILARITY`). |
+| `--model-id ID` | `calibrate` | Model pack id used in the embedding cache key (default `buffalo_l`); a mismatch with the engine's own pack fails the run. |
+| `--quiet` | `calibrate` | Print only failures. |
+
+Dataset lifecycle: `pairs.txt` and `lfw-funneled.tgz` are streamed from the
+Kaggle per-file endpoint into the work directory, the pairs file is validated
+(10 folds × 600 pairs) before the archive is fetched, the archive is extracted,
+its `lfw_funneled/` tree is renamed to the canonical `lfw/`, and every pair image
+is checked. Kaggle wraps the archive in a single-member ZIP while it serves
+`pairs.txt` raw, so a download is unwrapped by its signature. Embeddings are
+cached in `embeddings.json` under `sha256(image) + model id + preprocessing
+version`, so repeat and A/B runs do not re-embed anything. A successful
+`calibrate` deletes the whole directory (archive, images, cache); a failed run
+keeps it and prints the path for diagnosis, and `clean` removes it. No LFW data
+is committed or required on the host, and the pytest suite never downloads it.
+
+Exit status: `0` when the mean accuracy at the shipped threshold reaches 0.90
+and the selected threshold was reported, `1` when the floor is missed, the
+dataset cannot be downloaded/validated or the configuration cannot be rewritten.
+A below-floor run prints the measured accuracy and the best candidate threshold
+and leaves `app/config.py` untouched.
+
+The selected threshold keeps the threshold ordering: `RECOGNITION_MIN_SIMILARITY`
+must stay at or below every raw-cosine clustering floor
+(`CLUSTER_MIN_SIMILARITY`, `CLUSTER_ASSIGN_SIMILARITY`,
+`CLUSTER_MERGE_SIMILARITY`, `CLUSTER_MERGE_SUPPORT_SIMILARITY`), which
+[`tests/test_threshold_ordering.py`](tests/test_threshold_ordering.py) guards.
+`CLUSTER_CORE_SIMILARITY` is a hub-corrected (CSLS) floor on a different scale
+and cannot be ordered against a raw cosine.
+
+The recorded run — environment, per-fold table, A/B comparison and the selected
+threshold — lives in
+[`docs/faces/verification-calibration.md`](../../docs/faces/verification-calibration.md:1).
+The current result is a mean accuracy of 0.9822 at the shipped 0.25, so the
+shipped threshold stays as it is.
+
 ## Configuration
 
 | Env | Default | Purpose |
@@ -160,6 +264,7 @@ scenarios and the cosine thresholds.
 | `FACES_MAX_BATCH` | `16` | Maximum images one `/faces/analyze-batch` request may carry (larger requests are rejected with `422`). |
 | `FACES_RECOGNITION_BATCH` | `32` | Aligned small-face crops sent through the recognizer per forward pass; `1` keeps the per-image path. |
 | `FACES_MAX_CONCURRENCY` | `1` | Concurrent analyses **per device**; each device has its own session, and more per device only duplicates its VRAM use. |
+| `FACES_CLUSTER_ALGO` | `graph-v1` | Labelling revision: `graph-v1` (today's single linkage) or `graph-v2` (density-aware, see [Clustering revisions](#clustering-revisions)). |
 | `FACES_CLUSTER_MODE` | `auto` | Read by **core**, not this service: clustering strategy (`auto`, `store`, `memory`) for the recognition job's candidate graph. |
 | `FACES_CLUSTER_NEIGHBOURS` | `16` | Read by **core**, not this service: candidates per unassigned face when it queries the store for neighbours. |
 | `FACES_CLUSTER_TIMEOUT` | `10m` | Read by **core**: budget for one clustering decision and the HNSW index build (`halfvec(512)` is required for the index). |

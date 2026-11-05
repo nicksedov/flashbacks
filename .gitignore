@@ -124,6 +124,9 @@ Desktop.ini
 # overlay (test.env) is tracked: it only carries non-secret test overrides.
 .env
 
+# Kaggle credentials (access token used by tools/lfw_calibration.py)
+.kaggle/
+
 # ===========================
 # Generated files
 # ===========================
@@ -143,11 +146,6 @@ tests/dataset/**/*.log
 tests/dataset/**/derived/
 tests/dataset/**/generated/
 tests/dataset/**/temp/
-
-# Private face fixture — labelled photos of a private identity cut from the
-# production gallery. Kept out of version control on purpose; delete this entry
-# to commit it. Provenance and regeneration: tests/dataset/faces/dima/README.md
-tests/dataset/faces/dima/
 
 # ===========================
 # Agent / tool caches

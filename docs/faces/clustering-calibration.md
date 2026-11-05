@@ -173,53 +173,57 @@ are the defaults rather than a boundary point.
 neighbourhood mean scores `0`; it is not comparable to the raw `0.40` floor. All
 values are reported by `/faces/health` so core never re-implements them.
 
-## Production snapshot reconcile
+## Production gallery reconcile
 
-Measured on a copy of the production database (`flashbacks_reconcile`, restored
-with `pg_dump` from the live gallery; the live database was only read). The copy
-held 39 024 faces, 2 911 of them unassigned (7.46%), and 4 147 people. The six
-Dima fragments (`1905`, `1906`, `1924`, `1934`, `1974`, `5810`) held 2 931
-faces.
+Run on the live gallery (39 024 faces, 4 147 legacy people) after releasing
+`graph-v2`. The legacy partition held Dima's sampled faces in six people.
 
-| Metric | Before | After reconcile | After a second reconcile |
+| Metric | Before `graph-v2` | After the repair pass | After a second reconcile |
 |---|---|---|---|
-| People | 4 147 | 1 332 | 1 332 |
-| Dima people (fragments) | **6** | **1** | **1** |
-| Dima faces in the largest person | 2 907 | 2 931 | 2 931 |
-| Unassigned faces | 2 911 (7.46%) | 2 911 (7.46%) | 2 911 (7.46%) |
-| Person references | 0 | 4 512 | 4 512 |
+| People | 4 147 | **672** | 672 |
+| Dima sampled faces (63) | **6 fragments** | **2 fragments (60 + 2)** | 2 |
+| Largest person | 2 907 | 4 715 | 4 715 |
+| Unassigned faces | 2 911 (7.46%) | 6 896 (17.67%) | 6 896 (17.67%) |
+| Person references | 0 | 3 145 | 3 145 |
 
-The reconcile step builds the references lazily, then repeats its merge round
-until a round changes nothing, so a single call reaches the fixed point. A
-second call changed no row at all: the whole harness (migration, metrics, two
-calls) took ~19 s the first time and ~3 s when already converged. Unassigned
-faces are not touched by reconcile — they remain for the assignment and
-clustering path — which is why the unassigned share is identical before and
-after.
+The first production pass (release 17) exposed a defect the fixtures could not:
+the reconcile union-found every qualifying medoid pair, and a chain of lookalike
+people collapsed into one person of 23 871 faces. The fix (releases 18–19) makes
+reconcile merge only mutual best matches with a bounded round, bounds a merged
+person by a share of the gallery, and replaces the faces-service merge loop with
+an O(links) version (the old one recomputed medoids per pair and hung on the
+39k-face graph). The gallery was then rebuilt with the one-shot re-cluster lever
+(`FACES_RECLUSTER_ALL=true`) and reconciled.
+
+After the repair the 4 147 legacy fragments became 672 people. The largest
+person holds 4 715 faces (14.7% of the assigned faces); the next four hold
+4 085, 3 818, 3 486 and 2 880 — the expected shape of a family gallery's main
+identities. Dima's 63 sampled faces now live in two people (60 + 2); the
+remaining pair is a density outlier that does not clear the merge evidence,
+which is the residual the design reports instead of hiding. The unassigned
+share rose to 17.67% because `graph-v2` requires mutual density before a face
+joins a person; those faces stay available to the person-reference assignment
+on later passes.
+
+The second reconcile call changed no row (0.5 s versus 82 s for the converging
+call), so the fixed-point iteration is idempotent.
 
 Reproduction on a host that holds the gallery database:
 
 ```bash
-# 1. Consistent copy (the production database is only read).
-docker exec -e PGPASSWORD=<pw> postgres sh -lc \
-  'dropdb -U postgres --if-exists flashbacks_reconcile &&
-   createdb -U postgres flashbacks_reconcile &&
-   pg_dump -U postgres -Fc -f /tmp/snapshot.dump flashbacks &&
-   pg_restore -U postgres -d flashbacks_reconcile -j 4 /tmp/snapshot.dump'
+docker exec -e PGPASSWORD=<pw> postgres psql -U postgres -d flashbacks -c \
+  "CREATE TABLE dima_faces AS SELECT id FROM faces WHERE id IN (
+     SELECT face_id FROM unnest(ARRAY[...]) face_id);"  # fill from manifest.csv
 
-# 2. Track the identity under test (the production people ids above).
-docker exec -e PGPASSWORD=<pw> postgres psql -U postgres -d flashbacks_reconcile -c \
-  "CREATE TABLE dima_faces AS SELECT id FROM faces WHERE person_id IN (1905,1906,1924,1934,1974,5810);"
-
-# 3. Run the reconcile twice; the test skips unless SNAPSHOT_DSN is set.
 cd backend/core
-SNAPSHOT_DSN='host=<db-host> port=5432 user=postgres password=<pw> dbname=flashbacks_reconcile sslmode=disable' \
+SNAPSHOT_DSN='host=<db-host> port=5432 user=postgres password=<pw> dbname=flashbacks sslmode=disable' \
   go test ./internal/application/faces -run TestSnapshotReconcile -count=1 -v
 ```
 
 `TestSnapshotReconcile` prints a `SNAPSHOT_REPORT` JSON with the before/first/
-second metrics. The production ids in step 2 change on a fresh install; update
-them from `tests/dataset/faces/dima/README.md`.
+second metrics; it skips unless `SNAPSHOT_DSN` is set. Fill `dima_faces` from
+the `face_id` column of `tests/dataset/faces/dima/manifest.csv` (63 rows) so the
+report follows the labelled sample rather than production row ids.
 
 ## Known limits
 

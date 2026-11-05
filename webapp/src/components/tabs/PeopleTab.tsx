@@ -5,6 +5,7 @@ import type { PersonDTO, GalleryImageDTO } from "@/types"
 import { fetchPeople, fetchPersonPhotos } from "@/api/endpoints"
 import { EmptyState } from "@/components/EmptyState"
 import { LazyThumbnail } from "@/components/gallery/LazyThumbnail"
+import { UnifiedLightbox } from "@/components/gallery/UnifiedLightbox"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
 
@@ -29,6 +30,7 @@ export function PeopleTab() {
   const [selected, setSelected] = useState<PersonDTO | null>(null)
   const [photos, setPhotos] = useState<GalleryImageDTO[]>([])
   const [photosLoading, setPhotosLoading] = useState(false)
+  const [lightboxPath, setLightboxPath] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -75,6 +77,15 @@ export function PeopleTab() {
     setSelected(null)
     setPhotos([])
     setPhotosLoading(false)
+    setLightboxPath(null)
+  }, [])
+
+  const handlePhotoOpen = useCallback((photo: GalleryImageDTO) => {
+    setLightboxPath(photo.path)
+  }, [])
+
+  const handleLightboxClose = useCallback(() => {
+    setLightboxPath(null)
   }, [])
 
   const displayName = (person: PersonDTO): string =>
@@ -97,12 +108,21 @@ export function PeopleTab() {
         ) : (
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
             {photos.map((photo) => (
-              <div key={photo.id} className="aspect-square overflow-hidden rounded-lg border">
+              <button
+                key={photo.id}
+                type="button"
+                data-slot="person-photo"
+                className="group aspect-square overflow-hidden rounded-lg border transition-all hover:ring-2 hover:ring-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                onClick={() => handlePhotoOpen(photo)}
+              >
                 <LazyThumbnail path={photo.path} fileName={photo.fileName} loadingIcon="spinner" />
-              </div>
+              </button>
             ))}
           </div>
         )}
+
+        {/* Photos of a person open in the People mode of the shared lightbox */}
+        <UnifiedLightbox imagePath={lightboxPath} initialMode="people" onClose={handleLightboxClose} />
       </div>
     )
   }

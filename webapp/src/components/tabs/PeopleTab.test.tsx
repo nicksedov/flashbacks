@@ -1,6 +1,19 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { fireEvent, render, screen, waitFor } from "@testing-library/react"
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { PeopleTab } from "./PeopleTab"
+
+// The lightbox owns its own data fetching; the People tab only has to hand it
+// the clicked photo and the initial mode, so replace it with a probe.
+vi.mock("@/components/gallery/UnifiedLightbox", () => ({
+  UnifiedLightbox: (props: { imagePath: string | null; initialMode?: string; onClose: () => void }) =>
+    props.imagePath ? (
+      <div data-slot="lightbox" data-path={props.imagePath} data-mode={props.initialMode}>
+        <button type="button" onClick={props.onClose}>
+          close-lightbox
+        </button>
+      </div>
+    ) : null,
+}))
 
 // Controls which locale the mocked translator resolves.
 const languageState = vi.hoisted(() => ({ language: "en" as "en" | "ru" }))
@@ -104,6 +117,43 @@ describe("PeopleTab", () => {
     await waitFor(() => expect(container.querySelector('[data-slot="people-detail"] img')).toBeTruthy())
     expect(endpoints.fetchPersonPhotos).toHaveBeenCalledWith(1, 1, 200)
     expect((container.querySelector('[data-slot="people-detail"] img') as HTMLImageElement).getAttribute("src")).toBe(THUMBNAIL_DATA_URL)
+  })
+
+  it("opens a person's photo in the People mode of the unified lightbox and closes it", async () => {
+    endpoints.fetchPeople.mockResolvedValue({
+      people: [
+        { id: 1, name: "Alice", photoCount: 1, coverThumbnail: "/api/thumbnail?path=%2Fgallery%2Fa.jpg" },
+      ],
+    })
+    endpoints.fetchPersonPhotos.mockResolvedValue({
+      images: [
+        { id: 7, path: "/gallery/a.jpg", fileName: "a.jpg" },
+        { id: 8, path: "/gallery/b.jpg", fileName: "b.jpg" },
+      ],
+      totalImages: 2,
+      currentPage: 1,
+      pageSize: 50,
+      totalPages: 1,
+      hasNextPage: false,
+    })
+
+    const { container } = render(<PeopleTab />)
+
+    await waitFor(() => expect(container.querySelector('[data-slot="person-tile"]')).toBeTruthy())
+    expect(container.querySelector('[data-slot="lightbox"]')).toBeNull()
+    fireEvent.click(container.querySelector('[data-slot="person-tile"]') as HTMLElement)
+
+    await waitFor(() => expect(container.querySelectorAll('[data-slot="person-photo"]')).toHaveLength(2))
+    fireEvent.click(container.querySelectorAll('[data-slot="person-photo"]')[1] as HTMLElement)
+
+    await waitFor(() => expect(container.querySelector('[data-slot="lightbox"]')).toBeTruthy())
+    const lightbox = container.querySelector('[data-slot="lightbox"]') as HTMLElement
+    expect(lightbox.getAttribute("data-mode")).toBe("people")
+    expect(lightbox.getAttribute("data-path")).toBe("/gallery/b.jpg")
+
+    fireEvent.click(within(lightbox).getByText("close-lightbox"))
+
+    await waitFor(() => expect(container.querySelector('[data-slot="lightbox"]')).toBeNull())
   })
 
   it("shows the empty-state title and hint when no people have been discovered", async () => {

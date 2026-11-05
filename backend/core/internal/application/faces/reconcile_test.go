@@ -223,6 +223,37 @@ func TestFaceRecognitionManager_ReconcileDoesNotChainLookalikes(t *testing.T) {
 	}
 }
 
+// TestFaceRecognitionManager_ResetDropsReferences guards that a full re-cluster
+// does not leave references pointing at people it deleted.
+func TestFaceRecognitionManager_ResetDropsReferences(t *testing.T) {
+	db, cleanup := testutil.NewTestDB(t)
+	defer cleanup()
+
+	person := domain.Person{}
+	if err := db.Create(&person).Error; err != nil {
+		t.Fatalf("create person: %v", err)
+	}
+	repo := repository.NewPersonReferenceRepository(db)
+	if err := repo.Replace(person.ID, []domain.PersonReference{{
+		FaceID:    1,
+		Dimension: 2,
+		Embedding: domain.FormatEmbedding([]float32{1, 0}),
+	}}); err != nil {
+		t.Fatalf("store reference: %v", err)
+	}
+
+	m := reconcileManager(db, newFakeFacesClient())
+	m.resetGeneratedPeople()
+
+	grouped, err := repo.ListAll()
+	if err != nil {
+		t.Fatalf("list references: %v", err)
+	}
+	if len(grouped) != 0 {
+		t.Errorf("references after reset = %d, want 0", len(grouped))
+	}
+}
+
 // TestFaceRecognitionManager_AmbiguousFaceUnassigned guards that a weak match
 // to every existing person stays unassigned instead of guessing.
 func TestFaceRecognitionManager_AmbiguousFaceUnassigned(t *testing.T) {

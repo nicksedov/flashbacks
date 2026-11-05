@@ -1015,70 +1015,6 @@ class FaceEngine:
         ]
 
     @staticmethod
-    def _medoid(members: Sequence[int], links: dict[tuple[int, int], float]) -> int:
-        """Member with the strongest total link weight inside its component."""
-        best = members[0]
-        best_score = -1.0
-        for member in members:
-            score = sum(
-                links.get((min(member, other), max(member, other)), 0.0)
-                for other in members
-                if other != member
-            )
-            if score > best_score:
-                best, best_score = member, score
-        return best
-
-    @staticmethod
-    def _medoid_similarity(
-        left: int,
-        left_members: Sequence[int],
-        right: int,
-        right_members: Sequence[int],
-        links: dict[tuple[int, int], float],
-    ) -> float:
-        """Strongest similarity between two component medoids.
-
-        The graphs the caller sends are truncated kNN lists, so the two medoids
-        are not necessarily candidates of each other. The similarity of a
-        medoid to the other component is therefore used when the direct pair is
-        absent, instead of silently reporting zero.
-        """
-        keys = [(min(left, right), max(left, right))]
-        keys.extend((min(left, other), max(left, other)) for other in right_members)
-        keys.extend((min(right, other), max(right, other)) for other in left_members)
-        return max((links.get(key, 0.0) for key in keys), default=0.0)
-
-    @staticmethod
-    def _cross_support(
-        left_members: Sequence[int],
-        right_members: Sequence[int],
-        links: dict[tuple[int, int], float],
-        directed: set[tuple[int, int]],
-        photo_of: Sequence[int],
-        floor: float,
-    ) -> int:
-        """Mutual cross-component pairs at or above *floor*, one per photo pair.
-
-        Two burst photos of the same moment contribute one piece of evidence,
-        not one per face pair, which is what keeps a sequence from voting a
-        stranger into a person.
-        """
-        right_set = set(right_members)
-        seen: set[tuple[int, int]] = set()
-        for left in left_members:
-            for right in right_set:
-                key = (min(left, right), max(left, right))
-                value = links.get(key)
-                if value is None or value < floor:
-                    continue
-                if (left, right) not in directed or (right, left) not in directed:
-                    continue
-                photos = (photo_of[left], photo_of[right])
-                seen.add((min(photos), max(photos)))
-        return len(seen)
-
-    @staticmethod
     def _merge_groups(
         groups: Sequence[Sequence[int]],
         links: dict[tuple[int, int], float],
@@ -1090,62 +1026,115 @@ class FaceEngine:
     ) -> list[list[int]]:
         """Agglomeratively merge components that the evidence says are one person.
 
-        A pair merges when the medoid similarity clears ``merge_floor`` *and*
-        at least ``support_needed`` mutual cross-component pairs clear
-        ``support_floor``. Support is what keeps two similar-looking strangers
-        apart while rejoining the pieces of one person, whose cross links are
-        numerous. Merging repeats until no pair qualifies.
+        A group pair merges when the medoid similarity clears ``merge_floor``
+        *and* at least ``support_needed`` mutual cross-group links clear
+        ``support_floor``. Only mutual best matches merge, one partner per group
+        per round, so a lookalike bridge cannot chain unrelated groups into one
+        person.
+
+        Each round is O(links): member weights (medoids), cross-group support
+        and medoid similarities are all derived in a single pass over the
+        candidate links. The previous version recomputed medoids per candidate
+        pair, which was quadratic and hung on a 39k-face gallery.
         """
         groups_by_id = {index: list(members) for index, members in enumerate(groups)}
         if len(groups_by_id) < 2:
             return list(groups_by_id.values())
 
-        while True:
+        while len(groups_by_id) > 1:
             group_of: dict[int, int] = {}
             for group_id, members in groups_by_id.items():
                 for member in members:
                     group_of[member] = group_id
 
-            candidates: set[tuple[int, int]] = set()
-            for left, right in links:
+            weights: dict[int, dict[int, float]] = {
+                group_id: {} for group_id in groups_by_id
+            }
+            pair_support: dict[tuple[int, int], int] = {}
+            for (left, right), similarity in links.items():
                 left_group, right_group = group_of.get(left), group_of.get(right)
                 if left_group is None or right_group is None:
                     continue
-                if left_group != right_group:
-                    candidates.add((min(left_group, right_group), max(left_group, right_group)))
-
-            best_score = -1.0
-            best_pair: Optional[tuple[int, int]] = None
-            for left_group, right_group in candidates:
-                left_members = groups_by_id[left_group]
-                right_members = groups_by_id[right_group]
-                score = FaceEngine._medoid_similarity(
-                    FaceEngine._medoid(left_members, links),
-                    left_members,
-                    FaceEngine._medoid(right_members, links),
-                    right_members,
-                    links,
-                )
-                if score < merge_floor or score <= best_score:
+                if left_group == right_group:
+                    weights[left_group][left] = (
+                        weights[left_group].get(left, 0.0) + similarity
+                    )
+                    weights[left_group][right] = (
+                        weights[left_group].get(right, 0.0) + similarity
+                    )
                     continue
-                support = FaceEngine._cross_support(
-                    left_members,
-                    right_members,
-                    links,
-                    directed,
-                    photo_of,
-                    support_floor,
+                key = (
+                    (left_group, right_group)
+                    if left_group < right_group
+                    else (right_group, left_group)
                 )
-                if support < support_needed:
-                    continue
-                best_score, best_pair = score, (left_group, right_group)
+                if (
+                    similarity >= support_floor
+                    and (left, right) in directed
+                    and (right, left) in directed
+                ):
+                    pair_support[key] = pair_support.get(key, 0) + 1
 
-            if best_pair is None:
-                return list(groups_by_id.values())
-            left_group, right_group = best_pair
-            groups_by_id[left_group] = (
-                groups_by_id[left_group] + groups_by_id.pop(right_group)
-            )
+            medoids = {
+                group_id: (
+                    max(weights[group_id], key=weights[group_id].get)
+                    if weights[group_id]
+                    else members[0]
+                )
+                for group_id, members in groups_by_id.items()
+            }
+
+            # Medoid similarity: strongest link from either medoid to the other
+            # group, since a direct medoid pair is not always in the truncated
+            # candidate lists.
+            medoid_score: dict[tuple[int, int], float] = {}
+            for (left, right), similarity in links.items():
+                left_group, right_group = group_of.get(left), group_of.get(right)
+                if left_group is None or right_group is None:
+                    continue
+                if left_group == right_group:
+                    continue
+                key = (
+                    (left_group, right_group)
+                    if left_group < right_group
+                    else (right_group, left_group)
+                )
+                if (
+                    medoids[left_group] in (left, right)
+                    or medoids[right_group] in (left, right)
+                ):
+                    if similarity > medoid_score.get(key, 0.0):
+                        medoid_score[key] = similarity
+
+            best: dict[int, tuple[float, int]] = {}
+            for key, score in medoid_score.items():
+                if score < merge_floor:
+                    continue
+                if pair_support.get(key, 0) < support_needed:
+                    continue
+                left_group, right_group = key
+                if score > best.get(left_group, (0.0, -1))[0]:
+                    best[left_group] = (score, right_group)
+                if score > best.get(right_group, (0.0, -1))[0]:
+                    best[right_group] = (score, left_group)
+
+            handled: set[int] = set()
+            merged_any = False
+            for group_id in sorted(best):
+                if group_id in handled:
+                    continue
+                partner = best[group_id][1]
+                if partner in handled or best.get(partner, (0.0, -1))[1] != group_id:
+                    continue
+                handled.add(group_id)
+                handled.add(partner)
+                groups_by_id[group_id].extend(groups_by_id.pop(partner))
+                merged_any = True
+
+            if not merged_any:
+                break
+
+        return list(groups_by_id.values())
 
     @staticmethod
     def _decisive_label(

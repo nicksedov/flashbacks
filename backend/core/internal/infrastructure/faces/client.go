@@ -124,7 +124,10 @@ func NewClientWithProvider(provider func() string) Client {
 	}
 	return &clientImpl{
 		urlProvider: provider,
-		httpClient:  &http.Client{Timeout: 60 * time.Second},
+		// One clustering request can legitimately exceed a minute on a large
+		// gallery (the core budget is FACES_CLUSTER_TIMEOUT, 10m); shorter calls
+		// stay bounded by their own request contexts.
+		httpClient: &http.Client{Timeout: 10 * time.Minute},
 	}
 }
 

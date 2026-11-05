@@ -923,6 +923,19 @@ func (m *Manager) resetGeneratedPeople() {
 		m.setError(fmt.Sprintf("reset face assignments: %v", err))
 		return
 	}
+
+	// References follow their person: leaving them behind would let the next
+	// assignment step hand faces to ids that no longer exist.
+	if m.personRefs != nil {
+		var generatedIDs []uint
+		if err := m.db.Model(&domain.Person{}).Where("name = ?", "").
+			Pluck("id", &generatedIDs).Error; err != nil {
+			m.setError(fmt.Sprintf("load generated people: %v", err))
+		} else if err := m.personRefs.DeleteByPersonIDs(generatedIDs); err != nil {
+			m.setError(fmt.Sprintf("reset person references: %v", err))
+		}
+	}
+
 	if err := m.db.Where("name = ?", "").Delete(&domain.Person{}).Error; err != nil {
 		m.setError(fmt.Sprintf("reset people: %v", err))
 		return

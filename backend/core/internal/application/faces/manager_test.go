@@ -2,6 +2,7 @@ package faces
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -36,6 +37,21 @@ func newFakeFacesClient() *fakeFacesClient {
 		return batchResults(images), nil
 	}
 	mock.ClusterFunc = clusterByFirstComponent()
+	// A healthy faces service advertises its calibrated floors; core consumes
+	// them instead of keeping its own copies.
+	mock.HealthFunc = func(context.Context) (facesclient.Health, error) {
+		return facesclient.Health{
+			Status: "ok",
+			Thresholds: facesclient.Thresholds{
+				RecognitionMinSimilarity:      0.25,
+				RecognitionMargin:             0.05,
+				ClusterAssignSimilarity:       0.30,
+				ClusterMergeSimilarity:        0.50,
+				ClusterMergeSupport:           2,
+				ClusterMergeSupportSimilarity: 0.40,
+			},
+		}, nil
+	}
 	return &fakeFacesClient{MockFacesClient: mock}
 }
 
@@ -778,7 +794,12 @@ func TestClusterAssignUsesStoreCandidates(t *testing.T) {
 	client := newFakeFacesClient()
 	client.HealthFunc = func(context.Context) (facesclient.Health, error) {
 		return facesclient.Health{
-			Thresholds: facesclient.Thresholds{RecognitionMinSimilarity: 0.31},
+			Thresholds: facesclient.Thresholds{
+				RecognitionMinSimilarity: 0.31,
+				// A real service always advertises this floor; core refuses to
+				// run the reference pass without it.
+				ClusterAssignSimilarity: 0.30,
+			},
 		}, nil
 	}
 	var gotSeeds []uint
@@ -1045,5 +1066,148 @@ func TestFaceRecognitionManager_StatusProgress(t *testing.T) {
 	}
 	if status.Processed != 3 {
 		t.Errorf("processed = %d, want 3", status.Processed)
+	}
+}
+
+// TestThresholdsRequireTheServicesValues guards that core never invents a
+// similarity floor: a faces service that does not advertise its calibrated
+// values yields an error instead of a default, so no pass decides anything
+// against a guessed threshold.
+func TestThresholdsRequireTheServicesValues(t *testing.T) {
+	client := newFakeFacesClient()
+	m := NewManagerWithDependencies(nil, client, Dependencies{}, DefaultOptions())
+	ctx := context.Background()
+
+	if _, err := m.thresholds(ctx); err != nil {
+		t.Fatalf("healthy service thresholds: %v", err)
+	}
+
+	client.HealthFunc = func(context.Context) (facesclient.Health, error) {
+		return facesclient.Health{}, nil
+	}
+	if _, err := m.thresholds(ctx); !errors.Is(err, errThresholdsUnavailable) {
+		t.Errorf("unreported thresholds error = %v, want errThresholdsUnavailable", err)
+	}
+
+	client.HealthFunc = func(context.Context) (facesclient.Health, error) {
+		return facesclient.Health{}, errors.New("faces service unavailable")
+	}
+	if _, err := m.thresholds(ctx); !errors.Is(err, errThresholdsUnavailable) {
+		t.Errorf("unreachable service error = %v, want errThresholdsUnavailable", err)
+	}
+}
+
+// TestClusterAssignDegradesWithoutThresholds guards the degradation path: with
+// no advertised recognition floor the store is not queried at all and the pass
+// clusters in memory instead of matching faces at a guessed radius.
+func TestClusterAssignDegradesWithoutThresholds(t *testing.T) {
+	db, cleanup := testutil.NewTestDB(t)
+	defer cleanup()
+
+	imageA := seedImage(t, db, "person-a-1")
+	imageB := seedImage(t, db, "person-a-2")
+	faceA := seedFace(t, db, imageA.ID)
+	faceB := seedFace(t, db, imageB.ID)
+
+	client := newFakeFacesClient()
+	client.HealthFunc = func(context.Context) (facesclient.Health, error) {
+		return facesclient.Health{}, errors.New("faces service unavailable")
+	}
+	graphCalls := 0
+	client.ClusterGraphFunc = func(
+		context.Context, []uint, []facesclient.FaceLink, []bool, facesclient.FaceFacts,
+	) ([]int, error) {
+		graphCalls++
+		return nil, nil
+	}
+	neighbours := &fakeNeighbours{
+		supported: true,
+		result: map[uint][]Neighbour{
+			faceA.ID: {{FaceID: faceB.ID, Similarity: 0.9}},
+			faceB.ID: {{FaceID: faceA.ID, Similarity: 0.9}},
+		},
+	}
+
+	m := NewManagerWithDependencies(db, client, Dependencies{Neighbours: neighbours}, Options{
+		ClusterMode: domain.FacesClusterModeAuto,
+	})
+	m.clusterAssign(nil, map[uint]int{})
+
+	if neighbours.calls != 0 {
+		t.Errorf("neighbour queries = %d, want 0 without the service threshold", neighbours.calls)
+	}
+	if graphCalls != 0 {
+		t.Errorf("cluster graph calls = %d, want 0 without the service threshold", graphCalls)
+	}
+	if client.ClusterCallCount != 1 {
+		t.Errorf("memory clustering called %d times, want the in-memory fallback", client.ClusterCallCount)
+	}
+
+	var faces []domain.Face
+	if err := db.Where("id IN ?", []uint{faceA.ID, faceB.ID}).Order("id").Find(&faces).Error; err != nil {
+		t.Fatalf("load faces: %v", err)
+	}
+	if len(faces) != 2 {
+		t.Fatalf("faces = %d, want 2", len(faces))
+	}
+	if faces[0].PersonID == 0 || faces[0].PersonID != faces[1].PersonID {
+		t.Errorf("person ids = %d and %d, want one person from the in-memory fallback",
+			faces[0].PersonID, faces[1].PersonID)
+	}
+}
+
+// TestReconcileSkipsWithoutThresholds guards that a missing merge floor stops
+// merges instead of comparing people against numbers core guessed.
+func TestReconcileSkipsWithoutThresholds(t *testing.T) {
+	db, cleanup := testutil.NewTestDB(t)
+	defer cleanup()
+
+	older := domain.Person{ClusterVersion: "legacy"}
+	younger := domain.Person{ClusterVersion: "legacy"}
+	if err := db.Create(&older).Error; err != nil {
+		t.Fatalf("create older person: %v", err)
+	}
+	if err := db.Create(&younger).Error; err != nil {
+		t.Fatalf("create younger person: %v", err)
+	}
+
+	identity := make([]float32, 512)
+	identity[0] = 1
+	for index := 0; index < 4; index++ {
+		image := seedImage(t, db, "person-a-1")
+		face := seedFaceWithVector(t, db, image.ID, identity)
+		personID := older.ID
+		if index >= 2 {
+			personID = younger.ID
+		}
+		if err := db.Model(&domain.Face{}).Where("id = ?", face.ID).
+			Update("person_id", personID).Error; err != nil {
+			t.Fatalf("assign face: %v", err)
+		}
+		if err := db.Model(&domain.ImageFile{}).Where("id = ?", image.ID).
+			Update("faces_scan_version", facesScanVersion).Error; err != nil {
+			t.Fatalf("mark image scanned: %v", err)
+		}
+	}
+
+	client := newFakeFacesClient()
+	client.HealthFunc = func(context.Context) (facesclient.Health, error) {
+		return facesclient.Health{}, errors.New("faces service unavailable")
+	}
+	m := reconcileManager(db, client)
+	m.runPass(nil)
+
+	var people []domain.Person
+	if err := db.Order("id").Find(&people).Error; err != nil {
+		t.Fatalf("list people: %v", err)
+	}
+	if len(people) != 2 {
+		t.Fatalf("people = %d, want the two people left unmerged without thresholds", len(people))
+	}
+	for _, person := range people {
+		if person.ClusterVersion != personClusterVersion {
+			t.Errorf("person %d cluster version = %q, want the current generation %q",
+				person.ID, person.ClusterVersion, personClusterVersion)
+		}
 	}
 }

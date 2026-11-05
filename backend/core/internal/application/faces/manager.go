@@ -34,25 +34,11 @@ const facesScanVersion = "analyze-3"
 // People view empty even though faces were detected and embedded.
 const minClusterSize = 2
 
-// fallbackRecognitionSimilarity is the calibrated relaxed floor used when the
-// faces service does not advertise its thresholds (an older service).
-const fallbackRecognitionSimilarity = 0.25
-
 // personClusterVersion identifies the reconciliation generation that produced a
 // person. A person carrying another version is reconciled on the next pass, so
 // an algorithm change reaches a gallery that is already fully analysed without
 // a wipe.
 const personClusterVersion = "cluster-graph-v2"
-
-// Calibrated fallbacks used when the faces service does not advertise the
-// clustering thresholds (an older service). They mirror the service defaults.
-const (
-	fallbackAssignmentSimilarity   = 0.30
-	fallbackRecognitionMargin      = 0.05
-	fallbackMergeSimilarity        = 0.50
-	fallbackMergeSupport           = 2
-	fallbackMergeSupportSimilarity = 0.40
-)
 
 // exemplarLimit is how many reference vectors one person keeps: enough to hold
 // the modes of one identity (age, beard, glasses) without a full re-cluster.
@@ -781,14 +767,23 @@ func (m *Manager) clusterAssign(stopCh <-chan struct{}, facesPerImage map[uint]i
 
 	// Step 1 — assign: match every unassigned face against the reference sets
 	// of the people already discovered, before anything is sent for clustering.
-	candidates, candidateErr := m.candidateMap(ctx, members)
+	// The similarity floors come from the faces service only; without them the
+	// pass degrades (no reference match, in-memory clustering) rather than
+	// judging faces against numbers core guessed.
+	thresholds, thresholdErr := m.thresholds(ctx)
+	candidates, candidateErr := m.candidateMap(ctx, members, thresholds.recognition, thresholdErr)
 	var references *referenceVectors
-	var thresholds clusteringThresholds
 	var personByFace map[uint]uint
 	if m.personRefs != nil {
 		references = m.loadReferenceVectors()
+		if references != nil && thresholdErr != nil {
+			// Deciding a reference match needs the service's assignment floor
+			// and margin; without them every face would be accepted. Leave the
+			// faces for clustering, which retries on the next pass.
+			log.Printf("Face recognition: reference match skipped: %v", thresholdErr)
+			references = nil
+		}
 		if references != nil {
-			thresholds = m.thresholds(ctx)
 			personByFace = m.candidatePersonMap(candidates)
 		}
 	}
@@ -1003,19 +998,26 @@ func (m *Manager) useStoreCandidates(ctx context.Context) bool {
 
 // candidateMap reads each face's neighbourhood inside the service's
 // recognition radius. The links serve both the person-reference assignment and
-// the clustering decision, so one kNN query covers the pass.
+// the clustering decision, so one kNN query covers the pass. Without the
+// service's floor there is no radius to query at, so the error is returned and
+// the caller falls back to the in-memory clustering path.
 func (m *Manager) candidateMap(
-	ctx context.Context, members []faceRef,
+	ctx context.Context,
+	members []faceRef,
+	similarity float64,
+	thresholdErr error,
 ) (map[uint][]Neighbour, error) {
 	if !m.useStoreCandidates(ctx) {
 		return nil, nil
+	}
+	if thresholdErr != nil {
+		return nil, thresholdErr
 	}
 	seeds := make([]uint, len(members))
 	for i, member := range members {
 		seeds[i] = member.faceID
 	}
 
-	similarity := m.recognitionSimilarity(ctx)
 	candidates := make(map[uint][]Neighbour, len(seeds))
 	for start := 0; start < len(seeds); start += neighbourBatch {
 		end := min(start+neighbourBatch, len(seeds))
@@ -1065,21 +1067,6 @@ func (m *Manager) clusterFromCandidates(
 		}
 	}
 	return m.client.ClusterGraph(ctx, seeds, edges, solo, facts)
-}
-
-// recognitionSimilarity asks the faces service for its recognition floor, so the
-// candidate radius stays owned by the component that calibrated it. A service
-// that does not report the field falls back to the calibrated 0.25.
-func (m *Manager) recognitionSimilarity(ctx context.Context) float64 {
-	health, err := m.client.Health(ctx)
-	if err != nil {
-		log.Printf("Face recognition: read faces health: %v", err)
-		return fallbackRecognitionSimilarity
-	}
-	if health.Thresholds.RecognitionMinSimilarity <= 0 {
-		return fallbackRecognitionSimilarity
-	}
-	return health.Thresholds.RecognitionMinSimilarity
 }
 
 // setError records the last error without aborting the pass.

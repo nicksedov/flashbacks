@@ -2,6 +2,7 @@ package faces
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"math"
@@ -24,9 +25,16 @@ const (
 	reconcileMaxFacesMin = 250
 )
 
-// clusteringThresholds are the values the faces service advertises; the
-// fallbacks keep an older service working.
+// errThresholdsUnavailable means the faces service did not advertise its
+// similarity floors. Core never substitutes its own numbers for them: a pass
+// without the service's values degrades (in-memory clustering, no reference
+// matches) instead of judging faces against a guessed threshold.
+var errThresholdsUnavailable = errors.New("faces service did not report its thresholds")
+
+// clusteringThresholds are the similarity floors the faces service advertises.
+// The service is the single source of truth, so core keeps no copies of them.
 type clusteringThresholds struct {
+	recognition       float64
 	assign            float64
 	margin            float64
 	merge             float64
@@ -71,36 +79,34 @@ func (m *Manager) loadReferenceVectors() *referenceVectors {
 	return result
 }
 
-// thresholds reads the clustering thresholds from the faces service.
-func (m *Manager) thresholds(ctx context.Context) clusteringThresholds {
-	resolved := clusteringThresholds{
-		assign:            fallbackAssignmentSimilarity,
-		margin:            fallbackRecognitionMargin,
-		merge:             fallbackMergeSimilarity,
-		mergeSupport:      fallbackMergeSupport,
-		supportSimilarity: fallbackMergeSupportSimilarity,
-	}
+// thresholds reads the similarity floors from the faces service.
+//
+// The recognition floor and the assignment floor are required: a pass that
+// invented them would accept or reject faces against numbers nobody
+// calibrated, which is exactly what the LFW calibration exists to prevent. A
+// service that does not report them yields errThresholdsUnavailable so the
+// caller can degrade instead. A missing merge floor is not an error: grouping
+// is then simply left to the faces service.
+func (m *Manager) thresholds(ctx context.Context) (clusteringThresholds, error) {
 	health, err := m.client.Health(ctx)
 	if err != nil {
-		log.Printf("Face recognition: read faces health: %v", err)
-		return resolved
+		return clusteringThresholds{}, fmt.Errorf("%w: %v", errThresholdsUnavailable, err)
 	}
-	if value := health.Thresholds.ClusterAssignSimilarity; value > 0 {
-		resolved.assign = value
+	resolved := clusteringThresholds{
+		recognition:       health.Thresholds.RecognitionMinSimilarity,
+		assign:            health.Thresholds.ClusterAssignSimilarity,
+		margin:            health.Thresholds.RecognitionMargin,
+		merge:             health.Thresholds.ClusterMergeSimilarity,
+		mergeSupport:      health.Thresholds.ClusterMergeSupport,
+		supportSimilarity: health.Thresholds.ClusterMergeSupportSimilarity,
 	}
-	if value := health.Thresholds.RecognitionMargin; value > 0 {
-		resolved.margin = value
+	if resolved.recognition <= 0 || resolved.assign <= 0 {
+		return clusteringThresholds{}, fmt.Errorf(
+			"%w: recognition=%v assign=%v",
+			errThresholdsUnavailable, resolved.recognition, resolved.assign,
+		)
 	}
-	if value := health.Thresholds.ClusterMergeSimilarity; value > 0 {
-		resolved.merge = value
-	}
-	if value := health.Thresholds.ClusterMergeSupport; value > 0 {
-		resolved.mergeSupport = value
-	}
-	if value := health.Thresholds.ClusterMergeSupportSimilarity; value > 0 {
-		resolved.supportSimilarity = value
-	}
-	return resolved
+	return resolved, nil
 }
 
 // candidatePersonMap resolves the persons of the candidate faces named by the
@@ -387,10 +393,16 @@ func (m *Manager) reconcilePeople() {
 
 	ctx, cancel := context.WithTimeout(context.Background(), m.clusterTimeout)
 	defer cancel()
-	thresholds := m.thresholds(ctx)
-	facesPerImage := m.imageFaceCounts()
-
-	for m.reconcileRound(thresholds, facesPerImage) > 0 {
+	thresholds, err := m.thresholds(ctx)
+	if err != nil {
+		// Without the service's floors a merge would compare people against
+		// numbers core guessed. Skip the merge rounds; the generation
+		// bookkeeping below still runs and the next pass retries.
+		log.Printf("Face recognition: reconcile skipped: %v", err)
+	} else {
+		facesPerImage := m.imageFaceCounts()
+		for m.reconcileRound(thresholds, facesPerImage) > 0 {
+		}
 	}
 
 	// People without references could not be compared; they still belong to

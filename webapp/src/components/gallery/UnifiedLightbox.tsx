@@ -5,12 +5,15 @@ import { LightboxDialog } from "./lightbox/LightboxDialog"
 import { buildImageUrl } from "@/utils/buildImageUrl"
 import { OcrImagePanel } from "./lightbox/OcrImagePanel"
 import { OcrResultPanel } from "./lightbox/OcrResultPanel"
+import { PeopleImagePanel } from "./lightbox/PeopleImagePanel"
+import { PeoplePanel } from "./lightbox/PeoplePanel"
 import { TagsPanel } from "./lightbox/TagsPanel"
 import { ChatPanel } from "./lightbox/ChatPanel"
 import { ImageCompareSlider } from "./lightbox/ImageCompareSlider"
 import { MobileDetailPanel } from "./lightbox/MobileDetailPanel"
 import { useOcrState } from "@/hooks/useOcrState"
 import { useTagsState } from "@/hooks/useTagsState"
+import { useImageFaces } from "@/hooks/useImageFaces"
 import { useImageDimensions } from "@/hooks/useImageDimensions"
 import { useFileExport } from "@/hooks/useFileExport"
 import { useChatAgent } from "@/hooks/useChatAgent"
@@ -99,8 +102,11 @@ export function UnifiedLightbox({
       ? buildImageUrl(imagePath, "/api/ocr-image", { angle: ocrData.angle })
       : buildImageUrl(imagePath, "/api/image")
     : ""
-  const { imageRef, displayDimensions, imageLoaded, handleImageLoad } = useImageDimensions(ocrImageUrl)
+  const { imageRef, displayDimensions, naturalDimensions, imageLoaded, handleImageLoad } = useImageDimensions(ocrImageUrl)
   const { handleSaveMd, handleSaveHtml } = useFileExport(llmData?.markdownContent, imagePath)
+
+  // People mode: the faces of this photo, fetched only while the tab is open.
+  const { faces, people, loading: facesLoading, error: facesError } = useImageFaces(imagePath, activeMode === "people")
 
   // AI Chat state
   const {
@@ -277,7 +283,20 @@ export function UnifiedLightbox({
     >
       <div className="flex h-full relative">
         {/* Left: Image panel */}
-        {activeMode === "ocr" ? (
+        {activeMode === "people" ? (
+          <PeopleImagePanel
+            imageUrl={standardImageUrl}
+            faces={faces}
+            people={people}
+            loading={facesLoading}
+            imageRef={imageRef}
+            displayDimensions={displayDimensions}
+            sourceDimensions={naturalDimensions}
+            imageLoaded={imageLoaded}
+            handleImageLoad={handleImageLoad}
+            className="flex-1 flex items-center justify-center relative h-full min-w-0 min-h-0"
+          />
+        ) : activeMode === "ocr" ? (
           <OcrImagePanel
             imageUrl={ocrImageUrl}
             ocrData={ocrData}
@@ -370,6 +389,14 @@ export function UnifiedLightbox({
                 onSaveMd={handleSaveMd}
                 onSaveHtml={handleSaveHtml}
                 formatProcessingTime={formatProcessingTime}
+                className="w-full bg-card p-4 h-full flex flex-col"
+              />
+            )}
+            {activeMode === "people" && (
+              <PeoplePanel
+                people={people}
+                loading={facesLoading}
+                error={facesError}
                 className="w-full bg-card p-4 h-full flex flex-col"
               />
             )}

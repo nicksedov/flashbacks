@@ -3,6 +3,7 @@ package handler
 import (
 	"net/http"
 	"net/url"
+	"path/filepath"
 	"strconv"
 
 	"github.com/flashbacks/core/internal/domain"
@@ -127,4 +128,79 @@ func (s *Server) handleStopFaces(c *gin.Context) {
 	}
 	s.faceRecognition.Stop()
 	s.respondSuccess(c, http.StatusOK, i18n.MsgFacesStopped)
+}
+
+// handleGetImageFaces returns the faces detected on one gallery image, each with
+// its box in the analysed image's pixel frame and the person it was clustered
+// into. The lightbox draws the boxes over the same file /api/image serves, so the
+// boxes need no coordinate translation on the server.
+func (s *Server) handleGetImageFaces(c *gin.Context) {
+	path := c.Query("path")
+	if path == "" {
+		c.JSON(http.StatusBadRequest, i18n.ErrorResponse(i18n.MsgImagePathRequired))
+		return
+	}
+
+	// Same normalization and gallery check every other image endpoint applies.
+	cleanPath := filepath.Clean(filepath.FromSlash(path))
+	absPath, err := filepath.Abs(cleanPath)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, i18n.ErrorResponse(i18n.MsgImagePathRequired))
+		return
+	}
+	normalizedPath := filepath.ToSlash(absPath)
+	if !s.galleryAccess.VerifyGalleryAccess(c, normalizedPath) {
+		return
+	}
+
+	// An image the scanner has not recorded yet has no faces either; answering
+	// with an empty list keeps the lightbox tab on its normal "no faces" path
+	// instead of showing a not-found error for a file the user just opened.
+	imageFile, err := s.imageFileRepo.FindByPath(normalizedPath)
+	if err != nil {
+		c.JSON(http.StatusOK, dto.ImageFacesResponse{Faces: []dto.ImageFaceDTO{}})
+		return
+	}
+
+	faces, err := s.faceRepo.FindByImageFileID(imageFile.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, i18n.ErrorResponse(i18n.MsgAuthInternalError))
+		return
+	}
+
+	names := make(map[uint]string, len(faces))
+	dtos := make([]dto.ImageFaceDTO, 0, len(faces))
+	for _, face := range faces {
+		dtos = append(dtos, dto.ImageFaceDTO{
+			ID:         face.ID,
+			PersonID:   face.PersonID,
+			PersonName: s.personName(names, face.PersonID),
+			X:          face.X,
+			Y:          face.Y,
+			Width:      face.Width,
+			Height:     face.Height,
+			Confidence: face.Confidence,
+		})
+	}
+
+	c.JSON(http.StatusOK, dto.ImageFacesResponse{Faces: dtos})
+}
+
+// personName resolves a person's display name once per request: a group photo
+// repeats the same people across several faces, and an unnamed person reports an
+// empty name so the client can render its localized placeholder.
+func (s *Server) personName(cache map[uint]string, personID uint) string {
+	if personID == 0 {
+		return ""
+	}
+	if name, cached := cache[personID]; cached {
+		return name
+	}
+
+	name := ""
+	if person, err := s.personRepo.FindByID(personID); err == nil {
+		name = person.Name
+	}
+	cache[personID] = name
+	return name
 }

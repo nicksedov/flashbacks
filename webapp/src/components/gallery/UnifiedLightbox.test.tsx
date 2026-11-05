@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { render, screen, fireEvent } from "@testing-library/react"
+import { render, screen, fireEvent, within } from "@testing-library/react"
 import { UnifiedLightbox } from "./UnifiedLightbox"
 import { hasClass } from "@/test/dom"
 
@@ -45,6 +45,7 @@ vi.mock("@/hooks/useImageDimensions", () => ({
   useImageDimensions: () => ({
     imageRef: { current: null },
     displayDimensions: null,
+    naturalDimensions: null,
     imageLoaded: true,
     handleImageLoad: vi.fn(),
   }),
@@ -88,6 +89,7 @@ vi.mock("@/api/endpoints", () => ({
   replaceEnhancement: vi.fn(),
   saveCopyEnhancement: vi.fn(),
   rejectEnhancement: vi.fn(),
+  fetchImageFaces: vi.fn().mockResolvedValue({ faces: [] }),
 }))
 
 function enhancementMessage(): MockMessage {
@@ -125,6 +127,17 @@ describe("UnifiedLightbox", () => {
     expect(panel.getAttribute("data-open")).toBe("false")
   })
 
+  it("places the People tab immediately before the Tags tab", () => {
+    render(<UnifiedLightbox imagePath="a.jpg" initialMode="ai" onClose={vi.fn()} />)
+
+    const labels = within(screen.getByTestId("lightbox-tab-bar"))
+      .getAllByRole("tab")
+      .map((tab) => tab.textContent)
+
+    expect(labels).toContain("lightbox.tab.people")
+    expect(labels.indexOf("lightbox.tab.people")).toBe(labels.indexOf("lightbox.tab.tags") - 1)
+  })
+
   it("keeps the compare-slider branch full-area with no side column below md", async () => {
     chatState.messages = [enhancementMessage()]
     render(<UnifiedLightbox imagePath="a.jpg" initialMode="tags" onClose={vi.fn()} />)
@@ -141,7 +154,7 @@ describe("UnifiedLightbox", () => {
   })
 
   it("renders the image stage consistently across all lightbox modes", () => {
-    const modes = ["ai", "exif", "ocr", "tags"] as const
+    const modes = ["ai", "exif", "ocr", "people", "tags"] as const
     // Surface and layout classes every image-stage branch must share.
     const stageClasses = ["flex-1", "items-center", "justify-center", "bg-black", "relative", "h-full", "min-w-0"]
 

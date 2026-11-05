@@ -1370,6 +1370,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/image-faces": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the faces detected on one image */
+        get: operations["getImageFaces"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/embedding/status": {
         parameters: {
             query?: never;
@@ -2342,6 +2359,26 @@ export interface components {
             pageSize?: number;
             totalPages?: number;
             hasNextPage?: boolean;
+        };
+        ImageFaceDTO: {
+            id?: number;
+            /** @description The person the face was clustered into; 0 when it belongs to none. */
+            personId?: number;
+            /** @description The person's name; empty while the person is unnamed. */
+            personName?: string;
+            /** @description Box left edge in pixels of the analysed image. */
+            x?: number;
+            /** @description Box top edge in pixels of the analysed image. */
+            y?: number;
+            /** @description Box width in pixels of the analysed image. */
+            width?: number;
+            /** @description Box height in pixels of the analysed image. */
+            height?: number;
+            /** @description Detection confidence between 0 and 1. */
+            confidence?: number;
+        };
+        ImageFacesResponse: {
+            faces?: components["schemas"]["ImageFaceDTO"][];
         };
         EmbeddingStatusResponse: {
             running?: boolean;
@@ -4424,6 +4461,43 @@ export interface operations {
         responses: {
             /** @description Face recognition stopped */
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getImageFaces: {
+        parameters: {
+            query: {
+                /** @description Gallery-relative image path, as returned by the gallery listings */
+                path: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Faces detected on the image, ordered by face id */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImageFacesResponse"];
+                };
+            };
+            /** @description The path parameter is missing */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The path is outside the gallery folders */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

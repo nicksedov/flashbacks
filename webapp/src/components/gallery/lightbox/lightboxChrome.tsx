@@ -1,6 +1,6 @@
 import type { ReactNode } from "react"
 import type { LucideIcon } from "lucide-react"
-import { Sparkles, Info, ScanText, Tags } from "lucide-react"
+import { Sparkles, Info, ScanText, Tags, Users } from "lucide-react"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
 import type { ButtonProps } from "@/components/ui/button"
@@ -10,13 +10,17 @@ import type { TranslationKey } from "@/i18n"
 import { cn } from "@/lib/utils"
 
 /** Lightbox modes shared by every lightbox surface. */
-export type LightboxMode = "ai" | "exif" | "ocr" | "tags"
+export type LightboxMode = "ai" | "exif" | "ocr" | "people" | "tags"
 
-/** Mode tab definitions used by the lightbox tab bar. */
+/**
+ * Mode tab definitions used by the lightbox tab bar. The People tab sits
+ * immediately before Tags: people describe the photo's content, like tags do.
+ */
 const LIGHTBOX_TAB_CONFIG: { id: LightboxMode; labelKey: TranslationKey; icon: LucideIcon }[] = [
   { id: "ai", labelKey: "lightbox.tab.ai", icon: Sparkles },
   { id: "exif", labelKey: "lightbox.tab.exif", icon: Info },
   { id: "ocr", labelKey: "lightbox.tab.ocr", icon: ScanText },
+  { id: "people", labelKey: "lightbox.tab.people", icon: Users },
   { id: "tags", labelKey: "lightbox.tab.tags", icon: Tags },
 ]
 

@@ -1517,6 +1517,29 @@ paths:
         "200":
           description: Face recognition stopped
 
+  /api/image-faces:
+    get:
+      summary: List the faces detected on one image
+      operationId: getImageFaces
+      parameters:
+        - name: path
+          in: query
+          required: true
+          description: Gallery-relative image path, as returned by the gallery listings
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Faces detected on the image, ordered by face id
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImageFacesResponse"
+        "400":
+          description: The path parameter is missing
+        "403":
+          description: The path is outside the gallery folders
+
   /api/embedding/status:
     get:
       summary: Get embedding backfill status
@@ -3276,6 +3299,41 @@ components:
           type: integer
         hasNextPage:
           type: boolean
+
+    ImageFaceDTO:
+      type: object
+      properties:
+        id:
+          type: integer
+        personId:
+          type: integer
+          description: The person the face was clustered into; 0 when it belongs to none.
+        personName:
+          type: string
+          description: The person's name; empty while the person is unnamed.
+        x:
+          type: number
+          description: Box left edge in pixels of the analysed image.
+        y:
+          type: number
+          description: Box top edge in pixels of the analysed image.
+        width:
+          type: number
+          description: Box width in pixels of the analysed image.
+        height:
+          type: number
+          description: Box height in pixels of the analysed image.
+        confidence:
+          type: number
+          description: Detection confidence between 0 and 1.
+
+    ImageFacesResponse:
+      type: object
+      properties:
+        faces:
+          type: array
+          items:
+            $ref: "#/components/schemas/ImageFaceDTO"
 
     EmbeddingStatusResponse:
       type: object

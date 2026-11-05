@@ -1,15 +1,27 @@
 import { useState, useEffect, useCallback, useRef } from "react"
 
+interface DisplayDimensions {
+  width: number
+  height: number
+}
+
 interface UseImageDimensionsReturn {
   imageRef: React.RefObject<HTMLImageElement | null>
-  displayDimensions: { width: number; height: number } | null
+  displayDimensions: DisplayDimensions | null
+  /**
+   * The image's own pixel size, read from the loaded element. Overlays whose
+   * coordinates are stored in the source frame (for example face boxes) scale by
+   * this, not by the rendered size.
+   */
+  naturalDimensions: DisplayDimensions | null
   imageLoaded: boolean
   handleImageLoad: () => void
 }
 
 export function useImageDimensions(imageUrl?: string): UseImageDimensionsReturn {
   const [imageLoaded, setImageLoaded] = useState(false)
-  const [displayDimensions, setDisplayDimensions] = useState<{ width: number; height: number } | null>(null)
+  const [displayDimensions, setDisplayDimensions] = useState<DisplayDimensions | null>(null)
+  const [naturalDimensions, setNaturalDimensions] = useState<DisplayDimensions | null>(null)
   const imageRef = useRef<HTMLImageElement>(null)
   const prevUrlRef = useRef<string | undefined>(imageUrl)
 
@@ -19,6 +31,7 @@ export function useImageDimensions(imageUrl?: string): UseImageDimensionsReturn 
       prevUrlRef.current = imageUrl
       setImageLoaded(false)
       setDisplayDimensions(null)
+      setNaturalDimensions(null)
     }
   }, [imageUrl])
 
@@ -26,9 +39,12 @@ export function useImageDimensions(imageUrl?: string): UseImageDimensionsReturn 
     // Use requestAnimationFrame to ensure dimensions are read after paint
     requestAnimationFrame(() => {
       if (imageRef.current) {
-        const { clientWidth, clientHeight } = imageRef.current
+        const { clientWidth, clientHeight, naturalWidth, naturalHeight } = imageRef.current
         if (clientWidth > 0 && clientHeight > 0) {
           setDisplayDimensions({ width: clientWidth, height: clientHeight })
+          if (naturalWidth > 0 && naturalHeight > 0) {
+            setNaturalDimensions({ width: naturalWidth, height: naturalHeight })
+          }
           setImageLoaded(true)
         }
       }
@@ -52,5 +68,5 @@ export function useImageDimensions(imageUrl?: string): UseImageDimensionsReturn 
     return () => window.removeEventListener("resize", updateDimensions)
   }, [imageLoaded])
 
-  return { imageRef, displayDimensions, imageLoaded, handleImageLoad }
+  return { imageRef, displayDimensions, naturalDimensions, imageLoaded, handleImageLoad }
 }

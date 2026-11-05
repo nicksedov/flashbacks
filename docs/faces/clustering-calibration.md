@@ -1,0 +1,233 @@
+# Face clustering calibration
+
+This document records how the face-clustering thresholds are calibrated and
+what the labelled fixtures measure. It is the reproducible A/B report for the
+`rework-face-clustering` change: one identity that the production pipeline split
+into six people must resolve to one.
+
+The private fixture is **not** a CI gate (it is excluded from version control).
+The behavioural gate is the hermetic pytest suite over synthetic candidate
+graphs (`backend/faces/tests/test_cluster_graph.py`,
+`test_csls.py`, `test_clustering_quality.py`). This report is the evidence used
+to choose the numbers.
+
+## What is measured
+
+- **fragments per identity** — how many people one ground-truth identity is
+  split into (target: `1`);
+- **pairwise precision** — share of same-person pairs that really share an
+  identity (must stay `1.0` on the impostor sets);
+- **pairwise recall** — share of same-identity pairs placed in one person;
+- **unassigned share** — faces left without a person;
+- **person count** — distinct people produced.
+
+The harness rebuilds the candidate graph the core service sends (k nearest
+neighbours above the recognition floor, capped per source photo) and labels it
+with the algorithm under test. It never re-implements the algorithm.
+
+## Fixtures
+
+| Fixture | Faces | Identity | Notes |
+|---|---|---|---|
+| `tests/dataset/faces/dima` | 63 | one (Dima) | private; the six production labels `1905`, `1906`, `1924`, `1934`, `1974`, `5810` are fragments of one face |
+| `tests/dataset/faces/politicians` | 4 | Obama ×2, Merkel, Macron | portraits only; group photos are skipped because their faces span identities |
+| `tests/dataset/faces/scientists` | 5 | Einstein ×3, Curie, Bohr | portraits only |
+
+Why the baseline is the **stored partition**, not a re-run: the production
+fragments were produced by repeated passes (each pass minted new people) and by
+the cap-driven split of a 2 895-face group. A 63-face sample is below the cap
+of 250, so a single-batch re-run of `graph-v1` converges to one person and cannot
+reproduce the failure. The manifest `person_id` column records what the stored
+gallery actually holds — six people — and that is the `6` in `6 → 1`.
+
+## Reproduction
+
+The embedding cache (`embeddings.json`, keyed by each photo's manifest
+`sha256`) ships next to a fixture: a second run reports `cache hit` and does not
+load the model.
+
+### Local virtualenv (repository root)
+
+```bash
+backend/faces/.venv/bin/python backend/faces/tools/calibrate_clustering.py embed
+backend/faces/.venv/bin/python backend/faces/tools/calibrate_clustering.py baseline
+backend/faces/.venv/bin/python backend/faces/tools/calibrate_clustering.py v2
+backend/faces/.venv/bin/python backend/faces/tools/calibrate_clustering.py sweep
+```
+
+The first `embed` run reports `63 faces embedded, cache written`; every later run
+of any stage reports `cache hit` for the fixture.
+
+### Inside the `flashbacks-faces` container
+
+`docker cp` is blocked on hosts that front the Docker socket with an allow-list,
+so the fixture and the tool are streamed with `tar`:
+
+```bash
+tar -C tests/dataset/faces -cf - dima politicians scientists \
+  | docker exec -i flashbacks-faces sh -c \
+      'rm -rf /tmp/calibration && mkdir -p /tmp/calibration && tar -xf - -C /tmp/calibration'
+# The tool must run against this working tree, not the image's frozen copy of
+# the service: stage the sources in /tmp and put them first on PYTHONPATH.
+tar -C backend/faces -cf - app tools \
+  | docker exec -i flashbacks-faces sh -c \
+      'rm -rf /tmp/facestool && mkdir -p /tmp/facestool && tar -xf - -C /tmp/facestool'
+
+docker exec -w /tmp -e PYTHONPATH=/tmp/facestool flashbacks-faces \
+  python -m tools.calibrate_clustering baseline --dataset /tmp/calibration/dima
+docker exec -w /tmp -e PYTHONPATH=/tmp/facestool flashbacks-faces \
+  python -m tools.calibrate_clustering v2 --dataset /tmp/calibration/dima
+docker exec -w /tmp -e PYTHONPATH=/tmp/facestool flashbacks-faces \
+  python -m tools.calibrate_clustering sweep \
+    --dataset /tmp/calibration/dima \
+    --dataset /tmp/calibration/politicians \
+    --dataset /tmp/calibration/scientists
+```
+
+The copied `dima/embeddings.json` makes these container runs cache hits, so the
+reported numbers match the local run without a model pass. Running from `/tmp`
+prevents the image's `/app/app` from shadowing the staged sources.
+
+## Baseline — stored partition and `graph-v1`
+
+```bash
+backend/faces/.venv/bin/python backend/faces/tools/calibrate_clustering.py baseline
+```
+
+| Variant | Faces | People | Fragments | Precision | Recall | Unassigned |
+|---|---|---|---|---|---|---|
+| stored production partition | 63 | 6 | **6** | 1.000 | 0.429 | 0.0% |
+| `graph-v1` single pass | 63 | 1 | 1 | 1.000 | 1.000 | 0.0% |
+
+Per production label after the `graph-v1` re-run:
+
+| Label | Faces | Clusters | Largest | Unassigned |
+|---|---|---|---|---|
+| `1905` | 40 | 1 | 40 | 0 |
+| `1906` | 5 | 1 | 5 | 0 |
+| `1924` | 2 | 1 | 2 | 0 |
+| `1934` | 9 | 1 | 9 | 0 |
+| `1974` | 5 | 1 | 5 | 0 |
+| `5810` | 2 | 1 | 2 | 0 |
+
+## Result — `graph-v2` at the calibrated thresholds
+
+```bash
+backend/faces/.venv/bin/python backend/faces/tools/calibrate_clustering.py v2
+```
+
+| Fixture | Faces | People | Fragments | Precision | Recall | Unassigned |
+|---|---|---|---|---|---|---|
+| `dima` | 63 | 1 | **1** | 1.000 | 1.000 | 0.0% |
+| `politicians` (4 portraits) | 4 | 1 | 1 (Obama) | 1.000 | 1.000 | 50.0% |
+| `scientists` (5 portraits) | 5 | 0 | — | 1.000 | 1.000 | 100.0% |
+
+Fragments per identity therefore go from **6 → 1**, with pairwise precision
+unchanged at `1.0` on both impostor sets. A single-photo face alone cannot make
+a person (a person spans at least two photos), so the unassigned share on the
+portrait-only sets is expected; in the gallery those faces are picked up by the
+person-reference assignment (`τ_assign` + margin).
+
+## Threshold sweep
+
+```bash
+backend/faces/.venv/bin/python backend/faces/tools/calibrate_clustering.py sweep
+```
+
+The grid covers `k ∈ {8, 16, 24}`, `τ_core ∈ {−0.05, 0, 0.05, 0.1}`,
+`k_core ∈ {2, 3, 4}`, `τ_assign ∈ {0.25, 0.30, 0.35}`,
+`τ_merge ∈ {0.45, 0.50, 0.55}`, `m ∈ {2, 3}` and
+`margin ∈ {0.03, 0.05, 0.08}` — 1 944 combinations. Variants that merge two
+different people on either impostor set are discarded before the Pareto front,
+which is computed over fragments, precision and unassigned share.
+
+Output on the fixtures above:
+
+```
+Pareto front (1215 of 1944 combinations, impostor precision 1.0 on 2 sets; 1 distinct outcomes)
+  k   core  kcore  assign  merge  m  margin  frag   prec  recall  unassigned  people
+ 16   0.00      3    0.30   0.50  2    0.05     1  1.000   1.000        0.0%       1
+```
+
+The front has a single distinct outcome; the printed representative is the grid
+point closest to the configured defaults, which is why the chosen values below
+are the defaults rather than a boundary point.
+
+### Chosen values
+
+| Knob | Constant in `backend/faces/app/config.py` | Value |
+|---|---|---|
+| algorithm | `CLUSTER_ALGO` / `FACES_CLUSTER_ALGO` | `graph-v1` by default, `graph-v2` when enabled |
+| candidates per face (`k`) | core `ClusterNeighbours` (query side) | 16 |
+| core floor (`τ_core`) | `CLUSTER_CORE_SIMILARITY` | `0.00` (hub-corrected scale) |
+| core neighbours (`k_core`) | `CLUSTER_CORE_NEIGHBOURS` | `3` |
+| assign floor (`τ_assign`) | `CLUSTER_ASSIGN_SIMILARITY` | `0.30` |
+| runner-up margin | `RECOGNITION_MARGIN` | `0.05` |
+| merge floor (`τ_merge`) | `CLUSTER_MERGE_SIMILARITY` | `0.50` |
+| cross-component support (`m`) | `CLUSTER_MERGE_SUPPORT` | `2` |
+| support floor (`τ_support`) | `CLUSTER_MERGE_SUPPORT_SIMILARITY` | `0.40` |
+| candidates per source photo | `CLUSTER_CANDIDATES_PER_PHOTO` | `2` |
+| photos per person | `CLUSTER_MIN_PHOTOS` | `2` |
+
+`τ_core` sits on the hub-corrected (CSLS) scale, where a pair at its own
+neighbourhood mean scores `0`; it is not comparable to the raw `0.40` floor. All
+values are reported by `/faces/health` so core never re-implements them.
+
+## Production snapshot reconcile
+
+Measured on a copy of the production database (`flashbacks_reconcile`, restored
+with `pg_dump` from the live gallery; the live database was only read). The copy
+held 39 024 faces, 2 911 of them unassigned (7.46%), and 4 147 people. The six
+Dima fragments (`1905`, `1906`, `1924`, `1934`, `1974`, `5810`) held 2 931
+faces.
+
+| Metric | Before | After reconcile | After a second reconcile |
+|---|---|---|---|
+| People | 4 147 | 1 332 | 1 332 |
+| Dima people (fragments) | **6** | **1** | **1** |
+| Dima faces in the largest person | 2 907 | 2 931 | 2 931 |
+| Unassigned faces | 2 911 (7.46%) | 2 911 (7.46%) | 2 911 (7.46%) |
+| Person references | 0 | 4 512 | 4 512 |
+
+The reconcile step builds the references lazily, then repeats its merge round
+until a round changes nothing, so a single call reaches the fixed point. A
+second call changed no row at all: the whole harness (migration, metrics, two
+calls) took ~19 s the first time and ~3 s when already converged. Unassigned
+faces are not touched by reconcile — they remain for the assignment and
+clustering path — which is why the unassigned share is identical before and
+after.
+
+Reproduction on a host that holds the gallery database:
+
+```bash
+# 1. Consistent copy (the production database is only read).
+docker exec -e PGPASSWORD=<pw> postgres sh -lc \
+  'dropdb -U postgres --if-exists flashbacks_reconcile &&
+   createdb -U postgres flashbacks_reconcile &&
+   pg_dump -U postgres -Fc -f /tmp/snapshot.dump flashbacks &&
+   pg_restore -U postgres -d flashbacks_reconcile -j 4 /tmp/snapshot.dump'
+
+# 2. Track the identity under test (the production people ids above).
+docker exec -e PGPASSWORD=<pw> postgres psql -U postgres -d flashbacks_reconcile -c \
+  "CREATE TABLE dima_faces AS SELECT id FROM faces WHERE person_id IN (1905,1906,1924,1934,1974,5810);"
+
+# 3. Run the reconcile twice; the test skips unless SNAPSHOT_DSN is set.
+cd backend/core
+SNAPSHOT_DSN='host=<db-host> port=5432 user=postgres password=<pw> dbname=flashbacks_reconcile sslmode=disable' \
+  go test ./internal/application/faces -run TestSnapshotReconcile -count=1 -v
+```
+
+`TestSnapshotReconcile` prints a `SNAPSHOT_REPORT` JSON with the before/first/
+second metrics. The production ids in step 2 change on a fresh install; update
+them from `tests/dataset/faces/dima/README.md`.
+
+## Known limits
+
+- The fixture is private and gitignored; it produces this report, not the CI
+  gate.
+- The portrait sets measure false merges only: recall on them is meaningless
+  because each person appears on one or two portraits and group photos are
+  skipped (their faces cannot be attributed to one identity without labels).
+- The production snapshot report needs a gallery database; it is reproducible
+  with the commands above on any host that holds one, but not from the
+  repository alone.

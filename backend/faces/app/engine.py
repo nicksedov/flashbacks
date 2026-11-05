@@ -15,8 +15,17 @@ import numpy as np
 from PIL import Image
 
 from app.config import (
+    CLUSTER_ALGO,
+    CLUSTER_ASSIGN_SIMILARITY,
+    CLUSTER_CANDIDATES_PER_PHOTO,
+    CLUSTER_CORE_NEIGHBOURS,
+    CLUSTER_CORE_SIMILARITY,
     CLUSTER_MAX_FACES_MIN,
     CLUSTER_MAX_SHARE,
+    CLUSTER_MERGE_SIMILARITY,
+    CLUSTER_MERGE_SUPPORT,
+    CLUSTER_MERGE_SUPPORT_SIMILARITY,
+    CLUSTER_MIN_PHOTOS,
     CLUSTER_MIN_SIMILARITY,
     CLUSTER_SPLIT_MAX_SIMILARITY,
     CLUSTER_SPLIT_STEP,
@@ -432,6 +441,7 @@ class FaceEngine:
         embeddings: list[list[float]],
         min_cluster_size: int = 2,
         solo_faces: Optional[list[bool]] = None,
+        photo_ids: Optional[Sequence[int]] = None,
     ) -> list[int]:
         """Group embeddings into people with a cosine-distance threshold.
 
@@ -474,9 +484,28 @@ class FaceEngine:
         labels = FaceEngine._resplit_by_density(
             normalized, labels, max(2, int(min_cluster_size))
         )
-        return FaceEngine._recognise_leftovers(
+        labels = FaceEngine._recognise_leftovers(
             normalized, labels, max(2, int(min_cluster_size)), solo_faces or []
         )
+        if photo_ids is not None and len(photo_ids) == len(labels):
+            labels = FaceEngine._drop_photo_poor_labels(
+                labels, [int(value) for value in photo_ids], CLUSTER_MIN_PHOTOS
+            )
+        return labels
+
+    @staticmethod
+    def _drop_photo_poor_labels(
+        labels: Sequence[int], photo_of: Sequence[int], minimum: int
+    ) -> list[int]:
+        """Unassign clusters that span fewer than *minimum* distinct photos."""
+        if minimum <= 1:
+            return list(labels)
+        grouped: dict[int, set[int]] = {}
+        for position, label in enumerate(labels):
+            if label >= 0:
+                grouped.setdefault(label, set()).add(photo_of[position])
+        poor = {label for label, photos in grouped.items() if len(photos) < minimum}
+        return [-1 if label in poor else label for label in labels]
 
     @staticmethod
     def cluster_graph(
@@ -484,6 +513,20 @@ class FaceEngine:
         edges: Sequence[tuple[int, int, float]],
         solo_faces: Optional[Sequence[bool]] = None,
         min_cluster_size: int = 2,
+        *,
+        photo_ids: Optional[Sequence[int]] = None,
+        widths: Optional[Sequence[float]] = None,
+        qualities: Optional[Sequence[float]] = None,
+        algorithm: Optional[str] = None,
+        core_similarity: Optional[float] = None,
+        core_neighbours: Optional[int] = None,
+        assign_similarity: Optional[float] = None,
+        merge_similarity: Optional[float] = None,
+        merge_support: Optional[int] = None,
+        support_similarity: Optional[float] = None,
+        margin: Optional[float] = None,
+        min_photos: Optional[int] = None,
+        candidates_per_photo: Optional[int] = None,
     ) -> list[int]:
         """Group faces from candidate links into people, one label per face.
 
@@ -500,10 +543,34 @@ class FaceEngine:
         re-split only follows links both faces named each other. A one-way link
         is what a lookalike bridge looks like, and following those chains is how
         a library collapses into a single person.
+
+        ``algorithm`` selects the revision: ``graph-v1`` keeps that behaviour,
+        ``graph-v2`` switches to density-aware labelling (see
+        :meth:`_cluster_graph_v2`). ``photo_ids``/``widths``/``qualities`` are
+        aligned with ``face_ids``; ``widths`` and ``qualities`` are accepted for
+        the contract and reserved for quality-aware rules, while a missing
+        ``photo_ids`` defaults to one unique photo per face so an older core
+        keeps today's behaviour.
         """
         count = len(face_ids)
         if count == 0:
             return []
+        if (algorithm or CLUSTER_ALGO) == "graph-v2":
+            return FaceEngine._cluster_graph_v2(
+                face_ids,
+                edges,
+                min_cluster_size,
+                photo_ids=photo_ids,
+                core_similarity=core_similarity,
+                core_neighbours=core_neighbours,
+                assign_similarity=assign_similarity,
+                merge_similarity=merge_similarity,
+                merge_support=merge_support,
+                support_similarity=support_similarity,
+                margin=margin,
+                min_photos=min_photos,
+                candidates_per_photo=candidates_per_photo,
+            )
 
         index: dict[int, int] = {}
         for position, face_id in enumerate(face_ids):
@@ -704,6 +771,401 @@ class FaceEngine:
                     )
             resolved.extend(pieces)
         return resolved
+
+    @staticmethod
+    def hub_correction(
+        neighbour_scores: dict[int, dict[int, float]],
+        links: dict[tuple[int, int], float],
+    ) -> dict[tuple[int, int], float]:
+        """Hub-corrected (CSLS) score of every candidate link.
+
+        ``score(i, j) = 2·s(i,j) − r̄(i) − r̄(j)``, where ``r̄(i)`` is the mean
+        similarity from *i* to the candidates the caller sent. A face that is
+        moderately close to everything has a high mean and therefore a low
+        corrected score, so it can no longer bridge two identities even though
+        its raw similarity clears the floor.
+        """
+        means: dict[int, float] = {}
+        for node, scores in neighbour_scores.items():
+            values = list(scores.values())
+            means[node] = sum(values) / len(values) if values else 0.0
+        return {
+            (left, right): 2.0 * value - means.get(left, 0.0) - means.get(right, 0.0)
+            for (left, right), value in links.items()
+        }
+
+    @staticmethod
+    def _cluster_graph_v2(
+        face_ids: Sequence[int],
+        edges: Sequence[tuple[int, int, float]],
+        min_cluster_size: int,
+        *,
+        photo_ids: Optional[Sequence[int]] = None,
+        core_similarity: Optional[float] = None,
+        core_neighbours: Optional[int] = None,
+        assign_similarity: Optional[float] = None,
+        merge_similarity: Optional[float] = None,
+        merge_support: Optional[int] = None,
+        support_similarity: Optional[float] = None,
+        margin: Optional[float] = None,
+        min_photos: Optional[int] = None,
+        candidates_per_photo: Optional[int] = None,
+    ) -> list[int]:
+        """Density-aware labelling of the candidate graph.
+
+        Differs from ``graph-v1`` in four ways:
+
+        * only mutual links count, and links are scored hub-corrected (CSLS), so
+          a lookalike bridge is not an edge;
+        * a face is a core point only with ``core_neighbours`` mutual neighbours
+          at ``core_similarity``; components are built from core points, so a
+          non-core face can never join two identities;
+        * a candidate list keeps at most ``candidates_per_photo`` faces per
+          source photo, and a person must span ``min_photos`` distinct photos,
+          so a burst sequence cannot dominate a person;
+        * after the cap-driven split, neighbouring components merge when their
+          medoid similarity and their mutual cross-component support agree,
+          which rejoins a person the cap cut apart.
+        """
+        count = len(face_ids)
+        index: dict[int, int] = {}
+        for position, face_id in enumerate(face_ids):
+            index.setdefault(int(face_id), position)
+
+        if photo_ids is not None and len(photo_ids) == count:
+            photo_of = [int(value) for value in photo_ids]
+        else:
+            # An older core sends no photos; one unique photo per face keeps
+            # today's behaviour (nothing is collapsed by the diversity rules).
+            photo_of = list(range(count))
+
+        neighbour_scores: dict[int, dict[int, float]] = {}
+        for face_id, candidate_id, similarity in edges:
+            left, right = index.get(int(face_id)), index.get(int(candidate_id))
+            if left is None or right is None or left == right:
+                continue
+            value = float(similarity)
+            scores = neighbour_scores.setdefault(left, {})
+            scores[right] = max(scores.get(right, 0.0), value)
+
+        per_photo = (
+            CLUSTER_CANDIDATES_PER_PHOTO
+            if candidates_per_photo is None
+            else candidates_per_photo
+        )
+        neighbour_scores = FaceEngine._limit_candidates(
+            neighbour_scores, photo_of, per_photo
+        )
+        directed = {
+            (source, candidate)
+            for source, scores in neighbour_scores.items()
+            for candidate in scores
+        }
+
+        links: dict[tuple[int, int], float] = {}
+        for source, scores in neighbour_scores.items():
+            for candidate, value in scores.items():
+                key = (min(source, candidate), max(source, candidate))
+                links[key] = max(links.get(key, 0.0), value)
+
+        core_floor = (
+            CLUSTER_CORE_SIMILARITY if core_similarity is None else core_similarity
+        )
+        core_degree = (
+            CLUSTER_CORE_NEIGHBOURS if core_neighbours is None else core_neighbours
+        )
+        assign_floor = (
+            CLUSTER_ASSIGN_SIMILARITY if assign_similarity is None else assign_similarity
+        )
+        merge_floor = (
+            CLUSTER_MERGE_SIMILARITY if merge_similarity is None else merge_similarity
+        )
+        support_needed = CLUSTER_MERGE_SUPPORT if merge_support is None else merge_support
+        support_floor = (
+            CLUSTER_MERGE_SUPPORT_SIMILARITY
+            if support_similarity is None
+            else support_similarity
+        )
+        margin_floor = RECOGNITION_MARGIN if margin is None else margin
+        photos_needed = CLUSTER_MIN_PHOTOS if min_photos is None else min_photos
+
+        corrected = FaceEngine.hub_correction(neighbour_scores, links)
+        mutual = {
+            key
+            for key, value in corrected.items()
+            if value >= core_floor
+            and (key[0], key[1]) in directed
+            and (key[1], key[0]) in directed
+        }
+
+        degrees: dict[int, int] = {}
+        for left, right in mutual:
+            degrees[left] = degrees.get(left, 0) + 1
+            degrees[right] = degrees.get(right, 0) + 1
+        # A small request cannot supply ``core_degree`` neighbours: a two-face
+        # gallery names exactly one mutual candidate, and the person must still
+        # form. The requirement therefore collapses to what the request holds.
+        core = {
+            node
+            for node, degree in degrees.items()
+            if degree >= min(core_degree, len(neighbour_scores.get(node, {})))
+        }
+
+        minimum = max(2, int(min_cluster_size))
+        groups = [
+            members
+            for members in FaceEngine._core_components(mutual, core)
+            if len(members) >= minimum
+        ]
+        groups = FaceEngine._split_chained_groups(count, links, directed, groups)
+        groups = [members for members in groups if len(members) >= minimum]
+        groups = FaceEngine._drop_photo_poor(groups, photo_of, photos_needed)
+        groups = FaceEngine._merge_groups(
+            groups,
+            links,
+            directed,
+            photo_of,
+            merge_floor,
+            support_needed,
+            support_floor,
+        )
+
+        labels = [-1] * count
+        for label, members in enumerate(groups):
+            for member in members:
+                labels[member] = label
+
+        # Non-core faces never bridge components; they join one by their own
+        # candidate vote, bounded by the assignment floor and the margin.
+        for node in range(count):
+            if labels[node] != -1:
+                continue
+            scores: dict[int, float] = {}
+            for other, value in neighbour_scores.get(node, {}).items():
+                label = labels[other]
+                if label < 0:
+                    continue
+                if value > scores.get(label, -1.0):
+                    scores[label] = value
+            chosen = FaceEngine._decisive_label(scores, assign_floor, margin_floor)
+            if chosen is not None:
+                labels[node] = chosen
+        return labels
+
+    @staticmethod
+    def _limit_candidates(
+        neighbour_scores: dict[int, dict[int, float]],
+        photo_of: Sequence[int],
+        cap: Optional[int],
+    ) -> dict[int, dict[int, float]]:
+        """Keep at most *cap* candidates per source photo in every list."""
+        if cap is None or cap <= 0:
+            return neighbour_scores
+        limited: dict[int, dict[int, float]] = {}
+        for source, scores in neighbour_scores.items():
+            kept: dict[int, float] = {}
+            counts: dict[int, int] = {}
+            for candidate, value in sorted(
+                scores.items(), key=lambda item: (-item[1], item[0])
+            ):
+                photo = photo_of[candidate]
+                if counts.get(photo, 0) >= cap:
+                    continue
+                counts[photo] = counts.get(photo, 0) + 1
+                kept[candidate] = value
+            limited[source] = kept
+        return limited
+
+    @staticmethod
+    def _core_components(
+        mutual: set[tuple[int, int]], core: set[int]
+    ) -> list[list[int]]:
+        """Components of the mutual graph restricted to core points."""
+        parent = {node: node for node in core}
+
+        def find(node: int) -> int:
+            while parent[node] != node:
+                parent[node] = parent[parent[node]]
+                node = parent[node]
+            return node
+
+        for left, right in mutual:
+            if left not in parent or right not in parent:
+                continue
+            root_left, root_right = find(left), find(right)
+            if root_left != root_right:
+                parent[root_right] = root_left
+
+        grouped: dict[int, list[int]] = {}
+        for node in sorted(core):
+            grouped.setdefault(find(node), []).append(node)
+        return sorted(grouped.values(), key=lambda members: members[0])
+
+    @staticmethod
+    def _drop_photo_poor(
+        groups: Sequence[Sequence[int]], photo_of: Sequence[int], minimum: int
+    ) -> list[list[int]]:
+        """Drop components that span fewer than *minimum* distinct photos."""
+        if minimum <= 1:
+            return [list(members) for members in groups]
+        return [
+            list(members)
+            for members in groups
+            if len({photo_of[member] for member in members}) >= minimum
+        ]
+
+    @staticmethod
+    def _medoid(members: Sequence[int], links: dict[tuple[int, int], float]) -> int:
+        """Member with the strongest total link weight inside its component."""
+        best = members[0]
+        best_score = -1.0
+        for member in members:
+            score = sum(
+                links.get((min(member, other), max(member, other)), 0.0)
+                for other in members
+                if other != member
+            )
+            if score > best_score:
+                best, best_score = member, score
+        return best
+
+    @staticmethod
+    def _medoid_similarity(
+        left: int,
+        left_members: Sequence[int],
+        right: int,
+        right_members: Sequence[int],
+        links: dict[tuple[int, int], float],
+    ) -> float:
+        """Strongest similarity between two component medoids.
+
+        The graphs the caller sends are truncated kNN lists, so the two medoids
+        are not necessarily candidates of each other. The similarity of a
+        medoid to the other component is therefore used when the direct pair is
+        absent, instead of silently reporting zero.
+        """
+        keys = [(min(left, right), max(left, right))]
+        keys.extend((min(left, other), max(left, other)) for other in right_members)
+        keys.extend((min(right, other), max(right, other)) for other in left_members)
+        return max((links.get(key, 0.0) for key in keys), default=0.0)
+
+    @staticmethod
+    def _cross_support(
+        left_members: Sequence[int],
+        right_members: Sequence[int],
+        links: dict[tuple[int, int], float],
+        directed: set[tuple[int, int]],
+        photo_of: Sequence[int],
+        floor: float,
+    ) -> int:
+        """Mutual cross-component pairs at or above *floor*, one per photo pair.
+
+        Two burst photos of the same moment contribute one piece of evidence,
+        not one per face pair, which is what keeps a sequence from voting a
+        stranger into a person.
+        """
+        right_set = set(right_members)
+        seen: set[tuple[int, int]] = set()
+        for left in left_members:
+            for right in right_set:
+                key = (min(left, right), max(left, right))
+                value = links.get(key)
+                if value is None or value < floor:
+                    continue
+                if (left, right) not in directed or (right, left) not in directed:
+                    continue
+                photos = (photo_of[left], photo_of[right])
+                seen.add((min(photos), max(photos)))
+        return len(seen)
+
+    @staticmethod
+    def _merge_groups(
+        groups: Sequence[Sequence[int]],
+        links: dict[tuple[int, int], float],
+        directed: set[tuple[int, int]],
+        photo_of: Sequence[int],
+        merge_floor: float,
+        support_needed: int,
+        support_floor: float,
+    ) -> list[list[int]]:
+        """Agglomeratively merge components that the evidence says are one person.
+
+        A pair merges when the medoid similarity clears ``merge_floor`` *and*
+        at least ``support_needed`` mutual cross-component pairs clear
+        ``support_floor``. Support is what keeps two similar-looking strangers
+        apart while rejoining the pieces of one person, whose cross links are
+        numerous. Merging repeats until no pair qualifies.
+        """
+        groups_by_id = {index: list(members) for index, members in enumerate(groups)}
+        if len(groups_by_id) < 2:
+            return list(groups_by_id.values())
+
+        while True:
+            group_of: dict[int, int] = {}
+            for group_id, members in groups_by_id.items():
+                for member in members:
+                    group_of[member] = group_id
+
+            candidates: set[tuple[int, int]] = set()
+            for left, right in links:
+                left_group, right_group = group_of.get(left), group_of.get(right)
+                if left_group is None or right_group is None:
+                    continue
+                if left_group != right_group:
+                    candidates.add((min(left_group, right_group), max(left_group, right_group)))
+
+            best_score = -1.0
+            best_pair: Optional[tuple[int, int]] = None
+            for left_group, right_group in candidates:
+                left_members = groups_by_id[left_group]
+                right_members = groups_by_id[right_group]
+                score = FaceEngine._medoid_similarity(
+                    FaceEngine._medoid(left_members, links),
+                    left_members,
+                    FaceEngine._medoid(right_members, links),
+                    right_members,
+                    links,
+                )
+                if score < merge_floor or score <= best_score:
+                    continue
+                support = FaceEngine._cross_support(
+                    left_members,
+                    right_members,
+                    links,
+                    directed,
+                    photo_of,
+                    support_floor,
+                )
+                if support < support_needed:
+                    continue
+                best_score, best_pair = score, (left_group, right_group)
+
+            if best_pair is None:
+                return list(groups_by_id.values())
+            left_group, right_group = best_pair
+            groups_by_id[left_group] = (
+                groups_by_id[left_group] + groups_by_id.pop(right_group)
+            )
+
+    @staticmethod
+    def _decisive_label(
+        scores: dict[int, float], floor: float, margin: float
+    ) -> Optional[int]:
+        """Best label whose score clears *floor* and beats the runner-up."""
+        best_label: Optional[int] = None
+        best_score = runner_up = -1.0
+        for label, score in sorted(scores.items()):
+            if score > best_score:
+                best_score, runner_up, best_label = score, best_score, label
+            elif score > runner_up:
+                runner_up = score
+        if (
+            best_label is not None
+            and best_score >= floor
+            and best_score - runner_up >= margin
+        ):
+            return best_label
+        return None
 
     @staticmethod
     def _resplit_by_density(

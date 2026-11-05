@@ -783,11 +783,14 @@ func TestClusterAssignUsesStoreCandidates(t *testing.T) {
 	}
 	var gotSeeds []uint
 	var gotEdges []facesclient.FaceLink
+	var gotFacts facesclient.FaceFacts
 	client.ClusterGraphFunc = func(
 		_ context.Context, faceIDs []uint, edges []facesclient.FaceLink, _ []bool,
+		facts facesclient.FaceFacts,
 	) ([]int, error) {
 		gotSeeds = faceIDs
 		gotEdges = edges
+		gotFacts = facts
 		return []int{0, 0}, nil
 	}
 	neighbours := &fakeNeighbours{
@@ -817,6 +820,12 @@ func TestClusterAssignUsesStoreCandidates(t *testing.T) {
 	}
 	if len(gotEdges) != 2 || gotEdges[0].FaceID != faceA.ID || gotEdges[0].CandidateID != faceB.ID {
 		t.Errorf("candidate edges = %+v, want the two queried links", gotEdges)
+	}
+	if len(gotFacts.PhotoIDs) != 2 || len(gotFacts.Widths) != 2 || len(gotFacts.Qualities) != 2 {
+		t.Fatalf("face facts = %+v, want three arrays aligned with the seeds", gotFacts)
+	}
+	if gotFacts.PhotoIDs[0] != imageA.ID || gotFacts.PhotoIDs[1] != imageB.ID {
+		t.Errorf("photo ids = %v, want [%d %d]", gotFacts.PhotoIDs, imageA.ID, imageB.ID)
 	}
 	if client.ClusterCallCount != 0 {
 		t.Errorf("memory clustering called %d times, want 0 on the store path", client.ClusterCallCount)
@@ -863,7 +872,7 @@ func TestClusterAssignFallsBackInMemory(t *testing.T) {
 
 			client := newFakeFacesClient()
 			client.ClusterGraphFunc = func(
-				context.Context, []uint, []facesclient.FaceLink, []bool,
+				context.Context, []uint, []facesclient.FaceLink, []bool, facesclient.FaceFacts,
 			) ([]int, error) {
 				t.Error("cluster graph must not be used on the in-memory path")
 				return nil, nil
@@ -923,6 +932,7 @@ func TestClusterAssignHonoursMode(t *testing.T) {
 			client := newFakeFacesClient()
 			client.ClusterGraphFunc = func(
 				_ context.Context, faceIDs []uint, _ []facesclient.FaceLink, _ []bool,
+				_ facesclient.FaceFacts,
 			) ([]int, error) {
 				labels := make([]int, len(faceIDs))
 				return labels, nil

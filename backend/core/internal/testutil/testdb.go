@@ -64,6 +64,7 @@ func NewTestDB(t *testing.T) (*gorm.DB, func()) {
 		&domain.ImageProcessingError{},
 		&domain.TrashItem{},
 		&domain.Person{},
+		&domain.PersonReference{},
 		&domain.Face{},
 		&domain.FaceEmbedding{},
 	); err != nil {

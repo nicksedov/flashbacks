@@ -58,6 +58,27 @@ link is what a lookalike bridge looks like. On the same library this yields
 2,837 people, 60% of the faces in a person, and the largest person at 8.4% of
 the gallery.
 
+### Clustering revisions
+
+`FACES_CLUSTER_ALGO` selects the labelling revision:
+
+- `graph-v1` (default) — the behaviour above.
+- `graph-v2` — density-aware labelling: mutual, hub-corrected (CSLS) links; a
+  core point needs `CLUSTER_CORE_NEIGHBOURS` mutual neighbours at
+  `CLUSTER_CORE_SIMILARITY`; a candidate list keeps at most
+  `CLUSTER_CANDIDATES_PER_PHOTO` faces per source photo; a person spans at least
+  `CLUSTER_MIN_PHOTOS` photos; and after the cap-driven split, components merge
+  when their medoid similarity clears `CLUSTER_MERGE_SIMILARITY` with
+  `CLUSTER_MERGE_SUPPORT` mutual cross-component pairs at
+  `CLUSTER_MERGE_SUPPORT_SIMILARITY`.
+
+Both revisions are calibrated in
+[`docs/faces/clustering-calibration.md`](../../docs/faces/clustering-calibration.md),
+and `/faces/health` reports the effective thresholds. The clustering requests
+accept optional arrays aligned with the face ids — `photoIds` (used by
+`graph-v2`; absent means one unique photo per face), `widths` and `qualities`
+(accepted for quality-aware rules). That keeps an older core working unchanged.
+
 ## Execution providers
 
 `FACES_PROVIDERS` is an ordered, comma-separated list of ONNX Runtime providers
@@ -160,6 +181,7 @@ scenarios and the cosine thresholds.
 | `FACES_MAX_BATCH` | `16` | Maximum images one `/faces/analyze-batch` request may carry (larger requests are rejected with `422`). |
 | `FACES_RECOGNITION_BATCH` | `32` | Aligned small-face crops sent through the recognizer per forward pass; `1` keeps the per-image path. |
 | `FACES_MAX_CONCURRENCY` | `1` | Concurrent analyses **per device**; each device has its own session, and more per device only duplicates its VRAM use. |
+| `FACES_CLUSTER_ALGO` | `graph-v1` | Labelling revision: `graph-v1` (today's single linkage) or `graph-v2` (density-aware, see [Clustering revisions](#clustering-revisions)). |
 | `FACES_CLUSTER_MODE` | `auto` | Read by **core**, not this service: clustering strategy (`auto`, `store`, `memory`) for the recognition job's candidate graph. |
 | `FACES_CLUSTER_NEIGHBOURS` | `16` | Read by **core**, not this service: candidates per unassigned face when it queries the store for neighbours. |
 | `FACES_CLUSTER_TIMEOUT` | `10m` | Read by **core**: budget for one clustering decision and the HNSW index build (`halfvec(512)` is required for the index). |

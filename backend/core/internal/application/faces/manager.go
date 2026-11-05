@@ -14,6 +14,7 @@ import (
 
 	"github.com/flashbacks/core/internal/application/background"
 	"github.com/flashbacks/core/internal/domain"
+	"github.com/flashbacks/core/internal/domain/repository"
 	facesclient "github.com/flashbacks/core/internal/infrastructure/faces"
 	"github.com/flashbacks/core/internal/infrastructure/llm"
 
@@ -36,6 +37,26 @@ const minClusterSize = 2
 // fallbackRecognitionSimilarity is the calibrated relaxed floor used when the
 // faces service does not advertise its thresholds (an older service).
 const fallbackRecognitionSimilarity = 0.25
+
+// personClusterVersion identifies the reconciliation generation that produced a
+// person. A person carrying another version is reconciled on the next pass, so
+// an algorithm change reaches a gallery that is already fully analysed without
+// a wipe.
+const personClusterVersion = "cluster-graph-v2"
+
+// Calibrated fallbacks used when the faces service does not advertise the
+// clustering thresholds (an older service). They mirror the service defaults.
+const (
+	fallbackAssignmentSimilarity   = 0.30
+	fallbackRecognitionMargin      = 0.05
+	fallbackMergeSimilarity        = 0.50
+	fallbackMergeSupport           = 2
+	fallbackMergeSupportSimilarity = 0.40
+)
+
+// exemplarLimit is how many reference vectors one person keeps: enough to hold
+// the modes of one identity (age, beard, glasses) without a full re-cluster.
+const exemplarLimit = 5
 
 // Options configures how the recognition job talks to the faces service.
 type Options struct {
@@ -72,6 +93,9 @@ type Dependencies struct {
 	Neighbours NeighbourSource
 	// Indexes ensures the neighbour index after an analysis pass; nil skips it.
 	Indexes IndexMaintainer
+	// PersonReferences stores the exemplar vectors that let a later pass
+	// recognise a person it created earlier; nil keeps the legacy behaviour.
+	PersonReferences repository.PersonReferenceRepository
 }
 
 // DefaultOptions returns the documented defaults (eight images per request,
@@ -152,6 +176,7 @@ type Manager struct {
 	clusterPending bool
 	neighbours     NeighbourSource
 	indexes        IndexMaintainer
+	personRefs     repository.PersonReferenceRepository
 }
 
 // batchCaps bound the per-statement work on a gallery of tens of thousands of
@@ -200,6 +225,7 @@ func NewManagerWithDependencies(
 		clusterPending:    true,
 		neighbours:        dependencies.Neighbours,
 		indexes:           dependencies.Indexes,
+		personRefs:        dependencies.PersonReferences,
 	}
 }
 
@@ -384,6 +410,12 @@ func (m *Manager) runPass(stopCh <-chan struct{}) {
 	// both the covers of the new clusters and the refresh of stored ones.
 	counts := m.imageFaceCounts()
 	m.clusterAssign(stopCh, counts)
+	// People produced by another clustering generation are reconciled once the
+	// new people exist: the reconcile step merges the fragments of one identity
+	// and builds the references a later pass assigns against.
+	if m.peopleNeedReconcile() {
+		m.reconcilePeople()
+	}
 	m.refreshPersonCovers(counts)
 }
 
@@ -545,6 +577,7 @@ type faceRef struct {
 	faceID      uint
 	imageFileID uint
 	confidence  float32
+	width       float32
 }
 
 // imageFaceCounts reports how many faces every photo contains. A photo with a
@@ -725,6 +758,7 @@ func (m *Manager) clusterAssign(stopCh <-chan struct{}, facesPerImage map[uint]i
 			faceID:      face.ID,
 			imageFileID: face.ImageFileID,
 			confidence:  face.Confidence,
+			width:       face.Width,
 		})
 		embeddings = append(embeddings, vec)
 	}
@@ -739,7 +773,51 @@ func (m *Manager) clusterAssign(stopCh <-chan struct{}, facesPerImage map[uint]i
 
 	ctx, cancel := context.WithTimeout(context.Background(), m.clusterTimeout)
 	defer cancel()
-	labels, err := m.clusterLabels(ctx, members, embeddings, solo)
+
+	memberVectors := make(map[uint][]float32, len(members))
+	for index, member := range members {
+		memberVectors[member.faceID] = embeddings[index]
+	}
+
+	// Step 1 — assign: match every unassigned face against the reference sets
+	// of the people already discovered, before anything is sent for clustering.
+	candidates, candidateErr := m.candidateMap(ctx, members)
+	var references *referenceVectors
+	var thresholds clusteringThresholds
+	var personByFace map[uint]uint
+	if m.personRefs != nil {
+		references = m.loadReferenceVectors()
+		if references != nil {
+			thresholds = m.thresholds(ctx)
+			personByFace = m.candidatePersonMap(candidates)
+		}
+	}
+	known := m.assignKnownPeople(members, embeddings, candidates, references, personByFace, thresholds)
+
+	remainingMembers := make([]faceRef, 0, len(members))
+	remainingEmbeddings := make([][]float32, 0, len(members))
+	remainingSolo := make([]bool, 0, len(members))
+	for index, member := range members {
+		if known[member.faceID] {
+			continue
+		}
+		remainingMembers = append(remainingMembers, member)
+		remainingEmbeddings = append(remainingEmbeddings, embeddings[index])
+		remainingSolo = append(remainingSolo, solo[index])
+	}
+
+	if len(remainingMembers) == 0 {
+		m.mu.Lock()
+		m.clusterPending = false
+		m.mu.Unlock()
+		return
+	}
+
+	// Step 2 — cluster: label the rest and treat each cluster as a candidate
+	// for a new person.
+	labels, err := m.clusterLabels(
+		ctx, remainingMembers, remainingEmbeddings, remainingSolo, candidates, candidateErr,
+	)
 	if err != nil {
 		m.setError(fmt.Sprintf("cluster: %v", err))
 		return
@@ -747,10 +825,10 @@ func (m *Manager) clusterAssign(stopCh <-chan struct{}, facesPerImage map[uint]i
 
 	byLabel := make(map[int][]faceRef, len(labels))
 	for i, label := range labels {
-		if i >= len(members) || label == -1 {
+		if i >= len(remainingMembers) || label == -1 {
 			continue
 		}
-		byLabel[label] = append(byLabel[label], members[i])
+		byLabel[label] = append(byLabel[label], remainingMembers[i])
 	}
 
 	labelIDs := make([]int, 0, len(byLabel))
@@ -759,34 +837,44 @@ func (m *Manager) clusterAssign(stopCh <-chan struct{}, facesPerImage map[uint]i
 	}
 	sort.Ints(labelIDs)
 
+	// Step 3 — reconcile: extend the person a cluster matches instead of
+	// minting a new one, and store the exemplars of every new person.
 	assigned := 0
+	created := 0
 	for _, label := range labelIDs {
 		cluster := byLabel[label]
+		faceIDs := make([]uint, 0, len(cluster))
+		for _, member := range cluster {
+			faceIDs = append(faceIDs, member.faceID)
+		}
+
+		if references != nil {
+			if personID, matched := m.matchClusterToPerson(
+				cluster, memberVectors, references, candidates, personByFace, thresholds,
+			); matched {
+				m.assignFacesToPerson(personID, faceIDs)
+				assigned += len(cluster)
+				continue
+			}
+		}
+
 		coverFaceID := chooseCover(cluster, facesPerImage)
-		person := domain.Person{CoverFaceID: &coverFaceID}
+		person := domain.Person{
+			CoverFaceID:    &coverFaceID,
+			ClusterVersion: personClusterVersion,
+		}
 		if err := m.db.Create(&person).Error; err != nil {
 			m.setError(fmt.Sprintf("create person: %v", err))
 			continue
 		}
-		for start := 0; start < len(cluster); start += assignmentBatch {
-			end := start + assignmentBatch
-			if end > len(cluster) {
-				end = len(cluster)
-			}
-			ids := make([]uint, 0, end-start)
-			for _, member := range cluster[start:end] {
-				ids = append(ids, member.faceID)
-			}
-			if err := m.db.Model(&domain.Face{}).Where("id IN ?", ids).
-				Update("person_id", person.ID).Error; err != nil {
-				m.setError(fmt.Sprintf("assign person: %v", err))
-			}
-		}
+		m.assignFacesToPerson(person.ID, faceIDs)
+		m.replaceReferences(person.ID, cluster, memberVectors, facesPerImage)
+		created++
 		assigned += len(cluster)
 	}
 	log.Printf(
-		"Face recognition: clustered %d faces into %d people (%d assigned)",
-		len(members), len(labelIDs), assigned,
+		"Face recognition: clustered %d faces into %d people (%d new, %d assigned)",
+		len(remainingMembers), len(labelIDs), created, assigned,
 	)
 	m.mu.Lock()
 	m.clusterPending = false
@@ -851,18 +939,26 @@ func (m *Manager) resetGeneratedPeople() {
 // gallery the all-pairs matrix would exhaust memory, so the faces stay
 // unassigned and the next pass retries the store path.
 func (m *Manager) clusterLabels(
-	ctx context.Context, members []faceRef, embeddings [][]float32, solo []bool,
+	ctx context.Context,
+	members []faceRef,
+	embeddings [][]float32,
+	solo []bool,
+	candidates map[uint][]Neighbour,
+	candidateErr error,
 ) ([]int, error) {
 	if m.useStoreCandidates(ctx) {
-		labels, err := m.clusterFromNeighbours(ctx, members, solo)
-		if err == nil {
-			return labels, nil
+		if candidateErr == nil {
+			labels, err := m.clusterFromCandidates(ctx, members, solo, candidates)
+			if err == nil {
+				return labels, nil
+			}
+			candidateErr = err
 		}
-		m.setError(fmt.Sprintf("cluster from store: %v", err))
+		m.setError(fmt.Sprintf("cluster from store: %v", candidateErr))
 		if len(members) > memoryClusterLimit {
 			return nil, fmt.Errorf(
 				"store clustering failed for %d faces; in-memory fallback is capped at %d: %w",
-				len(members), memoryClusterLimit, err,
+				len(members), memoryClusterLimit, candidateErr,
 			)
 		}
 	}
@@ -885,11 +981,15 @@ func (m *Manager) useStoreCandidates(ctx context.Context) bool {
 	}
 }
 
-// clusterFromNeighbours reads each face's neighbourhood inside the service's
-// recognition radius and asks the service to label the resulting graph.
-func (m *Manager) clusterFromNeighbours(
-	ctx context.Context, members []faceRef, solo []bool,
-) ([]int, error) {
+// candidateMap reads each face's neighbourhood inside the service's
+// recognition radius. The links serve both the person-reference assignment and
+// the clustering decision, so one kNN query covers the pass.
+func (m *Manager) candidateMap(
+	ctx context.Context, members []faceRef,
+) (map[uint][]Neighbour, error) {
+	if !m.useStoreCandidates(ctx) {
+		return nil, nil
+	}
 	seeds := make([]uint, len(members))
 	for i, member := range members {
 		seeds[i] = member.faceID
@@ -898,10 +998,7 @@ func (m *Manager) clusterFromNeighbours(
 	similarity := m.recognitionSimilarity(ctx)
 	candidates := make(map[uint][]Neighbour, len(seeds))
 	for start := 0; start < len(seeds); start += neighbourBatch {
-		end := start + neighbourBatch
-		if end > len(seeds) {
-			end = len(seeds)
-		}
+		end := min(start+neighbourBatch, len(seeds))
 		batch, err := m.neighbours.Neighbours(
 			ctx, seeds[start:end], similarity, m.clusterNeighbours,
 		)
@@ -912,8 +1009,32 @@ func (m *Manager) clusterFromNeighbours(
 			candidates[seed] = neighbours
 		}
 	}
+	return candidates, nil
+}
+
+// clusterFromCandidates asks the service to label the candidate graph.
+func (m *Manager) clusterFromCandidates(
+	ctx context.Context,
+	members []faceRef,
+	solo []bool,
+	candidates map[uint][]Neighbour,
+) ([]int, error) {
+	seeds := make([]uint, len(members))
+	for i, member := range members {
+		seeds[i] = member.faceID
+	}
 
 	edges := make([]facesclient.FaceLink, 0, len(candidates))
+	facts := facesclient.FaceFacts{
+		PhotoIDs:  make([]uint, len(members)),
+		Widths:    make([]float32, len(members)),
+		Qualities: make([]float32, len(members)),
+	}
+	for index, member := range members {
+		facts.PhotoIDs[index] = member.imageFileID
+		facts.Widths[index] = member.width
+		facts.Qualities[index] = member.confidence
+	}
 	for _, seed := range seeds {
 		for _, neighbour := range candidates[seed] {
 			edges = append(edges, facesclient.FaceLink{
@@ -923,7 +1044,7 @@ func (m *Manager) clusterFromNeighbours(
 			})
 		}
 	}
-	return m.client.ClusterGraph(ctx, seeds, edges, solo)
+	return m.client.ClusterGraph(ctx, seeds, edges, solo, facts)
 }
 
 // recognitionSimilarity asks the faces service for its recognition floor, so the

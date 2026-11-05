@@ -206,6 +206,36 @@ components:
               type: number
             recognitionMargin:
               type: number
+            clusterAlgo:
+              type: string
+              enum:
+                - graph-v1
+                - graph-v2
+              description: |
+                The active labelling revision. `graph-v1` is the legacy single
+                linkage; `graph-v2` is the density-aware variant.
+            clusterCoreSimilarity:
+              type: number
+              description: |
+                Hub-corrected (CSLS) mutual-neighbour floor of a core point
+                (graph-v2). The scale differs from a raw cosine.
+            clusterCoreNeighbours:
+              type: integer
+            clusterAssignSimilarity:
+              type: number
+              description: |
+                Floor for assigning a face or a new cluster to an existing
+                person, also used by core for its reference match.
+            clusterMergeSimilarity:
+              type: number
+            clusterMergeSupport:
+              type: integer
+            clusterMergeSupportSimilarity:
+              type: number
+            clusterCandidatesPerPhoto:
+              type: integer
+            clusterMinPhotos:
+              type: integer
 
     FaceBox:
       type: object
@@ -345,6 +375,24 @@ components:
             from a group shot; a group-shot face alone never creates a person.
           items:
             type: boolean
+        photoIds:
+          type: array
+          description: |
+            Optional photo identity per embedding, aligned with `embeddings`.
+            Absent means one unique photo per face, which keeps an older core's
+            behaviour. Used by `graph-v2` for photo-diversity rules.
+          items:
+            type: integer
+        widths:
+          type: array
+          description: Optional face box width in pixels, aligned with `embeddings`.
+          items:
+            type: number
+        qualities:
+          type: array
+          description: Optional detection confidence, aligned with `embeddings`.
+          items:
+            type: number
 
     ClusterResponse:
       type: object
@@ -389,6 +437,24 @@ components:
             alone never creates one.
           items:
             type: boolean
+        photoIds:
+          type: array
+          description: |
+            Optional photo identity per face id, aligned with `faceIds`. Absent
+            means one unique photo per face, which keeps an older core's
+            behaviour. Used by `graph-v2` for photo-diversity rules.
+          items:
+            type: integer
+        widths:
+          type: array
+          description: Optional face box width in pixels, aligned with `faceIds`.
+          items:
+            type: number
+        qualities:
+          type: array
+          description: Optional detection confidence, aligned with `faceIds`.
+          items:
+            type: number
         edges:
           type: array
           description: |

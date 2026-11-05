@@ -112,3 +112,72 @@ def test_group_under_the_cap_keeps_its_identity(client) -> None:
     labels = _graph(client, list(range(1, 121)), _identity_chain(1, 120))
 
     assert set(labels) == {0}, labels[:5]
+
+
+def _mutual_edges(
+    pairs: list[tuple[int, int]], similarity: float
+) -> list[tuple[int, int, float]]:
+    edges: list[tuple[int, int, float]] = []
+    for left, right in pairs:
+        edges.append((left, right, similarity))
+        edges.append((right, left, similarity))
+    return edges
+
+
+def _complete_edges(
+    faces: list[int], similarity: float
+) -> list[tuple[int, int, float]]:
+    pairs = [
+        (left, right)
+        for index, left in enumerate(faces)
+        for right in faces[index + 1 :]
+    ]
+    return _mutual_edges(pairs, similarity)
+
+
+def _v2_labels(face_ids, edges, photo_ids) -> list[int]:
+    from app.engine import FaceEngine
+
+    return FaceEngine.cluster_graph(
+        face_ids, edges, algorithm="graph-v2", photo_ids=photo_ids
+    )
+
+
+def test_burst_sequence_yields_one_person_not_several() -> None:
+    """Six faces of one person across two photos form one person.
+
+    A four-face burst on a single photo must not become a person of its own:
+    a person spans at least two photos.
+    """
+    face_ids = list(range(1, 11))
+    photos = [10, 10, 10, 11, 11, 11, 20, 20, 20, 20]
+    edges = _complete_edges(list(range(1, 7)), 0.85) + _complete_edges(
+        list(range(7, 11)), 0.85
+    )
+
+    labels = _v2_labels(face_ids, edges, photos)
+
+    assert len(set(labels[:6])) == 1, labels[:6]
+    assert labels[0] != -1
+    assert labels[6:] == [-1, -1, -1, -1], labels[6:]
+
+
+def test_merge_stage_rejoins_the_pieces_of_one_person() -> None:
+    """Two components the core stage kept apart merge on medoid and support.
+
+    Cross links sit at 0.60: below the corrected core floor, so the core stage
+    forms two components, but the medoid similarity clears the merge floor and
+    the four distinct photo pairs give the required cross-component support.
+    """
+    first = [1, 2, 3, 4, 5]
+    second = [11, 12, 13, 14, 15]
+    face_ids = first + second
+    photos = [101, 101, 102, 102, 102, 201, 201, 202, 202, 202]
+
+    edges = _complete_edges(first, 0.85) + _complete_edges(second, 0.85)
+    edges += _mutual_edges([(left, right) for left in first for right in second], 0.60)
+
+    labels = _v2_labels(face_ids, edges, photos)
+
+    assert len(set(labels)) == 1, labels
+    assert labels[0] != -1

@@ -14,7 +14,7 @@ type MockFacesClient struct {
 	AnalyzeBatchFunc func(ctx context.Context, images [][]byte) ([]faces.BatchResult, error)
 	EmbedFunc        func(ctx context.Context, image []byte, box *faces.FaceBox) ([]float32, error)
 	ClusterFunc      func(ctx context.Context, embeddings [][]float32, minClusterSize int, soloFaces []bool) ([]int, error)
-	ClusterGraphFunc func(ctx context.Context, faceIDs []uint, edges []faces.FaceLink, soloFaces []bool) ([]int, error)
+	ClusterGraphFunc func(ctx context.Context, faceIDs []uint, edges []faces.FaceLink, soloFaces []bool, facts faces.FaceFacts) ([]int, error)
 	HealthFunc       func(ctx context.Context) (faces.Health, error)
 	ServiceURLValue  string
 	DetectCallCount  int
@@ -87,10 +87,12 @@ func (m *MockFacesClient) Cluster(ctx context.Context, embeddings [][]float32, m
 }
 
 // ClusterGraph implements faces.Client.
-func (m *MockFacesClient) ClusterGraph(ctx context.Context, faceIDs []uint, edges []faces.FaceLink, soloFaces []bool) ([]int, error) {
+func (m *MockFacesClient) ClusterGraph(
+	ctx context.Context, faceIDs []uint, edges []faces.FaceLink, soloFaces []bool, facts faces.FaceFacts,
+) ([]int, error) {
 	m.ClusterGraphCallCount++
 	if m.ClusterGraphFunc != nil {
-		return m.ClusterGraphFunc(ctx, faceIDs, edges, soloFaces)
+		return m.ClusterGraphFunc(ctx, faceIDs, edges, soloFaces, facts)
 	}
 	return nil, nil
 }

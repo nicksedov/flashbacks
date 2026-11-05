@@ -8,6 +8,15 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from app.config import (
+    CLUSTER_ALGO,
+    CLUSTER_ASSIGN_SIMILARITY,
+    CLUSTER_CANDIDATES_PER_PHOTO,
+    CLUSTER_CORE_NEIGHBOURS,
+    CLUSTER_CORE_SIMILARITY,
+    CLUSTER_MERGE_SIMILARITY,
+    CLUSTER_MERGE_SUPPORT,
+    CLUSTER_MERGE_SUPPORT_SIMILARITY,
+    CLUSTER_MIN_PHOTOS,
     CLUSTER_MIN_SIMILARITY,
     RECOGNITION_MARGIN,
     RECOGNITION_MIN_SIMILARITY,
@@ -85,6 +94,11 @@ class ClusterRequest(BaseModel):
     # One flag per embedding: true when the face is the sole face of its photo.
     # Such a portrait may anchor a person for a face matched from a group shot.
     soloFaces: Optional[list[bool]] = None
+    # Optional face facts, aligned with ``embeddings``. Absent arrays keep the
+    # behaviour an older core expects.
+    photoIds: Optional[list[int]] = None
+    widths: Optional[list[float]] = None
+    qualities: Optional[list[float]] = None
 
 
 class ClusterResponse(BaseModel):
@@ -105,6 +119,13 @@ class ClusterGraphRequest(BaseModel):
     faceIds: list[int]
     soloFaces: Optional[list[bool]] = None
     edges: list[FaceLink] = Field(default_factory=list)
+    # Aligned with ``faceIds``. ``photoIds`` lets the service enforce photo
+    # diversity; when absent it falls back to one unique photo per face, so an
+    # older core keeps today's behaviour. ``widths``/``qualities`` are accepted
+    # for quality-aware rules and do not change the labels yet.
+    photoIds: Optional[list[int]] = None
+    widths: Optional[list[float]] = None
+    qualities: Optional[list[float]] = None
 
 
 class ClusterGraphResponse(BaseModel):
@@ -151,6 +172,15 @@ def health(request: Request) -> dict[str, Any]:
             "clusterMinSimilarity": CLUSTER_MIN_SIMILARITY,
             "recognitionMinSimilarity": RECOGNITION_MIN_SIMILARITY,
             "recognitionMargin": RECOGNITION_MARGIN,
+            "clusterAlgo": getattr(_settings(request), "cluster_algo", CLUSTER_ALGO),
+            "clusterCoreSimilarity": CLUSTER_CORE_SIMILARITY,
+            "clusterCoreNeighbours": CLUSTER_CORE_NEIGHBOURS,
+            "clusterAssignSimilarity": CLUSTER_ASSIGN_SIMILARITY,
+            "clusterMergeSimilarity": CLUSTER_MERGE_SIMILARITY,
+            "clusterMergeSupport": CLUSTER_MERGE_SUPPORT,
+            "clusterMergeSupportSimilarity": CLUSTER_MERGE_SUPPORT_SIMILARITY,
+            "clusterCandidatesPerPhoto": CLUSTER_CANDIDATES_PER_PHOTO,
+            "clusterMinPhotos": CLUSTER_MIN_PHOTOS,
         },
     }
     if selection is not None:
@@ -224,7 +254,9 @@ def embed(req: EmbedRequest, request: Request) -> EmbedResponse:
 @router.post("/faces/cluster", response_model=ClusterResponse)
 def cluster(req: ClusterRequest, request: Request) -> ClusterResponse:
     try:
-        labels = _engine(request).cluster(req.embeddings, req.minClusterSize, req.soloFaces)
+        labels = _engine(request).cluster(
+            req.embeddings, req.minClusterSize, req.soloFaces, req.photoIds
+        )
     except Exception as exc:  # noqa: BLE001 - surface a uniform server error
         raise HTTPException(status_code=500, detail=f"clustering failed: {exc}") from exc
     return ClusterResponse(labels=labels)
@@ -239,8 +271,17 @@ def cluster_graph(req: ClusterGraphRequest, request: Request) -> ClusterGraphRes
     thresholds and turns the graph into person labels.
     """
     edges = [(edge.faceId, edge.candidateId, edge.similarity) for edge in req.edges]
+    algorithm = getattr(_settings(request), "cluster_algo", CLUSTER_ALGO)
     try:
-        labels = _engine(request).cluster_graph(req.faceIds, edges, req.soloFaces)
+        labels = _engine(request).cluster_graph(
+            req.faceIds,
+            edges,
+            req.soloFaces,
+            photo_ids=req.photoIds,
+            widths=req.widths,
+            qualities=req.qualities,
+            algorithm=algorithm,
+        )
     except Exception as exc:  # noqa: BLE001 - surface a uniform server error
         raise HTTPException(status_code=500, detail=f"clustering failed: {exc}") from exc
     return ClusterGraphResponse(labels=labels)

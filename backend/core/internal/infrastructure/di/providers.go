@@ -63,6 +63,7 @@ var CoreSet = wire.NewSet(
 	ProvideSyncHistoryRepo,
 	ProvideScheduleRepo,
 	ProvidePersonRepo,
+	ProvidePersonReferenceRepo,
 	ProvideFaceRepo,
 )
 
@@ -219,6 +220,11 @@ func ProvidePersonRepo(db *gorm.DB) repository.PersonRepository {
 	return repository.NewPersonRepository(db)
 }
 
+// ProvidePersonReferenceRepo creates the person exemplar repository.
+func ProvidePersonReferenceRepo(db *gorm.DB) repository.PersonReferenceRepository {
+	return repository.NewPersonReferenceRepository(db)
+}
+
 // ProvideFaceRepo creates the face repository.
 func ProvideFaceRepo(db *gorm.DB) repository.FaceRepository {
 	return repository.NewFaceRepository(db)
@@ -317,11 +323,13 @@ func ProvideFaceRecognitionManager(
 	client facesclient.Client,
 	neighbours recognition.NeighbourSource,
 	indexes recognition.IndexMaintainer,
+	personRefs repository.PersonReferenceRepository,
 	cfg *config.AppConfig,
 ) *recognition.Manager {
 	return recognition.NewManagerWithDependencies(db, client, recognition.Dependencies{
-		Neighbours: neighbours,
-		Indexes:    indexes,
+		Neighbours:       neighbours,
+		Indexes:          indexes,
+		PersonReferences: personRefs,
 	}, recognition.Options{
 		BatchSize:         cfg.FacesBatchSize,
 		BatchConcurrency:  cfg.FacesBatchConcurrency,

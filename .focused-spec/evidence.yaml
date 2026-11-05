@@ -9,6 +9,18 @@ scopes:
     face-recognition.no-face-skipped:
       evidence:
         - go::./internal/application/faces::TestFaceRecognitionManager_NoFaceSkipped
+    face-recognition.identity-stable-across-passes:
+      evidence:
+        - go::./internal/application/faces::TestFaceRecognitionManager_IdentityStableAcrossPasses
+    face-recognition.people-reconciled:
+      evidence:
+        - go::./internal/application/faces::TestFaceRecognitionManager_PeopleReconciled
+    face-recognition.ambiguous-face-unassigned:
+      evidence:
+        - go::./internal/application/faces::TestFaceRecognitionManager_AmbiguousFaceUnassigned
+    face-recognition.distinct-identities-stay-separate:
+      evidence:
+        - facespytest::backend/faces/tests/test_clustering_quality.py::test_distinct_identities_stay_separate
     face-recognition.status-progress:
       evidence:
         - go::./internal/application/faces::TestFaceRecognitionManager_StatusProgress

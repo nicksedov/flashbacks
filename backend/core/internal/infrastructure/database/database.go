@@ -62,6 +62,7 @@ func InitDatabase(cfg *config.AppConfig) (*gorm.DB, error) {
 		&domain.SyncHistory{},
 		&domain.TrashItem{},
 		&domain.Person{},
+		&domain.PersonReference{},
 		&domain.Face{},
 		&domain.FaceEmbedding{},
 	); err != nil {

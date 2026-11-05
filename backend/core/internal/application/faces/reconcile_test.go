@@ -151,6 +151,78 @@ func TestFaceRecognitionManager_PeopleReconciled(t *testing.T) {
 	}
 }
 
+// seedPersonWithFaces stores one person holding *count* faces with *vector*.
+func seedPersonWithFaces(t *testing.T, db *gorm.DB, vector []float32, count int) *domain.Person {
+	t.Helper()
+	person := domain.Person{ClusterVersion: "legacy"}
+	if err := db.Create(&person).Error; err != nil {
+		t.Fatalf("create person: %v", err)
+	}
+	for index := 0; index < count; index++ {
+		image := seedImage(t, db, "person-a-1")
+		face := seedFaceWithVector(t, db, image.ID, vector)
+		if err := db.Model(&domain.Face{}).Where("id = ?", face.ID).
+			Update("person_id", person.ID).Error; err != nil {
+			t.Fatalf("assign face: %v", err)
+		}
+		if err := db.Model(&domain.ImageFile{}).Where("id = ?", image.ID).
+			Update("faces_scan_version", facesScanVersion).Error; err != nil {
+			t.Fatalf("mark image scanned: %v", err)
+		}
+	}
+	return &person
+}
+
+// sparseVector builds a 512-d vector whose first components are the given ones.
+func sparseVector(values ...float32) []float32 {
+	vector := make([]float32, 512)
+	copy(vector, values)
+	return vector
+}
+
+// TestFaceRecognitionManager_ReconcileDoesNotChainLookalikes guards that a
+// person who looks like two different people cannot merge both of them into one
+// gallery-wide person.
+func TestFaceRecognitionManager_ReconcileDoesNotChainLookalikes(t *testing.T) {
+	db, cleanup := testutil.NewTestDB(t)
+	defer cleanup()
+
+	// cos(A,B)=0.9, cos(B,C)~0.52, cos(A,C)=0.1: B is a bridge, not a shared
+	// identity.
+	first := seedPersonWithFaces(t, db, sparseVector(1, 0), 2)
+	seedPersonWithFaces(t, db, sparseVector(0.9, 0.435), 2)
+	third := seedPersonWithFaces(t, db, sparseVector(0.1, 0.995), 2)
+
+	m := reconcileManager(db, newFakeFacesClient())
+	m.reconcilePeople()
+
+	var people []domain.Person
+	if err := db.Order("id").Find(&people).Error; err != nil {
+		t.Fatalf("list people: %v", err)
+	}
+	if len(people) != 2 {
+		t.Fatalf("people after reconcile = %d, want 2 (only the mutual best pair merges)", len(people))
+	}
+
+	var merged int64
+	if err := db.Model(&domain.Face{}).Where("person_id = ?", first.ID).
+		Count(&merged).Error; err != nil {
+		t.Fatalf("count merged faces: %v", err)
+	}
+	if merged != 4 {
+		t.Errorf("faces on the merged person = %d, want 4", merged)
+	}
+
+	var bridge int64
+	if err := db.Model(&domain.Face{}).Where("person_id = ?", third.ID).
+		Count(&bridge).Error; err != nil {
+		t.Fatalf("count bridge faces: %v", err)
+	}
+	if bridge != 2 {
+		t.Errorf("faces on the lookalike person = %d, want 2 (unmerged)", bridge)
+	}
+}
+
 // TestFaceRecognitionManager_AmbiguousFaceUnassigned guards that a weak match
 // to every existing person stays unassigned instead of guessing.
 func TestFaceRecognitionManager_AmbiguousFaceUnassigned(t *testing.T) {

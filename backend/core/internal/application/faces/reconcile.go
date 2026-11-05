@@ -10,6 +10,16 @@ import (
 	"github.com/flashbacks/core/internal/domain"
 )
 
+// reconcileMaxShare/reconcileMaxFacesMin bound how large one merge may grow a
+// person during reconcile. A person above this share of the assigned gallery is
+// implausible, so the merge is refused: the guard stops a lookalike chain from
+// collapsing the library into one person. It is a safety valve, not the
+// splitting mechanism.
+const (
+	reconcileMaxShare    = 0.10
+	reconcileMaxFacesMin = 250
+)
+
 // clusteringThresholds are the values the faces service advertises; the
 // fallbacks keep an older service working.
 type clusteringThresholds struct {
@@ -423,76 +433,86 @@ func (m *Manager) reconcileRound(
 	}
 	sort.Slice(ids, func(left, right int) bool { return ids[left] < ids[right] })
 
-	parent := make(map[uint]uint, len(ids))
-	for _, personID := range ids {
-		parent[personID] = personID
+	// Size of every person bounds a single merge: a person may not grow past a
+	// plausible share of the gallery. This is a safety valve, not the splitting
+	// mechanism — without it one lookalike chain can swallow the library.
+	type countRow struct {
+		PersonID uint
+		Count    int
 	}
-	var find func(uint) uint
-	find = func(personID uint) uint {
-		for parent[personID] != personID {
-			parent[personID] = parent[parent[personID]]
-			personID = parent[personID]
-		}
-		return personID
+	var counts []countRow
+	if err := m.db.Model(&domain.Face{}).Select("person_id, count(*) AS count").
+		Where("person_id > 0").Group("person_id").Scan(&counts).Error; err != nil {
+		m.setError(fmt.Sprintf("count person faces: %v", err))
+		return 0
 	}
-	union := func(left, right uint) {
-		leftRoot, rightRoot := find(left), find(right)
-		if leftRoot != rightRoot {
-			parent[rightRoot] = leftRoot
-		}
+	sizes := make(map[uint]int, len(counts))
+	assignedFaces := 0
+	for _, row := range counts {
+		sizes[row.PersonID] = row.Count
+		assignedFaces += row.Count
+	}
+	maxPersonFaces := int(float64(assignedFaces) * reconcileMaxShare)
+	if maxPersonFaces < reconcileMaxFacesMin {
+		maxPersonFaces = reconcileMaxFacesMin
 	}
 
+	// Each person keeps its single best partner; only mutual bests merge. A
+	// transitive union over every qualifying pair turns a chain of lookalikes
+	// into one gallery-wide person, which is exactly the failure this change
+	// removes.
+	type match struct {
+		score float64
+		other uint
+	}
+	best := make(map[uint]match, len(ids))
 	for leftIndex := 0; leftIndex < len(ids); leftIndex++ {
 		for rightIndex := leftIndex + 1; rightIndex < len(ids); rightIndex++ {
 			left, right := ids[leftIndex], ids[rightIndex]
-			if cosineSimilarity(medoids[left], medoids[right]) < thresholds.merge {
+			if sizes[left]+sizes[right] > maxPersonFaces {
+				continue
+			}
+			score := cosineSimilarity(medoids[left], medoids[right])
+			if score < thresholds.merge {
 				continue
 			}
 			if crossSupport(byPerson[left], byPerson[right], thresholds.supportSimilarity) < thresholds.mergeSupport {
 				continue
 			}
-			union(left, right)
+			if current, ok := best[left]; !ok || score > current.score {
+				best[left] = match{score: score, other: right}
+			}
+			if current, ok := best[right]; !ok || score > current.score {
+				best[right] = match{score: score, other: left}
+			}
 		}
 	}
 
-	groups := make(map[uint][]uint)
-	for _, personID := range ids {
-		root := find(personID)
-		groups[root] = append(groups[root], personID)
-	}
-
+	handled := make(map[uint]bool, len(ids))
 	merged := 0
-	for _, group := range groups {
-		survivor := group[0]
-		for _, personID := range group[1:] {
-			if personID < survivor {
-				survivor = personID
-			}
-		}
-		mergedAway := make([]uint, 0, len(group)-1)
-		for _, personID := range group {
-			if personID != survivor {
-				mergedAway = append(mergedAway, personID)
-			}
-		}
-		if len(mergedAway) == 0 {
-			m.db.Model(&domain.Person{}).Where("id = ?", survivor).
-				Update("cluster_version", personClusterVersion)
+	for _, personID := range ids {
+		partner := best[personID].other
+		if partner == 0 || handled[personID] || handled[partner] {
 			continue
 		}
+		if best[partner].other != personID {
+			continue
+		}
+		handled[personID], handled[partner] = true, true
 
-		for start := 0; start < len(mergedAway); start += assignmentBatch {
-			end := min(start+assignmentBatch, len(mergedAway))
-			if err := m.db.Model(&domain.Face{}).
-				Where("person_id IN ?", mergedAway[start:end]).
-				Update("person_id", survivor).Error; err != nil {
-				m.setError(fmt.Sprintf("merge faces into person %d: %v", survivor, err))
-			}
+		survivor, mergedAway := personID, partner
+		if mergedAway < survivor {
+			survivor, mergedAway = mergedAway, survivor
 		}
-		if err := m.db.Where("id IN ?", mergedAway).Delete(&domain.Person{}).Error; err != nil {
-			m.setError(fmt.Sprintf("delete merged people: %v", err))
+		if err := m.db.Model(&domain.Face{}).
+			Where("person_id = ?", mergedAway).
+			Update("person_id", survivor).Error; err != nil {
+			m.setError(fmt.Sprintf("merge faces into person %d: %v", survivor, err))
 		}
-		if err := m.personRefs.DeleteByPersonIDs(mergedAway); err != nil {
+		if err := m.db.Where("id = ?", mergedAway).Delete(&domain.Person{}).Error; err != nil {
+			m.setError(fmt.Sprintf("delete merged person %d: %v", mergedAway, err))
+		}
+		if err := m.personRefs.DeleteByPersonIDs([]uint{mergedAway}); err != nil {
 			m.setError(fmt.Sprintf("delete merged references: %v", err))
 		}
 		if err := m.db.Model(&domain.Person{}).Where("id = ?", survivor).
@@ -500,8 +520,8 @@ func (m *Manager) reconcileRound(
 			m.setError(fmt.Sprintf("mark person %d reconciled: %v", survivor, err))
 		}
 		m.rebuildReferences(survivor, facesPerImage)
-		merged += len(mergedAway)
-		log.Printf("Face recognition: reconciled %d people into person %d", len(group), survivor)
+		merged++
+		log.Printf("Face recognition: reconciled person %d into person %d", mergedAway, survivor)
 	}
 	return merged
 }

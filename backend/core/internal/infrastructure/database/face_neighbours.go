@@ -3,6 +3,8 @@ package database
 import (
 	"context"
 	"fmt"
+	"strconv"
+	"strings"
 
 	"github.com/flashbacks/core/internal/application/faces"
 
@@ -59,6 +61,21 @@ func (f *FaceNeighbours) Supported(ctx context.Context) bool {
 	return supported
 }
 
+// seedArrayLiteral renders seed ids as a PostgreSQL array literal ("{1,2,3}").
+//
+// The query must receive the seeds as one array parameter: GORM expands a Go
+// slice into one placeholder per element, so unnest() would be called with
+// thousands of scalar arguments and PostgreSQL rejects it with
+// "function pg_catalog.unnest(unknown) is not unique" — which is how every
+// clustering pass failed before this helper existed.
+func seedArrayLiteral(seeds []int64) string {
+	values := make([]string, len(seeds))
+	for i, seed := range seeds {
+		values[i] = strconv.FormatInt(seed, 10)
+	}
+	return "{" + strings.Join(values, ",") + "}"
+}
+
 // Neighbours returns, per seed face, the faces within minSimilarity capped at
 // limit, grouped by seed. Seeds without candidates are absent from the map.
 func (f *FaceNeighbours) Neighbours(
@@ -82,7 +99,9 @@ func (f *FaceNeighbours) Neighbours(
 		CandidateID uint
 		Similarity  float64
 	}
-	if err := f.db.WithContext(ctx).Raw(neighbourQuery, seedIDs, minSimilarity, limit).Scan(&rows).Error; err != nil {
+	if err := f.db.WithContext(ctx).
+		Raw(neighbourQuery, seedArrayLiteral(seedIDs), minSimilarity, limit).
+		Scan(&rows).Error; err != nil {
 		return nil, fmt.Errorf("query face neighbours: %w", err)
 	}
 	for _, row := range rows {

@@ -523,7 +523,15 @@ func (m *Manager) applyBatch(outcome batchOutcome) {
 			return
 		}
 		if outcome.results[i].Error != "" {
+			// The service reached this image and reported a failure no retry
+			// will fix (an undecodable file, an unresolvable crop). Recording
+			// it and marking the image scanned keeps a handful of such photos
+			// from being re-analysed on every pass forever, which on a real
+			// gallery delayed clustering and kept the job constantly busy. A
+			// request-level failure stays retryable, as the batch contract
+			// requires.
 			m.setError(fmt.Sprintf("analyze %s: %s", image.file.Path, outcome.results[i].Error))
+			m.markScanned(image.file.ID)
 			continue
 		}
 		m.replaceFaces(image.file.ID, outcome.results[i].Faces)

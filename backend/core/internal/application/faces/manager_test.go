@@ -443,6 +443,35 @@ func seedPeople(t *testing.T, db *gorm.DB, name string, faceIDs []uint) *domain.
 	return &person
 }
 
+// TestFaceRecognitionManager_UnanalysableImageIsMarkedScanned guards the pass
+// from never finishing: the service reports a per-image error for a photo it
+// cannot decode, and retrying it on every pass kept the job busy forever (and
+// delayed clustering) on a gallery with a few such files.
+func TestFaceRecognitionManager_UnanalysableImageIsMarkedScanned(t *testing.T) {
+	db, cleanup := testutil.NewTestDB(t)
+	defer cleanup()
+
+	image := seedImage(t, db, "broken")
+	client := newFakeFacesClient()
+	client.AnalyzeBatchFunc = func(
+		_ context.Context, images [][]byte,
+	) ([]facesclient.BatchResult, error) {
+		results := make([]facesclient.BatchResult, len(images))
+		for i := range images {
+			results[i] = facesclient.BatchResult{Error: "analysis failed: OpenCV"}
+		}
+		return results, nil
+	}
+
+	NewManager(db, client).runPass(nil)
+
+	var stored domain.ImageFile
+	db.First(&stored, image.ID)
+	if stored.FacesScanVersion != facesScanVersion {
+		t.Fatalf("scan version = %q, want %q", stored.FacesScanVersion, facesScanVersion)
+	}
+}
+
 // TestFaceRecognitionManager_DoesNotReclusterWithoutPendingWork guards the
 // steady state: a gallery whose faces no person claims keeps unassigned faces,
 // and that must not re-run clustering on every thirty-second pass.

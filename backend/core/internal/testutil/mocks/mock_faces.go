@@ -2,6 +2,7 @@ package mocks
 
 import (
 	"context"
+	"sync"
 
 	"github.com/flashbacks/core/internal/infrastructure/faces"
 )
@@ -10,13 +11,26 @@ import (
 type MockFacesClient struct {
 	DetectFunc       func(ctx context.Context, image []byte) ([]faces.FaceBox, error)
 	AnalyzeFunc      func(ctx context.Context, image []byte) ([]faces.AnalyzedFace, error)
+	AnalyzeBatchFunc func(ctx context.Context, images [][]byte) ([]faces.BatchResult, error)
 	EmbedFunc        func(ctx context.Context, image []byte, box *faces.FaceBox) ([]float32, error)
 	ClusterFunc      func(ctx context.Context, embeddings [][]float32, minClusterSize int, soloFaces []bool) ([]int, error)
+	ClusterGraphFunc func(ctx context.Context, faceIDs []uint, edges []faces.FaceLink, soloFaces []bool) ([]int, error)
+	HealthFunc       func(ctx context.Context) (faces.Health, error)
 	ServiceURLValue  string
 	DetectCallCount  int
 	AnalyzeCallCount int
-	EmbedCallCount   int
-	ClusterCallCount int
+	// AnalyzeBatchCallCount counts batch requests; AnalyzeBatchSizes records the
+	// number of images each request carried.
+	AnalyzeBatchCallCount int
+	AnalyzeBatchSizes     []int
+	EmbedCallCount        int
+	ClusterCallCount      int
+	ClusterGraphCallCount int
+	HealthCallCount       int
+
+	// batchMu guards the batch counters: the recognition job dispatches batch
+	// requests concurrently, one per faces model session.
+	batchMu sync.Mutex
 }
 
 // ServiceURL implements faces.Client.
@@ -42,6 +56,18 @@ func (m *MockFacesClient) Analyze(ctx context.Context, image []byte) ([]faces.An
 	return nil, nil
 }
 
+// AnalyzeBatch implements faces.Client.
+func (m *MockFacesClient) AnalyzeBatch(ctx context.Context, images [][]byte) ([]faces.BatchResult, error) {
+	m.batchMu.Lock()
+	m.AnalyzeBatchCallCount++
+	m.AnalyzeBatchSizes = append(m.AnalyzeBatchSizes, len(images))
+	m.batchMu.Unlock()
+	if m.AnalyzeBatchFunc != nil {
+		return m.AnalyzeBatchFunc(ctx, images)
+	}
+	return nil, nil
+}
+
 // Embed implements faces.Client.
 func (m *MockFacesClient) Embed(ctx context.Context, image []byte, box *faces.FaceBox) ([]float32, error) {
 	m.EmbedCallCount++
@@ -58,6 +84,24 @@ func (m *MockFacesClient) Cluster(ctx context.Context, embeddings [][]float32, m
 		return m.ClusterFunc(ctx, embeddings, minClusterSize, soloFaces)
 	}
 	return nil, nil
+}
+
+// ClusterGraph implements faces.Client.
+func (m *MockFacesClient) ClusterGraph(ctx context.Context, faceIDs []uint, edges []faces.FaceLink, soloFaces []bool) ([]int, error) {
+	m.ClusterGraphCallCount++
+	if m.ClusterGraphFunc != nil {
+		return m.ClusterGraphFunc(ctx, faceIDs, edges, soloFaces)
+	}
+	return nil, nil
+}
+
+// Health implements faces.Client.
+func (m *MockFacesClient) Health(ctx context.Context) (faces.Health, error) {
+	m.HealthCallCount++
+	if m.HealthFunc != nil {
+		return m.HealthFunc(ctx)
+	}
+	return faces.Health{}, nil
 }
 
 // SingleFaceBoxes returns one deterministic face box.

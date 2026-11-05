@@ -62,6 +62,27 @@ type AppConfig struct {
 
 	// Faces service configuration
 	FacesServiceURL string
+	// FacesClusterMode selects the clustering strategy: "auto" uses the vector
+	// store when it can answer kNN queries, "store" forces it, "memory" forces
+	// the all-pairs path.
+	FacesClusterMode string
+	// FacesClusterNeighbours caps the candidates per face in the store path.
+	FacesClusterNeighbours int
+	// FacesClusterTimeout bounds one clustering decision and the neighbour
+	// index build (default: 10m; a large gallery needs minutes, not seconds).
+	FacesClusterTimeout time.Duration
+	// FacesReclusterAll discards the generated people before the next pass
+	// clusters again, so a changed clustering algorithm reaches a gallery that
+	// is already fully analysed. People the user named are kept (default: false).
+	FacesReclusterAll bool
+	// FacesBatchSize is how many images one faces-service analysis request
+	// carries (default: 8). One batching degenerates to one request per photo.
+	FacesBatchSize int
+	// FacesBatchConcurrency is how many analysis requests may be in flight at
+	// once, i.e. how many model sessions (GPUs) the job keeps busy (default: 2).
+	FacesBatchConcurrency int
+	// FacesAnalyzeTimeout bounds a single batch analysis request (default: 300s).
+	FacesAnalyzeTimeout time.Duration
 }
 
 // LoadConfig reads configuration from environment variables
@@ -77,6 +98,20 @@ func LoadConfig() *AppConfig {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
 			scanWorkers = n
 		}
+	}
+
+	facesClusterMode := getEnv("FACES_CLUSTER_MODE", "")
+	if facesClusterMode == "" {
+		facesClusterMode = domain.FacesClusterModeAuto
+	}
+	switch facesClusterMode {
+	case domain.FacesClusterModeAuto, domain.FacesClusterModeStore, domain.FacesClusterModeMemory:
+	default:
+		log.Fatalf("invalid FACES_CLUSTER_MODE %q: must be one of %q, %q, %q",
+			facesClusterMode,
+			domain.FacesClusterModeAuto,
+			domain.FacesClusterModeStore,
+			domain.FacesClusterModeMemory)
 	}
 
 	accountCreationMode := getEnv("ACCOUNT_CREATION_MODE", domain.AccountCreationModeAdminOnly)
@@ -120,6 +155,13 @@ func LoadConfig() *AppConfig {
 		AgentMaxConversationTokens:  getEnvInt("AGENT_MAX_CONVERSATION_TOKENS", 128000),
 		ExifServiceURL:              getEnv("EXIF_SERVICE_URL", "http://localhost:5172"),
 		FacesServiceURL:             getEnv("FACES_SERVICE_URL", "http://localhost:5173"),
+		FacesBatchSize:              getEnvInt("FACES_BATCH_SIZE", 8),
+		FacesBatchConcurrency:       getEnvInt("FACES_BATCH_CONCURRENCY", 2),
+		FacesAnalyzeTimeout:         getEnvDuration("FACES_ANALYZE_TIMEOUT", 300*time.Second),
+		FacesClusterMode:            facesClusterMode,
+		FacesClusterNeighbours:      getEnvInt("FACES_CLUSTER_NEIGHBOURS", 16),
+		FacesClusterTimeout:         getEnvDuration("FACES_CLUSTER_TIMEOUT", 10*time.Minute),
+		FacesReclusterAll:           getEnvBool("FACES_RECLUSTER_ALL", false),
 	}
 }
 
@@ -154,6 +196,13 @@ func (c *AppConfig) RegistryDefaults() map[string]string {
 		"AGENT_MAX_CONVERSATION_TOKENS":   strconv.Itoa(c.AgentMaxConversationTokens),
 		"EXIF_SERVICE_URL":                c.ExifServiceURL,
 		"FACES_SERVICE_URL":               c.FacesServiceURL,
+		"FACES_BATCH_SIZE":                strconv.Itoa(c.FacesBatchSize),
+		"FACES_BATCH_CONCURRENCY":         strconv.Itoa(c.FacesBatchConcurrency),
+		"FACES_ANALYZE_TIMEOUT":           c.FacesAnalyzeTimeout.String(),
+		"FACES_CLUSTER_MODE":              c.FacesClusterMode,
+		"FACES_CLUSTER_NEIGHBOURS":        strconv.Itoa(c.FacesClusterNeighbours),
+		"FACES_CLUSTER_TIMEOUT":           c.FacesClusterTimeout.String(),
+		"FACES_RECLUSTER_ALL":             strconv.FormatBool(c.FacesReclusterAll),
 	}
 }
 
@@ -214,6 +263,16 @@ func (c *AppConfig) ApplyRegistry(values map[string]string) {
 	applyPositiveInt("THUMBNAIL_CACHE_MAX_SIZE", &c.ThumbnailCacheMaxSize)
 	applyPositiveInt("THUMBNAIL_CACHE_QUALITY", &c.ThumbnailCacheQuality)
 	applyPositiveInt("AGENT_MAX_CONVERSATION_TOKENS", &c.AgentMaxConversationTokens)
+	applyPositiveInt("FACES_BATCH_SIZE", &c.FacesBatchSize)
+	applyPositiveInt("FACES_BATCH_CONCURRENCY", &c.FacesBatchConcurrency)
+	applyPositiveInt("FACES_CLUSTER_NEIGHBOURS", &c.FacesClusterNeighbours)
+
+	if value, ok := values["FACES_CLUSTER_MODE"]; ok {
+		switch value {
+		case domain.FacesClusterModeAuto, domain.FacesClusterModeStore, domain.FacesClusterModeMemory:
+			c.FacesClusterMode = value
+		}
+	}
 
 	applyBool("OCR_ENABLED", &c.OCREnabled)
 	applyBool("THUMBNAIL_CACHE_ENABLED", &c.ThumbnailCacheEnabled)
@@ -227,6 +286,20 @@ func (c *AppConfig) ApplyRegistry(values map[string]string) {
 			c.LlmModelsCacheTTL = parsed
 		}
 	}
+
+	if value, ok := values["FACES_ANALYZE_TIMEOUT"]; ok {
+		if parsed, err := time.ParseDuration(value); err == nil && parsed > 0 {
+			c.FacesAnalyzeTimeout = parsed
+		}
+	}
+
+	if value, ok := values["FACES_CLUSTER_TIMEOUT"]; ok {
+		if parsed, err := time.ParseDuration(value); err == nil && parsed > 0 {
+			c.FacesClusterTimeout = parsed
+		}
+	}
+
+	applyBool("FACES_RECLUSTER_ALL", &c.FacesReclusterAll)
 
 	if value, ok := values["ACCOUNT_CREATION_MODE"]; ok {
 		switch value {
@@ -250,6 +323,20 @@ func getEnvInt(key string, defaultValue int) int {
 
 // getEnvDuration gets environment variable as a Go duration with a default value.
 // Values that do not parse as a positive duration fall back to the default.
+// getEnvBool reads a boolean flag, falling back to *defaultValue* when the
+// variable is unset or not a boolean.
+func getEnvBool(key string, defaultValue bool) bool {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		return defaultValue
+	}
+	parsed, err := strconv.ParseBool(value)
+	if err != nil {
+		return defaultValue
+	}
+	return parsed
+}
+
 func getEnvDuration(key string, defaultValue time.Duration) time.Duration {
 	if value, exists := os.LookupEnv(key); exists {
 		if d, err := time.ParseDuration(value); err == nil && d > 0 {

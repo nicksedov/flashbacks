@@ -15,6 +15,12 @@ from app.engine import EMBEDDING_DIM, FaceEngine
 class StubFace:
     """Minimal stand-in for an insightface ``Face``."""
 
+    #: Landmarks inside an upscaled crop, used by the batched recognizer path.
+    KPS = np.array(
+        [[120.0, 120.0], [220.0, 120.0], [170.0, 170.0], [120.0, 220.0], [220.0, 220.0]],
+        dtype=float,
+    )
+
     def __init__(
         self,
         bbox: tuple[float, float, float, float],
@@ -24,6 +30,19 @@ class StubFace:
         self.bbox = np.asarray(bbox, dtype=float)
         self.normed_embedding = np.asarray(embedding, dtype=float)
         self.det_score = det_score
+        self.kps = self.KPS
+
+
+class StubRecognition:
+    """Recognizer stand-in returning one fixed feature per submitted crop."""
+
+    def __init__(self, embedding: list[float]) -> None:
+        self.embedding = np.asarray(embedding, dtype=float)
+        self.calls: list[int] = []
+
+    def get_feat(self, crops) -> np.ndarray:
+        self.calls.append(len(crops))
+        return np.stack([self.embedding for _ in range(len(crops))])
 
 
 class StubAnalysis:
@@ -32,6 +51,7 @@ class StubAnalysis:
     def __init__(self, faces: list[StubFace]) -> None:
         self.faces = faces
         self.calls = 0
+        self.models = {"recognition": StubRecognition([1.0, 0.0, 0.0])}
 
     def get(self, img: np.ndarray) -> list[StubFace]:  # noqa: ARG002 - image content is irrelevant
         self.calls += 1
@@ -41,9 +61,16 @@ class StubAnalysis:
 class SequencedAnalysis:
     """Returns one prepared detection list per ``get`` call."""
 
-    def __init__(self, responses: list[list[StubFace]]) -> None:
+    def __init__(
+        self,
+        responses: list[list[StubFace]],
+        recognition_embedding: list[float] | None = None,
+    ) -> None:
         self.responses = list(responses)
         self.calls = 0
+        self.models = {
+            "recognition": StubRecognition(recognition_embedding or [1.0, 0.0, 0.0])
+        }
 
     def get(self, img: np.ndarray) -> list[StubFace]:  # noqa: ARG002 - image content is irrelevant
         self.calls += 1
@@ -81,7 +108,7 @@ def test_analyze_uses_the_refined_embedding_when_the_crop_face_matches(image) ->
     """The face found in the crop overlaps the detection: its vector wins."""
     detected = StubFace((10.0, 10.0, 40.0, 50.0), [1.0, 0.0, 0.0])
     refined = StubFace((53.0, 53.0, 213.0, 267.0), [0.0, 0.0, 1.0])
-    analysis = SequencedAnalysis([[detected], [refined]])
+    analysis = SequencedAnalysis([[detected], [refined]], recognition_embedding=[0.0, 0.0, 1.0])
     engine = FaceEngine()
     engine.ensure_loaded = lambda: analysis  # type: ignore[method-assign]
 

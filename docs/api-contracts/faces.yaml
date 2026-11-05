@@ -70,6 +70,57 @@ paths:
         "400":
           description: Invalid image payload
 
+  /faces/analyze-batch:
+    post:
+      summary: Detect and embed every face of several images in one request
+      description: |
+        One request covers many photos, so a GPU is kept busy between model
+        submissions. The response carries exactly one entry per submitted image,
+        in request order; an image that cannot be decoded produces an `error`
+        entry while the other entries still carry their faces. Requests larger
+        than `FACES_MAX_BATCH` are rejected before any model work.
+      operationId: analyzeFacesBatch
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AnalyzeBatchRequest"
+      responses:
+        "200":
+          description: One entry per submitted image, in request order
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnalyzeBatchResponse"
+        "422":
+          description: The batch exceeds the configured FACES_MAX_BATCH limit
+
+  /faces/cluster-graph:
+    post:
+      summary: Cluster faces from a candidate-similarity graph
+      description: |
+        The caller queries pgvector for each unassigned face's neighbours inside
+        the clustering radius and posts those candidate links instead of every
+        embedding. The service keeps ownership of the calibrated thresholds — the
+        strict floor (0.40), the recognition floor (0.25) and the runner-up margin
+        (0.05) — and returns one label per submitted face id (`-1` when a face
+        stays unassigned).
+      operationId: clusterFacesGraph
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ClusterGraphRequest"
+      responses:
+        "200":
+          description: One label per face id, in request order
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ClusterGraphResponse"
+
   /faces/embed:
     post:
       summary: Embed a detected face
@@ -120,6 +171,41 @@ components:
       properties:
         status:
           type: string
+        activeProvider:
+          type: string
+          description: |
+            Short name of the ONNX Runtime provider the model session runs on
+            (`cpu`, `cuda`, `tensorrt`), after intersecting configuration with
+            what the installed runtime offers.
+        requestedProviders:
+          type: array
+          description: Configured providers in priority order, as short names.
+          items:
+            type: string
+        devices:
+          type: array
+          description: |
+            One entry per model session in the pool. A two-GPU host reports two
+            devices; the CPU fallback reports a single device with id -1.
+          items:
+            type: object
+            properties:
+              deviceId:
+                type: integer
+              provider:
+                type: string
+        thresholds:
+          type: object
+          description: |
+            The calibrated similarities the service applies, reported so callers
+            do not keep their own copies.
+          properties:
+            clusterMinSimilarity:
+              type: number
+            recognitionMinSimilarity:
+              type: number
+            recognitionMargin:
+              type: number
 
     FaceBox:
       type: object
@@ -179,6 +265,42 @@ components:
           items:
             $ref: "#/components/schemas/AnalyzedFace"
 
+    AnalyzeBatchRequest:
+      type: object
+      required:
+        - images
+      properties:
+        images:
+          type: array
+          minItems: 1
+          items:
+            type: string
+            description: Base64-encoded image bytes.
+
+    AnalyzeBatchEntry:
+      type: object
+      description: |
+        The outcome of analysing one image of a batch; positionally aligned with
+        the request so the caller never needs an id map.
+      properties:
+        faces:
+          type: array
+          items:
+            $ref: "#/components/schemas/AnalyzedFace"
+        error:
+          type: string
+          description: |
+            Set when this image failed to decode or analyse; the other entries
+            still carry their faces.
+
+    AnalyzeBatchResponse:
+      type: object
+      properties:
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/AnalyzeBatchEntry"
+
     EmbedRequest:
       type: object
       required:
@@ -229,5 +351,57 @@ components:
       properties:
         labels:
           type: array
+          items:
+            type: integer
+
+    FaceLink:
+      type: object
+      description: One candidate-similarity edge between two detected faces.
+      required:
+        - faceId
+        - candidateId
+        - similarity
+      properties:
+        faceId:
+          type: integer
+        candidateId:
+          type: integer
+        similarity:
+          type: number
+          description: Cosine similarity between the two face embeddings.
+
+    ClusterGraphRequest:
+      type: object
+      required:
+        - faceIds
+        - edges
+      properties:
+        faceIds:
+          type: array
+          description: Every face to label, in the order the labels are returned.
+          items:
+            type: integer
+        soloFaces:
+          type: array
+          description: |
+            One flag per face id: true when the face is the only face of its
+            photo. Such a portrait may anchor a new person; a group-shot face
+            alone never creates one.
+          items:
+            type: boolean
+        edges:
+          type: array
+          description: |
+            Candidate links inside the clustering radius, as answered by the
+            vector store's nearest-neighbour query.
+          items:
+            $ref: "#/components/schemas/FaceLink"
+
+    ClusterGraphResponse:
+      type: object
+      properties:
+        labels:
+          type: array
+          description: One label per submitted face id (-1 for unassigned).
           items:
             type: integer

@@ -26,6 +26,13 @@ runners:
       command: uv
       commandArgs: ["run", "--with", "pytest", "python"]
     timeoutMs: 300000
+  facespytest:
+    package: "@focused-spec/runner-pytest"
+    options:
+      # The runner appends its own "-m pytest"; passing it again would make
+      # pytest read the second one as a marker expression and deselect everything.
+      command: backend/faces/.venv/bin/python
+    timeoutMs: 600000
   go:
     package: "@focused-spec/runner-go"
     options:

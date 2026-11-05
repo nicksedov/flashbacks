@@ -104,6 +104,7 @@ func (s *Server) handleGetFacesStatus(c *gin.Context) {
 		Running:   status.Running,
 		Processed: status.Processed,
 		Total:     status.Total,
+		LastError: status.Progress.LastError,
 	})
 }
 

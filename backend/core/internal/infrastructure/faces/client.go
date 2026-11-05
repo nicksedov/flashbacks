@@ -29,6 +29,37 @@ type AnalyzedFace struct {
 	Embedding []float32 `json:"embedding"`
 }
 
+// BatchResult is one entry of a batch analysis: the faces detected on one
+// image, or the reason that image could not be analysed. Entries are
+// positionally aligned with the images of the request.
+type BatchResult struct {
+	Faces []AnalyzedFace
+	Error string
+}
+
+// Thresholds are the calibrated similarities the faces service applies. Core
+// reads them from /faces/health instead of keeping its own copies.
+type Thresholds struct {
+	ClusterMinSimilarity     float64 `json:"clusterMinSimilarity"`
+	RecognitionMinSimilarity float64 `json:"recognitionMinSimilarity"`
+	RecognitionMargin        float64 `json:"recognitionMargin"`
+}
+
+// Health is the /faces/health payload.
+type Health struct {
+	Status             string     `json:"status"`
+	ActiveProvider     string     `json:"activeProvider"`
+	RequestedProviders []string   `json:"requestedProviders"`
+	Thresholds         Thresholds `json:"thresholds"`
+}
+
+// FaceLink is one candidate-similarity edge between two detected faces.
+type FaceLink struct {
+	FaceID      uint    `json:"faceId"`
+	CandidateID uint    `json:"candidateId"`
+	Similarity  float64 `json:"similarity"`
+}
+
 // Client is the typed REST interface of the faces microservice.
 type Client interface {
 	// ServiceURL returns the peer base URL this client currently targets.
@@ -40,6 +71,10 @@ type Client interface {
 	// per face costs a full inference each and made group photos exceed the
 	// request budget, dropping most of their faces.
 	Analyze(ctx context.Context, image []byte) ([]AnalyzedFace, error)
+	// AnalyzeBatch detects and embeds every face of several images in one
+	// request; the result is positionally aligned with images. A per-image
+	// failure is reported in that entry's Error instead of failing the batch.
+	AnalyzeBatch(ctx context.Context, images [][]byte) ([]BatchResult, error)
 	// Embed runs ArcFace embedding on a full image and returns the 512-d vector
 	// of one detected face; box selects which detected face to embed.
 	Embed(ctx context.Context, image []byte, box *FaceBox) ([]float32, error)
@@ -47,6 +82,11 @@ type Client interface {
 	// (-1 for noise). soloFaces marks embeddings that are the only face of their
 	// photo: such a portrait may anchor a person for a face from a group shot.
 	Cluster(ctx context.Context, embeddings [][]float32, minClusterSize int, soloFaces []bool) ([]int, error)
+	// ClusterGraph groups faces from the candidate links of a vector-store kNN
+	// query, returning one label per face id (-1 for unassigned).
+	ClusterGraph(ctx context.Context, faceIDs []uint, edges []FaceLink, soloFaces []bool) ([]int, error)
+	// Health reports the service liveness, active provider and thresholds.
+	Health(ctx context.Context) (Health, error)
 }
 
 type clientImpl struct {
@@ -109,6 +149,29 @@ func (c *clientImpl) post(ctx context.Context, path string, body any, out any) e
 	return nil
 }
 
+func (c *clientImpl) get(ctx context.Context, path string, out any) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.base()+path, nil)
+	if err != nil {
+		return fmt.Errorf("create request: %w", err)
+	}
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("faces service request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("faces service returned %d: %s", resp.StatusCode, string(bodyBytes))
+	}
+	if out != nil {
+		if err := json.NewDecoder(resp.Body).Decode(out); err != nil {
+			return fmt.Errorf("decode response: %w", err)
+		}
+	}
+	return nil
+}
+
 // Detect runs face detection over a base64-encoded image.
 func (c *clientImpl) Detect(ctx context.Context, image []byte) ([]FaceBox, error) {
 	var resp struct {
@@ -131,6 +194,29 @@ func (c *clientImpl) Analyze(ctx context.Context, image []byte) ([]AnalyzedFace,
 		return nil, err
 	}
 	return resp.Faces, nil
+}
+
+// AnalyzeBatch detects and embeds every face of several images in one request.
+// The service answers one entry per submitted image, in request order.
+func (c *clientImpl) AnalyzeBatch(ctx context.Context, images [][]byte) ([]BatchResult, error) {
+	encoded := make([]string, len(images))
+	for i, image := range images {
+		encoded[i] = base64.StdEncoding.EncodeToString(image)
+	}
+	var resp struct {
+		Results []struct {
+			Faces []AnalyzedFace `json:"faces"`
+			Error string         `json:"error"`
+		} `json:"results"`
+	}
+	if err := c.post(ctx, "/faces/analyze-batch", map[string]any{"images": encoded}, &resp); err != nil {
+		return nil, err
+	}
+	results := make([]BatchResult, len(resp.Results))
+	for i, entry := range resp.Results {
+		results[i] = BatchResult{Faces: entry.Faces, Error: entry.Error}
+	}
+	return results, nil
 }
 
 // Embed runs ArcFace embedding for one detected face of a full image: the
@@ -166,4 +252,32 @@ func (c *clientImpl) Cluster(ctx context.Context, embeddings [][]float32, minClu
 		return nil, err
 	}
 	return resp.Labels, nil
+}
+
+// ClusterGraph groups faces from candidate links answered by the vector store.
+func (c *clientImpl) ClusterGraph(ctx context.Context, faceIDs []uint, edges []FaceLink, soloFaces []bool) ([]int, error) {
+	var resp struct {
+		Labels []int `json:"labels"`
+	}
+	body := map[string]any{
+		"faceIds": faceIDs,
+		"edges":   edges,
+	}
+	if len(soloFaces) > 0 {
+		body["soloFaces"] = soloFaces
+	}
+	if err := c.post(ctx, "/faces/cluster-graph", body, &resp); err != nil {
+		return nil, err
+	}
+	return resp.Labels, nil
+}
+
+// Health reports the service liveness, active execution provider and the
+// calibrated thresholds the clustering decision uses.
+func (c *clientImpl) Health(ctx context.Context) (Health, error) {
+	var health Health
+	if err := c.get(ctx, "/faces/health", &health); err != nil {
+		return Health{}, err
+	}
+	return health, nil
 }

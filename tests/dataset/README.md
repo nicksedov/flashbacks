@@ -11,9 +11,7 @@ OCR-сервисом, но и интеграционными тестами core
 - **inscription** — короткие фигурные надписи, вывески
 - **image** — картинки, фотографии без текстового содержимого
 - **faces** — фотографии людей для проверки распознавания лиц:
-  `politicians/` и `scientists/` (свободные лицензии) и `dima/` — приватный
-  размеченный набор из production-галереи (один человек, разбитый
-  кластеризацией на шесть «людей»), с `manifest.csv` и координатами лиц
+  `politicians/` и `scientists/` (свободные лицензии)
 
 ## Где используется
 
@@ -21,9 +19,9 @@ OCR-сервисом, но и интеграционными тестами core
   (`TestClassifyEnglish`, `TestClassifyRussian`, `TestClassifyImages`,
   `TestClassifyInscriptions`, `TestDatasetFull`);
 - [`faces/`](faces) — фотографии людей для проверок распознавания лиц: подпапки
-  [`faces/politicians/`](faces/politicians), [`faces/scientists/`](faces/scientists)
-  и [`faces/dima/`](faces/dima) — размеченный набор для регрессии кластеризации
-  (см. [`faces/README.md`](faces/README.md) и [`faces/dima/README.md`](faces/dima/README.md));
+  [`faces/politicians/`](faces/politicians) и
+  [`faces/scientists/`](faces/scientists)
+  (см. [`faces/README.md`](faces/README.md));
 - [`tests/faces/integration/`](../faces/integration) — pytest-тесты распознавания
   лиц против развёрнутого сервиса `faces` (детекция, эмбеддинги, распознавание
   в групповых снимках, кластеризация по людям; см.

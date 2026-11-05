@@ -40,11 +40,10 @@ was visible in the UI.
   living in the faces service and is reported by `/faces/health`; the values are
   recalibrated against a labelled fixture instead of a handful of aggregate
   counts.
-- **A labelled fixture and A/B harness ship with the change.** `tests/dataset/faces/dima`
-  holds 64 photos of one identity with a `manifest.csv` (face box, confidence,
-  faces-on-photo). The harness embeds them once, caches embeddings, scores any
-  clustering variant against them (fragments per identity, pairwise
-  precision/recall, unassigned share) and gates the regression in pytest.
+- **Thresholds were tuned against a labelled fixture.** The calibration used a
+  private fixture (one identity split into six stored people) and a local A/B
+  harness; both were removed afterwards, and the regression gate is the hermetic
+  synthetic pytest suite.
 - **BREAKING** (internal contract): `/faces/cluster-graph` gains per-face photo
   identity and quality input so the service can enforce photo diversity and
   density; core must send them. The endpoint is consumed only by core, and both
@@ -76,8 +75,8 @@ mechanics are the `how`, recorded in `design.md`.
   parameters.
 - `docs/api-contracts/faces.yaml`, `docs/api-contracts/core.yaml` — additive
   request/response fields; `make generate-types` refreshes `webapp/src/types/api.ts`.
-- `tests/dataset/faces/dima` (private, ignored by git), `backend/faces/tools/`,
-  `backend/faces/tests/`, `tests/faces/` — fixture, harness and regression gate.
+- `backend/faces/tests/`, `tests/faces/` — calibration harness (since removed with
+  the private fixture) and regression gate.
 - No webapp behaviour change: person ids and names keep their current meaning, so
   no translation or UI work is implied.
 

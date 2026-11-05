@@ -1,10 +1,15 @@
 # Tasks
 
+> The private calibration fixture, the harness under `backend/faces/tools/`, its
+> tests and the calibration report were removed after the change completed. The
+> tasks below record what was done; the remaining gate is the hermetic synthetic
+> pytest suite.
+
 ## 1. Fixture harness and baseline
 
-- [x] 1.1 Add `backend/faces/tools/calibrate_clustering.py`: read `tests/dataset/faces/dima/manifest.csv`, embed each photo once through `FaceEngine.analyze`, and cache `embeddings.json` keyed by the manifest `sha256`. Verify: a first run reports `64 faces embedded, cache written`; a second run reports `cache hit` and does not load the model.
-- [x] 1.2 Add the scoring core to the same module — fragments per identity, pairwise precision/recall, unassigned share, person count — and print the baseline of the current algorithm (`engine.cluster_graph` with today's thresholds) over the cached embeddings. Verify: `backend/faces/.venv/bin/python -m pytest backend/faces/tests/test_calibration_metrics.py -q` passes and the CLI prints the baseline table for the six production labels.
-- [x] 1.3 Add the threshold sweep (grid over `τ_core`, `τ_assign`, `τ_merge`, margin, `k`, `k_core`, `m`) printing a Pareto front, and record the baseline + candidate numbers in a new tracked document `docs/faces/clustering-calibration.md`. Verify: the document's commands reproduce the tables it prints (run from the repository root inside the `flashbacks-faces` container).
+- [x] 1.1 Add the calibration harness: read the private fixture manifest, embed each photo once through `FaceEngine.analyze`, and cache `embeddings.json` keyed by the manifest `sha256`. Verify: a first run reports `64 faces embedded, cache written`; a second run reports `cache hit` and does not load the model.
+- [x] 1.2 Add the scoring core to the same module — fragments per identity, pairwise precision/recall, unassigned share, person count — and print the baseline of the current algorithm (`engine.cluster_graph` with today's thresholds) over the cached embeddings. Verify: the harness metric tests pass and the CLI prints the baseline table per production label.
+- [x] 1.3 Add the threshold sweep (grid over `τ_core`, `τ_assign`, `τ_merge`, margin, `k`, `k_core`, `m`) printing a Pareto front, and record the baseline + candidate numbers in the calibration report. Verify: the report's commands reproduce the tables it prints (run from the repository root inside the `flashbacks-faces` container).
 
 ## 2. Faces service — labelling algorithm
 
@@ -27,8 +32,8 @@
 
 ## 5. Calibration and A/B result
 
-- [x] 5.1 Sweep on the fixture, choose the thresholds, and record the before/after table in `docs/faces/clustering-calibration.md`: fragments per identity must go from 6 (baseline) to 1 with pairwise precision unchanged on the impostor sets (`politicians`, `scientists`). Verify: rerunning the documented command reproduces every number in the table.
-- [x] 5.2 Run the reconcile pass against a copy of the production gallery and record person count, fragments per identity and unassigned share before/after in the same document. Verify: the recorded numbers match a rerun on the same snapshot, and a second reconcile pass changes nothing (idempotence).
+- [x] 5.1 Sweep on the fixture, choose the thresholds, and record the before/after table in the calibration report: fragments per identity must go from 6 (baseline) to 1 with pairwise precision unchanged on the impostor sets (`politicians`, `scientists`). Verify: rerunning the documented command reproduces every number in the table.
+- [x] 5.2 Run the reconcile pass against a copy of the production gallery and record person count, fragments per identity and unassigned share before/after in the same report. Verify: the recorded numbers match a rerun on the same snapshot, and a second reconcile pass changes nothing (idempotence).
 
 ## 6. Evidence and checks
 

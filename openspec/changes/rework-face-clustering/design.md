@@ -20,9 +20,8 @@ approach:
 - **Candidates are truncated kNN.** Core queries pgvector for 16 neighbours per
   face at the 0.25 recognition floor
   ([`face_neighbours.go`](../../../backend/core/internal/infrastructure/database/face_neighbours.go:17)).
-- **The labelled fixture exists but is private.** `tests/dataset/faces/dima`
-  holds 64 photos of one identity with `manifest.csv` (face box, confidence,
-  faces-on-photo) and is excluded from version control.
+- **The calibration fixture is private.** It held 64 photos of one identity and
+  was excluded from version control, then removed once calibration finished.
 - **Environment for calibration.** The faces container ships Python 3.11,
   `insightface 2.1` (`buffalo_l`), `numpy`, `sklearn`, two GPUs; `docker cp` is
   blocked on this host, so files move via `docker exec … cat`/`tar`.
@@ -135,24 +134,19 @@ also lets the historic production gallery converge without a wipe: reconciling
 merges existing people rather than deleting and recreating them, so user-visible
 ids disappear only for merged duplicates.
 
-### D8 — Calibration harness and what counts as evidence
+### D8 — Calibration and what counts as evidence
 
-`backend/faces/tools/calibrate_clustering.py` (runs inside the container):
+Calibration ran against a private labelled fixture through a local harness that
+embedded each photo once (cached by `sha256`), scored any variant (fragments per
+identity, pairwise precision/recall, unassigned share, person count) and swept
+`τ_core`, `τ_assign`, `τ_merge`, `margin`, `k`, `k_core`, `m`. The fixture, the
+harness and its report were removed afterwards.
 
-1. embeds the fixture once (`FaceEngine.analyze` per file), caching
-   `embeddings.json` keyed by the manifest `sha256` so re-runs cost nothing;
-2. scores any variant — fragments per identity, pairwise precision/recall,
-   unassigned share, person count;
-3. sweeps `τ_core`, `τ_assign`, `τ_merge`, `margin`, `k`, `k_core`, `m` and
-   prints a Pareto front plus the A/B table against the current algorithm.
-
-Because the fixture is private and gitignored, it **cannot** be the focused-spec
+Because the fixture was private and gitignored, it **cannot** be the focused-spec
 evidence: an always-skipped scope is not a gate. Behavioural evidence is
 hermetic pytest cases over synthetic vectors (well-separated identities, a bridge
-face, a burst photo, an ambiguous face), and the fixture-based case is marked
-`skipif` when the fixture is absent — used to produce the A/B report, not to gate
-CI. Go-level evidence for the person lifecycle lives in `manager_test.go` on
-in-memory SQLite.
+face, a burst photo, an ambiguous face). Go-level evidence for the person
+lifecycle lives in `manager_test.go` on in-memory SQLite.
 
 ## Risks / Trade-offs
 

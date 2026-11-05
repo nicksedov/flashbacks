@@ -72,9 +72,7 @@ the gallery.
   `CLUSTER_MERGE_SUPPORT` mutual cross-component pairs at
   `CLUSTER_MERGE_SUPPORT_SIMILARITY`.
 
-Both revisions are calibrated in
-[`docs/faces/clustering-calibration.md`](../../docs/faces/clustering-calibration.md),
-and `/faces/health` reports the effective thresholds. The clustering requests
+`/faces/health` reports the effective thresholds. The clustering requests
 accept optional arrays aligned with the face ids — `photoIds` (used by
 `graph-v2`; absent means one unique photo per face), `widths` and `qualities`
 (accepted for quality-aware rules). That keeps an older core working unchanged.

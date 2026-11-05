@@ -1,7 +1,7 @@
 """Hermetic clustering-quality regressions for the density-aware variant.
 
 These cases use synthetic candidate graphs on purpose: they are the behavioural
-gate (the private ``dima`` fixture only produces the A/B report).
+gate.
 """
 
 from __future__ import annotations

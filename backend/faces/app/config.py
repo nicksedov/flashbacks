@@ -84,15 +84,14 @@ CLUSTER_SPLIT_MAX_SIMILARITY = 0.9
 
 #: Labelling algorithm revision. ``graph-v1`` keeps today's single-linkage
 #: behaviour and is the default until the calibrated ``graph-v2`` variant is
-#: enabled with ``FACES_CLUSTER_ALGO=graph-v2`` (see ``docs/faces/clustering-calibration.md``).
+#: enabled with ``FACES_CLUSTER_ALGO=graph-v2``.
 CLUSTER_ALGO = "graph-v1"
 CLUSTER_ALGOS = ("graph-v1", "graph-v2")
 
 #: ``graph-v2``: floor of the hub-corrected (CSLS) similarity between two
 #: *mutual* candidates for the edge to join a component. The scale differs from
 #: a raw cosine: a pair at its own neighbourhood mean scores 0, so the floor sits
-#: on that mean rather than near the raw 0.40 floor. Recalibrated by
-#: ``backend/faces/tools/calibrate_clustering.py sweep``.
+#: on that mean rather than near the raw 0.40 floor.
 CLUSTER_CORE_SIMILARITY = 0.0
 
 #: ``graph-v2``: mutual neighbours at ``CLUSTER_CORE_SIMILARITY`` a face needs

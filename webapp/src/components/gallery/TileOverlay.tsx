@@ -17,6 +17,7 @@ export function TileOverlay({ onDownload, onDelete }: TileOverlayProps) {
           <button
             type="button"
             className="p-2 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors"
+            data-slot="tile-download"
             onClick={(e) => {
               e.stopPropagation()
               onDownload()
@@ -30,6 +31,7 @@ export function TileOverlay({ onDownload, onDelete }: TileOverlayProps) {
           <button
             type="button"
             className="p-2 rounded-lg bg-red-500/20 hover:bg-red-500/40 text-white transition-colors"
+            data-slot="tile-delete"
             onClick={(e) => {
               e.stopPropagation()
               onDelete()

@@ -75,6 +75,8 @@ export function FolderList({ folders, onRemove, isLoading }: FolderListProps) {
               variant="ghost"
               size="sm"
               className="text-destructive hover:text-destructive hover:bg-destructive/10 shrink-0"
+              data-slot="folder-remove"
+              aria-label={t("folderList.removeButton")}
               onClick={() => setConfirmFolder(folder)}
               disabled={removingId === folder.id}
             >

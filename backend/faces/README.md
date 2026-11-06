@@ -253,6 +253,59 @@ threshold — lives in
 The current result is a mean accuracy of 0.9822 at the shipped 0.25, so the
 shipped threshold stays as it is.
 
+## Clustering calibration (1:N)
+
+The verification floor answers a 1:1 question. Clustering is a different one —
+does the candidate graph plus the labelling turn a gallery into the right
+people? [`tools/lfw_clustering.py`](tools/lfw_clustering.py) scores that on the
+LFW identities, and [`tools/clustering_benchmark.py`](tools/clustering_benchmark.py)
+does the same on any labelled tree (`<root>/<identity>/<image>`, or
+`<identity>_<rest>.jpg` with `--flat-names`).
+
+Both build the graph the way core does (cosine floor, `top_k` neighbours, a
+per-photo candidate cap) and label it with the service's own
+`FaceEngine.cluster_graph`, so a threshold or algorithm change is measured
+through production code. Metrics: B-cubed precision/recall/F1, pairwise
+precision/recall/F1, `merge rate` (clusters spanning more than one identity),
+`identity merges` (distinct identity pairs glued together — the number that must
+stay zero), `identity integrity` and the unassigned share. An unassigned face is
+scored as its own singleton, never as a merge.
+
+```bash
+cd backend/faces
+
+# LFW identities with two or more photos: shipped graph-v1 and production graph-v2
+.venv/bin/python -m tools.lfw_clustering score --work-dir /tmp/flashbacks-lfw --algorithm graph-v1
+.venv/bin/python -m tools.lfw_clustering score --work-dir /tmp/flashbacks-lfw --algorithm graph-v2
+
+# how close different people get: the floor no graph can beat
+.venv/bin/python -m tools.lfw_clustering hard-negatives --work-dir /tmp/flashbacks-lfw
+
+# floor x core neighbours x assign x merge, ranked with merges first
+.venv/bin/python -m tools.lfw_clustering sweep --work-dir /tmp/flashbacks-lfw
+
+# the same metrics on the repository fixtures, with synthetic bursts added
+.venv/bin/python -m tools.clustering_benchmark score \
+  --images ../../tests/dataset/faces/scientists --flat-names --minimum-images 3 --bursts 2
+```
+
+`score` accepts gates for CI use (`--max-merge-rate`, `--min-b3`,
+`--min-integrity`) and exits non-zero when one is missed; `sweep` fails when the
+best configuration merges more identity pairs than `--max-merges` allows. Zero
+merges is a gallery requirement, not an LFW one: about 15% of LFW faces have a
+different person as their nearest neighbour above the 0.40 candidate floor, so
+LFW runs are compared against the recorded baseline instead. The dataset and
+embeddings share `tools.lfw_calibration`'s Kaggle download and content-addressed
+cache, so a second command on the same work directory embeds nothing, and a
+successful run removes the directory unless `--keep`.
+
+LFW is closed-set, one face per photo and smaller than the production gallery,
+so it cannot exercise `CLUSTER_MIN_PHOTOS`, the burst candidate cap or
+`CLUSTER_MAX_SHARE`: those need the fixtures with synthetic bursts or a labelled
+gallery export. Treat an LFW result as a regression gate and a direction, not as
+the shipped clustering floor — the recorded two-tier procedure is in
+[`docs/faces/clustering-calibration.md`](../../docs/faces/clustering-calibration.md:1).
+
 ## Configuration
 
 | Env | Default | Purpose |

@@ -24,7 +24,11 @@ import (
 // facesScanVersion identifies the current face-analysis pipeline. Images whose
 // stored faces come from another version are analysed again — once — which is
 // how an improved analyser reaches photos that already have faces.
-const facesScanVersion = "analyze-3"
+//
+// "analyze-4" forces the one-off full re-embedding of the gallery that ships
+// with the clustering-calibration release: every photo is detected and embedded
+// again before the people are rebuilt.
+const facesScanVersion = "analyze-4"
 
 // minClusterSize is the minimum number of faces a person needs before the
 // clustering service groups them into a person. Two is the calibrated floor:

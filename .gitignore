@@ -163,6 +163,12 @@ tests/dataset/**/temp/
 # Locally bootstrapped tools (e.g. exiftool)
 .tools/
 
+# Playwright E2E artifacts (traces, videos, failure screenshots)
+test-results/
+playwright-report/
+blob-report/
+
+
 # ===========================
 # Provider API reference scratch
 # ===========================

@@ -1,4 +1,9 @@
 {
+  "scripts": {
+    "test:e2e": "playwright test",
+    "test:e2e:tunnel": "PW_TUNNEL=1 playwright test",
+    "test:e2e:list": "playwright test --list"
+  },
   "dependencies": {
     "openspec": "^0.0.0"
   },
@@ -8,6 +13,9 @@
     "@focused-spec/runner-go": "^0.9.1",
     "@focused-spec/runner-pytest": "^0.9.1",
     "@focused-spec/runner-vitest": "^0.9.1",
+    "@playwright/test": "^1.65.0",
+    "@rushstack/playwright-browser-tunnel": "^0.3.36",
+    "@rushstack/terminal": "^0.24.8",
     "@types/node": "^26.6.5",
     "focused-spec": "^0.9.1",
     "jsdom": "^30.1.2",

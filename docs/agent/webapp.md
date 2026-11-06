@@ -132,6 +132,12 @@ npm run build           # tsc -b && vite build — must succeed
 - `make test-webapp-integration` runs `tests/webapp` against the test DB
   (`.env` base plus the `test.env` overlay that switches `DB_NAME` to
   `flashbacks-test`; the production database is never used).
+- `npm run test:e2e` (repository root) runs the Playwright walkthrough in
+  `tests/e2e` against a live deployment (`E2E_BASE_URL`, staging by default).
+  It needs `E2E_LOGIN`/`E2E_PASSWORD` and skips with an explicit reason without
+  them; `npm run test:e2e:tunnel` drives a browser on the developer's machine
+  through `@rushstack/playwright-browser-tunnel`. See
+  [`tests/e2e/README.md`](../../tests/e2e/README.md:1).
 - PWA: `public/manifest.json`, `public/sw.js` and the icon set are regenerated
   with `webapp/scripts/generate-pwa-icons.js`; keep icon sizes consistent when
   touching branding.
@@ -146,6 +152,9 @@ npm run build           # tsc -b && vite build — must succeed
 - [ ] API field names match the Go JSON tags; `make generate-types` run when the
       OpenAPI spec changed.
 - [ ] `npm test` green, plus `npm run build` for build-affecting changes.
+- [ ] Catalog/lightbox UI changes keep `tests/e2e` green (or explicitly SKIP
+      without `E2E_LOGIN`/`E2E_PASSWORD`); new `data-slot` hooks are added when a
+      spec needs to target a control.
 
 ## 10. See also
 

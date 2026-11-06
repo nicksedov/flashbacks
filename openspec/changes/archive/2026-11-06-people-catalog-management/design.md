@@ -201,6 +201,40 @@ New webapp pieces:
 - Webapp: Vitest for the grid tools (search, selection, merge availability),
   each dialog's confirm/cancel path, the unassigned view attach/create flows,
   and the lightbox correction flow refreshing boxes and the people list.
+- End-to-end: a Playwright suite in `tests/e2e/` replaces the manual
+  four-screen walkthrough and runs the real webapp against a live deployment.
+
+### 8. Browser automation replaces the manual walkthrough
+
+The catalog is only correct when the four screens work together over real HTTP
+and a real browser. The manual walkthrough is therefore an executable Playwright
+suite, committed with the change:
+
+- **Headless on the server by default.** `npm run test:e2e` launches Chromium in
+  the code-server environment; no local browser is required and the same command
+  works on CI.
+- **Optional local browser via `@rushstack/playwright-browser-tunnel`.**
+  `PW_TUNNEL=1 npm run test:e2e:tunnel` swaps the `browser` fixture for a
+  tunneled browser: the developer runs `tests/e2e/browser-host.cjs` on their own
+  machine and forwards tunnel port `56767` to the server, so they can watch the
+  run locally while the tests execute remotely.
+- **The target is a live deployment.** `E2E_BASE_URL` defaults to
+  `https://staging.flashbacks.life`; the suite is not tied to a local dev server.
+- **Credentials are environment input.** `E2E_LOGIN` / `E2E_PASSWORD` must be
+  set (staging admin). Without them every spec skips with an explicit reason
+  instead of failing, so a checkout without secrets stays green.
+- **Seeding is API-driven and self-cleaning.** Specs create throwaway people
+  from unassigned faces through the catalog endpoints, drive the UI, and disband
+  what they created in `afterAll`. Existing people are never modified. A
+  gallery without enough unassigned faces makes the face-dependent spec skip.
+- **Deterministic selectors and language.** Tests use the `data-slot` /
+  `data-testid` hooks the UI already exposes and force the interface language to
+  English through `PUT /api/user-settings` for the run, restoring the previous
+  setting afterwards.
+
+*Alternative considered:* recording the manual walkthrough as a checklist in the
+tasks file — rejected because it neither proves the shipped build nor protects
+the scenarios from regressions.
 
 ## Risks / Trade-offs
 

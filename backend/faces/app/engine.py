@@ -240,6 +240,13 @@ class FaceEngine:
 
     @staticmethod
     def decode_image(image_b64: str) -> np.ndarray:
+        """Decode the stored bytes exactly as they are.
+
+        No EXIF orientation is applied on purpose: boxes are reported in the raw
+        stored pixel frame, and core maps them into the upright frame when it
+        serves them (core/internal/application/faces/framing.go). Transposing the
+        pixels here would rotate every stored box twice.
+        """
         try:
             raw = base64.b64decode(image_b64)
             return np.asarray(Image.open(io.BytesIO(raw)).convert("RGB"))

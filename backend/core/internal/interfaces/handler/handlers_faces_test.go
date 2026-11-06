@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"path/filepath"
 	"testing"
 
 	recognition "github.com/flashbacks/core/internal/application/faces"
@@ -216,6 +218,42 @@ func TestHandleGetImageFaces_UnassignedFaceHasNoPerson(t *testing.T) {
 	require.Len(t, resp.Faces, 1)
 	require.Zero(t, resp.Faces[0].PersonID)
 	require.Empty(t, resp.Faces[0].PersonName)
+}
+
+// TestHandleGetImageFaces_NormalizesExifOrientation guards the overlay frame: a
+// face stored in the raw pixels of a rotated photo is reported in the upright
+// frame the browser renders, so its box lands on the face instead of beside it.
+func TestHandleGetImageFaces_NormalizesExifOrientation(t *testing.T) {
+	svc, db, cleanup := newFacesTestServer(t)
+	defer cleanup()
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "portrait.jpg")
+	// Stored as 400x200 landscape pixels with EXIF orientation 6: the browser
+	// shows the photo as a 200x400 portrait.
+	testutil.WriteJPEGWithOrientation(t, path, 400, 200, 6)
+
+	svc.galleryAccess = helpers.NewGalleryAccess(db)
+	testutil.SeedGalleryFolder(t, db, dir)
+
+	img := testutil.SeedImageFile(t, db, path, "h6", 60)
+	// A face in the upper-left area of the stored pixels.
+	face := domain.Face{ImageFileID: img.ID, X: 40, Y: 20, Width: 100, Height: 50, Confidence: 0.9}
+	require.NoError(t, svc.faceRepo.Create(&face))
+
+	request := "/api/image-faces?path=" + url.QueryEscape(path)
+	w := serveHandler(svc.handleGetImageFaces, http.MethodGet, request, nil)
+	require.Equal(t, http.StatusOK, w.Code, "body: %s", w.Body.String())
+
+	var resp dto.ImageFacesResponse
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	require.Len(t, resp.Faces, 1)
+	// A 90° clockwise rotation moves the box to the middle-right of the upright
+	// frame and swaps its sides.
+	require.InDelta(t, 130, resp.Faces[0].X, 0.01)
+	require.InDelta(t, 40, resp.Faces[0].Y, 0.01)
+	require.InDelta(t, 50, resp.Faces[0].Width, 0.01)
+	require.InDelta(t, 100, resp.Faces[0].Height, 0.01)
 }
 
 // TestHandleGetImageFaces_EmptyWithoutFaces guards that an image the analyser

@@ -2440,13 +2440,13 @@ export interface components {
             personId?: number;
             /** @description The person's name; empty while the person is unnamed. */
             personName?: string;
-            /** @description Box left edge in pixels of the analysed image. */
+            /** @description Box left edge in pixels of the upright image the browser renders: the EXIF orientation of the file is already applied, so the box can be drawn over the photo `/api/image` serves without further rotation. */
             x?: number;
-            /** @description Box top edge in pixels of the analysed image. */
+            /** @description Box top edge in pixels of the same upright image. */
             y?: number;
-            /** @description Box width in pixels of the analysed image. */
+            /** @description Box width in pixels of the upright image. */
             width?: number;
-            /** @description Box height in pixels of the analysed image. */
+            /** @description Box height in pixels of the upright image. */
             height?: number;
             /** @description Detection confidence between 0 and 1. */
             confidence?: number;

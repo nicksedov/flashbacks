@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strconv"
 
+	recognition "github.com/flashbacks/core/internal/application/faces"
 	"github.com/flashbacks/core/internal/application/people"
 	"github.com/flashbacks/core/internal/domain"
 	"github.com/flashbacks/core/internal/interfaces/dto"
@@ -133,9 +134,13 @@ func (s *Server) handleStopFaces(c *gin.Context) {
 }
 
 // handleGetImageFaces returns the faces detected on one gallery image, each with
-// its box in the analysed image's pixel frame and the person it was clustered
-// into. The lightbox draws the boxes over the same file /api/image serves, so the
-// boxes need no coordinate translation on the server.
+// its box in the upright frame of that image and the person it was clustered
+// into.
+//
+// The analyser reads the stored pixels as they are, so a stored box is in the raw
+// frame. /api/image serves the untouched file and the browser rotates it upright
+// (EXIF Orientation), which is the frame the lightbox draws over, so every box is
+// mapped through the image's orientation here.
 func (s *Server) handleGetImageFaces(c *gin.Context) {
 	path := c.Query("path")
 	if path == "" {
@@ -170,17 +175,19 @@ func (s *Server) handleGetImageFaces(c *gin.Context) {
 		return
 	}
 
+	frame := recognition.ReadImageFrame(normalizedPath)
 	names := make(map[uint]string, len(faces))
 	dtos := make([]dto.ImageFaceDTO, 0, len(faces))
 	for _, face := range faces {
+		x, y, width, height := frame.NormalizeBox(face.X, face.Y, face.Width, face.Height)
 		dtos = append(dtos, dto.ImageFaceDTO{
 			ID:         face.ID,
 			PersonID:   face.PersonID,
 			PersonName: s.personName(names, face.PersonID),
-			X:          face.X,
-			Y:          face.Y,
-			Width:      face.Width,
-			Height:     face.Height,
+			X:          x,
+			Y:          y,
+			Width:      width,
+			Height:     height,
 			Confidence: face.Confidence,
 		})
 	}
@@ -292,17 +299,30 @@ func (s *Server) handleAssignFace(c *gin.Context) {
 		return
 	}
 
+	// The client redraws this box straight over the served photo, so it has to be
+	// in the same upright frame handleGetImageFaces reports.
+	x, y, width, height := s.faceFrame(face).NormalizeBox(face.X, face.Y, face.Width, face.Height)
 	names := make(map[uint]string, 1)
 	c.JSON(http.StatusOK, dto.ImageFaceDTO{
 		ID:         face.ID,
 		PersonID:   face.PersonID,
 		PersonName: s.personName(names, face.PersonID),
-		X:          face.X,
-		Y:          face.Y,
-		Width:      face.Width,
-		Height:     face.Height,
+		X:          x,
+		Y:          y,
+		Width:      width,
+		Height:     height,
 		Confidence: face.Confidence,
 	})
+}
+
+// faceFrame resolves the pixel frame of the image a face was detected on. An
+// unknown image degrades to the identity frame, which leaves the box untouched.
+func (s *Server) faceFrame(face *domain.Face) recognition.ImageFrame {
+	imageFile, err := s.imageFileRepo.FindByID(face.ImageFileID)
+	if err != nil {
+		return recognition.ImageFrame{Orientation: 1}
+	}
+	return recognition.ReadImageFrame(imageFile.Path)
 }
 
 // handleGetUnassignedFaces lists the faces that belong to no person.
@@ -318,17 +338,26 @@ func (s *Server) handleGetUnassignedFaces(c *gin.Context) {
 		return
 	}
 
+	// The unassigned grid draws each box over the served photo, so the boxes are
+	// mapped into the upright frame too. Several faces of one photo share a probe.
+	frames := make(map[string]recognition.ImageFrame, len(page.Faces))
 	faces := make([]dto.UnassignedFaceDTO, 0, len(page.Faces))
 	for _, entry := range page.Faces {
+		frame, probed := frames[entry.Path]
+		if !probed {
+			frame = recognition.ReadImageFrame(entry.Path)
+			frames[entry.Path] = frame
+		}
+		x, y, width, height := frame.NormalizeBox(entry.Face.X, entry.Face.Y, entry.Face.Width, entry.Face.Height)
 		faces = append(faces, dto.UnassignedFaceDTO{
 			ID:         entry.Face.ID,
 			PersonID:   entry.Face.PersonID,
 			Path:       entry.Path,
 			FileName:   entry.FileName,
-			X:          entry.Face.X,
-			Y:          entry.Face.Y,
-			Width:      entry.Face.Width,
-			Height:     entry.Face.Height,
+			X:          x,
+			Y:          y,
+			Width:      width,
+			Height:     height,
 			Confidence: entry.Face.Confidence,
 		})
 	}

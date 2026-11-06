@@ -19,6 +19,18 @@ const (
 	maxPNGChunkLen = 1 << 20
 )
 
+// ReadExifOrientation returns the EXIF Orientation value (1-8) stored in the
+// image file, or 0 when the file has no orientation tag or cannot be parsed.
+// It supports JPEG (APP1 "Exif" segment) and PNG (eXIf chunk) and reads only the
+// format headers, so the file is left at an arbitrary offset afterwards.
+//
+// Consumers that draw pixel coordinates over the file a browser renders (for
+// example face boxes) need it: the browser rotates the file upright, so stored
+// coordinates are in the raw frame until they are mapped through this value.
+func ReadExifOrientation(file *os.File) int {
+	return readExifOrientation(file)
+}
+
 // readExifOrientation returns the EXIF Orientation value (1-8) stored in the
 // image file, or 0 when the file has no orientation tag or cannot be parsed.
 // It supports JPEG (APP1 "Exif" segment) and PNG (eXIf chunk) and reads only the

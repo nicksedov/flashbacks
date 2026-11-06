@@ -12,6 +12,7 @@ import (
 	"github.com/flashbacks/core/internal/application/geo"
 	"github.com/flashbacks/core/internal/application/imaging"
 	catalog "github.com/flashbacks/core/internal/application/llm"
+	"github.com/flashbacks/core/internal/application/people"
 	"github.com/flashbacks/core/internal/application/thumbnail"
 	"github.com/flashbacks/core/internal/domain"
 	"github.com/flashbacks/core/internal/domain/repository"
@@ -551,9 +552,22 @@ func ProvideAgent(
 
 // HandlerSet groups HTTP handler providers.
 var HandlerSet = wire.NewSet(
+	ProvidePeopleCatalog,
 	wire.Struct(new(handler.ServerDeps), "*"),
 	ProvideServer,
 )
+
+// ProvidePeopleCatalog creates the catalog service behind the people/faces
+// mutation endpoints.
+func ProvidePeopleCatalog(
+	db *gorm.DB,
+	persons repository.PersonRepository,
+	faces repository.FaceRepository,
+	references repository.PersonReferenceRepository,
+	images repository.ImageFileRepository,
+) *people.Catalog {
+	return people.NewCatalog(db, persons, faces, references, images)
+}
 
 // ProvideServer creates the HTTP server from its dependency struct.
 func ProvideServer(deps handler.ServerDeps) *handler.Server {

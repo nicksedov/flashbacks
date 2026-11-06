@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest"
-import { render, screen } from "@testing-library/react"
+import { describe, it, expect, vi } from "vitest"
+import { fireEvent, render, screen } from "@testing-library/react"
 import { I18nProvider } from "@/i18n/I18nProvider"
 import { PeoplePanel } from "./PeoplePanel"
 import type { ImagePerson } from "@/hooks/useImageFaces"
@@ -12,6 +12,7 @@ interface RenderOptions {
   loading?: boolean
   error?: boolean
   language?: "en" | "ru"
+  onRename?: (personId: number) => void
 }
 
 function renderPanel({
@@ -19,10 +20,11 @@ function renderPanel({
   loading = false,
   error = false,
   language = "en",
+  onRename,
 }: RenderOptions = {}) {
   return render(
     <I18nProvider language={language}>
-      <PeoplePanel people={people} loading={loading} error={error} />
+      <PeoplePanel people={people} loading={loading} error={error} onRename={onRename} />
     </I18nProvider>
   )
 }
@@ -62,5 +64,25 @@ describe("PeoplePanel", () => {
     renderPanel({ people: [], error: true })
 
     expect(screen.getByText("Could not load the faces of this photo")).toBeTruthy()
+  })
+
+  it("offers a rename action per person and shows the updated name", () => {
+    const onRename = vi.fn()
+    const { rerender } = renderPanel({ onRename })
+
+    fireEvent.click(screen.getAllByTestId("people-list-rename")[0])
+    expect(onRename).toHaveBeenCalledWith(7)
+
+    rerender(
+      <I18nProvider language="en">
+        <PeoplePanel
+          people={[{ ...anna, name: "Василиса" }, unnamed]}
+          loading={false}
+          error={false}
+          onRename={onRename}
+        />
+      </I18nProvider>,
+    )
+    expect(screen.getByText("Василиса")).toBeTruthy()
   })
 })

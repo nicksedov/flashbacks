@@ -15,6 +15,8 @@ type PersonRepository interface {
 	Save(person *domain.Person) error
 	// List returns every person ordered by ID.
 	List() ([]domain.Person, error)
+	// Delete removes a person row. Deleting an unknown id is not an error.
+	Delete(id uint) error
 }
 
 type gormPersonRepo struct {
@@ -48,4 +50,8 @@ func (r *gormPersonRepo) List() ([]domain.Person, error) {
 		return nil, err
 	}
 	return people, nil
+}
+
+func (r *gormPersonRepo) Delete(id uint) error {
+	return r.db.Where("id = ?", id).Delete(&domain.Person{}).Error
 }

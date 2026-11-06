@@ -1,11 +1,13 @@
 package handler
 
 import (
+	"errors"
 	"net/http"
 	"net/url"
 	"path/filepath"
 	"strconv"
 
+	"github.com/flashbacks/core/internal/application/people"
 	"github.com/flashbacks/core/internal/domain"
 	"github.com/flashbacks/core/internal/interfaces/dto"
 	"github.com/flashbacks/core/internal/interfaces/handler/helpers"
@@ -184,6 +186,209 @@ func (s *Server) handleGetImageFaces(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, dto.ImageFacesResponse{Faces: dtos})
+}
+
+// handleRenamePerson sets or clears a person's display name.
+func (s *Server) handleRenamePerson(c *gin.Context) {
+	if !s.requirePeopleCatalog(c) {
+		return
+	}
+	personID, ok := parseUintParam(c, "id")
+	if !ok {
+		return
+	}
+
+	var req dto.RenamePersonRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, i18n.CreateValidationError(i18n.MsgPeopleInvalidInput))
+		return
+	}
+
+	person, err := s.peopleCatalog.Rename(personID, req.Name)
+	if err != nil {
+		s.respondCatalogError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, s.personDTO(person))
+}
+
+// handleCreatePerson creates a person from previously unassigned faces.
+func (s *Server) handleCreatePerson(c *gin.Context) {
+	if !s.requirePeopleCatalog(c) {
+		return
+	}
+
+	var req dto.CreatePersonRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, i18n.CreateValidationError(i18n.MsgPeopleInvalidInput))
+		return
+	}
+
+	person, err := s.peopleCatalog.CreateFromFaces(req.Name, req.FaceIDs)
+	if err != nil {
+		s.respondCatalogError(c, err)
+		return
+	}
+	c.JSON(http.StatusCreated, s.personDTO(person))
+}
+
+// handleMergePeople merges the source people into the target person.
+func (s *Server) handleMergePeople(c *gin.Context) {
+	if !s.requirePeopleCatalog(c) {
+		return
+	}
+
+	var req dto.MergePeopleRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, i18n.CreateValidationError(i18n.MsgPeopleInvalidInput))
+		return
+	}
+
+	person, err := s.peopleCatalog.Merge(req.TargetPersonID, req.SourcePersonIDs, req.Name)
+	if err != nil {
+		s.respondCatalogError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, s.personDTO(person))
+}
+
+// handleDisbandPerson returns a person's faces to unassigned and removes the
+// person, keeping the photos.
+func (s *Server) handleDisbandPerson(c *gin.Context) {
+	if !s.requirePeopleCatalog(c) {
+		return
+	}
+	personID, ok := parseUintParam(c, "id")
+	if !ok {
+		return
+	}
+
+	if err := s.peopleCatalog.Disband(personID); err != nil {
+		s.respondCatalogError(c, err)
+		return
+	}
+	s.respondSuccess(c, http.StatusOK, i18n.MsgPeopleDisbanded)
+}
+
+// handleAssignFace moves a face to a person, or detaches it when personId is 0.
+func (s *Server) handleAssignFace(c *gin.Context) {
+	if !s.requirePeopleCatalog(c) {
+		return
+	}
+	faceID, ok := parseUintParam(c, "id")
+	if !ok {
+		return
+	}
+
+	var req dto.AssignFaceRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, i18n.CreateValidationError(i18n.MsgPeopleInvalidInput))
+		return
+	}
+
+	face, err := s.peopleCatalog.AssignFace(faceID, req.PersonID)
+	if err != nil {
+		s.respondCatalogError(c, err)
+		return
+	}
+
+	names := make(map[uint]string, 1)
+	c.JSON(http.StatusOK, dto.ImageFaceDTO{
+		ID:         face.ID,
+		PersonID:   face.PersonID,
+		PersonName: s.personName(names, face.PersonID),
+		X:          face.X,
+		Y:          face.Y,
+		Width:      face.Width,
+		Height:     face.Height,
+		Confidence: face.Confidence,
+	})
+}
+
+// handleGetUnassignedFaces lists the faces that belong to no person.
+func (s *Server) handleGetUnassignedFaces(c *gin.Context) {
+	if !s.requirePeopleCatalog(c) {
+		return
+	}
+
+	params := helpers.ParsePagination(c, helpers.ModeFlexible)
+	page, err := s.peopleCatalog.ListUnassigned(params.Page, params.PageSize)
+	if err != nil {
+		s.respondError(c, http.StatusInternalServerError, i18n.MsgPeopleListFailed)
+		return
+	}
+
+	faces := make([]dto.UnassignedFaceDTO, 0, len(page.Faces))
+	for _, entry := range page.Faces {
+		faces = append(faces, dto.UnassignedFaceDTO{
+			ID:         entry.Face.ID,
+			PersonID:   entry.Face.PersonID,
+			Path:       entry.Path,
+			FileName:   entry.FileName,
+			X:          entry.Face.X,
+			Y:          entry.Face.Y,
+			Width:      entry.Face.Width,
+			Height:     entry.Face.Height,
+			Confidence: entry.Face.Confidence,
+		})
+	}
+
+	c.JSON(http.StatusOK, dto.UnassignedFacesResponse{
+		Faces:       faces,
+		TotalFaces:  page.TotalFaces,
+		CurrentPage: page.CurrentPage,
+		PageSize:    page.PageSize,
+		TotalPages:  page.TotalPages,
+		HasNextPage: page.HasNextPage,
+	})
+}
+
+// personDTO renders one person with its photo count and cover thumbnail.
+func (s *Server) personDTO(person *domain.Person) dto.PersonDTO {
+	photoCount, err := s.faceRepo.CountImageFilesByPersonID(person.ID)
+	if err != nil {
+		photoCount = 0
+	}
+	return dto.PersonDTO{
+		ID:             person.ID,
+		Name:           person.Name,
+		PhotoCount:     int(photoCount),
+		CoverThumbnail: s.coverThumbnail(person.CoverFaceID),
+	}
+}
+
+// parseUintParam reads a numeric path parameter or answers 400.
+func parseUintParam(c *gin.Context, name string) (uint, bool) {
+	value, err := strconv.ParseUint(c.Param(name), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, i18n.CreateValidationError(i18n.MsgPeopleInvalidInput))
+		return 0, false
+	}
+	return uint(value), true
+}
+
+// requirePeopleCatalog guards the catalog handlers when the service is absent
+// (a partially wired server), answering 503 instead of panicking.
+func (s *Server) requirePeopleCatalog(c *gin.Context) bool {
+	if s.peopleCatalog != nil {
+		return true
+	}
+	s.respondError(c, http.StatusServiceUnavailable, i18n.MsgPeopleOperationFailed)
+	return false
+}
+
+// respondCatalogError maps a catalog error to the documented status code.
+func (s *Server) respondCatalogError(c *gin.Context, err error) {
+	switch {
+	case errors.Is(err, people.ErrPersonNotFound):
+		s.respondError(c, http.StatusNotFound, i18n.MsgPeoplePersonNotFound)
+	case errors.Is(err, people.ErrFaceNotFound):
+		s.respondError(c, http.StatusNotFound, i18n.MsgPeopleFaceNotFound)
+	case errors.Is(err, people.ErrInvalidInput):
+		c.JSON(http.StatusBadRequest, i18n.CreateValidationError(i18n.MsgPeopleInvalidInput))
+	default:
+		s.respondError(c, http.StatusInternalServerError, i18n.MsgPeopleOperationFailed)
+	}
 }
 
 // personName resolves a person's display name once per request: a group photo

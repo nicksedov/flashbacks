@@ -24,9 +24,19 @@ const endpoints = vi.hoisted(() => ({
   fetchPeople: vi.fn(),
   fetchPersonPhotos: vi.fn(),
   fetchThumbnail: vi.fn(),
+  renamePerson: vi.fn(),
+  mergePeople: vi.fn(),
+  createPerson: vi.fn(),
+  disbandPerson: vi.fn(),
+  assignFaceToPerson: vi.fn(),
+  fetchUnassignedFaces: vi.fn(),
 }))
 
 vi.mock("@/api/endpoints", () => endpoints)
+
+const toast = vi.hoisted(() => ({ showToastError: vi.fn(), showToastSuccess: vi.fn() }))
+
+vi.mock("@/lib/toast-utils", () => toast)
 
 vi.mock("@/i18n", async () => {
   const en = await import("@/i18n/translations.en")
@@ -46,6 +56,13 @@ vi.mock("@/i18n", async () => {
 beforeEach(() => {
   languageState.language = "en"
   endpoints.fetchPeople.mockReset()
+  endpoints.renamePerson.mockReset()
+  endpoints.mergePeople.mockReset()
+  endpoints.createPerson.mockReset()
+  endpoints.disbandPerson.mockReset()
+  endpoints.assignFaceToPerson.mockReset()
+  endpoints.fetchUnassignedFaces.mockReset()
+  toast.showToastError.mockReset()
   endpoints.fetchPersonPhotos.mockReset()
   endpoints.fetchPersonPhotos.mockResolvedValue({
     images: [],
@@ -173,5 +190,209 @@ describe("PeopleTab", () => {
 
     await waitFor(() => expect(screen.getByText("Люди")).toBeTruthy())
     expect(screen.getByText("Людей пока нет")).toBeTruthy()
+  })
+
+  it("filters people by name case-insensitively and reports no matches", async () => {
+    endpoints.fetchPeople.mockResolvedValue({
+      people: [
+        { id: 1, name: "Anna", photoCount: 2, coverThumbnail: "" },
+        { id: 2, name: "Василиса", photoCount: 4, coverThumbnail: "" },
+      ],
+    })
+
+    const { container } = render(<PeopleTab />)
+    await waitFor(() => expect(container.querySelectorAll('[data-slot="person-tile"]')).toHaveLength(2))
+
+    fireEvent.change(container.querySelector('[data-slot="people-search"]') as HTMLElement, {
+      target: { value: "ВАС" },
+    })
+    await waitFor(() => expect(container.querySelectorAll('[data-slot="person-tile"]')).toHaveLength(1))
+    expect(screen.getByText("Василиса")).toBeTruthy()
+
+    fireEvent.change(container.querySelector('[data-slot="people-search"]') as HTMLElement, {
+      target: { value: "zzz" },
+    })
+    await waitFor(() => expect(container.querySelector('[data-slot="people-no-matches"]')).toBeTruthy())
+    expect(screen.getByText("No people match “zzz”")).toBeTruthy()
+  })
+
+  it("enables merge only for two selected people and merges them into one tile", async () => {
+    endpoints.fetchPeople.mockResolvedValue({
+      people: [
+        { id: 1, name: "Anna", photoCount: 1, coverThumbnail: "" },
+        { id: 2, name: "Bob", photoCount: 1, coverThumbnail: "" },
+      ],
+    })
+    endpoints.fetchPersonPhotos.mockResolvedValue({
+      images: [{ id: 1, path: "/gallery/shared.jpg", fileName: "shared.jpg" }],
+      totalImages: 1,
+      currentPage: 1,
+      pageSize: 200,
+      totalPages: 1,
+      hasNextPage: false,
+    })
+    endpoints.mergePeople.mockResolvedValue({
+      id: 1,
+      name: "Василиса",
+      photoCount: 1,
+      coverThumbnail: "",
+    })
+
+    const { container } = render(<PeopleTab />)
+    await waitFor(() => expect(container.querySelectorAll('[data-slot="person-tile"]')).toHaveLength(2))
+
+    const mergeButton = container.querySelector('[data-slot="people-merge"]') as HTMLButtonElement
+    expect(mergeButton.disabled).toBe(true)
+
+    fireEvent.click(container.querySelectorAll('[data-slot="person-select"]')[0])
+    expect(mergeButton.disabled).toBe(true)
+
+    fireEvent.click(container.querySelectorAll('[data-slot="person-select"]')[1])
+    expect(mergeButton.disabled).toBe(false)
+
+    fireEvent.click(mergeButton)
+    await waitFor(() => expect(screen.getByRole("dialog")).toBeTruthy())
+    // Both people share one photo, so the preview must count it once.
+    await waitFor(() => expect(screen.getByText("Result: Anna, 1 photos")).toBeTruthy())
+
+    fireEvent.change(screen.getByLabelText("Name (optional)"), {
+      target: { value: "Василиса" },
+    })
+    fireEvent.click(screen.getByText("Merge", { selector: '[data-slot="merge-confirm"]' }))
+
+    await waitFor(() =>
+      expect(endpoints.mergePeople).toHaveBeenCalledWith({
+        targetPersonId: 1,
+        sourcePersonIds: [2],
+        name: "Василиса",
+      }),
+    )
+    await waitFor(() => expect(container.querySelectorAll('[data-slot="person-tile"]')).toHaveLength(1))
+    expect(screen.getByText("Василиса")).toBeTruthy()
+  })
+
+  it("renames a tile in place", async () => {
+    endpoints.fetchPeople.mockResolvedValue({
+      people: [{ id: 1, name: "Anna", photoCount: 1, coverThumbnail: "" }],
+    })
+    endpoints.renamePerson.mockResolvedValue({
+      id: 1,
+      name: "Василиса",
+      photoCount: 1,
+      coverThumbnail: "",
+    })
+
+    const { container } = render(<PeopleTab />)
+    await waitFor(() => expect(container.querySelector('[data-slot="person-tile"]')).toBeTruthy())
+
+    fireEvent.click(container.querySelector('[data-slot="person-rename"]') as HTMLElement)
+    await waitFor(() => expect(screen.getByRole("dialog")).toBeTruthy())
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Василиса" } })
+    fireEvent.click(screen.getByText("Save", { selector: '[data-slot="rename-save"]' }))
+
+    await waitFor(() => expect(screen.getByText("Василиса")).toBeTruthy())
+    expect(endpoints.renamePerson).toHaveBeenCalledWith(1, "Василиса")
+  })
+
+  it("sends no rename request when the dialog is cancelled", async () => {
+    endpoints.fetchPeople.mockResolvedValue({
+      people: [{ id: 1, name: "Anna", photoCount: 1, coverThumbnail: "" }],
+    })
+
+    const { container } = render(<PeopleTab />)
+    await waitFor(() => expect(container.querySelector('[data-slot="person-tile"]')).toBeTruthy())
+
+    fireEvent.click(container.querySelector('[data-slot="person-rename"]') as HTMLElement)
+    await waitFor(() => expect(screen.getByRole("dialog")).toBeTruthy())
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Василиса" } })
+    fireEvent.click(screen.getByText("Cancel", { selector: '[data-slot="rename-cancel"]' }))
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull())
+    expect(endpoints.renamePerson).not.toHaveBeenCalled()
+    expect(screen.getByText("Anna")).toBeTruthy()
+  })
+
+  it("removes a disbanded tile only after confirmation", async () => {
+    endpoints.fetchPeople.mockResolvedValue({
+      people: [
+        { id: 1, name: "Anna", photoCount: 1, coverThumbnail: "" },
+        { id: 2, name: "Bob", photoCount: 1, coverThumbnail: "" },
+      ],
+    })
+    endpoints.disbandPerson.mockResolvedValue({ message: "Person disbanded; photos kept" })
+
+    const { container } = render(<PeopleTab />)
+    await waitFor(() => expect(container.querySelectorAll('[data-slot="person-tile"]')).toHaveLength(2))
+
+    fireEvent.click(container.querySelector('[data-slot="person-disband"]') as HTMLElement)
+    await waitFor(() => expect(screen.getByRole("dialog")).toBeTruthy())
+    expect(
+      screen.getByText(
+        "The photos stay. The faces return to unassigned and the person is removed.",
+      ),
+    ).toBeTruthy()
+
+    const dialog = screen.getByRole("dialog")
+    fireEvent.click(within(dialog).getByText("Disband"))
+
+    await waitFor(() => expect(endpoints.disbandPerson).toHaveBeenCalledWith(1))
+    await waitFor(() => expect(container.querySelectorAll('[data-slot="person-tile"]')).toHaveLength(1))
+    expect(screen.queryByText("Anna")).toBeNull()
+  })
+
+  it("keeps the person when disbanding is cancelled", async () => {
+    endpoints.fetchPeople.mockResolvedValue({
+      people: [{ id: 1, name: "Anna", photoCount: 1, coverThumbnail: "" }],
+    })
+
+    const { container } = render(<PeopleTab />)
+    await waitFor(() => expect(container.querySelector('[data-slot="person-tile"]')).toBeTruthy())
+
+    fireEvent.click(container.querySelector('[data-slot="person-disband"]') as HTMLElement)
+    await waitFor(() => expect(screen.getByRole("dialog")).toBeTruthy())
+    const dialog = screen.getByRole("dialog")
+    fireEvent.click(within(dialog).getByText("Cancel"))
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull())
+    expect(endpoints.disbandPerson).not.toHaveBeenCalled()
+    expect(container.querySelectorAll('[data-slot="person-tile"]')).toHaveLength(1)
+  })
+
+  it("matches unnamed people by their localized placeholder", async () => {
+    endpoints.fetchPeople.mockResolvedValue({
+      people: [
+        { id: 42, name: "", photoCount: 1, coverThumbnail: "" },
+        { id: 1, name: "Anna", photoCount: 1, coverThumbnail: "" },
+      ],
+    })
+
+    const { container } = render(<PeopleTab />)
+    await waitFor(() => expect(container.querySelectorAll('[data-slot="person-tile"]')).toHaveLength(2))
+    expect(screen.getByText("Person 42")).toBeTruthy()
+
+    fireEvent.change(container.querySelector('[data-slot="people-search"]') as HTMLElement, {
+      target: { value: "person 42" },
+    })
+    await waitFor(() => expect(container.querySelectorAll('[data-slot="person-tile"]')).toHaveLength(1))
+    expect(screen.getByText("Person 42")).toBeTruthy()
+    expect(screen.queryByText("Anna")).toBeNull()
+  })
+
+  it("reports a failed rename and keeps the previous grid state", async () => {
+    endpoints.fetchPeople.mockResolvedValue({
+      people: [{ id: 1, name: "Anna", photoCount: 1, coverThumbnail: "" }],
+    })
+    endpoints.renamePerson.mockRejectedValue(new Error("boom"))
+
+    const { container } = render(<PeopleTab />)
+    await waitFor(() => expect(container.querySelector('[data-slot="person-tile"]')).toBeTruthy())
+
+    fireEvent.click(container.querySelector('[data-slot="person-rename"]') as HTMLElement)
+    await waitFor(() => expect(screen.getByRole("dialog")).toBeTruthy())
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Василиса" } })
+    fireEvent.click(screen.getByText("Save", { selector: '[data-slot="rename-save"]' }))
+
+    await waitFor(() => expect(toast.showToastError).toHaveBeenCalledWith("Could not update the catalog"))
+    expect(screen.getByText("Anna")).toBeTruthy()
   })
 })

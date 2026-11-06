@@ -930,3 +930,55 @@ type ImageFaceDTO struct {
 type ImageFacesResponse struct {
 	Faces []ImageFaceDTO `json:"faces"`
 }
+
+// RenamePersonRequest is the body of PATCH /api/people/:id. An empty or
+// whitespace-only name clears the person's name.
+type RenamePersonRequest struct {
+	Name string `json:"name"`
+}
+
+// CreatePersonRequest is the body of POST /api/people. Name is optional; an
+// empty name creates an unnamed person from the given unassigned faces.
+type CreatePersonRequest struct {
+	Name    string `json:"name"`
+	FaceIDs []uint `json:"faceIds"`
+}
+
+// MergePeopleRequest is the body of POST /api/people/merge. A nil Name keeps
+// the target's current name.
+type MergePeopleRequest struct {
+	TargetPersonID  uint    `json:"targetPersonId"`
+	SourcePersonIDs []uint  `json:"sourcePersonIds"`
+	Name            *string `json:"name"`
+}
+
+// AssignFaceRequest is the body of PATCH /api/faces/:id. PersonID 0 detaches
+// the face from its person.
+type AssignFaceRequest struct {
+	PersonID uint `json:"personId"`
+}
+
+// UnassignedFaceDTO is one face that belongs to no person, together with the
+// photo it was detected on. Path is the gallery path the thumbnail endpoint
+// serves; the box values are pixels in the analysed image's own frame.
+type UnassignedFaceDTO struct {
+	ID         uint    `json:"id"`
+	PersonID   uint    `json:"personId"`
+	Path       string  `json:"path"`
+	FileName   string  `json:"fileName"`
+	X          float32 `json:"x"`
+	Y          float32 `json:"y"`
+	Width      float32 `json:"width"`
+	Height     float32 `json:"height"`
+	Confidence float32 `json:"confidence"`
+}
+
+// UnassignedFacesResponse is the JSON response for GET /api/faces/unassigned.
+type UnassignedFacesResponse struct {
+	Faces       []UnassignedFaceDTO `json:"faces"`
+	TotalFaces  int                 `json:"totalFaces"`
+	CurrentPage int                 `json:"currentPage"`
+	PageSize    int                 `json:"pageSize"`
+	TotalPages  int                 `json:"totalPages"`
+	HasNextPage bool                `json:"hasNextPage"`
+}

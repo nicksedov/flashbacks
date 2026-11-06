@@ -1,6 +1,6 @@
 import { createRef } from "react"
 import { describe, it, expect, vi } from "vitest"
-import { render, screen } from "@testing-library/react"
+import { fireEvent, render, screen } from "@testing-library/react"
 import { I18nProvider } from "@/i18n/I18nProvider"
 import { PeopleImagePanel } from "./PeopleImagePanel"
 import type { ImageFaceDTO } from "@/types"
@@ -30,6 +30,8 @@ interface RenderOptions {
   sourceDimensions?: { width: number; height: number } | null
   imageLoaded?: boolean
   loading?: boolean
+  selectedFaceId?: number | null
+  onSelectFace?: (face: ImageFaceDTO) => void
 }
 
 function renderPanel({
@@ -39,6 +41,8 @@ function renderPanel({
   sourceDimensions = { width: 200, height: 100 },
   imageLoaded = true,
   loading = false,
+  selectedFaceId = null,
+  onSelectFace,
 }: RenderOptions = {}) {
   return render(
     <I18nProvider language="en">
@@ -52,6 +56,8 @@ function renderPanel({
         sourceDimensions={sourceDimensions}
         imageLoaded={imageLoaded}
         handleImageLoad={vi.fn()}
+        selectedFaceId={selectedFaceId}
+        onSelectFace={onSelectFace}
       />
     </I18nProvider>
   )
@@ -86,6 +92,23 @@ describe("PeopleImagePanel", () => {
     const box = screen.getByTestId("people-face-box")
     expect(box.getAttribute("data-numbered")).toBe("false")
     expect(screen.queryByTestId("people-face-number")).toBeNull()
+  })
+
+  it("turns every box into a button that reports the click and its selected state", () => {
+    const onSelectFace = vi.fn()
+    renderPanel({
+      faces: [face({ id: 1 }), face({ id: 2 })],
+      people: [anna],
+      selectedFaceId: 2,
+      onSelectFace,
+    })
+
+    const boxes = screen.getAllByRole("button")
+    expect(boxes).toHaveLength(2)
+    expect(screen.getAllByTestId("people-face-box")[1].getAttribute("aria-pressed")).toBe("true")
+
+    fireEvent.click(boxes[0])
+    expect(onSelectFace).toHaveBeenCalledWith(expect.objectContaining({ id: 1 }))
   })
 
   it("scales every box with the rendered image", () => {

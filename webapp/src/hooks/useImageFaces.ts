@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { fetchImageFaces } from "@/api/endpoints"
 import type { ImageFaceDTO } from "@/types"
 
@@ -18,6 +18,8 @@ export interface UseImageFacesResult {
   people: ImagePerson[]
   loading: boolean
   error: boolean
+  /** Re-read the photo's faces, e.g. after the user corrects an assignment. */
+  refresh: () => void
 }
 
 /** The settled answer for one image path. */
@@ -71,6 +73,9 @@ export function numberPeople(faces: ImageFaceDTO[]): ImagePerson[] {
  */
 export function useImageFaces(imagePath: string | null, enabled: boolean): UseImageFacesResult {
   const [loaded, setLoaded] = useState<LoadedFaces | null>(null)
+  // refreshNonce re-issues the request for the same path after a correction,
+  // without closing and reopening the lightbox.
+  const [refreshNonce, setRefreshNonce] = useState(0)
   const activePath = enabled && imagePath ? imagePath : null
 
   useEffect(() => {
@@ -90,7 +95,11 @@ export function useImageFaces(imagePath: string | null, enabled: boolean): UseIm
     return () => {
       cancelled = true
     }
-  }, [activePath])
+  }, [activePath, refreshNonce])
+
+  const refresh = useCallback(() => {
+    setRefreshNonce((nonce) => nonce + 1)
+  }, [])
 
   const current = activePath && loaded?.path === activePath ? loaded : null
 
@@ -99,5 +108,6 @@ export function useImageFaces(imagePath: string | null, enabled: boolean): UseIm
     people: numberPeople(current?.faces ?? []),
     loading: activePath !== null && current === null,
     error: current?.error ?? false,
+    refresh,
   }
 }

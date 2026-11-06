@@ -723,7 +723,10 @@ func (m *Manager) clusterAssign(stopCh <-chan struct{}, facesPerImage map[uint]i
 	}
 
 	var unassigned []domain.Face
-	if err := m.db.Where("person_id = ?", 0).Order("id").Find(&unassigned).Error; err != nil {
+	// Faces the user assigned or detached are locked: clustering must neither
+	// re-assign them nor treat a detached face as fresh material.
+	if err := m.db.Where("person_id = ? AND manual_assignment = ?", 0, false).
+		Order("id").Find(&unassigned).Error; err != nil {
 		m.setError(fmt.Sprintf("load unassigned faces: %v", err))
 		return
 	}
@@ -912,10 +915,11 @@ func (m *Manager) loadEmbeddings(faceIDs []uint) map[uint][]float32 {
 }
 
 // resetGeneratedPeople discards the people a previous clustering produced so a
-// finished gallery can be clustered again with the current algorithm. People a
-// user named are kept, together with their faces.
+// finished gallery can be clustered again with the current algorithm. People the
+// user curated — named, merged or created from faces — are manual and kept,
+// together with their faces.
 func (m *Manager) resetGeneratedPeople() {
-	generated := m.db.Model(&domain.Person{}).Select("id").Where("name = ?", "")
+	generated := m.db.Model(&domain.Person{}).Select("id").Where("manual = ?", false)
 	if err := m.db.Model(&domain.Face{}).
 		Where("person_id IN (?)", generated).
 		Update("person_id", 0).Error; err != nil {
@@ -927,7 +931,7 @@ func (m *Manager) resetGeneratedPeople() {
 	// assignment step hand faces to ids that no longer exist.
 	if m.personRefs != nil {
 		var generatedIDs []uint
-		if err := m.db.Model(&domain.Person{}).Where("name = ?", "").
+		if err := m.db.Model(&domain.Person{}).Where("manual = ?", false).
 			Pluck("id", &generatedIDs).Error; err != nil {
 			m.setError(fmt.Sprintf("load generated people: %v", err))
 		} else if err := m.personRefs.DeleteByPersonIDs(generatedIDs); err != nil {
@@ -942,7 +946,7 @@ func (m *Manager) resetGeneratedPeople() {
 		}
 	}
 
-	if err := m.db.Where("name = ?", "").Delete(&domain.Person{}).Error; err != nil {
+	if err := m.db.Where("manual = ?", false).Delete(&domain.Person{}).Error; err != nil {
 		m.setError(fmt.Sprintf("reset people: %v", err))
 		return
 	}

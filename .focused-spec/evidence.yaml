@@ -1021,3 +1021,173 @@ scopes:
         - go::./internal/application/faces::TestThresholdsRequireTheServicesValues
         - go::./internal/application/faces::TestClusterAssignDegradesWithoutThresholds
         - go::./internal/application/faces::TestReconcileSkipsWithoutThresholds
+    face-recognition.person-renamed:
+      evidence:
+        - go::./internal/application/people::TestCatalogRename
+        - go::./internal/interfaces/handler::TestHandleRenamePerson_RenamesAndValidates
+    face-recognition.person-name-trimmed:
+      evidence:
+        - go::./internal/application/people::TestCatalogRename
+    face-recognition.person-name-cleared:
+      evidence:
+        - go::./internal/application/people::TestCatalogRename
+    face-recognition.person-rename-unknown:
+      evidence:
+        - go::./internal/application/people::TestCatalogRename
+    face-recognition.person-name-too-long-rejected:
+      evidence:
+        - go::./internal/application/people::TestCatalogRename
+    face-recognition.person-name-duplicate-allowed:
+      evidence:
+        - go::./internal/application/people::TestCatalogRename
+    face-recognition.people-merged:
+      evidence:
+        - go::./internal/application/people::TestCatalogMerge
+        - go::./internal/interfaces/handler::TestHandleMergePeople_StatusCodes
+    face-recognition.merge-applies-name:
+      evidence:
+        - go::./internal/application/people::TestCatalogMerge
+    face-recognition.merge-keeps-target-name:
+      evidence:
+        - go::./internal/application/people::TestCatalogMerge
+    face-recognition.merge-counts-photo-once:
+      evidence:
+        - go::./internal/application/people::TestCatalogMerge
+    face-recognition.merge-unknown-rejected:
+      evidence:
+        - go::./internal/application/people::TestCatalogMerge
+    face-recognition.merge-rejects-empty-sources:
+      evidence:
+        - go::./internal/application/people::TestCatalogMerge
+    face-recognition.merge-rejects-target-in-sources:
+      evidence:
+        - go::./internal/application/people::TestCatalogMerge
+    face-recognition.person-created-from-faces:
+      evidence:
+        - go::./internal/application/people::TestCatalogCreateFromFaces
+        - go::./internal/interfaces/handler::TestHandleCreatePerson_StatusCodes
+    face-recognition.person-created-without-name:
+      evidence:
+        - go::./internal/application/people::TestCatalogCreateFromFaces
+    face-recognition.person-create-rejects-empty-faces:
+      evidence:
+        - go::./internal/application/people::TestCatalogCreateFromFaces
+    face-recognition.person-create-unknown-face-rejected:
+      evidence:
+        - go::./internal/application/people::TestCatalogCreateFromFaces
+    face-recognition.person-disbanded:
+      evidence:
+        - go::./internal/application/people::TestCatalogDisband
+        - go::./internal/interfaces/handler::TestHandleDisbandPerson_StatusCodes
+    face-recognition.disband-unknown-rejected:
+      evidence:
+        - go::./internal/application/people::TestCatalogDisband
+    face-recognition.unassigned-faces-listed:
+      evidence:
+        - go::./internal/application/people::TestCatalogListUnassigned
+    face-recognition.unassigned-faces-paginated:
+      evidence:
+        - go::./internal/application/people::TestCatalogListUnassigned
+    face-recognition.unassigned-faces-empty:
+      evidence:
+        - go::./internal/application/people::TestCatalogListUnassignedEmpty
+    face-recognition.face-joins-person:
+      evidence:
+        - go::./internal/application/people::TestCatalogAssignFace
+        - go::./internal/interfaces/handler::TestHandleAssignFace_StatusCodes
+    face-recognition.face-leaves-person:
+      evidence:
+        - go::./internal/application/people::TestCatalogAssignFace
+    face-recognition.face-assign-unknown-rejected:
+      evidence:
+        - go::./internal/application/people::TestCatalogAssignFace
+    face-recognition.catalog-failure-leaves-view-unchanged:
+      evidence:
+        - vitest::webapp/src/components/tabs/PeopleTab.test.tsx::PeopleTab > reports a failed rename and keeps the previous grid state
+        - vitest::webapp/src/components/people/UnassignedFacesView.test.tsx::UnassignedFacesView > reports a failed attach and keeps the face in the view
+    face-recognition.people-tab-renames-person:
+      evidence:
+        - vitest::webapp/src/components/tabs/PeopleTab.test.tsx::PeopleTab > renames a tile in place
+    face-recognition.people-tab-rename-cancel:
+      evidence:
+        - vitest::webapp/src/components/tabs/PeopleTab.test.tsx::PeopleTab > sends no rename request when the dialog is cancelled
+    face-recognition.people-tab-merges-selected:
+      evidence:
+        - vitest::webapp/src/components/tabs/PeopleTab.test.tsx::PeopleTab > enables merge only for two selected people and merges them into one tile
+    face-recognition.people-tab-merge-needs-two:
+      evidence:
+        - vitest::webapp/src/components/tabs/PeopleTab.test.tsx::PeopleTab > enables merge only for two selected people and merges them into one tile
+    face-recognition.people-tab-confirms-disband:
+      evidence:
+        - vitest::webapp/src/components/tabs/PeopleTab.test.tsx::PeopleTab > removes a disbanded tile only after confirmation
+    face-recognition.people-tab-disband-cancel:
+      evidence:
+        - vitest::webapp/src/components/tabs/PeopleTab.test.tsx::PeopleTab > keeps the person when disbanding is cancelled
+    face-recognition.people-tab-filters-by-name:
+      evidence:
+        - vitest::webapp/src/components/tabs/PeopleTab.test.tsx::PeopleTab > filters people by name case-insensitively and reports no matches
+    face-recognition.people-tab-filter-no-match:
+      evidence:
+        - vitest::webapp/src/components/tabs/PeopleTab.test.tsx::PeopleTab > filters people by name case-insensitively and reports no matches
+    face-recognition.people-tab-filter-matches-placeholder:
+      evidence:
+        - vitest::webapp/src/components/tabs/PeopleTab.test.tsx::PeopleTab > matches unnamed people by their localized placeholder
+    face-recognition.unassigned-view-lists-faces:
+      evidence:
+        - vitest::webapp/src/components/people/UnassignedFacesView.test.tsx::UnassignedFacesView > renders one entry per unassigned face
+    face-recognition.unassigned-face-attached:
+      evidence:
+        - vitest::webapp/src/components/people/UnassignedFacesView.test.tsx::UnassignedFacesView > attaches a selected face to an existing person
+    face-recognition.unassigned-faces-create-person:
+      evidence:
+        - vitest::webapp/src/components/people/UnassignedFacesView.test.tsx::UnassignedFacesView > creates a named person from the selected faces
+    face-recognition.unassigned-view-pages:
+      evidence:
+        - vitest::webapp/src/components/people/UnassignedFacesView.test.tsx::UnassignedFacesView > pages forward to the next faces
+    face-recognition.lightbox-renames-person:
+      evidence:
+        - vitest::webapp/src/components/gallery/UnifiedLightbox.test.tsx::UnifiedLightbox > renames a person from the lightbox people list and refreshes the photo
+        - vitest::webapp/src/components/gallery/lightbox/PeoplePanel.test.tsx::PeoplePanel > offers a rename action per person and shows the updated name
+    face-recognition.lightbox-reassigns-face:
+      evidence:
+        - vitest::webapp/src/components/gallery/UnifiedLightbox.test.tsx::UnifiedLightbox > reassigns a face and refreshes the boxes and the people list
+    face-recognition.lightbox-detaches-face:
+      evidence:
+        - vitest::webapp/src/components/gallery/UnifiedLightbox.test.tsx::UnifiedLightbox > detaches a face, mutes its box and compacts the people list
+    face-recognition.lightbox-reassign-compacts-list:
+      evidence:
+        - vitest::webapp/src/components/gallery/UnifiedLightbox.test.tsx::UnifiedLightbox > detaches a face, mutes its box and compacts the people list
+    face-recognition.lightbox-reassign-picker-lists-whole-catalog:
+      evidence:
+        - vitest::webapp/src/components/gallery/UnifiedLightbox.test.tsx::UnifiedLightbox > reassigns a face and refreshes the boxes and the people list
+    face-recognition.lightbox-attaches-unassigned-face:
+      evidence:
+        - vitest::webapp/src/components/gallery/UnifiedLightbox.test.tsx::UnifiedLightbox > attaches an unassigned face to an existing person
+    face-recognition.lightbox-attaches-to-new-person:
+      evidence:
+        - vitest::webapp/src/components/gallery/UnifiedLightbox.test.tsx::UnifiedLightbox > creates a new person from an unassigned face in the lightbox
+    face-recognition.catalog-strings-localized:
+      evidence:
+        - vitest::webapp/src/components/tabs/PeopleTab.test.tsx::PeopleTab > renders People labels in the selected language without falling back to a raw key
+        - vitest::webapp/src/i18n/translations.test.ts::i18n translation parity > EN and RU should have identical key sets
+    face-clustering.manual-person-survives:
+      evidence:
+        - go::./internal/application/faces::TestFaceRecognitionManager_ManualPersonSurvivesReconcile
+    face-clustering.manual-face-survives:
+      evidence:
+        - go::./internal/application/faces::TestFaceRecognitionManager_ManualFaceKeepsPerson
+    face-clustering.detached-face-stays-unassigned:
+      evidence:
+        - go::./internal/application/faces::TestFaceRecognitionManager_DetachedFaceStaysUnassigned
+    face-clustering.disbanded-faces-stay-unassigned:
+      evidence:
+        - go::./internal/application/faces::TestFaceRecognitionManager_DisbandedFacesStayUnassigned
+    face-clustering.renamed-person-keeps-name:
+      evidence:
+        - go::./internal/application/faces::TestFaceRecognitionManager_ManualPersonSurvivesReconcile
+    face-clustering.merged-person-recognised-later:
+      evidence:
+        - go::./internal/application/faces::TestFaceRecognitionManager_MergedPersonRecognisedLater
+    face-clustering.created-person-recognised-later:
+      evidence:
+        - go::./internal/application/faces::TestFaceRecognitionManager_CreatedPersonRecognisedLater

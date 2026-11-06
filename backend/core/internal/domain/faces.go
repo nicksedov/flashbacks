@@ -27,6 +27,10 @@ type Person struct {
 	// Name is empty until the user renames the person; the UI falls back to a
 	// localized "Person N" label.
 	Name string `gorm:"default:''" json:"name"`
+	// Manual marks a person the user created, merged or renamed. The
+	// recognition job leaves manual people alone: it neither reconciles them
+	// into another person nor deletes them on a full re-cluster.
+	Manual bool `gorm:"not null;default:false" json:"manual"`
 	// CoverFaceID points at the face used as this person's cover thumbnail.
 	CoverFaceID *uint `json:"coverFaceId,omitempty"`
 	// ClusterVersion marks the clustering generation that produced this
@@ -43,17 +47,21 @@ func (Person) TableName() string { return "people" }
 // Face is a detected face on an image. A face references exactly one person
 // once the background job has clustered it (PersonID == 0 means unassigned).
 type Face struct {
-	ID          uint      `gorm:"primaryKey" json:"id"`
-	ImageFileID uint      `gorm:"not null;index" json:"imageFileId"`
-	PersonID    uint      `gorm:"not null;index;default:0" json:"personId"`
-	X           float32   `json:"x"`
-	Y           float32   `json:"y"`
-	Width       float32   `json:"width"`
-	Height      float32   `json:"height"`
-	Confidence  float32   `json:"confidence"`
-	EmbeddingID uint      `gorm:"default:0" json:"embeddingId"`
-	CreatedAt   time.Time `json:"createdAt"`
-	UpdatedAt   time.Time `json:"updatedAt"`
+	ID          uint `gorm:"primaryKey" json:"id"`
+	ImageFileID uint `gorm:"not null;index" json:"imageFileId"`
+	PersonID    uint `gorm:"not null;index;default:0" json:"personId"`
+	// ManualAssignment marks a face whose person the user chose: assigned to a
+	// person, detached, or carried through a merge/disband. The recognition job
+	// never reassigns such a face and never clusters it again.
+	ManualAssignment bool      `gorm:"not null;default:false;index" json:"manualAssignment"`
+	X                float32   `json:"x"`
+	Y                float32   `json:"y"`
+	Width            float32   `json:"width"`
+	Height           float32   `json:"height"`
+	Confidence       float32   `json:"confidence"`
+	EmbeddingID      uint      `gorm:"default:0" json:"embeddingId"`
+	CreatedAt        time.Time `json:"createdAt"`
+	UpdatedAt        time.Time `json:"updatedAt"`
 }
 
 // TableName overrides the default GORM table name.

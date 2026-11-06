@@ -207,6 +207,18 @@ const (
 	MsgFacesStarted             MessageKey = "faces.started"
 	MsgFacesStopped             MessageKey = "faces.stopped"
 
+	// People catalog messages
+	MsgPeoplePersonNotFound  MessageKey = "people.person_not_found"
+	MsgPeopleFaceNotFound    MessageKey = "people.face_not_found"
+	MsgPeopleInvalidInput    MessageKey = "people.invalid_input"
+	MsgPeopleRenamed         MessageKey = "people.renamed"
+	MsgPeopleMerged          MessageKey = "people.merged"
+	MsgPeopleCreated         MessageKey = "people.created"
+	MsgPeopleDisbanded       MessageKey = "people.disbanded"
+	MsgPeopleFaceAssigned    MessageKey = "people.face_assigned"
+	MsgPeopleListFailed      MessageKey = "people.list_failed"
+	MsgPeopleOperationFailed MessageKey = "people.operation_failed"
+
 	// Move files messages
 	MsgMoveFilesTargetDirRequired MessageKey = "move_files.target_dir_required"
 	MsgMoveFilesNoFilesSelected   MessageKey = "move_files.no_files_selected"

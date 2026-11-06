@@ -18,6 +18,10 @@ interface PeopleImagePanelProps {
   sourceDimensions: { width: number; height: number } | null
   imageLoaded: boolean
   handleImageLoad: () => void
+  /** The face whose actions are open, drawn with a selected outline. */
+  selectedFaceId?: number | null
+  /** Turns each box into a button that opens the face actions. */
+  onSelectFace?: (face: ImageFaceDTO) => void
   className?: string
 }
 
@@ -36,6 +40,8 @@ export function PeopleImagePanel({
   sourceDimensions,
   imageLoaded,
   handleImageLoad,
+  selectedFaceId = null,
+  onSelectFace,
   className,
 }: PeopleImagePanelProps) {
   const { t } = useTranslation()
@@ -79,17 +85,26 @@ export function PeopleImagePanel({
           {faces.map((face) => {
             const number = numbers.get(face.personId)
             const numbered = number !== undefined
+            const selected = selectedFaceId === face.id
             return (
-              <div
+              <button
                 key={face.id}
+                type="button"
                 data-testid="people-face-box"
                 data-face-id={face.id}
                 data-numbered={numbered ? "true" : "false"}
+                aria-pressed={selected}
+                aria-label={
+                  numbered
+                    ? t("lightbox.people.faceBox", { number })
+                    : t("lightbox.people.unassignedFace")
+                }
                 className={cn(
-                  "absolute border-2",
+                  "absolute border-2 text-left pointer-events-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                   numbered
                     ? "border-primary bg-primary/10"
-                    : "border-muted-foreground/60 bg-muted-foreground/10"
+                    : "border-muted-foreground/60 bg-muted-foreground/10",
+                  selected && "ring-2 ring-ring",
                 )}
                 style={{
                   left: face.x * scaleX,
@@ -97,6 +112,7 @@ export function PeopleImagePanel({
                   width: face.width * scaleX,
                   height: face.height * scaleY,
                 }}
+                onClick={() => onSelectFace?.(face)}
               >
                 {numbered && (
                   <span
@@ -106,7 +122,7 @@ export function PeopleImagePanel({
                     {number}
                   </span>
                 )}
-              </div>
+              </button>
             )
           })}
         </div>

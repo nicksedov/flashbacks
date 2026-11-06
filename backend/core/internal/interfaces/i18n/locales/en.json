@@ -253,6 +253,20 @@
     "stopped": "Face recognition stopped"
   },
 
+  "description_people": "People catalog messages",
+  "people": {
+    "person_not_found": "Person not found",
+    "face_not_found": "Face not found",
+    "invalid_input": "Invalid request",
+    "renamed": "Person renamed",
+    "merged": "People merged",
+    "created": "Person created",
+    "disbanded": "Person disbanded; photos kept",
+    "face_assigned": "Face updated",
+    "list_failed": "Failed to load unassigned faces",
+    "operation_failed": "Catalog update failed"
+  },
+
   "description_move_files": "Move files messages",
   "move_files": {
     "target_dir_required": "Target directory is required",

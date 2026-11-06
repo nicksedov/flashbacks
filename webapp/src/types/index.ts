@@ -717,6 +717,54 @@ export interface ImageFacesResponse {
   faces: ImageFaceDTO[]
 }
 
+// UnassignedFaceDTO is one face that belongs to no person, together with the
+// photo it was detected on. The box values are in the analysed image's frame.
+export interface UnassignedFaceDTO {
+  id: number
+  // personId is always 0 in the unassigned listing.
+  personId: number
+  path: string
+  fileName: string
+  x: number
+  y: number
+  width: number
+  height: number
+  confidence: number
+}
+
+export interface UnassignedFacesResponse {
+  faces: UnassignedFaceDTO[]
+  totalFaces: number
+  currentPage: number
+  pageSize: number
+  totalPages: number
+  hasNextPage: boolean
+}
+
+// RenamePersonRequest sets a person's name; an empty name clears it.
+export interface RenamePersonRequest {
+  name: string
+}
+
+// CreatePersonRequest builds a person from unassigned faces.
+export interface CreatePersonRequest {
+  name?: string
+  faceIds: number[]
+}
+
+// MergePeopleRequest folds source people into the target; an omitted name keeps
+// the target's name.
+export interface MergePeopleRequest {
+  targetPersonId: number
+  sourcePersonIds: number[]
+  name?: string
+}
+
+// AssignFaceRequest moves a face to a person; 0 detaches it.
+export interface AssignFaceRequest {
+  personId: number
+}
+
 export interface TagScanStatusResponse {
   running: boolean
   paused: boolean

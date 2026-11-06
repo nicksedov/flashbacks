@@ -59,7 +59,10 @@ func InitializeApp() (*App, error) {
 	conversationService := di.ProvideConversationService(db)
 	agentConfig := di.ProvideAgentConfig(appConfig)
 	agent := di.ProvideAgent(conversationService, flashbacksMCPServer, agentConfig)
+	personRepository := di.ProvidePersonRepo(db)
+	faceRepository := di.ProvideFaceRepo(db)
 	imageFileRepository := di.ProvideImageFileRepo(db)
+	catalog := di.ProvidePeopleCatalog(db, personRepository, faceRepository, personReferenceRepository, imageFileRepository)
 	galleryFolderRepository := di.ProvideGalleryFolderRepo(db)
 	llmRepository := di.ProvideLlmRepo(db)
 	metadataRepository := di.ProvideMetadataRepo(db)
@@ -68,8 +71,6 @@ func InitializeApp() (*App, error) {
 	appSettingsRepository := di.ProvideAppSettingsRepo(db)
 	userSettingsRepository := di.ProvideUserSettingsRepo(db)
 	syncHistoryRepository := di.ProvideSyncHistoryRepo(db)
-	personRepository := di.ProvidePersonRepo(db)
-	faceRepository := di.ProvideFaceRepo(db)
 	serverDeps := handler.ServerDeps{
 		DB:                  db,
 		Config:              appConfig,
@@ -97,6 +98,7 @@ func InitializeApp() (*App, error) {
 		AgentConfig:         agentConfig,
 		ConversationService: conversationService,
 		ExifClient:          exifClient,
+		PeopleCatalog:       catalog,
 		ImageFileRepo:       imageFileRepository,
 		GalleryFolderRepo:   galleryFolderRepository,
 		LlmRepo:             llmRepository,

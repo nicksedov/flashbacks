@@ -10,6 +10,7 @@ import (
 	"github.com/flashbacks/core/internal/application/geo"
 	"github.com/flashbacks/core/internal/application/imaging"
 	catalog "github.com/flashbacks/core/internal/application/llm"
+	"github.com/flashbacks/core/internal/application/people"
 	"github.com/flashbacks/core/internal/application/thumbnail"
 	"github.com/flashbacks/core/internal/domain/repository"
 	"github.com/flashbacks/core/internal/infrastructure/config"
@@ -55,6 +56,7 @@ type ServerDeps struct {
 	AgentConfig         agent.AgentConfig
 	ConversationService *agent.ConversationService
 	ExifClient          imaging.ExifClient
+	PeopleCatalog       *people.Catalog
 
 	// Repositories (data access layer — no direct DB access in handlers)
 	ImageFileRepo     repository.ImageFileRepository
@@ -99,6 +101,7 @@ type Server struct {
 	agentConfig         agent.AgentConfig
 	conversationService *agent.ConversationService
 	exifClient          imaging.ExifClient
+	peopleCatalog       *people.Catalog
 
 	// Repositories — handlers use these instead of s.db directly
 	imageFileRepo     repository.ImageFileRepository
@@ -145,6 +148,7 @@ func NewServer(deps ServerDeps) *Server {
 		agentConfig:         deps.AgentConfig,
 		conversationService: deps.ConversationService,
 		exifClient:          deps.ExifClient,
+		peopleCatalog:       deps.PeopleCatalog,
 		imageFileRepo:       deps.ImageFileRepo,
 		galleryFolderRepo:   deps.GalleryFolderRepo,
 		llmRepo:             deps.LlmRepo,

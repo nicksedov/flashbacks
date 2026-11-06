@@ -1,21 +1,25 @@
-# People catalog — browser walkthrough
+# Browser end-to-end suite
 
-Playwright suite that exercises the four People screens against a **live
-deployment**: the workspace grid (search, rename, merge, disband), the unassigned
-faces view (attach, create) and the lightbox People tab (rename, reassign,
-detach, attach). It replaces the manual checklist that used to close the
-`people-catalog-management` change.
+Playwright suite that exercises the running webapp in a real browser: the
+sign-in/sign-out flow, the People catalog screens, gallery browsing and the
+shared lightbox modes, every sidebar destination with its documented empty
+states, and — opt-in — the destructive maintenance flows.
 
 ```
 tests/e2e/
-├── fixtures.ts                 # auth + language fixture, optional tunnel browser
+├── fixtures.ts                 # signed-in and signed-out tests, error guard, temp gallery
 ├── browser-host.cjs            # run this on YOUR machine for tunnel mode
+├── auth.spec.ts                # login form, rejected password, sign-out
+├── gallery.spec.ts             # all-images grid, lightbox modes, calendar/folders
+├── navigation.spec.ts          # every sidebar destination + empty/degraded states
+├── maintenance.spec.ts         # destructive flows, gated by E2E_DESTRUCTIVE=1
 ├── people-grid.spec.ts         # search / rename / merge / disband
 ├── people-unassigned.spec.ts   # attach to a person, create from faces
 ├── people-lightbox.spec.ts     # rename / reassign / detach / attach
 └── support/
-    ├── api.ts                  # catalog API client used for seeding + assertions
-    ├── env.ts                  # E2E_* inputs and the skip reason
+    ├── api.ts                  # FlashbacksApi client used for seeding + assertions
+    ├── env.ts                  # E2E_* inputs, skip reasons, destructive guard
+    ├── gallery.ts              # temporary gallery folder helpers
     └── ui.ts                   # page helpers built on the UI's data-slot hooks
 ```
 
@@ -27,10 +31,9 @@ The runner config is [`playwright.config.ts`](../../playwright.config.ts:1).
   dependency).
 - A Chromium build for the runner: `npx playwright install chromium` (already
   done on the code-server host).
-- A Flashbacks account **with catalog permissions** and a gallery where face
-  recognition has left at least four unassigned faces. The specs read the
-  unassigned listing first and `SKIP` when the gallery cannot seed them; they
-  never modify existing people.
+- A Flashbacks account on the target deployment. Read-only specs `SKIP` with a
+  reason when their precondition is absent (no credentials, no photos, no
+  duplicate groups, no dangling trash).
 
 ## Configuration
 
@@ -39,9 +42,12 @@ The runner config is [`playwright.config.ts`](../../playwright.config.ts:1).
 | `E2E_BASE_URL` | `https://staging.flashbacks.life` | Target deployment |
 | `E2E_LOGIN` | — | Account login |
 | `E2E_PASSWORD` | — | Account password |
+| `E2E_DESTRUCTIVE` | unset | `1` enables the maintenance spec (mutates data) |
+| `E2E_ALLOW_REMOTE_DESTRUCTIVE` | unset | `1` allows destructive runs off localhost |
 | `PW_TUNNEL` | unset | `1` runs the browser on your machine (see below) |
 | `E2E_TUNNEL_PORT` | `56767` | Port the test runner exposes for the tunnel |
 | `E2E_TUNNEL_ENDPOINT` | `ws://localhost:56767` | Endpoint `browser-host.cjs` polls |
+| `E2E_DATASET_ROOT` | `tests/dataset` | Where the maintenance fixtures copy photos from |
 
 Without `E2E_LOGIN` / `E2E_PASSWORD` every spec reports **SKIP** with the reason
 from [`env.ts`](support/env.ts:1), so a plain checkout stays green.
@@ -50,15 +56,41 @@ from [`env.ts`](support/env.ts:1), so a plain checkout stays green.
 E2E_LOGIN=admin E2E_PASSWORD='…' npm run test:e2e
 ```
 
-## Headless on the server (default, CI)
+## Read-only run (default, CI)
 
 ```bash
 npm run test:e2e          # or: npx playwright test
 npm run test:e2e:list     # enumerate specs without credentials
+npx playwright test gallery navigation auth   # one area at a time
 ```
 
-Chromium runs headless in the code-server environment. Traces, screenshots and
-videos of failures are written under `test-results/`.
+`auth`, `gallery` and `navigation` never mutate the deployment: they assert what
+it already holds. `maintenance` reports SKIP unless `E2E_DESTRUCTIVE=1`.
+
+## Destructive run (local stack only)
+
+```bash
+E2E_DESTRUCTIVE=1 E2E_BASE_URL=http://localhost:5180 \
+  E2E_LOGIN=admin E2E_PASSWORD='…' npx playwright test maintenance
+```
+
+The maintenance spec owns everything it touches:
+
+1. the `gallery` fixture copies a `tests/dataset` photo into a fresh OS temp
+   directory, registers it with `POST /api/folders` and polls `/api/gallery`
+   until the photo is indexed;
+2. the spec points the stack's trash directory at a second temp directory
+   through the admin settings form (a trash path inside a registered folder is
+   rejected by the API) and restores the previous value in `finally`;
+3. every delete, restore, folder add/remove and batch dedup rule is applied
+   through the UI, with assertions polled through the API and the file system;
+4. teardown drops the folder registration, deletes both temp directories and
+   leaves no trash rows behind.
+
+A destructive run against anything that is not `localhost` / `127.0.0.1` is
+refused before a session is opened or a file is copied, unless
+`E2E_ALLOW_REMOTE_DESTRUCTIVE=1` is set as well. That guard lives in the
+`destructiveRun` fixture in [`fixtures.ts`](fixtures.ts:1) and runs first.
 
 ## Watching the run locally (optional tunnel)
 
@@ -90,18 +122,31 @@ The `browser` fixture in [`fixtures.ts`](fixtures.ts:1) uses
 `@rushstack/playwright-browser-tunnel` only when `PW_TUNNEL=1`; the headless path
 is unchanged.
 
+## Fixtures and guards
+
+- `test` ([`fixtures.ts`](fixtures.ts:1)) signs in through the login form — the
+  app shell only renders for a real session — and exposes `api`, a
+  `FlashbacksApi` bound to the browser's cookie jar.
+- `anonymous` is the same base test without the `api` fixture, for flows that
+  start signed out.
+- Every test fails on an uncaught browser error: the auto `pageErrors` fixture
+  collects `pageerror` events and fails the test with the message. Console noise
+  and failed requests are not asserted.
+- `destructive` adds the guard plus the temporary `gallery` folder described
+  above.
+
 ## How seeding works
 
-Each spec seeds through the catalog API with the same session the browser uses:
+Specs seed through the API with the same session the browser uses, then drive
+the UI and poll the API for the resulting state:
 
-1. `GET /api/faces/unassigned` supplies the faces.
-2. `POST /api/people` creates throwaway people named `E2E … <run suffix>`.
-3. The UI performs the walkthrough; assertions poll the API for the resulting
-   state (photo counts, face person ids, unassigned listing).
-4. `finally` disbands everything the spec created, which returns the faces to
-   unassigned. The suite leaves no long-lived catalog rows.
+1. `GET /api/faces/unassigned`, `GET /api/gallery`, `GET /api/duplicates`,
+   `GET /api/trash` supply the preconditions.
+2. `POST /api/people` creates throwaway people named `E2E … <run suffix>`; the
+   maintenance spec creates its photos in temp folders named after the run.
+3. The UI performs the walkthrough; assertions poll the API (photo counts, face
+   person ids, trash rows, gallery paths).
+4. `finally` / fixture teardown removes everything the spec created.
 
-The `api` fixture also signs in through the login form (the app shell renders
-only for a real session) before handing the test a `PeopleApi` bound to the
-browser's cookie jar. Assertions target the UI's `data-slot` / `data-testid`
-hooks, so they do not depend on the account's display language.
+Assertions target the UI's `data-slot` / `data-testid` hooks and, where copy is
+the only hook, an en/ru label pair, so the suite runs against either language.

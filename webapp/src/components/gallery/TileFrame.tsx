@@ -21,6 +21,8 @@ export function TileFrame({ fileName, children, onClick, selected, className }: 
       role="button"
       tabIndex={0}
       className="group flex flex-col cursor-pointer"
+      data-slot="gallery-tile"
+      data-file-name={fileName}
       onClick={onClick}
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } }}
     >

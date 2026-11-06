@@ -40,7 +40,7 @@ export function LightboxTabBar({
     <Tabs variant="underline" value={value} onValueChange={(v) => onValueChange(v as LightboxMode)}>
       <TabsList className="max-md:flex-wrap max-md:gap-y-1" data-testid="lightbox-tab-bar">
         {LIGHTBOX_TAB_CONFIG.map(({ id, labelKey, icon: Icon }) => (
-          <TabsTrigger key={id} value={id}>
+          <TabsTrigger key={id} value={id} data-slot="lightbox-mode" data-mode={id}>
             <Icon className="h-3.5 w-3.5" />
             {t(labelKey)}
           </TabsTrigger>

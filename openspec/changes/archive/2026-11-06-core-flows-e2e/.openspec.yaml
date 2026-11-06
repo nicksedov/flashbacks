@@ -1,0 +1,5 @@
+schema: spec-driven
+created: 2026-11-06
+# Testing-infrastructure change: it adds browser coverage for behavior that is
+# already specified, without changing any requirement or scenario.
+skip_specs: true

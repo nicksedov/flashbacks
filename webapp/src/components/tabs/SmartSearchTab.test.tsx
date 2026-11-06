@@ -158,4 +158,18 @@ describe("SmartSearchTab", () => {
     expect(screen.getByText("smartSearch.noEmbeddings")).toBeTruthy()
     expect(screen.getByText("smartSearch.configureHint")).toBeTruthy()
   })
+
+  it("shows the no-embeddings hint from the status read on mount", async () => {
+    // Polling only fills its data while a backfill runs, so the first visit has
+    // to keep the status it read once — otherwise the hint never renders.
+    endpoints.fetchEmbeddingStatus.mockResolvedValue({
+      running: false,
+      progress: { total: 0, processed: 0, remaining: 0, lastError: "" },
+    })
+
+    render(<SmartSearchTab />)
+
+    expect(await screen.findByText("smartSearch.noEmbeddings")).toBeTruthy()
+    expect(screen.getByText("smartSearch.configureHint")).toBeTruthy()
+  })
 })

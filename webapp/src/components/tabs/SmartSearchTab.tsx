@@ -43,7 +43,7 @@ export function SmartSearchTab() {
 
   // Embedding status polling
   const {
-    data: embeddingStatus,
+    data: polledEmbeddingStatus,
     start: startPollingEmbeddings,
     stop: stopPollingEmbeddings,
     setOnComplete,
@@ -53,6 +53,11 @@ export function SmartSearchTab() {
     onCompleteCheck: (s) => !s.running,
   })
 
+  // Status read once on mount. Polling only fills `data` while a backfill runs,
+  // so without this snapshot the index hint stays hidden until one is started.
+  const [initialEmbeddingStatus, setInitialEmbeddingStatus] = useState<EmbeddingBackfillStatus | null>(null)
+  const embeddingStatus = polledEmbeddingStatus ?? initialEmbeddingStatus
+
   // Register onComplete callback after stop is available
   useEffect(() => {
     setOnComplete(() => stopPollingEmbeddings())
@@ -61,6 +66,7 @@ export function SmartSearchTab() {
   // Load embedding status on mount
   useEffect(() => {
     fetchEmbeddingStatus().then((status) => {
+      setInitialEmbeddingStatus(status)
       if (status.running) {
         startPollingEmbeddings()
       }

@@ -1,6 +1,8 @@
-import { test as base, expect } from "@playwright/test"
-import { PeopleApi } from "./support/api"
-import { LOGIN, PASSWORD } from "./support/env"
+import { test as base, expect, type Page } from "@playwright/test"
+import { FlashbacksApi } from "./support/api"
+import { LOGIN, PASSWORD, assertDestructiveAllowed } from "./support/env"
+import { createTempGallery, destroyTempGallery, type TempGallery } from "./support/gallery"
+import { expectWorkspace, signIn } from "./support/ui"
 
 type BaseTest = typeof base
 
@@ -33,29 +35,92 @@ const withTunnel: BaseTest =
       }) as unknown as BaseTest)
     : base
 
+/** Messages of uncaught browser errors collected during a test. */
+type ErrorGuard = { pageErrors: string[] }
+
 /**
- * Test with the catalog walkthrough fixtures.
+ * Auto fixture: collects uncaught browser errors and fails the test when any
+ * occurred. A screen that renders blank because a chunk threw is a defect even
+ * when its selectors happen to survive, so the guard turns silent failures into
+ * red tests. React warnings and failed network requests are not page errors and
+ * stay out of the collector.
+ */
+const guarded = withTunnel.extend<ErrorGuard>({
+  pageErrors: [
+    async ({ page }: { page: Page }, use: (errors: string[]) => Promise<void>) => {
+      const errors: string[] = []
+      const onPageError = (error: Error) => {
+        errors.push(error.message)
+      }
+      page.on("pageerror", onPageError)
+      await use(errors)
+      page.off("pageerror", onPageError)
+      if (errors.length > 0) {
+        throw new Error(`Uncaught browser error(s) during the test:\n${errors.join("\n")}`)
+      }
+    },
+    { auto: true },
+  ],
+})
+
+/**
+ * Base test for specs that must start signed out (authentication flows) or do
+ * not need the API helper. Like every spec in this suite it still fails on an
+ * uncaught browser error.
+ */
+export const anonymous = guarded
+
+/**
+ * Test with the signed-in fixtures.
  *
  * The `api` fixture signs in through the login form once per test and exposes
- * the catalog API bound to the browser's cookie jar. Specs that need credentials
+ * the API client bound to the browser's cookie jar. Specs that need credentials
  * call `test.skip(!HAS_CREDENTIALS, ...)`.
  */
-export const test = withTunnel.extend<{ api: PeopleApi }>({
+export const test = guarded.extend<{ api: FlashbacksApi }>({
   api: async ({ page, baseURL }, use) => {
     // Sign in through the form, exactly like a user: the app shell is only
     // rendered for a real session, and `page.request` then shares the browser
     // context's cookies for seeding and assertions.
     await page.goto(baseURL ?? "/")
     if (await page.locator('input[type="password"]').count()) {
-      await page.getByRole("textbox", { name: "Login" }).fill(LOGIN)
-      await page.getByRole("textbox", { name: "Enter password" }).fill(PASSWORD)
-      await page.getByRole("button", { name: "Sign In" }).click()
+      await signIn(page, LOGIN, PASSWORD)
     }
-    await expect(page.getByRole("button", { name: /^(People|Люди)$/ }).first()).toBeVisible()
+    await expectWorkspace(page)
 
-    const api = new PeopleApi(page.request)
+    const api = new FlashbacksApi(page.request)
     await use(api)
     await page.request.post("/api/auth/logout").catch(() => undefined)
+  },
+})
+
+/**
+ * Test with a throwaway gallery folder.
+ *
+ * `destructiveRun` is an auto fixture and therefore runs before the signed-in
+ * `api` fixture: a run that is not allowed is refused before a session is
+ * opened or anything is created. The `gallery` fixture then copies a sample
+ * photo into an OS temp directory, registers the folder and waits for the photo
+ * to be indexed. Teardown removes the registration and the directory even when
+ * the test fails, so repeated runs start from the same state.
+ */
+type DestructiveFixtures = { gallery: TempGallery; destructiveRun: string }
+
+export const destructive = test.extend<DestructiveFixtures>({
+  destructiveRun: [
+    async ({}, use) => {
+      assertDestructiveAllowed()
+      await use("allowed")
+    },
+    { auto: true },
+  ],
+  gallery: async ({ api }, use) => {
+    const gallery = await createTempGallery(api)
+    try {
+      await use(gallery)
+    } finally {
+      await destroyTempGallery(api, gallery)
+    }
   },
 })
 

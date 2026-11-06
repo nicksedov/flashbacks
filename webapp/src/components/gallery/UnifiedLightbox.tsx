@@ -7,6 +7,7 @@ import { OcrImagePanel } from "./lightbox/OcrImagePanel"
 import { OcrResultPanel } from "./lightbox/OcrResultPanel"
 import { PeopleImagePanel } from "./lightbox/PeopleImagePanel"
 import { PeoplePanel } from "./lightbox/PeoplePanel"
+import { PeopleFaceActionDialog } from "./lightbox/PeopleFaceActionDialog"
 import { TagsPanel } from "./lightbox/TagsPanel"
 import { ChatPanel } from "./lightbox/ChatPanel"
 import { ImageCompareSlider } from "./lightbox/ImageCompareSlider"
@@ -18,12 +19,22 @@ import { useImageDimensions } from "@/hooks/useImageDimensions"
 import { useFileExport } from "@/hooks/useFileExport"
 import { useChatAgent } from "@/hooks/useChatAgent"
 import { useImageMetadata } from "@/hooks/useImageMetadata"
-import { replaceEnhancement, saveCopyEnhancement, rejectEnhancement } from "@/api/endpoints"
+import {
+  assignFaceToPerson,
+  createPerson,
+  fetchPeople,
+  renamePerson,
+  replaceEnhancement,
+  saveCopyEnhancement,
+  rejectEnhancement,
+} from "@/api/endpoints"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
 import { Camera, MapPin, MapPinPlus, Image as ImageIcon, Pencil, FileText } from "lucide-react"
 import { GeoSearchForm } from "./GeoSearchForm"
-import type { ImageMetadataDTO } from "@/types"
+import { CreatePersonDialog, PersonPickerDialog, RenamePersonDialog } from "@/components/people/PeopleDialogs"
+import { showToastError } from "@/lib/toast-utils"
+import type { ImageFaceDTO, ImageMetadataDTO, PersonDTO } from "@/types"
 import { LightboxTabBar } from "./lightbox/lightboxChrome"
 import type { LightboxMode } from "./lightbox/lightboxChrome"
 
@@ -35,6 +46,8 @@ interface UnifiedLightboxProps {
   onClose: () => void
   showGeoForm?: boolean
   onShowGeoFormChange?: (show: boolean) => void
+  /** Called after a catalog correction, so a host view can reload its people. */
+  onPeopleChanged?: () => void
 }
 
 export function UnifiedLightbox({
@@ -43,6 +56,7 @@ export function UnifiedLightbox({
   onClose,
   showGeoForm,
   onShowGeoFormChange,
+  onPeopleChanged,
 }: UnifiedLightboxProps) {
   const { t, language } = useTranslation()
   const [activeMode, setActiveMode] = useState<LightboxMode>(initialMode)
@@ -50,6 +64,16 @@ export function UnifiedLightbox({
   const [standardImageLoaded, setStandardImageLoaded] = useState(false)
   const [panelOpen, setPanelOpen] = useState(false)
   const isGeoFormVisible = showGeoForm ?? internalShowGeoForm
+
+  // Catalog corrections: a selected face opens its actions, and each action
+  // re-reads the photo so the boxes and the people list stay in step. Declared
+  // before the per-image reset block, which clears them.
+  const [selectedFaceId, setSelectedFaceId] = useState<number | null>(null)
+  const [assignPickerOpen, setAssignPickerOpen] = useState(false)
+  const [createFromFaceOpen, setCreateFromFaceOpen] = useState(false)
+  const [renameTarget, setRenameTarget] = useState<{ personId: number; name: string } | null>(null)
+  const [catalog, setCatalog] = useState<PersonDTO[]>([])
+  const [catalogBusy, setCatalogBusy] = useState(false)
 
   const handleShowGeoForm = useCallback((show: boolean) => {
     if (onShowGeoFormChange) {
@@ -78,6 +102,10 @@ export function UnifiedLightbox({
     setStandardImageLoaded(false)
     setEnhancedPath(null)
     setPanelOpen(false)
+    setSelectedFaceId(null)
+    setAssignPickerOpen(false)
+    setCreateFromFaceOpen(false)
+    setRenameTarget(null)
   }
 
   // Reset the enhancement-processing dedupe cache when the image changes.
@@ -106,7 +134,111 @@ export function UnifiedLightbox({
   const { handleSaveMd, handleSaveHtml } = useFileExport(llmData?.markdownContent, imagePath)
 
   // People mode: the faces of this photo, fetched only while the tab is open.
-  const { faces, people, loading: facesLoading, error: facesError } = useImageFaces(imagePath, activeMode === "people")
+  const {
+    faces,
+    people,
+    loading: facesLoading,
+    error: facesError,
+    refresh: refreshFaces,
+  } = useImageFaces(imagePath, activeMode === "people")
+
+  const selectedFace = selectedFaceId === null ? null : faces.find((face) => face.id === selectedFaceId) ?? null
+  const selectedPerson =
+    selectedFace && selectedFace.personId !== 0
+      ? people.find((person) => person.personId === selectedFace.personId) ?? null
+      : null
+  const selectedPersonLabel = selectedPerson
+    ? selectedPerson.name || t("people.unnamed", { id: selectedPerson.personId })
+    : ""
+
+  const openFaceActions = useCallback((face: ImageFaceDTO) => {
+    setSelectedFaceId(face.id)
+  }, [])
+
+  const closeFaceActions = useCallback(() => {
+    setSelectedFaceId(null)
+    setAssignPickerOpen(false)
+    setCreateFromFaceOpen(false)
+  }, [])
+
+  const openAssignPicker = useCallback(() => {
+    setAssignPickerOpen(true)
+    fetchPeople()
+      .then((response) => setCatalog(response.people ?? []))
+      .catch(() => setCatalog([]))
+  }, [])
+
+  const handleAssignToPerson = useCallback(
+    async (personId: number) => {
+      if (!selectedFace) return
+      setCatalogBusy(true)
+      try {
+        await assignFaceToPerson(selectedFace.id, personId)
+        closeFaceActions()
+        refreshFaces()
+        onPeopleChanged?.()
+      } catch {
+        showToastError(t("lightbox.people.actionFailed"))
+      } finally {
+        setCatalogBusy(false)
+      }
+    },
+    [closeFaceActions, onPeopleChanged, refreshFaces, selectedFace, t],
+  )
+
+  const handleDetachFace = useCallback(async () => {
+    if (!selectedFace) return
+    setCatalogBusy(true)
+    try {
+      await assignFaceToPerson(selectedFace.id, 0)
+      closeFaceActions()
+      refreshFaces()
+      onPeopleChanged?.()
+    } catch {
+      showToastError(t("lightbox.people.actionFailed"))
+    } finally {
+      setCatalogBusy(false)
+    }
+  }, [closeFaceActions, onPeopleChanged, refreshFaces, selectedFace, t])
+
+  const handleCreateFromFace = useCallback(
+    async (name: string) => {
+      if (!selectedFace) return
+      setCatalogBusy(true)
+      try {
+        await createPerson({
+          ...(name.trim() ? { name: name.trim() } : {}),
+          faceIds: [selectedFace.id],
+        })
+        closeFaceActions()
+        refreshFaces()
+        onPeopleChanged?.()
+      } catch {
+        showToastError(t("lightbox.people.actionFailed"))
+      } finally {
+        setCatalogBusy(false)
+      }
+    },
+    [closeFaceActions, onPeopleChanged, refreshFaces, selectedFace, t],
+  )
+
+  const handleRenamePerson = useCallback(
+    async (name: string) => {
+      if (!renameTarget) return
+      setCatalogBusy(true)
+      try {
+        await renamePerson(renameTarget.personId, name)
+        setRenameTarget(null)
+        refreshFaces()
+        onPeopleChanged?.()
+      } catch {
+        showToastError(t("lightbox.people.actionFailed"))
+      } finally {
+        setCatalogBusy(false)
+      }
+    },
+    [onPeopleChanged, refreshFaces, renameTarget, t],
+  )
 
   // AI Chat state
   const {
@@ -294,6 +426,8 @@ export function UnifiedLightbox({
             sourceDimensions={naturalDimensions}
             imageLoaded={imageLoaded}
             handleImageLoad={handleImageLoad}
+            selectedFaceId={selectedFaceId}
+            onSelectFace={openFaceActions}
             className="flex-1 flex items-center justify-center relative h-full min-w-0 min-h-0"
           />
         ) : activeMode === "ocr" ? (
@@ -397,6 +531,10 @@ export function UnifiedLightbox({
                 people={people}
                 loading={facesLoading}
                 error={facesError}
+                onRename={(personId) => {
+                  const person = people.find((entry) => entry.personId === personId)
+                  if (person) setRenameTarget({ personId: person.personId, name: person.name })
+                }}
                 className="w-full bg-card p-4 h-full flex flex-col"
               />
             )}
@@ -414,6 +552,45 @@ export function UnifiedLightbox({
           </div>
         </MobileDetailPanel>
       </div>
+
+      {selectedFace && !assignPickerOpen && !createFromFaceOpen && (
+        <PeopleFaceActionDialog
+          face={selectedFace}
+          personLabel={selectedPersonLabel}
+          busy={catalogBusy}
+          onCancel={closeFaceActions}
+          onAssign={openAssignPicker}
+          onDetach={() => void handleDetachFace()}
+          onCreate={() => setCreateFromFaceOpen(true)}
+        />
+      )}
+
+      {selectedFace && assignPickerOpen && (
+        <PersonPickerDialog
+          title={t("lightbox.people.assignTitle")}
+          people={catalog}
+          loading={catalogBusy}
+          onCancel={() => setAssignPickerOpen(false)}
+          onPick={(personId) => void handleAssignToPerson(personId)}
+        />
+      )}
+
+      {selectedFace && createFromFaceOpen && (
+        <CreatePersonDialog
+          loading={catalogBusy}
+          onCancel={() => setCreateFromFaceOpen(false)}
+          onSubmit={(name) => void handleCreateFromFace(name)}
+        />
+      )}
+
+      {renameTarget && (
+        <RenamePersonDialog
+          initialName={renameTarget.name}
+          loading={catalogBusy}
+          onCancel={() => setRenameTarget(null)}
+          onSubmit={(name) => void handleRenamePerson(name)}
+        />
+      )}
     </LightboxDialog>
   )
 }

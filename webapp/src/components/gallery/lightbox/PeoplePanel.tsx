@@ -1,7 +1,8 @@
-import { Loader2, Users } from "lucide-react"
+import { Loader2, Pencil, Users } from "lucide-react"
 import { useTranslation } from "@/i18n"
 import { EmptyState } from "@/components/EmptyState"
 import { ErrorBanner } from "@/components/ui/error-banner"
+import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import type { ImagePerson } from "@/hooks/useImageFaces"
 
@@ -10,6 +11,8 @@ interface PeoplePanelProps {
   people: ImagePerson[]
   loading: boolean
   error: boolean
+  /** Opens the rename action for a person of this photo. */
+  onRename?: (personId: number) => void
   className?: string
 }
 
@@ -17,7 +20,7 @@ interface PeoplePanelProps {
  * The right-hand panel of the lightbox People mode: one entry per person on the
  * photo, carrying the same number that is drawn on that person's boxes.
  */
-export function PeoplePanel({ people, loading, error, className }: PeoplePanelProps) {
+export function PeoplePanel({ people, loading, error, onRename, className }: PeoplePanelProps) {
   const { t } = useTranslation()
 
   return (
@@ -49,6 +52,19 @@ export function PeoplePanel({ people, loading, error, className }: PeoplePanelPr
               <span className="truncate text-sm font-medium">
                 {person.name || t("people.unnamed", { id: person.personId })}
               </span>
+              {onRename && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  data-testid="people-list-rename"
+                  aria-label={t("lightbox.people.rename")}
+                  className="ml-auto h-11 w-11 shrink-0 md:h-8 md:w-8"
+                  onClick={() => onRename(person.personId)}
+                >
+                  <Pencil className="h-4 w-4" />
+                </Button>
+              )}
             </li>
           ))}
         </ul>

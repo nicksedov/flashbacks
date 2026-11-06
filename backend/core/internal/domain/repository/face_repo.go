@@ -20,6 +20,12 @@ type FaceRepository interface {
 	ListImageFilesByPersonID(personID uint, offset, limit int) ([]domain.ImageFile, error)
 	// CountImageFilesByPersonID counts the distinct photos of a person.
 	CountImageFilesByPersonID(personID uint) (int64, error)
+	// ListUnassigned returns the faces that belong to no person, ordered by ID
+	// and paginated. Faces the user detached are included: they are unassigned
+	// until the user assigns them again.
+	ListUnassigned(offset, limit int) ([]domain.Face, error)
+	// CountUnassigned counts the faces that belong to no person.
+	CountUnassigned() (int64, error)
 	// SetPersonID assigns a face to a person.
 	SetPersonID(faceID, personID uint) error
 }
@@ -77,6 +83,24 @@ func (r *gormFaceRepo) CountImageFilesByPersonID(personID uint) (int64, error) {
 		Where("faces.person_id = ?", personID).
 		Distinct("image_files.id").
 		Count(&count).Error
+	return count, err
+}
+
+func (r *gormFaceRepo) ListUnassigned(offset, limit int) ([]domain.Face, error) {
+	var faces []domain.Face
+	if err := r.db.Where("person_id = ?", 0).
+		Order("id").
+		Offset(offset).
+		Limit(limit).
+		Find(&faces).Error; err != nil {
+		return nil, err
+	}
+	return faces, nil
+}
+
+func (r *gormFaceRepo) CountUnassigned() (int64, error) {
+	var count int64
+	err := r.db.Model(&domain.Face{}).Where("person_id = ?", 0).Count(&count).Error
 	return count, err
 }
 

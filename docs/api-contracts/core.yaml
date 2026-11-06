@@ -1468,6 +1468,94 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/PeopleResponse"
+    post:
+      summary: Create a person from unassigned faces
+      operationId: createPerson
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePersonRequest"
+      responses:
+        "201":
+          description: Person created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PersonDTO"
+        "400":
+          description: The face list is empty or the name is too long
+        "404":
+          description: A face does not exist or already belongs to a person
+
+  /api/people/merge:
+    post:
+      summary: Merge people into one person
+      operationId: mergePeople
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MergePeopleRequest"
+      responses:
+        "200":
+          description: The merged person
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PersonDTO"
+        "400":
+          description: The source list is empty, too long, or contains the target
+        "404":
+          description: The target or a source person does not exist
+
+  /api/people/{id}:
+    patch:
+      summary: Rename a person
+      operationId: renamePerson
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RenamePersonRequest"
+      responses:
+        "200":
+          description: The updated person
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PersonDTO"
+        "400":
+          description: The name is longer than 200 characters
+        "404":
+          description: Person not found
+    delete:
+      summary: Disband a person into unassigned faces
+      operationId: disbandPerson
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Person disbanded; photos and faces are kept
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "404":
+          description: Person not found
 
   /api/people/{id}/photos:
     get:
@@ -1516,6 +1604,57 @@ paths:
       responses:
         "200":
           description: Face recognition stopped
+
+  /api/faces/unassigned:
+    get:
+      summary: List the faces that belong to no person
+      operationId: getUnassignedFaces
+      parameters:
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 1
+        - name: pageSize
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 50
+      responses:
+        "200":
+          description: Paginated unassigned faces, each with its photo and box
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UnassignedFacesResponse"
+
+  /api/faces/{id}:
+    patch:
+      summary: Assign a face to a person, or detach it
+      operationId: assignFace
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AssignFaceRequest"
+      responses:
+        "200":
+          description: The updated face
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImageFaceDTO"
+        "404":
+          description: The face or the person does not exist
 
   /api/image-faces:
     get:
@@ -3262,6 +3401,13 @@ components:
         total:
           type: integer
 
+    MessageResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          description: Localized success message.
+
     PersonDTO:
       type: object
       properties:
@@ -3334,6 +3480,100 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/ImageFaceDTO"
+
+    RenamePersonRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Trimmed name; an empty or blank name clears it.
+          maxLength: 200
+      required:
+        - name
+
+    CreatePersonRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Optional display name; empty creates an unnamed person.
+          maxLength: 200
+        faceIds:
+          type: array
+          description: 1–200 distinct unassigned face ids.
+          items:
+            type: integer
+      required:
+        - faceIds
+
+    MergePeopleRequest:
+      type: object
+      properties:
+        targetPersonId:
+          type: integer
+        sourcePersonIds:
+          type: array
+          description: 1–50 distinct person ids; must not contain the target.
+          items:
+            type: integer
+        name:
+          type: string
+          description: Optional name for the merged person; omitted keeps the target's name.
+          maxLength: 200
+      required:
+        - targetPersonId
+        - sourcePersonIds
+
+    AssignFaceRequest:
+      type: object
+      properties:
+        personId:
+          type: integer
+          description: The person to assign the face to; 0 detaches it.
+      required:
+        - personId
+
+    UnassignedFaceDTO:
+      type: object
+      properties:
+        id:
+          type: integer
+        personId:
+          type: integer
+          description: Always 0 in this listing.
+        path:
+          type: string
+          description: Gallery path of the photo the face was detected on.
+        fileName:
+          type: string
+        x:
+          type: number
+        y:
+          type: number
+        width:
+          type: number
+        height:
+          type: number
+        confidence:
+          type: number
+
+    UnassignedFacesResponse:
+      type: object
+      properties:
+        faces:
+          type: array
+          items:
+            $ref: "#/components/schemas/UnassignedFaceDTO"
+        totalFaces:
+          type: integer
+        currentPage:
+          type: integer
+        pageSize:
+          type: integer
+        totalPages:
+          type: integer
+        hasNextPage:
+          type: boolean
 
     EmbeddingStatusResponse:
       type: object

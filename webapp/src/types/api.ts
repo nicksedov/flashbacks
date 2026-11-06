@@ -1295,11 +1295,47 @@ export interface paths {
         /** List discovered people */
         get: operations["getPeople"];
         put?: never;
-        post?: never;
+        /** Create a person from unassigned faces */
+        post: operations["createPerson"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/people/merge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Merge people into one person */
+        post: operations["mergePeople"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/people/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Disband a person into unassigned faces */
+        delete: operations["disbandPerson"];
+        options?: never;
+        head?: never;
+        /** Rename a person */
+        patch: operations["renamePerson"];
         trace?: never;
     };
     "/api/people/{id}/photos": {
@@ -1368,6 +1404,40 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/faces/unassigned": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the faces that belong to no person */
+        get: operations["getUnassignedFaces"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/faces/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Assign a face to a person, or detach it */
+        patch: operations["assignFace"];
         trace?: never;
     };
     "/api/image-faces": {
@@ -2343,6 +2413,10 @@ export interface components {
             processed?: number;
             total?: number;
         };
+        MessageResponse: {
+            /** @description Localized success message. */
+            message?: string;
+        };
         PersonDTO: {
             id?: number;
             name?: string;
@@ -2379,6 +2453,48 @@ export interface components {
         };
         ImageFacesResponse: {
             faces?: components["schemas"]["ImageFaceDTO"][];
+        };
+        RenamePersonRequest: {
+            /** @description Trimmed name; an empty or blank name clears it. */
+            name: string;
+        };
+        CreatePersonRequest: {
+            /** @description Optional display name; empty creates an unnamed person. */
+            name?: string;
+            /** @description 1–200 distinct unassigned face ids. */
+            faceIds: number[];
+        };
+        MergePeopleRequest: {
+            targetPersonId: number;
+            /** @description 1–50 distinct person ids; must not contain the target. */
+            sourcePersonIds: number[];
+            /** @description Optional name for the merged person; omitted keeps the target's name. */
+            name?: string;
+        };
+        AssignFaceRequest: {
+            /** @description The person to assign the face to; 0 detaches it. */
+            personId: number;
+        };
+        UnassignedFaceDTO: {
+            id?: number;
+            /** @description Always 0 in this listing. */
+            personId?: number;
+            /** @description Gallery path of the photo the face was detected on. */
+            path?: string;
+            fileName?: string;
+            x?: number;
+            y?: number;
+            width?: number;
+            height?: number;
+            confidence?: number;
+        };
+        UnassignedFacesResponse: {
+            faces?: components["schemas"]["UnassignedFaceDTO"][];
+            totalFaces?: number;
+            currentPage?: number;
+            pageSize?: number;
+            totalPages?: number;
+            hasNextPage?: boolean;
         };
         EmbeddingStatusResponse: {
             running?: boolean;
@@ -4383,6 +4499,151 @@ export interface operations {
             };
         };
     };
+    createPerson: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreatePersonRequest"];
+            };
+        };
+        responses: {
+            /** @description Person created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonDTO"];
+                };
+            };
+            /** @description The face list is empty or the name is too long */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description A face does not exist or already belongs to a person */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    mergePeople: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MergePeopleRequest"];
+            };
+        };
+        responses: {
+            /** @description The merged person */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonDTO"];
+                };
+            };
+            /** @description The source list is empty, too long, or contains the target */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The target or a source person does not exist */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    disbandPerson: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Person disbanded; photos and faces are kept */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessageResponse"];
+                };
+            };
+            /** @description Person not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    renamePerson: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RenamePersonRequest"];
+            };
+        };
+        responses: {
+            /** @description The updated person */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonDTO"];
+                };
+            };
+            /** @description The name is longer than 200 characters */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Person not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     getPersonPhotos: {
         parameters: {
             query?: never;
@@ -4461,6 +4722,62 @@ export interface operations {
         responses: {
             /** @description Face recognition stopped */
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getUnassignedFaces: {
+        parameters: {
+            query?: {
+                page?: number;
+                pageSize?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Paginated unassigned faces, each with its photo and box */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UnassignedFacesResponse"];
+                };
+            };
+        };
+    };
+    assignFace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssignFaceRequest"];
+            };
+        };
+        responses: {
+            /** @description The updated face */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImageFaceDTO"];
+                };
+            };
+            /** @description The face or the person does not exist */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

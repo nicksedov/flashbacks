@@ -424,6 +424,16 @@ func (m *Manager) reconcileRound(
 		m.setError(fmt.Sprintf("load people: %v", err))
 		return 0
 	}
+	// A manual person is a user decision: reconciliation neither merges it away
+	// nor merges another person into it.
+	considered := make([]domain.Person, 0, len(people))
+	for _, person := range people {
+		if person.Manual {
+			continue
+		}
+		considered = append(considered, person)
+	}
+	people = considered
 	if len(people) == 0 {
 		return 0
 	}

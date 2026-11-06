@@ -446,7 +446,9 @@ func TestFaceRecognitionManager_ClustersWithoutUnscannedImages(t *testing.T) {
 // faces to it.
 func seedPeople(t *testing.T, db *gorm.DB, name string, faceIDs []uint) *domain.Person {
 	t.Helper()
-	person := domain.Person{Name: name}
+	// A named person is a user-curated person (rename marks it manual), which
+	// is what protects it from a full re-cluster.
+	person := domain.Person{Name: name, Manual: name != ""}
 	if err := db.Create(&person).Error; err != nil {
 		t.Fatalf("create person: %v", err)
 	}

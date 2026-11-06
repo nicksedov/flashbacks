@@ -66,6 +66,13 @@ import type {
   PersonPhotosResponse,
   FaceStatusResponse,
   ImageFacesResponse,
+  ImageFaceDTO,
+  PersonDTO,
+  RenamePersonRequest,
+  CreatePersonRequest,
+  MergePeopleRequest,
+  AssignFaceRequest,
+  UnassignedFacesResponse,
   GeocodeSearchResponse,
   UpdateGpsRequest,
   UpdateGpsResponse,
@@ -581,6 +588,39 @@ export function fetchFacesStatus(): Promise<FaceStatusResponse> {
 /** Faces detected on one image, with their boxes and the person they belong to. */
 export function fetchImageFaces(imagePath: string): Promise<ImageFacesResponse> {
   return apiGet<ImageFacesResponse>("/api/image-faces", { path: imagePath })
+}
+
+/** Rename a person; an empty name makes the person unnamed again. */
+export function renamePerson(id: number, name: string): Promise<PersonDTO> {
+  return apiPatch<PersonDTO>(`/api/people/${id}`, { name } satisfies RenamePersonRequest)
+}
+
+/** Create a person from previously unassigned faces. */
+export function createPerson(req: CreatePersonRequest): Promise<PersonDTO> {
+  return apiPost<PersonDTO>("/api/people", req)
+}
+
+/** Merge the source people into the target person. */
+export function mergePeople(req: MergePeopleRequest): Promise<PersonDTO> {
+  return apiPost<PersonDTO>("/api/people/merge", req)
+}
+
+/** Disband a person: its faces become unassigned and the photos are kept. */
+export function disbandPerson(id: number): Promise<{ message: string }> {
+  return apiDelete<{ message: string }>(`/api/people/${id}`)
+}
+
+/** Assign a face to a person, or detach it when personId is 0. */
+export function assignFaceToPerson(faceId: number, personId: number): Promise<ImageFaceDTO> {
+  return apiPatch<ImageFaceDTO>(`/api/faces/${faceId}`, { personId } satisfies AssignFaceRequest)
+}
+
+/** Faces that belong to no person, paginated, each with its photo and box. */
+export function fetchUnassignedFaces(page: number, pageSize: number): Promise<UnassignedFacesResponse> {
+  return apiGet<UnassignedFacesResponse>("/api/faces/unassigned", {
+    page: String(page),
+    pageSize: String(pageSize),
+  })
 }
 
 export function startFaces(): Promise<{ message: string }> {

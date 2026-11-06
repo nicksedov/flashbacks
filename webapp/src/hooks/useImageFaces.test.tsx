@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { renderHook, waitFor } from "@testing-library/react"
+import { act, renderHook, waitFor } from "@testing-library/react"
 import { numberPeople, useImageFaces } from "./useImageFaces"
 import { fetchImageFaces } from "@/api/endpoints"
 import type { ImageFaceDTO } from "@/types"
@@ -73,5 +73,24 @@ describe("useImageFaces", () => {
 
     expect(result.current.faces).toEqual([])
     expect(result.current.loading).toBe(false)
+  })
+
+  it("re-reads the photo's faces when refresh is called", async () => {
+    mockFetchImageFaces
+      .mockResolvedValueOnce({
+        faces: [face({ id: 1, personId: 5, personName: "Anna" })],
+      })
+      .mockResolvedValueOnce({
+        faces: [face({ id: 1, personId: 0 })],
+      })
+
+    const { result } = renderHook(() => useImageFaces("/gallery/a.jpg", true))
+    await waitFor(() => expect(result.current.people).toHaveLength(1))
+
+    act(() => result.current.refresh())
+
+    await waitFor(() => expect(result.current.people).toEqual([]))
+    expect(mockFetchImageFaces).toHaveBeenCalledTimes(2)
+    expect(result.current.faces[0]?.personId).toBe(0)
   })
 })

@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	recognition "github.com/flashbacks/core/internal/application/faces"
+	catalogpeople "github.com/flashbacks/core/internal/application/people"
 	"github.com/flashbacks/core/internal/domain"
 	"github.com/flashbacks/core/internal/domain/repository"
 	"github.com/flashbacks/core/internal/interfaces/dto"
@@ -28,12 +29,18 @@ func newFacesTestServer(t *testing.T) (*Server, *gorm.DB, func()) {
 	i18nSvc, err := i18n.NewService()
 	require.NoError(t, err)
 
+	personRepo := repository.NewPersonRepository(db)
+	faceRepo := repository.NewFaceRepository(db)
+	imageRepo := repository.NewImageFileRepository(db)
+	referenceRepo := repository.NewPersonReferenceRepository(db)
+
 	svc := &Server{
 		db:             db,
 		i18n:           i18nSvc,
-		personRepo:     repository.NewPersonRepository(db),
-		faceRepo:       repository.NewFaceRepository(db),
-		imageFileRepo:  repository.NewImageFileRepository(db),
+		personRepo:     personRepo,
+		faceRepo:       faceRepo,
+		imageFileRepo:  imageRepo,
+		peopleCatalog:  catalogpeople.NewCatalog(db, personRepo, faceRepo, referenceRepo, imageRepo),
 		settingsLoader: helpers.NewSettingsLoader(db),
 		scheduleRepo:   repository.NewScheduleRepository(db),
 	}

@@ -31,6 +31,7 @@ from app.config import (
     CLUSTER_SPLIT_STEP,
     CUDA_PROVIDERS,
     EMBEDDING_DIM,
+    MIN_CLUSTERABLE_FACE_PX,
     RECOGNITION_MARGIN,
     RECOGNITION_MIN_SIMILARITY,
     SMALL_FACE_WIDTH,
@@ -78,6 +79,55 @@ def _l2_normalize(features: np.ndarray) -> np.ndarray:
     norms = np.linalg.norm(features, axis=1, keepdims=True)
     norms[norms == 0] = 1.0
     return features / norms
+
+
+def _face_sizes(count: int, widths: Optional[Sequence[float]]) -> list[float]:
+    """The size of every face; ``inf`` when the caller sent no sizes.
+
+    ``widths`` carries the smaller side of each box (core sends
+    ``min(width, height)``), which is orientation-invariant: boxes are reported
+    in the stored, un-rotated frame, so a rotated photo's box width is the
+    face's upright height.
+    """
+    if widths is None or len(widths) != count:
+        return [float("inf")] * count
+    return [float(value) for value in widths]
+
+
+def _face_roles(
+    sizes: Sequence[float], min_px: float
+) -> tuple[list[bool], list[bool]]:
+    """Return the ``clusterable`` and ``may_found`` flags of every face.
+
+    A face below ``min_px`` is not clusterable at all: it stays a detection and
+    is never labelled. A face below ``SMALL_FACE_WIDTH`` is *weak*: clusterable,
+    but it may only join an existing person — it cannot found one, cannot be a
+    core point and cannot anchor a leftover.
+    """
+    clusterable = [size >= min_px for size in sizes]
+    may_found = [size >= SMALL_FACE_WIDTH for size in sizes]
+    return clusterable, may_found
+
+
+def _drop_unfounded_labels(
+    labels: Sequence[int], clusterable: Sequence[bool], may_found: Sequence[bool]
+) -> list[int]:
+    """Unlabel every cluster that holds no full-size face.
+
+    A person has to be founded by a full-size face: a group made only of weak
+    faces is the group-photo neighbour effect the size rule exists to stop. The
+    density passes and the single-linkage pass both chain such faces happily, so
+    the check is applied to whatever labelling came out of them.
+    """
+    founded = {
+        label
+        for label, allowed in zip(labels, may_found)
+        if label != -1 and allowed
+    }
+    return [
+        label if label == -1 or (label in founded and clusterable[index]) else -1
+        for index, label in enumerate(labels)
+    ]
 
 
 @dataclass
@@ -455,6 +505,8 @@ class FaceEngine:
         min_cluster_size: int = 2,
         solo_faces: Optional[list[bool]] = None,
         photo_ids: Optional[Sequence[int]] = None,
+        widths: Optional[Sequence[float]] = None,
+        min_clusterable_px: Optional[float] = None,
     ) -> list[int]:
         """Group embeddings into people with a cosine-distance threshold.
 
@@ -484,6 +536,14 @@ class FaceEngine:
 
         if not embeddings:
             return []
+        min_px = (
+            float(MIN_CLUSTERABLE_FACE_PX)
+            if min_clusterable_px is None
+            else float(min_clusterable_px)
+        )
+        clusterable, may_found = _face_roles(
+            _face_sizes(len(embeddings), widths), min_px
+        )
         arr = np.asarray(embeddings, dtype=float)
         norms = np.linalg.norm(arr, axis=1, keepdims=True)
         norms[norms == 0] = 1.0
@@ -497,9 +557,17 @@ class FaceEngine:
         labels = FaceEngine._resplit_by_density(
             normalized, labels, max(2, int(min_cluster_size))
         )
+        labels = _drop_unfounded_labels(labels, clusterable, may_found)
         labels = FaceEngine._recognise_leftovers(
-            normalized, labels, max(2, int(min_cluster_size)), solo_faces or []
+            normalized,
+            labels,
+            max(2, int(min_cluster_size)),
+            solo_faces or [],
+            may_found,
         )
+        # A face below the floor is not clusterable: whatever the passes decided
+        # about it, it stays unassigned.
+        labels = _drop_unfounded_labels(labels, clusterable, may_found)
         if photo_ids is not None and len(photo_ids) == len(labels):
             labels = FaceEngine._drop_photo_poor_labels(
                 labels, [int(value) for value in photo_ids], CLUSTER_MIN_PHOTOS
@@ -530,6 +598,7 @@ class FaceEngine:
         photo_ids: Optional[Sequence[int]] = None,
         widths: Optional[Sequence[float]] = None,
         qualities: Optional[Sequence[float]] = None,
+        min_clusterable_px: Optional[float] = None,
         algorithm: Optional[str] = None,
         core_similarity: Optional[float] = None,
         core_neighbours: Optional[int] = None,
@@ -560,14 +629,23 @@ class FaceEngine:
         ``algorithm`` selects the revision: ``graph-v1`` keeps that behaviour,
         ``graph-v2`` switches to density-aware labelling (see
         :meth:`_cluster_graph_v2`). ``photo_ids``/``widths``/``qualities`` are
-        aligned with ``face_ids``; ``widths`` and ``qualities`` are accepted for
-        the contract and reserved for quality-aware rules, while a missing
-        ``photo_ids`` defaults to one unique photo per face so an older core
-        keeps today's behaviour.
+        aligned with ``face_ids``; ``widths`` carries the smaller side of every
+        box and decides the face's role (a missing array means "every face is
+        full size", which keeps an older core working), ``qualities`` is
+        reserved for quality-aware rules, and a missing ``photo_ids`` defaults
+        to one unique photo per face so an older core keeps today's behaviour.
         """
         count = len(face_ids)
         if count == 0:
             return []
+        min_px = (
+            float(MIN_CLUSTERABLE_FACE_PX)
+            if min_clusterable_px is None
+            else float(min_clusterable_px)
+        )
+        clusterable, may_found = _face_roles(
+            _face_sizes(count, widths), min_px
+        )
         if (algorithm or CLUSTER_ALGO) == "graph-v2":
             return FaceEngine._cluster_graph_v2(
                 face_ids,
@@ -583,6 +661,8 @@ class FaceEngine:
                 margin=margin,
                 min_photos=min_photos,
                 candidates_per_photo=candidates_per_photo,
+                clusterable=clusterable,
+                may_found=may_found,
             )
 
         index: dict[int, int] = {}
@@ -596,6 +676,10 @@ class FaceEngine:
             left, right = index.get(int(face_id)), index.get(int(candidate_id))
             if left is None or right is None or left == right:
                 continue
+            # A face below the size floor is not clusterable: its links are
+            # dropped, so it can neither join a person nor bridge two people.
+            if not clusterable[left] or not clusterable[right]:
+                continue
             value = float(similarity)
             directed.add((left, right))
             scores = neighbour_scores.setdefault(left, {})
@@ -608,6 +692,13 @@ class FaceEngine:
             count, links, directed, CLUSTER_MIN_SIMILARITY
         )
         components = FaceEngine._split_chained_groups(count, links, directed, components)
+        # A group made only of weak faces has no full-size founder: dropping it
+        # here keeps a pair of small crops from becoming a person.
+        components = [
+            members
+            for members in components
+            if any(may_found[member] for member in members)
+        ]
 
         labels = [-1] * count
         groups: dict[int, list[int]] = {}
@@ -665,11 +756,20 @@ class FaceEngine:
 
         leftovers = [position for position, label in enumerate(labels) if label == -1]
         for position in leftovers:
+            if not clusterable[position]:
+                continue
             label = decisive(group_scores(position))
             if label is not None:
                 labels[position] = label
 
-        anchors = [position for position in leftovers if is_solo(position) and labels[position] == -1]
+        # Only a full-size portrait may anchor a new person: a weak face is not
+        # trustworthy enough to found an identity, and a face below the size
+        # floor may not be assigned at all.
+        anchors = [
+            position
+            for position in leftovers
+            if is_solo(position) and may_found[position] and labels[position] == -1
+        ]
         if not anchors:
             return labels
 
@@ -680,6 +780,8 @@ class FaceEngine:
         anchored_members: dict[int, list[int]] = {anchor: [anchor] for anchor in anchors}
         for position in leftovers:
             if labels[position] != -1 or position in anchored_members:
+                continue
+            if not clusterable[position]:
                 continue
             best_anchor: Optional[int] = None
             best_score = runner_up = -1.0
@@ -823,6 +925,8 @@ class FaceEngine:
         margin: Optional[float] = None,
         min_photos: Optional[int] = None,
         candidates_per_photo: Optional[int] = None,
+        clusterable: Optional[Sequence[bool]] = None,
+        may_found: Optional[Sequence[bool]] = None,
     ) -> list[int]:
         """Density-aware labelling of the candidate graph.
 
@@ -839,8 +943,14 @@ class FaceEngine:
         * after the cap-driven split, neighbouring components merge when their
           medoid similarity and their mutual cross-component support agree,
           which rejoins a person the cap cut apart.
+
+        ``clusterable`` excludes the faces below the service's size floor and
+        ``may_found`` marks the full-size faces that may be core points: a weak
+        face can join a component by the assignment vote but never forms one.
         """
         count = len(face_ids)
+        clusterable = list(clusterable) if clusterable is not None else [True] * count
+        may_found = list(may_found) if may_found is not None else [True] * count
         index: dict[int, int] = {}
         for position, face_id in enumerate(face_ids):
             index.setdefault(int(face_id), position)
@@ -856,6 +966,10 @@ class FaceEngine:
         for face_id, candidate_id, similarity in edges:
             left, right = index.get(int(face_id)), index.get(int(candidate_id))
             if left is None or right is None or left == right:
+                continue
+            # A face below the size floor is not clusterable: its links are
+            # dropped, so it can neither join a component nor bridge two.
+            if not clusterable[left] or not clusterable[right]:
                 continue
             value = float(similarity)
             scores = neighbour_scores.setdefault(left, {})
@@ -918,10 +1032,13 @@ class FaceEngine:
         # A small request cannot supply ``core_degree`` neighbours: a two-face
         # gallery names exactly one mutual candidate, and the person must still
         # form. The requirement therefore collapses to what the request holds.
+        # A weak face is deliberately not a core point: it may be assigned to a
+        # component afterwards, but it can never found or extend one.
         core = {
             node
             for node, degree in degrees.items()
-            if degree >= min(core_degree, len(neighbour_scores.get(node, {})))
+            if may_found[node]
+            and degree >= min(core_degree, len(neighbour_scores.get(node, {})))
         }
 
         minimum = max(2, int(min_cluster_size))
@@ -952,6 +1069,8 @@ class FaceEngine:
         # candidate vote, bounded by the assignment floor and the margin.
         for node in range(count):
             if labels[node] != -1:
+                continue
+            if not clusterable[node]:
                 continue
             scores: dict[int, float] = {}
             for other, value in neighbour_scores.get(node, {}).items():
@@ -1235,6 +1354,7 @@ class FaceEngine:
         labels: list[int],
         min_cluster_size: int,
         solo_faces: list[bool],
+        may_anchor: Optional[Sequence[bool]] = None,
     ) -> list[int]:
         """Link faces the strict pass left as noise to the group they belong to.
 
@@ -1251,8 +1371,17 @@ class FaceEngine:
         matches keeps ``-1``, so no one-photo person appears.
         """
 
-        def is_solo(index: int) -> bool:
-            return 0 <= index < len(solo_faces) and bool(solo_faces[index])
+        def is_anchor(index: int) -> bool:
+            """A solo photo *and* a full-size face may found a person.
+
+            A weak face is similar to the people standing next to it in a group
+            shot, so letting it anchor a person is what spawned false people.
+            """
+            if not (0 <= index < len(solo_faces) and bool(solo_faces[index])):
+                return False
+            if may_anchor is None:
+                return True
+            return 0 <= index < len(may_anchor) and bool(may_anchor[index])
 
         leftovers = [index for index, label in enumerate(labels) if label == -1]
         if not leftovers:
@@ -1285,7 +1414,7 @@ class FaceEngine:
         # matching against such members pulled whole group photos into one person.
         groups: dict[int, list[int]] = {}
         for index, label in enumerate(labels):
-            if label != -1 and is_solo(index):
+            if label != -1 and is_anchor(index):
                 groups.setdefault(label, []).append(index)
 
         resolved = list(labels)
@@ -1294,7 +1423,7 @@ class FaceEngine:
             if label is not None:
                 resolved[index] = label
 
-        anchors = [index for index in leftovers if is_solo(index) and resolved[index] == -1]
+        anchors = [index for index in leftovers if is_anchor(index) and resolved[index] == -1]
         if not anchors:
             return resolved
 

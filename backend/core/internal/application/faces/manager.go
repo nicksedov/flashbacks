@@ -339,6 +339,10 @@ func (m *Manager) runPass(stopCh <-chan struct{}) {
 			// one-shot: the pass rebuilds the people, and the next pass keeps
 			// them instead of deleting everything every thirty seconds.
 			m.resetGeneratedPeople()
+			// A reset drops generated people only, so the small faces attached
+			// to a person the user curated are detached here: they were linked
+			// by an older criteria set that did not know about face size.
+			m.detachTooSmallFaces()
 		}
 	} else {
 		m.clusterPending = true
@@ -407,6 +411,9 @@ func (m *Manager) runPass(stopCh <-chan struct{}) {
 		m.reconcilePeople()
 	}
 	m.refreshPersonCovers(counts)
+	// Detaching small faces can leave a person without a single face, and such a
+	// person is not a person any more.
+	m.deleteEmptyPeople()
 }
 
 // collectBatches reads unprocessed images from the cursor and queues full
@@ -568,6 +575,33 @@ type faceRef struct {
 	imageFileID uint
 	confidence  float32
 	width       float32
+	height      float32
+}
+
+// minFaceSide returns the smaller side of a box in stored pixels. That is the
+// size the faces service judges: boxes live in the un-rotated frame, so on a
+// photo with EXIF orientation 5-8 the box width is the face's upright height.
+func minFaceSide(width, height float32) float32 {
+	if width <= 0 || height <= 0 {
+		return max(width, height)
+	}
+	return min(width, height)
+}
+
+// fullSizeFaces keeps the faces at or above *minimum* px. It returns nil when
+// the rule is off or nothing qualifies, so the caller can fall back to the
+// unfiltered set instead of leaving a person without exemplars.
+func fullSizeFaces(faces []domain.Face, minimum float64) []domain.Face {
+	if minimum <= 0 {
+		return nil
+	}
+	kept := make([]domain.Face, 0, len(faces))
+	for _, face := range faces {
+		if float64(minFaceSide(face.Width, face.Height)) >= minimum {
+			kept = append(kept, face)
+		}
+	}
+	return kept
 }
 
 // imageFaceCounts reports how many faces every photo contains. A photo with a
@@ -592,19 +626,27 @@ func (m *Manager) imageFaceCounts() map[uint]int {
 	return counts
 }
 
-// chooseCover picks the cover face of one person: a face detected on a solo
-// photo beats a face cropped out of a group shot, then the most confident
-// detection wins, and the lowest face ID (members are ordered by ID) keeps the
-// choice deterministic.
-func chooseCover(members []faceRef, facesPerImage map[uint]int) uint {
+// chooseCover picks the cover face of one person: a full-size face beats a
+// small one (the cover is the tile the user sees in the people grid), then a
+// face detected on a solo photo beats a face cropped out of a group shot, then
+// the most confident detection wins, and the lowest face ID (members are
+// ordered by ID) keeps the choice deterministic. *minSize* is the service's
+// full-size floor; zero disables it.
+func chooseCover(members []faceRef, facesPerImage map[uint]int, minSize float32) uint {
 	best := members[0]
 	for _, candidate := range members[1:] {
 		bestSolo := facesPerImage[best.imageFileID] <= 1
 		candidateSolo := facesPerImage[candidate.imageFileID] <= 1
+		bestFull := minSize <= 0 || minFaceSide(best.width, best.height) >= minSize
+		candidateFull := minSize <= 0 ||
+			minFaceSide(candidate.width, candidate.height) >= minSize
 		switch {
-		case candidateSolo && !bestSolo:
+		case candidateFull && !bestFull:
 			best = candidate
-		case candidateSolo == bestSolo && candidate.confidence > best.confidence:
+		case candidateFull == bestFull && candidateSolo && !bestSolo:
+			best = candidate
+		case candidateFull == bestFull && candidateSolo == bestSolo &&
+			candidate.confidence > best.confidence:
 			best = candidate
 		}
 	}
@@ -615,6 +657,16 @@ func chooseCover(members []faceRef, facesPerImage map[uint]int) uint {
 // earlier version of the job (one that always took the first face) also end up
 // with a solo photo as their cover.
 func (m *Manager) refreshPersonCovers(facesPerImage map[uint]int) {
+	// The cover is the tile the user sees, so it follows the same size floor as
+	// the clustering: a small face covers a person only when nothing else is
+	// left. Without the service's floor the choice keeps its previous rules.
+	ctx, cancel := context.WithTimeout(context.Background(), m.clusterTimeout)
+	defer cancel()
+	thresholds, err := m.thresholds(ctx)
+	if err != nil {
+		thresholds = clusteringThresholds{}
+	}
+
 	var faces []domain.Face
 	if err := m.db.Where("person_id > 0").Order("id").Find(&faces).Error; err != nil {
 		m.setError(fmt.Sprintf("load assigned faces: %v", err))
@@ -630,6 +682,8 @@ func (m *Manager) refreshPersonCovers(facesPerImage map[uint]int) {
 			faceID:      face.ID,
 			imageFileID: face.ImageFileID,
 			confidence:  face.Confidence,
+			width:       face.Width,
+			height:      face.Height,
 		})
 	}
 
@@ -643,7 +697,7 @@ func (m *Manager) refreshPersonCovers(facesPerImage map[uint]int) {
 		if len(members) == 0 {
 			continue
 		}
-		cover := chooseCover(members, facesPerImage)
+		cover := chooseCover(members, facesPerImage, float32(thresholds.weakFacePx))
 		if person.CoverFaceID != nil && *person.CoverFaceID == cover {
 			continue
 		}
@@ -734,14 +788,26 @@ func (m *Manager) clusterAssign(stopCh <-chan struct{}, facesPerImage map[uint]i
 		return
 	}
 
+	ctx, cancel := context.WithTimeout(context.Background(), m.clusterTimeout)
+	defer cancel()
+
+	// The size floor comes from the faces service: a face below it cannot be
+	// clustered at all, so it is dropped before the candidate query and the
+	// label pass instead of being sent and rejected. When the service reports
+	// no floor, nothing is filtered rather than guessing a number.
+	thresholds, thresholdErr := m.thresholds(ctx)
 	faceIDs := make([]uint, 0, len(unassigned))
 	for _, face := range unassigned {
+		if thresholds.facePx > 0 &&
+			float64(minFaceSide(face.Width, face.Height)) < thresholds.facePx {
+			continue
+		}
 		faceIDs = append(faceIDs, face.ID)
 	}
 	vectors := m.loadEmbeddings(faceIDs)
 
-	members := make([]faceRef, 0, len(unassigned))
-	embeddings := make([][]float32, 0, len(unassigned))
+	members := make([]faceRef, 0, len(faceIDs))
+	embeddings := make([][]float32, 0, len(faceIDs))
 	for _, face := range unassigned {
 		vec := vectors[face.ID]
 		if len(vec) == 0 {
@@ -752,6 +818,7 @@ func (m *Manager) clusterAssign(stopCh <-chan struct{}, facesPerImage map[uint]i
 			imageFileID: face.ImageFileID,
 			confidence:  face.Confidence,
 			width:       face.Width,
+			height:      face.Height,
 		})
 		embeddings = append(embeddings, vec)
 	}
@@ -764,9 +831,6 @@ func (m *Manager) clusterAssign(stopCh <-chan struct{}, facesPerImage map[uint]i
 		solo[i] = facesPerImage[member.imageFileID] <= 1
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), m.clusterTimeout)
-	defer cancel()
-
 	memberVectors := make(map[uint][]float32, len(members))
 	for index, member := range members {
 		memberVectors[member.faceID] = embeddings[index]
@@ -777,7 +841,6 @@ func (m *Manager) clusterAssign(stopCh <-chan struct{}, facesPerImage map[uint]i
 	// The similarity floors come from the faces service only; without them the
 	// pass degrades (no reference match, in-memory clustering) rather than
 	// judging faces against numbers core guessed.
-	thresholds, thresholdErr := m.thresholds(ctx)
 	candidates, candidateErr := m.candidateMap(ctx, members, thresholds.recognition, thresholdErr)
 	var references *referenceVectors
 	var personByFace map[uint]uint
@@ -860,7 +923,7 @@ func (m *Manager) clusterAssign(stopCh <-chan struct{}, facesPerImage map[uint]i
 			}
 		}
 
-		coverFaceID := chooseCover(cluster, facesPerImage)
+		coverFaceID := chooseCover(cluster, facesPerImage, float32(thresholds.weakFacePx))
 		person := domain.Person{
 			CoverFaceID:    &coverFaceID,
 			ClusterVersion: personClusterVersion,
@@ -870,7 +933,10 @@ func (m *Manager) clusterAssign(stopCh <-chan struct{}, facesPerImage map[uint]i
 			continue
 		}
 		m.assignFacesToPerson(person.ID, faceIDs)
-		m.replaceReferences(person.ID, cluster, memberVectors, facesPerImage)
+		m.replaceReferences(
+			person.ID, cluster, memberVectors, facesPerImage,
+			float32(thresholds.weakFacePx),
+		)
 		created++
 		assigned += len(cluster)
 	}
@@ -951,6 +1017,92 @@ func (m *Manager) resetGeneratedPeople() {
 		return
 	}
 	log.Println("Face recognition: cleared generated people for a full re-cluster")
+}
+
+// detachTooSmallFaces unassigns the faces the service will not cluster.
+//
+// A face below the service's size floor holds too few real pixels for the
+// recognizer, so the link it carries is mostly resampling noise: on the
+// production gallery 15-21% of the faces under 32 px do not even reach
+// RECOGNITION_MIN_SIMILARITY against their own person's strong faces, while the
+// 32-63 px band stays at 4-9%. Detaching them is what stops a small face from
+// claiming someone else's identity.
+//
+// A manual assignment is a user decision and is left alone: overriding it would
+// silently undo an explicit action. The step is idempotent and runs on a full
+// re-cluster, which is also how an existing gallery is migrated.
+func (m *Manager) detachTooSmallFaces() int64 {
+	ctx, cancel := context.WithTimeout(context.Background(), m.clusterTimeout)
+	defer cancel()
+	thresholds, err := m.thresholds(ctx)
+	if err != nil {
+		m.setError(fmt.Sprintf("detach small faces: %v", err))
+		return 0
+	}
+	if thresholds.facePx <= 0 {
+		return 0
+	}
+
+	// LEAST() is PostgreSQL-only, so the smaller side is spelled as a CASE to
+	// keep the SQLite unit tests on the same code path. Boxes are stored in the
+	// un-rotated frame, hence the comparison of both sides.
+	where := "person_id > 0 AND manual_assignment = false AND " +
+		"(CASE WHEN width < height THEN width ELSE height END) < ?"
+
+	var personIDs []uint
+	if err := m.db.Model(&domain.Face{}).Where(where, thresholds.facePx).
+		Distinct().Pluck("person_id", &personIDs).Error; err != nil {
+		m.setError(fmt.Sprintf("load people holding small faces: %v", err))
+		return 0
+	}
+	result := m.db.Model(&domain.Face{}).Where(where, thresholds.facePx).
+		Update("person_id", 0)
+	if result.Error != nil {
+		m.setError(fmt.Sprintf("detach small faces: %v", result.Error))
+		return 0
+	}
+	if result.RowsAffected == 0 {
+		return 0
+	}
+
+	// An exemplar or a cover may point at a face that has just left its person,
+	// so both are rebuilt from what the person still holds.
+	facesPerImage := m.imageFaceCounts()
+	for _, personID := range personIDs {
+		m.rebuildReferences(personID, facesPerImage, thresholds)
+	}
+	m.refreshPersonCovers(facesPerImage)
+	log.Printf(
+		"Face recognition: detached %d faces smaller than %.0f px from their person",
+		result.RowsAffected, thresholds.facePx,
+	)
+	return result.RowsAffected
+}
+
+// deleteEmptyPeople removes the people no face belongs to any more.
+//
+// A person the user curated is kept even when empty: the name and the manual
+// flag are a user decision, not a clustering artefact, so a criteria change must
+// not throw them away.
+func (m *Manager) deleteEmptyPeople() int64 {
+	emptyPeople := m.db.Model(&domain.Person{}).Select("id").
+		Where("manual = ?", false).
+		Where("NOT EXISTS (SELECT 1 FROM faces WHERE faces.person_id = people.id)")
+	if m.personRefs != nil {
+		if err := m.db.Where("person_id IN (?)", emptyPeople).
+			Delete(&domain.PersonReference{}).Error; err != nil {
+			m.setError(fmt.Sprintf("clear references of empty people: %v", err))
+		}
+	}
+	result := m.db.Where("id IN (?)", emptyPeople).Delete(&domain.Person{})
+	if result.Error != nil {
+		m.setError(fmt.Sprintf("delete empty people: %v", result.Error))
+		return 0
+	}
+	if result.RowsAffected > 0 {
+		log.Printf("Face recognition: removed %d people without faces", result.RowsAffected)
+	}
+	return result.RowsAffected
 }
 
 // clusterLabels decides the person labels of the unassigned faces.
@@ -1062,7 +1214,9 @@ func (m *Manager) clusterFromCandidates(
 	}
 	for index, member := range members {
 		facts.PhotoIDs[index] = member.imageFileID
-		facts.Widths[index] = member.width
+		// The smaller side, so a box stored in the un-rotated frame is judged by
+		// the side that matches the face's real scale.
+		facts.Widths[index] = minFaceSide(member.width, member.height)
 		facts.Qualities[index] = member.confidence
 	}
 	for _, seed := range seeds {

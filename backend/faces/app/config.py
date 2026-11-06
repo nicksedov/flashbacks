@@ -36,7 +36,23 @@ CLUSTER_MIN_SIMILARITY = 0.4
 #: from the same person's portrait. Such a face is re-embedded from an upscaled
 #: padded crop (measured on the G7 group photo: a 21 px wide face scores 0.29
 #: against its portrait this way, 0.22 when embedded from the full frame).
+#:
+#: It is also the boundary between a ``weak`` face and a ``full`` one: a face
+#: below it may join a person but may never found one, and never becomes an
+#: exemplar or a cover.
 SMALL_FACE_WIDTH = 64
+
+#: A face whose smaller side is below this many pixels never takes part in
+#: clustering: alignment onto the 112x112 recognizer canvas interpolates so few
+#: real pixels that the vector is mostly resampling artefact. Measured on the
+#: production gallery (52k faces): 15-21% of the faces below 32 px do not even
+#: reach RECOGNITION_MIN_SIMILARITY against their own person's strong faces,
+#: while the 32-63 px band stays at 4-9%, so the floor sits at 32 px.
+#:
+#: The size of a face is its box's smaller side (``LEAST(width, height)``):
+#: bounding boxes are reported in the stored, un-rotated frame, so on a photo
+#: with EXIF orientation 5-8 the box width is the face's upright height.
+MIN_CLUSTERABLE_FACE_PX = 32
 
 #: Padded crop (a multiple of the face box) and target face width used when
 #: re-embedding a small face. Two box widths of context keeps the detector from
@@ -170,6 +186,9 @@ class FaceSettings:
     max_batch: int = 16
     #: Number of aligned face crops sent through the recognizer per forward pass.
     recognition_batch: int = 32
+    #: Faces smaller than this many pixels (smaller box side) are never
+    #: clustered: they stay detections and are never assigned to a person.
+    min_clusterable_face_px: int = MIN_CLUSTERABLE_FACE_PX
     #: Concurrent analyses allowed per device (each device holds its own session).
     max_concurrency: int = 1
     #: Labelling algorithm revision: ``graph-v1`` or ``graph-v2``.
@@ -192,6 +211,12 @@ class FaceSettings:
             gpu_ids=gpu_ids,
             max_batch=_env_int(source, "FACES_MAX_BATCH", 16, minimum=1),
             recognition_batch=_env_int(source, "FACES_RECOGNITION_BATCH", 32, minimum=1),
+            min_clusterable_face_px=_env_int(
+                source,
+                "FACES_MIN_CLUSTERABLE_FACE_PX",
+                MIN_CLUSTERABLE_FACE_PX,
+                minimum=0,
+            ),
             max_concurrency=_env_int(source, "FACES_MAX_CONCURRENCY", 1, minimum=1),
             cluster_algo=_env_choice(
                 source, "FACES_CLUSTER_ALGO", CLUSTER_ALGO, CLUSTER_ALGOS

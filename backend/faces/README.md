@@ -21,6 +21,22 @@ Runs the Flashbacks face recognition ML pipeline over HTTP:
   wide face scores 0.22 against its portrait from the full frame and 0.29 from
   the upscaled crop, while the highest cosine between two different people in
   the calibration set is 0.15.
+- **Size criteria** — the size of a face is its smaller box side in stored
+  pixels (`widths` on the cluster requests), which is orientation-invariant
+  because boxes live in the un-rotated frame. Three roles follow:
+
+  | role | size | behaviour |
+  |---|---|---|
+  | `tooSmall` | `< MIN_CLUSTERABLE_FACE_PX` (32) | never labelled: stays a detection, is never assigned a person and never founds one |
+  | `weak` | 32…63 | may join a person a full-size face founded; never a core point, an anchor, an exemplar or a cover |
+  | `full` | `>= SMALL_FACE_WIDTH` (64) | full participant |
+
+  Measured on the production gallery (52 407 faces): 15-21 % of the faces below
+  32 px do not even reach `RECOGNITION_MIN_SIMILARITY` against their own
+  person's full-size faces, while the 32-63 px band stays at 4-9 %. The floors
+  are advertised in `/faces/health` (`minClusterableFacePx`, `weakFacePx`) and
+  core reads them: it skips such faces when clustering and detaches the ones
+  attached by an older criteria set.
 
 ## Endpoints
 
@@ -316,6 +332,7 @@ the shipped clustering floor — the recorded two-tier procedure is in
 | `FACES_GPU_ID` | `0` | Single CUDA device id used when `FACES_GPU_IDS` is unset. |
 | `FACES_MAX_BATCH` | `16` | Maximum images one `/faces/analyze-batch` request may carry (larger requests are rejected with `422`). |
 | `FACES_RECOGNITION_BATCH` | `32` | Aligned small-face crops sent through the recognizer per forward pass; `1` keeps the per-image path. |
+| `FACES_MIN_CLUSTERABLE_FACE_PX` | `32` | Smallest face (smaller box side) this service will cluster. A smaller face stays a detection: it is never labelled, never assigned and never founds a person. Set `0` to disable the rule. |
 | `FACES_MAX_CONCURRENCY` | `1` | Concurrent analyses **per device**; each device has its own session, and more per device only duplicates its VRAM use. |
 | `FACES_CLUSTER_ALGO` | `graph-v1` | Labelling revision: `graph-v1` (today's single linkage) or `graph-v2` (density-aware, see [Clustering revisions](#clustering-revisions)). |
 | `FACES_CLUSTER_MODE` | `auto` | Read by **core**, not this service: clustering strategy (`auto`, `store`, `memory`) for the recognition job's candidate graph. |

@@ -37,12 +37,20 @@ type BatchResult struct {
 	Error string
 }
 
-// Thresholds are the calibrated similarities the faces service applies. Core
-// reads them from /faces/health instead of keeping its own copies.
+// Thresholds are the calibrated similarities and size floors the faces service
+// applies. Core reads them from /faces/health instead of keeping its own copies.
 type Thresholds struct {
 	ClusterMinSimilarity     float64 `json:"clusterMinSimilarity"`
 	RecognitionMinSimilarity float64 `json:"recognitionMinSimilarity"`
 	RecognitionMargin        float64 `json:"recognitionMargin"`
+	// MinClusterableFacePx is the smallest face (smaller box side, in stored
+	// pixels) the service will cluster. A smaller face stays a detection: it is
+	// never assigned to a person and never makes one.
+	MinClusterableFacePx float64 `json:"minClusterableFacePx"`
+	// WeakFacePx is the size from which a face is a full participant: below it
+	// a face may join a person but cannot found one, and it never becomes an
+	// exemplar or a cover.
+	WeakFacePx float64 `json:"weakFacePx"`
 	// Assignment of a face (or a new cluster) to an existing person.
 	ClusterAssignSimilarity float64 `json:"clusterAssignSimilarity"`
 	// Merge of two people whose medoids and cross support agree.
@@ -68,7 +76,9 @@ type FaceLink struct {
 
 // FaceFacts are the per-face facts the clustering service needs beside the
 // candidate links, aligned with the submitted face ids. The service owns the
-// semantics (photo diversity, density, quality); core only reports the facts.
+// semantics (photo diversity, density, quality, size); core only reports the
+// facts. Widths carries the smaller box side (min(width, height)), which is
+// orientation-invariant: boxes are stored in the un-rotated frame.
 type FaceFacts struct {
 	PhotoIDs  []uint    `json:"photoIds,omitempty"`
 	Widths    []float32 `json:"widths,omitempty"`

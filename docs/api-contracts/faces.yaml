@@ -206,6 +206,21 @@ components:
               type: number
             recognitionMargin:
               type: number
+            minClusterableFacePx:
+              type: number
+              description: |
+                Smallest face, measured by the smaller box side in stored pixels,
+                that the service will cluster. A smaller face stays a detection:
+                it is never labelled, never assigned to a person and never
+                makes one. Core reads it to skip clustering such faces and to
+                detach the ones already attached (`FACES_MIN_CLUSTERABLE_FACE_PX`,
+                default 32).
+            weakFacePx:
+              type: number
+              description: |
+                Size from which a face is a full participant. Below it a face is
+                *weak*: it may join a person but cannot found one, and it never
+                becomes a person exemplar or a cover (64, i.e. `SMALL_FACE_WIDTH`).
             clusterAlgo:
               type: string
               enum:
@@ -385,7 +400,12 @@ components:
             type: integer
         widths:
           type: array
-          description: Optional face box width in pixels, aligned with `embeddings`.
+          description: |
+            Size of each face in stored pixels, aligned with `embeddings`: the
+            smaller box side (`min(width, height)`), which is the orientation-
+            invariant measure because boxes live in the un-rotated frame. A face
+            below `minClusterableFacePx` never receives a label; a face below
+            `weakFacePx` cannot found a person.
           items:
             type: number
         qualities:
@@ -447,7 +467,13 @@ components:
             type: integer
         widths:
           type: array
-          description: Optional face box width in pixels, aligned with `faceIds`.
+          description: |
+            Size of each face in stored pixels, aligned with `faceIds`: the
+            smaller box side (`min(width, height)`), which is the
+            orientation-invariant measure because boxes live in the un-rotated
+            frame. A face below `minClusterableFacePx` is never labelled, and a
+            face below `weakFacePx` cannot be a core point, so it can only join
+            a person an existing full-size face founded.
           items:
             type: number
         qualities:

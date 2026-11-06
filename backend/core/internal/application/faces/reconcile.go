@@ -31,8 +31,9 @@ const (
 // matches) instead of judging faces against a guessed threshold.
 var errThresholdsUnavailable = errors.New("faces service did not report its thresholds")
 
-// clusteringThresholds are the similarity floors the faces service advertises.
-// The service is the single source of truth, so core keeps no copies of them.
+// clusteringThresholds are the similarity floors and size floors the faces
+// service advertises. The service is the single source of truth, so core keeps
+// no copies of them.
 type clusteringThresholds struct {
 	recognition       float64
 	assign            float64
@@ -40,6 +41,13 @@ type clusteringThresholds struct {
 	merge             float64
 	mergeSupport      int
 	supportSimilarity float64
+	// facePx is the smallest clusterable face (smaller box side, px). Zero
+	// means the service did not report it, and then no size rule is applied
+	// rather than guessed.
+	facePx float64
+	// weakFacePx is the size from which a face is a full participant. It also
+	// marks the smallest face worth storing as an exemplar or a cover.
+	weakFacePx float64
 }
 
 // referenceVectors groups the exemplar vectors of every person.
@@ -99,6 +107,8 @@ func (m *Manager) thresholds(ctx context.Context) (clusteringThresholds, error) 
 		merge:             health.Thresholds.ClusterMergeSimilarity,
 		mergeSupport:      health.Thresholds.ClusterMergeSupport,
 		supportSimilarity: health.Thresholds.ClusterMergeSupportSimilarity,
+		facePx:            health.Thresholds.MinClusterableFacePx,
+		weakFacePx:        health.Thresholds.WeakFacePx,
 	}
 	if resolved.recognition <= 0 || resolved.assign <= 0 {
 		return clusteringThresholds{}, fmt.Errorf(
@@ -270,14 +280,33 @@ func (m *Manager) matchClusterToPerson(
 }
 
 // replaceReferences stores the exemplars of one person from its member faces.
+//
+// Only full-size faces become exemplars: a weak face drifts far enough from the
+// person's own portfolio to pull a later assignment towards a lookalike. A
+// cluster that holds nothing but weak faces keeps them, because a person
+// without exemplars can never be matched again. *minSize* is the service's
+// full-size floor; zero disables it.
 func (m *Manager) replaceReferences(
 	personID uint,
 	cluster []faceRef,
 	memberVectors map[uint][]float32,
 	facesPerImage map[uint]int,
+	minSize float32,
 ) {
 	if m.personRefs == nil {
 		return
+	}
+
+	if minSize > 0 {
+		fullSize := make([]faceRef, 0, len(cluster))
+		for _, member := range cluster {
+			if minFaceSide(member.width, member.height) >= minSize {
+				fullSize = append(fullSize, member)
+			}
+		}
+		if len(fullSize) > 0 {
+			cluster = fullSize
+		}
 	}
 
 	type candidate struct {
@@ -324,12 +353,24 @@ func (m *Manager) replaceReferences(
 }
 
 // rebuildReferences replaces the exemplars of one person from its stored faces.
-func (m *Manager) rebuildReferences(personID uint, facesPerImage map[uint]int) {
+//
+// Only full-size faces become exemplars: a weak face drifts far enough from the
+// person's own portfolio to pull a later assignment towards a lookalike. When a
+// person holds nothing but weak faces its best faces are kept, because an
+// imperfect exemplar still beats a person nobody can match.
+func (m *Manager) rebuildReferences(
+	personID uint,
+	facesPerImage map[uint]int,
+	thresholds clusteringThresholds,
+) {
 	var faces []domain.Face
 	if err := m.db.Where("person_id = ?", personID).Order("confidence DESC, id").
 		Find(&faces).Error; err != nil {
 		m.setError(fmt.Sprintf("load faces of person %d: %v", personID, err))
 		return
+	}
+	if kept := fullSizeFaces(faces, thresholds.weakFacePx); len(kept) > 0 {
+		faces = kept
 	}
 	if len(faces) == 0 {
 		if err := m.personRefs.Replace(personID, nil); err != nil {
@@ -355,10 +396,14 @@ func (m *Manager) rebuildReferences(personID uint, facesPerImage map[uint]int) {
 			faceID:      face.ID,
 			imageFileID: face.ImageFileID,
 			confidence:  face.Confidence,
+			width:       face.Width,
+			height:      face.Height,
 		})
 		memberVectors[face.ID] = vector
 	}
-	m.replaceReferences(personID, cluster, memberVectors, facesPerImage)
+	m.replaceReferences(
+		personID, cluster, memberVectors, facesPerImage, float32(thresholds.weakFacePx),
+	)
 }
 
 // peopleNeedReconcile reports whether stored people come from another
@@ -443,7 +488,7 @@ func (m *Manager) reconcileRound(
 	for _, person := range people {
 		vectors := m.personVectors(person.ID)
 		if len(vectors) == 0 {
-			m.rebuildReferences(person.ID, facesPerImage)
+			m.rebuildReferences(person.ID, facesPerImage, thresholds)
 			vectors = m.personVectors(person.ID)
 		}
 		if len(vectors) == 0 {
@@ -545,7 +590,7 @@ func (m *Manager) reconcileRound(
 			Update("cluster_version", personClusterVersion).Error; err != nil {
 			m.setError(fmt.Sprintf("mark person %d reconciled: %v", survivor, err))
 		}
-		m.rebuildReferences(survivor, facesPerImage)
+		m.rebuildReferences(survivor, facesPerImage, thresholds)
 		merged++
 		log.Printf("Face recognition: reconciled person %d into person %d", mergedAway, survivor)
 	}

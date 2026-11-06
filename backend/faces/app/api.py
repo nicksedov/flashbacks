@@ -18,8 +18,10 @@ from app.config import (
     CLUSTER_MERGE_SUPPORT_SIMILARITY,
     CLUSTER_MIN_PHOTOS,
     CLUSTER_MIN_SIMILARITY,
+    MIN_CLUSTERABLE_FACE_PX,
     RECOGNITION_MARGIN,
     RECOGNITION_MIN_SIMILARITY,
+    SMALL_FACE_WIDTH,
 )
 
 router = APIRouter()
@@ -95,8 +97,10 @@ class ClusterRequest(BaseModel):
     # Such a portrait may anchor a person for a face matched from a group shot.
     soloFaces: Optional[list[bool]] = None
     # Optional face facts, aligned with ``embeddings``. Absent arrays keep the
-    # behaviour an older core expects.
+    # behaviour an older core expects: every face counts as full size.
     photoIds: Optional[list[int]] = None
+    # Smaller side of each face box (``min(width, height)``). A face below
+    # ``MIN_CLUSTERABLE_FACE_PX`` never receives a label.
     widths: Optional[list[float]] = None
     qualities: Optional[list[float]] = None
 
@@ -121,8 +125,11 @@ class ClusterGraphRequest(BaseModel):
     edges: list[FaceLink] = Field(default_factory=list)
     # Aligned with ``faceIds``. ``photoIds`` lets the service enforce photo
     # diversity; when absent it falls back to one unique photo per face, so an
-    # older core keeps today's behaviour. ``widths``/``qualities`` are accepted
-    # for quality-aware rules and do not change the labels yet.
+    # older core keeps today's behaviour. ``widths`` carries the smaller side of
+    # every box and decides the face's role: below ``MIN_CLUSTERABLE_FACE_PX`` it
+    # is never labelled, below ``SMALL_FACE_WIDTH`` it cannot be a core point.
+    # ``qualities`` is accepted for quality-aware rules and does not change the
+    # labels yet.
     photoIds: Optional[list[int]] = None
     widths: Optional[list[float]] = None
     qualities: Optional[list[float]] = None
@@ -172,6 +179,12 @@ def health(request: Request) -> dict[str, Any]:
             "clusterMinSimilarity": CLUSTER_MIN_SIMILARITY,
             "recognitionMinSimilarity": RECOGNITION_MIN_SIMILARITY,
             "recognitionMargin": RECOGNITION_MARGIN,
+            # Size floors: the caller uses them to skip clustering faces that
+            # can never be assigned and to detach the ones already attached.
+            "minClusterableFacePx": getattr(
+                _settings(request), "min_clusterable_face_px", MIN_CLUSTERABLE_FACE_PX
+            ),
+            "weakFacePx": SMALL_FACE_WIDTH,
             "clusterAlgo": getattr(_settings(request), "cluster_algo", CLUSTER_ALGO),
             "clusterCoreSimilarity": CLUSTER_CORE_SIMILARITY,
             "clusterCoreNeighbours": CLUSTER_CORE_NEIGHBOURS,
@@ -255,7 +268,14 @@ def embed(req: EmbedRequest, request: Request) -> EmbedResponse:
 def cluster(req: ClusterRequest, request: Request) -> ClusterResponse:
     try:
         labels = _engine(request).cluster(
-            req.embeddings, req.minClusterSize, req.soloFaces, req.photoIds
+            req.embeddings,
+            req.minClusterSize,
+            req.soloFaces,
+            req.photoIds,
+            req.widths,
+            getattr(
+                _settings(request), "min_clusterable_face_px", MIN_CLUSTERABLE_FACE_PX
+            ),
         )
     except Exception as exc:  # noqa: BLE001 - surface a uniform server error
         raise HTTPException(status_code=500, detail=f"clustering failed: {exc}") from exc
@@ -280,6 +300,9 @@ def cluster_graph(req: ClusterGraphRequest, request: Request) -> ClusterGraphRes
             photo_ids=req.photoIds,
             widths=req.widths,
             qualities=req.qualities,
+            min_clusterable_px=getattr(
+                _settings(request), "min_clusterable_face_px", MIN_CLUSTERABLE_FACE_PX
+            ),
             algorithm=algorithm,
         )
     except Exception as exc:  # noqa: BLE001 - surface a uniform server error

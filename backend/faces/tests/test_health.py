@@ -21,8 +21,10 @@ from app.config import (
     CLUSTER_MERGE_SUPPORT_SIMILARITY,
     CLUSTER_MIN_PHOTOS,
     CLUSTER_MIN_SIMILARITY,
+    MIN_CLUSTERABLE_FACE_PX,
     RECOGNITION_MARGIN,
     RECOGNITION_MIN_SIMILARITY,
+    SMALL_FACE_WIDTH,
 )
 from app.main import create_app
 
@@ -35,6 +37,11 @@ def test_health_returns_ok(client) -> None:
         "clusterMinSimilarity": CLUSTER_MIN_SIMILARITY,
         "recognitionMinSimilarity": RECOGNITION_MIN_SIMILARITY,
         "recognitionMargin": RECOGNITION_MARGIN,
+        # The size floors travel with the similarity floors: core needs them to
+        # skip clustering a face that can never be assigned and to detach the
+        # ones already attached.
+        "minClusterableFacePx": MIN_CLUSTERABLE_FACE_PX,
+        "weakFacePx": SMALL_FACE_WIDTH,
         "clusterAlgo": CLUSTER_ALGO,
         "clusterCoreSimilarity": CLUSTER_CORE_SIMILARITY,
         "clusterCoreNeighbours": CLUSTER_CORE_NEIGHBOURS,

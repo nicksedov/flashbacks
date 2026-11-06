@@ -73,8 +73,17 @@ class FakeEngine:
         min_cluster_size: int = 2,
         solo_faces: list[bool] | None = None,
         photo_ids: list[int] | None = None,
+        widths: list[float] | None = None,
+        min_clusterable_px: float | None = None,
     ) -> list[int]:
-        return FaceEngine.cluster(embeddings, min_cluster_size, solo_faces, photo_ids)
+        return FaceEngine.cluster(
+            embeddings,
+            min_cluster_size,
+            solo_faces,
+            photo_ids,
+            widths,
+            min_clusterable_px,
+        )
 
     def cluster_graph(
         self,

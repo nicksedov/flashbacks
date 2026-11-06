@@ -58,6 +58,23 @@ humans.
 - Refactor only where tests already cover the changed code; never refactor the
   OCR `/classify` signature without an explicit requirement.
 
+### Face size criteria (core + faces)
+
+- The **faces service owns every threshold**, including the size floors
+  (`minClusterableFacePx`, `weakFacePx`); core reads them from `/faces/health`
+  and never keeps a copy. Missing values mean "no rule", never a guessed number.
+- A face is measured by its **smaller box side** (`min(width, height)`, sent to
+  the service as `widths`): boxes live in the un-rotated frame, so on a photo
+  with EXIF orientation 5-8 the box width is the face's upright height. A rule
+  written against `width` alone misjudges those faces.
+- Roles: below `MIN_CLUSTERABLE_FACE_PX` (32) a face is never clustered and never
+  assigned; below `SMALL_FACE_WIDTH` (64) it may join a person but cannot found
+  one and is never an exemplar or a cover.
+- `manual_assignment` and `people.manual` are **user decisions**: the job never
+  detaches or deletes them, even when a size rule says otherwise.
+- SQL in core must stay SQLite-compatible for the unit tests: use
+  `CASE WHEN width < height THEN width ELSE height END`, not `LEAST()`.
+
 ### Cross-service contracts
 
 - JSON tags are camelCase and must match the webapp TypeScript property names

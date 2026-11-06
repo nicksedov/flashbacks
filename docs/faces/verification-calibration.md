@@ -181,3 +181,38 @@ work directory removed: /tmp/dataset
 
 No image, embedding or archive from LFW is stored in this repository; running
 the commands above reproduces every number in this document.
+
+## Size criteria measured on the production gallery
+
+The same question — how much identity survives in a small face — was measured on
+the live gallery (52 407 faces): for every face below 64 px, the best cosine to
+the full-size faces (>= 64 px) of **its own** person. A score under 0.25 is
+below the recognition floor and above the highest cosine between two different
+people (0.15), so such a face is demonstrably linked to the wrong person.
+
+| face size, px | faces | mean best cosine | >= 0.25 | >= 0.30 | >= 0.40 |
+|---|---|---|---|---|---|
+| < 20 | 498 | 0.356 | 78.5 % | 70.1 % | 34.1 % |
+| 20–23 | 416 | 0.377 | 79.1 % | 68.8 % | 39.2 % |
+| 24–27 | 440 | 0.425 | 85.5 % | 78.9 % | 52.5 % |
+| 28–31 | 475 | 0.454 | 89.1 % | 83.2 % | 58.5 % |
+| 32–39 | 1 027 | 0.483 | 90.8 % | 86.4 % | 65.0 % |
+| 40–47 | 1 132 | 0.513 | 91.0 % | 87.6 % | 66.3 % |
+| 48–55 | 1 182 | 0.548 | 93.3 % | 89.8 % | 74.5 % |
+| 56–63 | 1 204 | 0.578 | 95.9 % | 93.9 % | 79.5 % |
+
+Two conclusions drive the criteria in `app/config.py`:
+
+* `det_score` is **not** a usable proxy: the median detection confidence is 0.744
+  for faces under 32 px and 0.824 for faces over 64 px, so a confidence floor
+  would reject correct large faces about as often as small ones.
+* the size itself is: below 32 px one face in five is linked to the wrong
+  person, while the 32–63 px band stays at 4–9 %. Hence
+  `MIN_CLUSTERABLE_FACE_PX = 32` (never clustered) and `SMALL_FACE_WIDTH = 64`
+  (may join, may not found, never an exemplar or a cover).
+
+Cost of the floor on the same gallery: 2 160 of 44 773 assigned faces are
+detached, 24 of 1 727 people lose every face (none of them curated by the user),
+and 413 hand-assigned faces are left untouched by design. See
+[`plans/small-faces-criteria.md`](../../plans/small-faces-criteria.md:47) for the
+full measurement.

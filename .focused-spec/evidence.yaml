@@ -21,6 +21,36 @@ scopes:
     face-recognition.distinct-identities-stay-separate:
       evidence:
         - facespytest::backend/faces/tests/test_clustering_quality.py::test_distinct_identities_stay_separate
+    face-recognition.face-size-is-smaller-box-side:
+      evidence:
+        - go::./internal/application/faces::TestMinFaceSideIsOrientationInvariant
+        - go::./internal/application/faces::TestClusterFromCandidatesSendsTheSmallerBoxSide
+    face-recognition.small-face-never-assigned:
+      evidence:
+        - go::./internal/application/faces::TestClusterAssignSkipsFacesBelowTheFloor
+        - facespytest::backend/faces/tests/test_small_faces.py::test_a_face_below_the_floor_is_never_labelled
+    face-recognition.weak-face-cannot-found-person:
+      evidence:
+        - facespytest::backend/faces/tests/test_small_faces.py::test_weak_faces_cannot_found_a_person
+        - facespytest::backend/faces/tests/test_small_faces.py::test_graph_v2_refuses_core_points_among_weak_faces
+    face-recognition.weak-face-joins-person:
+      evidence:
+        - facespytest::backend/faces/tests/test_small_faces.py::test_weak_faces_join_the_person_a_full_face_founds
+    face-recognition.exemplars-are-full-size:
+      evidence:
+        - go::./internal/application/faces::TestRebuildReferencesUsesOnlyFullSizeFaces
+    face-recognition.small-face-detached:
+      evidence:
+        - go::./internal/application/faces::TestDetachTooSmallFacesUnassignsAutoAssignments
+    face-recognition.manual-assignment-kept:
+      evidence:
+        - go::./internal/application/faces::TestDetachTooSmallFacesKeepsManualAssignments
+    face-recognition.person-without-faces-removed:
+      evidence:
+        - go::./internal/application/faces::TestDeleteEmptyPeopleRemovesGeneratedPeople
+    face-recognition.size-floors-published:
+      evidence:
+        - facespytest::backend/faces/tests/test_small_faces.py::test_health_reports_the_size_floors
     face-recognition.status-progress:
       evidence:
         - go::./internal/application/faces::TestFaceRecognitionManager_StatusProgress

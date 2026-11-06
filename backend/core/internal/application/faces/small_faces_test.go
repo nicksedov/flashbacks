@@ -239,6 +239,39 @@ func TestClusterAssignSkipsFacesBelowTheFloor(t *testing.T) {
 	}
 }
 
+// TestRebuildReferencesUsesOnlyFullSizeFaces guards which faces represent a
+// person: a weak face is never an exemplar while the person holds a full-size
+// one, because a drifted exemplar pulls later assignments towards a lookalike.
+func TestRebuildReferencesUsesOnlyFullSizeFaces(t *testing.T) {
+	db, cleanup := testutil.NewTestDB(t)
+	defer cleanup()
+
+	image := seedImage(t, db, "person-a-1")
+	person := domain.Person{}
+	if err := db.Create(&person).Error; err != nil {
+		t.Fatalf("create person: %v", err)
+	}
+	full := seedSizedFace(t, db, image.ID, person.ID, 120, 140, false)
+	weak := seedSizedFace(t, db, image.ID, person.ID, 40, 48, false)
+
+	m := reconcileManager(db, clientWithSizeFloors(32, 64))
+	m.rebuildReferences(person.ID, m.imageFaceCounts(), clusteringThresholds{weakFacePx: 64})
+
+	references, err := m.personRefs.List(person.ID)
+	if err != nil {
+		t.Fatalf("list references: %v", err)
+	}
+	if len(references) != 1 {
+		t.Fatalf("references = %d, want 1 (only the full-size face)", len(references))
+	}
+	if references[0].FaceID != full.ID {
+		t.Errorf(
+			"exemplar face = %d, want the full-size face %d (weak face %d excluded)",
+			references[0].FaceID, full.ID, weak.ID,
+		)
+	}
+}
+
 // TestClusterFromCandidatesSendsTheSmallerBoxSide guards the fact core reports:
 // the service judges the smaller side, so a rotated box must not look large.
 func TestClusterFromCandidatesSendsTheSmallerBoxSide(t *testing.T) {

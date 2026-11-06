@@ -1,7 +1,7 @@
 -- =============================================================================
 -- Production migration: detach faces below the size floor
 -- =============================================================================
--- Criteria (see plans/small-faces-criteria.md and docs/faces/verification-calibration.md):
+-- Criteria (see openspec/specs/face-recognition/spec.md and docs/faces/verification-calibration.md):
 --   a face is measured by its SMALLER box side, in stored pixels;
 --   below 32 px it can never be clustered, so any link it carries is noise.
 --

@@ -61,6 +61,82 @@ not clear the calibrated similarity floor and margin SHALL stay unassigned
 - **WHEN** the job processes photos of two different people whose faces are below the calibrated similarity floor of each other
 - **THEN** their face records reference different people
 
+### Requirement: Face size decides whether a face is clustered and assigned
+
+The size of a face SHALL be the smaller side of its bounding box in stored
+pixels: boxes are reported in the analysed image's un-rotated frame, so the
+smaller side is the only orientation-invariant measure of the face's real
+scale. The faces service SHALL own the two size floors and report them in
+`GET /faces/health` as `minClusterableFacePx` (32 px) and `weakFacePx` (64 px).
+The core SHALL read those floors from the service and SHALL apply no size rule
+of its own when the service does not report them.
+
+A face below `minClusterableFacePx` SHALL NOT take part in clustering and SHALL
+NOT be assigned to a person: it stays a stored detection with `personId` 0. A
+face at or above `minClusterableFacePx` but below `weakFacePx` MAY join a person
+that a full-size face founded, and SHALL NOT found a person, SHALL NOT become a
+person exemplar and SHALL NOT become a cover. A face at or above `weakFacePx`
+SHALL take part fully.
+
+The floors are calibrated rather than guessed. Measured on 52 407 production
+faces, 15-21% of the faces below 32 px do not reach the recognition threshold
+against their own person's full-size faces, while the 32-63 px band stays at
+4-9% — see [`docs/faces/verification-calibration.md`](docs/faces/verification-calibration.md:186).
+
+<!-- focused-spec:id=face-recognition.face-size-is-smaller-box-side -->
+#### Scenario: A face is measured by its smaller box side
+
+- **WHEN** one detected face box is wider than it is tall and another is taller than it is wide
+- **THEN** both are judged by their smaller side, and the core reports that side to the clustering service
+
+<!-- focused-spec:id=face-recognition.small-face-never-assigned -->
+#### Scenario: A face below the clusterable floor stays unassigned
+
+- **WHEN** a face whose smaller side is below the clusterable floor is submitted for clustering
+- **THEN** that face receives no cluster label and references no person, while the full-size faces of the same request are still clustered
+
+<!-- focused-spec:id=face-recognition.weak-face-cannot-found-person -->
+#### Scenario: Weak faces never become a person of their own
+
+- **WHEN** a candidate group holds only faces below the weak boundary, however tightly they are linked
+- **THEN** no person is formed and every face of that group stays unassigned
+
+<!-- focused-spec:id=face-recognition.weak-face-joins-person -->
+#### Scenario: A weak face joins the person a full-size face founded
+
+- **WHEN** a weak face belongs to a group that also holds a full-size face
+- **THEN** the weak face joins that person's cluster
+
+<!-- focused-spec:id=face-recognition.exemplars-are-full-size -->
+#### Scenario: Only full-size faces represent a person
+
+- **WHEN** a person's exemplar set is rebuilt and the person holds at least one full-size face
+- **THEN** only full-size faces are stored as that person's exemplars
+
+<!-- focused-spec:id=face-recognition.small-face-detached -->
+#### Scenario: A face below the floor is detached from its person
+
+- **WHEN** a stored face below the clusterable floor is automatically attached to a person and the size criteria are applied again
+- **THEN** that face references no person and the person keeps its remaining faces
+
+<!-- focused-spec:id=face-recognition.manual-assignment-kept -->
+#### Scenario: A user's own assignment survives the size criteria
+
+- **WHEN** a face below the clusterable floor was attached to a person by the user
+- **THEN** the size criteria leave that assignment in place
+
+<!-- focused-spec:id=face-recognition.person-without-faces-removed -->
+#### Scenario: A person left without faces is removed
+
+- **WHEN** every face of a generated person is detached by the size criteria
+- **THEN** that person is deleted, while a person the user curated is kept even when it holds no face
+
+<!-- focused-spec:id=face-recognition.size-floors-published -->
+#### Scenario: Health reports both size floors
+
+- **WHEN** the faces service is healthy
+- **THEN** `GET /faces/health` reports the clusterable size floor and the weak boundary it applies
+
 ### Requirement: Detected faces of one image are exposed with their person
 
 `GET /api/image-faces?path=<imagePath>` SHALL return every face detected on that

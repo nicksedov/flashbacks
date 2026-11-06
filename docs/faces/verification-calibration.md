@@ -211,8 +211,10 @@ Two conclusions drive the criteria in `app/config.py`:
   `MIN_CLUSTERABLE_FACE_PX = 32` (never clustered) and `SMALL_FACE_WIDTH = 64`
   (may join, may not found, never an exemplar or a cover).
 
-Cost of the floor on the same gallery: 2 160 of 44 773 assigned faces are
-detached, 24 of 1 727 people lose every face (none of them curated by the user),
-and 413 hand-assigned faces are left untouched by design. See
-[`plans/small-faces-criteria.md`](../../plans/small-faces-criteria.md:47) for the
-full measurement.
+Cost of the floor when it was applied to the same gallery: 1 747 automatically
+assigned faces were detached, 24 of 1 727 people lost every face (none of them
+curated by the user) and were removed, and 413 hand-assigned faces stayed in
+place by design. The migration that did it is
+[`plans/small-faces-detach-migration.sql`](../../plans/small-faces-detach-migration.sql:1);
+the rules it enforces are specified in
+[`openspec/specs/face-recognition/spec.md`](../../openspec/specs/face-recognition/spec.md:64).

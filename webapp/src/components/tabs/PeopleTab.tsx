@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { ArrowLeft, Check, Pencil, Trash2, Users } from "lucide-react"
+import { ArrowLeft, Check, Pencil, Trash2, UserPlus, Users } from "lucide-react"
 import { useTranslation } from "@/i18n"
 import type { PersonDTO, GalleryImageDTO } from "@/types"
 import {
@@ -16,8 +16,12 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
-import { showToastError } from "@/lib/toast-utils"
-import { MergePeopleDialog, RenamePersonDialog } from "@/components/people/PeopleDialogs"
+import { showToastError, showToastSuccess } from "@/lib/toast-utils"
+import {
+  MergePeopleDialog,
+  PersonPickerDialog,
+  RenamePersonDialog,
+} from "@/components/people/PeopleDialogs"
 import { UnassignedFacesView } from "@/components/people/UnassignedFacesView"
 
 /**
@@ -49,6 +53,7 @@ export function PeopleTab() {
   const [selectedIds, setSelectedIds] = useState<number[]>([])
   const [renameTarget, setRenameTarget] = useState<PersonDTO | null>(null)
   const [mergeOpen, setMergeOpen] = useState(false)
+  const [mergeIntoSource, setMergeIntoSource] = useState<PersonDTO | null>(null)
   const [disbandTarget, setDisbandTarget] = useState<PersonDTO | null>(null)
   const [busy, setBusy] = useState(false)
 
@@ -190,6 +195,40 @@ export function PeopleTab() {
     [selectedPeople, t],
   )
 
+  // Folding one cluster into an already-known person: the cluster's faces and
+  // photos move to the chosen person and the cluster row disappears.
+  const handleMergeIntoSubmit = useCallback(
+    async (targetPersonId: number) => {
+      const source = mergeIntoSource
+      if (!source || source.id === targetPersonId) return
+      setBusy(true)
+      try {
+        const merged = await mergePeople({
+          targetPersonId,
+          sourcePersonIds: [source.id],
+        })
+        setPeople((current) =>
+          current
+            .filter((person) => person.id !== source.id)
+            .map((person) => (person.id === targetPersonId ? merged : person)),
+        )
+        setSelectedIds((current) => current.filter((id) => id !== source.id))
+        setSelected((current) => (current && current.id === source.id ? null : current))
+        setMergeIntoSource(null)
+        showToastSuccess(
+          t("people.mergeIntoDone", {
+            name: merged.name || t("people.unnamed", { id: merged.id }),
+          }),
+        )
+      } catch {
+        showToastError(t("people.actionFailed"))
+      } finally {
+        setBusy(false)
+      }
+    },
+    [mergeIntoSource, t],
+  )
+
   const handleDisbandConfirm = useCallback(async () => {
     if (!disbandTarget) return
     setBusy(true)
@@ -223,6 +262,17 @@ export function PeopleTab() {
           >
             <Pencil className="h-4 w-4" />
             {t("people.rename")}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            data-slot="person-detail-merge-into"
+            className="gap-2"
+            disabled={people.length < 2 || busy}
+            onClick={() => setMergeIntoSource(selected)}
+          >
+            <UserPlus className="h-4 w-4" />
+            {t("people.mergeInto")}
           </Button>
           <Button
             variant="destructive"
@@ -393,7 +443,7 @@ export function PeopleTab() {
                         </p>
                       </div>
                     </button>
-                    <div className="absolute right-1 top-1 flex gap-1">
+                    <div className="absolute right-1 top-1 flex max-w-[calc(100%-0.5rem)] flex-wrap justify-end gap-1">
                       <Button
                         type="button"
                         size="icon"
@@ -405,6 +455,19 @@ export function PeopleTab() {
                         onClick={() => toggleSelection(person.id)}
                       >
                         <Check className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="outline"
+                        data-slot="person-merge-into"
+                        aria-label={t("people.mergeInto")}
+                        title={t("people.mergeInto")}
+                        className="h-11 w-11 md:h-8 md:w-8"
+                        disabled={people.length < 2 || busy}
+                        onClick={() => setMergeIntoSource(person)}
+                      >
+                        <UserPlus className="h-4 w-4" />
                       </Button>
                       <Button
                         type="button"
@@ -443,6 +506,17 @@ export function PeopleTab() {
           loading={busy}
           onCancel={() => setRenameTarget(null)}
           onSubmit={(name) => void handleRenameSubmit(name)}
+        />
+      )}
+
+      {mergeIntoSource && (
+        <PersonPickerDialog
+          title={t("people.mergeIntoTitle", { name: displayName(mergeIntoSource) })}
+          description={t("people.mergeIntoHint")}
+          people={people.filter((person) => person.id !== mergeIntoSource.id)}
+          loading={busy}
+          onCancel={() => setMergeIntoSource(null)}
+          onPick={(personId) => void handleMergeIntoSubmit(personId)}
         />
       )}
 

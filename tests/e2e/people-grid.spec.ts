@@ -13,7 +13,10 @@ import { openPeopleTab, personCard, personTile, searchPeople, selectPerson } fro
 test.describe("People catalog — grid tools", () => {
   test.skip(!HAS_CREDENTIALS, SKIP_REASON)
 
-  test("search, rename, merge and disband a seeded catalog", async ({ page, api }) => {
+  test("search, rename, fold a cluster in, merge and disband a seeded catalog", async ({
+    page,
+    api,
+  }) => {
     const created: number[] = []
     try {
       const faces = await api.unassignedFaces(1, 100)
@@ -21,12 +24,14 @@ test.describe("People catalog — grid tools", () => {
         faces.length < 3,
         "The gallery needs at least three unassigned faces to seed the walkthrough.",
       )
-      const [faceA, faceB] = faces
+      const [faceA, faceB, faceC] = faces
 
       const personA = uniquePersonName("Anna")
       const personB = uniquePersonName("Boris")
+      const cluster = uniquePersonName("Cluster")
       created.push((await api.createPerson(personA, [faceA.id])).id)
       created.push((await api.createPerson(personB, [faceB.id])).id)
+      created.push((await api.createPerson(cluster, [faceC.id])).id)
 
       await openPeopleTab(page)
 
@@ -47,6 +52,20 @@ test.describe("People catalog — grid tools", () => {
       await expect
         .poll(async () => (await api.people()).some((person) => person.name === renamed))
         .toBe(true)
+
+      // Fold a cluster into an already-known person: the per-tile action opens
+      // the person picker, and the picked person absorbs the cluster.
+      await personCard(page, cluster)
+        .locator('[data-slot="person-merge-into"]')
+        .click()
+      const pickerDialog = page.getByRole("dialog")
+      await expect(pickerDialog).toBeVisible()
+      await pickerDialog.locator('[data-slot="picker-person"]').filter({ hasText: renamed }).click()
+
+      await expect(personTile(page, cluster)).toHaveCount(0)
+      await expect
+        .poll(async () => (await api.people()).some((person) => person.name === cluster))
+        .toBe(false)
 
       // Merge: the merge action needs two selections and previews the result.
       await selectPerson(page, renamed)

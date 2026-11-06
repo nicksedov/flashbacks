@@ -63,6 +63,7 @@ beforeEach(() => {
   endpoints.assignFaceToPerson.mockReset()
   endpoints.fetchUnassignedFaces.mockReset()
   toast.showToastError.mockReset()
+  toast.showToastSuccess.mockReset()
   endpoints.fetchPersonPhotos.mockReset()
   endpoints.fetchPersonPhotos.mockResolvedValue({
     images: [],
@@ -269,6 +270,46 @@ describe("PeopleTab", () => {
     )
     await waitFor(() => expect(container.querySelectorAll('[data-slot="person-tile"]')).toHaveLength(1))
     expect(screen.getByText("Василиса")).toBeTruthy()
+  })
+
+  it("folds one cluster into a chosen known person through the picker", async () => {
+    endpoints.fetchPeople.mockResolvedValue({
+      people: [
+        { id: 5, name: "", photoCount: 2, coverThumbnail: "" },
+        { id: 2, name: "Василиса", photoCount: 4, coverThumbnail: "" },
+      ],
+    })
+    endpoints.mergePeople.mockResolvedValue({
+      id: 2,
+      name: "Василиса",
+      photoCount: 6,
+      coverThumbnail: "",
+    })
+
+    const { container } = render(<PeopleTab />)
+    await waitFor(() => expect(container.querySelectorAll('[data-slot="person-tile"]')).toHaveLength(2))
+
+    fireEvent.click(container.querySelectorAll('[data-slot="person-merge-into"]')[0] as HTMLElement)
+    await waitFor(() => expect(screen.getByRole("dialog")).toBeTruthy())
+    expect(screen.getByText("Add “Person 5” to a person")).toBeTruthy()
+
+    // The cluster being folded in must not be offered as its own target.
+    const picks = document.querySelectorAll('[data-slot="picker-person"]')
+    expect(picks).toHaveLength(1)
+    expect(within(picks[0] as HTMLElement).getByText("Василиса")).toBeTruthy()
+
+    fireEvent.click(picks[0] as HTMLElement)
+
+    await waitFor(() =>
+      expect(endpoints.mergePeople).toHaveBeenCalledWith({
+        targetPersonId: 2,
+        sourcePersonIds: [5],
+      }),
+    )
+    await waitFor(() => expect(container.querySelectorAll('[data-slot="person-tile"]')).toHaveLength(1))
+    expect(screen.queryByText("Person 5")).toBeNull()
+    expect(toast.showToastSuccess).toHaveBeenCalledWith("Added to Василиса")
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull())
   })
 
   it("renames a tile in place", async () => {

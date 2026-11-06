@@ -252,6 +252,8 @@ export function CreatePersonDialog({
 
 interface PersonPickerDialogProps {
   title: string
+  /** Optional explanation of what picking a person does. */
+  description?: string
   /** The whole catalog, not only the people already on a photo. */
   people: PersonDTO[]
   loading?: boolean
@@ -264,6 +266,7 @@ interface PersonPickerDialogProps {
 /** Searchable list of every person, with an optional create-new path. */
 export function PersonPickerDialog({
   title,
+  description,
   people,
   loading = false,
   onCreate,
@@ -291,6 +294,9 @@ export function PersonPickerDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
+          {description && (
+            <DialogDescription data-slot="picker-description">{description}</DialogDescription>
+          )}
         </DialogHeader>
         <div className="space-y-3">
           <Input

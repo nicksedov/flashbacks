@@ -19,6 +19,11 @@ const maxPersonExemplars = 5
 const nameKeyIndexSQL = `CREATE UNIQUE INDEX IF NOT EXISTS idx_people_name_key_unique ` +
 	`ON people (name_key) WHERE name_key <> ''`
 
+// redundantNameKeyIndexSQL drops the plain btree an earlier build created through
+// the GORM `index` tag. The partial unique index above serves every lookup, so
+// keeping both only adds an index write to each rename.
+const redundantNameKeyIndexSQL = `DROP INDEX IF EXISTS idx_people_name_key`
+
 // migratePersonNames makes people.name_key authoritative before the unique index
 // is created: it backfills the keys, folds the people whose names are equal after
 // normalization into the lowest id, and then creates the partial unique index.
@@ -36,6 +41,15 @@ func migratePersonNames(db *gorm.DB) {
 		// enforcing the rule for every write through the API.
 		log.Printf("warning: failed to create unique index idx_people_name_key_unique "+
 			"(resolve duplicate person names first): %v", err)
+	}
+
+	// Only drop the redundant index once the unique one actually exists: on a
+	// database whose duplicates could not be folded it is the only index left on
+	// the column.
+	if db.Migrator().HasIndex(&domain.Person{}, "idx_people_name_key_unique") {
+		if err := db.Exec(redundantNameKeyIndexSQL).Error; err != nil {
+			log.Printf("warning: drop redundant index idx_people_name_key: %v", err)
+		}
 	}
 }
 

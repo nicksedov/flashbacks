@@ -179,7 +179,20 @@ func TestMigratePersonNamesCreatesUniqueIndex(t *testing.T) {
 	db, cleanup := testutil.NewTestDB(t)
 	defer cleanup()
 
+	// An earlier build indexed name_key twice; the plain btree must be gone once
+	// the partial unique index exists.
+	if err := db.Exec("CREATE INDEX IF NOT EXISTS idx_people_name_key ON people (name_key)").Error; err != nil {
+		t.Fatalf("create legacy index: %v", err)
+	}
+
 	migratePersonNames(db)
+
+	if db.Migrator().HasIndex(&domain.Person{}, "idx_people_name_key") {
+		t.Errorf("redundant index idx_people_name_key still exists")
+	}
+	if !db.Migrator().HasIndex(&domain.Person{}, "idx_people_name_key_unique") {
+		t.Errorf("unique index idx_people_name_key_unique is missing")
+	}
 
 	first := domain.Person{}
 	first.SetName("Иван")

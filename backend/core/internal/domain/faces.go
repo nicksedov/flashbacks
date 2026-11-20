@@ -31,8 +31,10 @@ type Person struct {
 	// collapsed and case-folded (see PersonNameKey). It is never exposed to
 	// clients and is empty for an unnamed person, so unnamed people never
 	// collide. The catalog sets it through SetName on every name write and the
-	// database carries a partial unique index on it.
-	NameKey string `gorm:"default:'';index" json:"-"`
+	// database carries a partial unique index on it (idx_people_name_key_unique,
+	// created by the startup migration); no extra GORM index tag here, or the
+	// column would be indexed twice.
+	NameKey string `gorm:"default:''" json:"-"`
 	// Manual marks a person the user created, merged or renamed. The
 	// recognition job leaves manual people alone: it neither reconciles them
 	// into another person nor deletes them on a full re-cluster.

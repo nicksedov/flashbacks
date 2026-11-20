@@ -68,8 +68,10 @@ func InitializeApp() (*App, error) {
 	metadataRepository := di.ProvideMetadataRepo(db)
 	ocrRepository := di.ProvideOcrRepo(db)
 	imageTagRepository := di.ProvideImageTagRepo(db)
-	appSettingsRepository := di.ProvideAppSettingsRepo(db)
-	userSettingsRepository := di.ProvideUserSettingsRepo(db)
+	ttlCache := di.ProvideAppSettingsCache(appConfig)
+	appSettingsRepository := di.ProvideAppSettingsRepo(db, ttlCache)
+	cacheTTLCache := di.ProvideUserSettingsCache(appConfig)
+	userSettingsRepository := di.ProvideUserSettingsRepo(db, cacheTTLCache)
 	syncHistoryRepository := di.ProvideSyncHistoryRepo(db)
 	serverDeps := handler.ServerDeps{
 		DB:                  db,
@@ -115,7 +117,8 @@ func InitializeApp() (*App, error) {
 	server := di.ProvideServer(serverDeps)
 	loginLimiter := di.ProvideLoginRateLimiter()
 	sessionConfig := di.ProvideSessionConfig(appConfig)
-	sessionRepository := di.ProvideSessionRepository(db, sessionConfig)
+	ttlCache2 := di.ProvideSessionCache(appConfig)
+	sessionRepository := di.ProvideSessionRepository(db, sessionConfig, ttlCache2)
 	sessionCleanupJob := di.ProvideSessionCleanupJob(sessionRepository)
 	bootstrapService := di.ProvideBootstrapService(db, appConfig)
 	registerLimiter := di.ProvideRegisterRateLimiter()

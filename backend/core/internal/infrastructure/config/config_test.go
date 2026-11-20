@@ -57,6 +57,45 @@ func TestLlmModelsCacheTTLRegistryRoundTrip(t *testing.T) {
 	}
 }
 
+// TestCacheTTLDefaults guards the documented defaults: sessions are cached for
+// a minute and settings for five.
+func TestCacheTTLDefaults(t *testing.T) {
+	t.Setenv("SESSION_CACHE_TTL", "")
+	t.Setenv("SETTINGS_CACHE_TTL", "")
+
+	cfg := LoadConfig()
+	if cfg.SessionCacheTTL != time.Minute {
+		t.Fatalf("SESSION_CACHE_TTL default = %v, want 1m", cfg.SessionCacheTTL)
+	}
+	if cfg.SettingsCacheTTL != 5*time.Minute {
+		t.Fatalf("SETTINGS_CACHE_TTL default = %v, want 5m", cfg.SettingsCacheTTL)
+	}
+}
+
+// TestCacheTTLRegistryRoundTrip verifies both cache TTLs survive the registry
+// overlay.
+func TestCacheTTLRegistryRoundTrip(t *testing.T) {
+	cfg := LoadConfig()
+	cfg.SessionCacheTTL = 90 * time.Second
+	cfg.SettingsCacheTTL = 2 * time.Minute
+
+	defaults := cfg.RegistryDefaults()
+	for _, key := range []string{"SESSION_CACHE_TTL", "SETTINGS_CACHE_TTL"} {
+		if _, ok := defaults[key]; !ok {
+			t.Fatalf("%s is missing from the registry defaults", key)
+		}
+	}
+
+	overlay := LoadConfig()
+	overlay.ApplyRegistry(defaults)
+	if overlay.SessionCacheTTL != 90*time.Second {
+		t.Fatalf("applied SESSION_CACHE_TTL = %v, want 90s", overlay.SessionCacheTTL)
+	}
+	if overlay.SettingsCacheTTL != 2*time.Minute {
+		t.Fatalf("applied SETTINGS_CACHE_TTL = %v, want 2m", overlay.SettingsCacheTTL)
+	}
+}
+
 // TestFacesBatchDefaults guards the documented defaults: eight images per
 // analysis request and a five-minute budget for it.
 func TestFacesBatchDefaults(t *testing.T) {

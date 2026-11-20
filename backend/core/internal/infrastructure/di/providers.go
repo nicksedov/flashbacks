@@ -16,6 +16,7 @@ import (
 	"github.com/flashbacks/core/internal/application/thumbnail"
 	"github.com/flashbacks/core/internal/domain"
 	"github.com/flashbacks/core/internal/domain/repository"
+	"github.com/flashbacks/core/internal/infrastructure/cache"
 	"github.com/flashbacks/core/internal/infrastructure/config"
 	"github.com/flashbacks/core/internal/infrastructure/database"
 	"github.com/flashbacks/core/internal/infrastructure/exifclient"
@@ -43,6 +44,9 @@ var CoreSet = wire.NewSet(
 	ProvideConfig,
 	ProvideDB,
 	ProvideI18nService,
+	ProvideSessionCache,
+	ProvideAppSettingsCache,
+	ProvideUserSettingsCache,
 	ProvideExifClient,
 	ProvideFacesClient,
 	ProvideNominatimClient,
@@ -90,6 +94,22 @@ func ProvideConfig(bootstrap *registrybootstrap.Bootstrap) *config.AppConfig {
 // ProvideDB initializes the database connection and runs auto-migration.
 func ProvideDB(cfg *config.AppConfig) (*gorm.DB, error) {
 	return database.InitDatabase(cfg)
+}
+
+// ProvideSessionCache creates the process-local cache of authenticated
+// sessions, keyed by token hash. Write paths evict it explicitly.
+func ProvideSessionCache(cfg *config.AppConfig) *cache.TTLCache[string, *domain.Session] {
+	return cache.NewTTLCache[string, *domain.Session](cfg.SessionCacheTTL, nil)
+}
+
+// ProvideAppSettingsCache creates the cache of the app_settings singleton.
+func ProvideAppSettingsCache(cfg *config.AppConfig) *cache.TTLCache[int, *domain.AppSettings] {
+	return cache.NewTTLCache[int, *domain.AppSettings](cfg.SettingsCacheTTL, nil)
+}
+
+// ProvideUserSettingsCache creates the per-user settings cache.
+func ProvideUserSettingsCache(cfg *config.AppConfig) *cache.TTLCache[uint, *domain.UserSettings] {
+	return cache.NewTTLCache[uint, *domain.UserSettings](cfg.SettingsCacheTTL, nil)
 }
 
 // ProvideI18nService creates the i18n translation service.
@@ -207,8 +227,8 @@ func ProvideImageTagRepo(db *gorm.DB) repository.ImageTagRepository {
 }
 
 // ProvideAppSettingsRepo creates the app settings repository.
-func ProvideAppSettingsRepo(db *gorm.DB) repository.AppSettingsRepository {
-	return repository.NewAppSettingsRepository(db)
+func ProvideAppSettingsRepo(db *gorm.DB, settings *cache.TTLCache[int, *domain.AppSettings]) repository.AppSettingsRepository {
+	return repository.NewAppSettingsRepository(db, settings)
 }
 
 // ProvideScheduleRepo creates the unified job schedule repository.
@@ -232,8 +252,8 @@ func ProvideFaceRepo(db *gorm.DB) repository.FaceRepository {
 }
 
 // ProvideUserSettingsRepo creates the user settings repository.
-func ProvideUserSettingsRepo(db *gorm.DB) repository.UserSettingsRepository {
-	return repository.NewUserSettingsRepository(db)
+func ProvideUserSettingsRepo(db *gorm.DB, settings *cache.TTLCache[uint, *domain.UserSettings]) repository.UserSettingsRepository {
+	return repository.NewUserSettingsRepository(db, settings)
 }
 
 // ProvideSyncHistoryRepo creates the sync history repository.
@@ -407,8 +427,12 @@ func ProvideSessionConfig(cfg *config.AppConfig) *auth.SessionConfig {
 }
 
 // ProvideSessionRepository creates the session repository.
-func ProvideSessionRepository(db *gorm.DB, sessionConfig *auth.SessionConfig) *auth.SessionRepository {
-	return auth.NewSessionRepository(db, sessionConfig)
+func ProvideSessionRepository(
+	db *gorm.DB,
+	sessionConfig *auth.SessionConfig,
+	sessions *cache.TTLCache[string, *domain.Session],
+) *auth.SessionRepository {
+	return auth.NewSessionRepository(db, sessionConfig, sessions)
 }
 
 // ProvideBootstrapService creates the bootstrap service.

@@ -17,7 +17,7 @@ func setupUserService(t *testing.T) (*UserService, func()) {
 	db, cleanup := testutil.NewTestDB(t)
 	config := DefaultSessionConfig()
 	config.IdleTimeout = 24 * time.Hour
-	sessionRepo := NewSessionRepository(db, config)
+	sessionRepo := NewSessionRepository(db, config, nil)
 	service := NewUserService(db, sessionRepo)
 	return service, cleanup
 }

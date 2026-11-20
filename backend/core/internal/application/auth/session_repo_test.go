@@ -2,10 +2,13 @@ package auth
 
 import (
 	"context"
+	"crypto/sha256"
+	"fmt"
 	"testing"
 	"time"
 
 	"github.com/flashbacks/core/internal/domain"
+	"github.com/flashbacks/core/internal/infrastructure/cache"
 	"github.com/flashbacks/core/internal/testutil"
 
 	"github.com/stretchr/testify/assert"
@@ -19,7 +22,8 @@ func setupSessionRepository(t *testing.T) (*SessionRepository, func()) {
 	config := DefaultSessionConfig()
 	config.IdleTimeout = 1 * time.Hour
 	config.AbsoluteTimeout = 24 * time.Hour
-	repo := NewSessionRepository(db, config)
+	sessions := cache.NewTTLCache[string, *domain.Session](time.Minute, nil)
+	repo := NewSessionRepository(db, config, sessions)
 	return repo, cleanup
 }
 
@@ -69,7 +73,10 @@ func TestSessionRepository_GetSession_Expired(t *testing.T) {
 	token, err := repo.CreateSession(context.Background(), user.ID, "127.0.0.1", "test-agent")
 	require.NoError(t, err)
 
+	// Change the row behind the repository's back and drop the cached snapshot,
+	// so the read has to be decided by the database.
 	repo.db.Model(&domain.Session{}).Where("user_id = ?", user.ID).Update("expires_at", time.Now().Add(-1*time.Hour))
+	repo.sessions.InvalidateAll()
 
 	_, err = repo.GetSession(context.Background(), token)
 
@@ -84,6 +91,7 @@ func TestSessionRepository_GetSession_IdleTimeout(t *testing.T) {
 	require.NoError(t, err)
 
 	repo.db.Model(&domain.Session{}).Where("user_id = ?", user.ID).Update("last_seen_at", time.Now().Add(-2*time.Hour))
+	repo.sessions.InvalidateAll()
 
 	_, err = repo.GetSession(context.Background(), token)
 
@@ -151,6 +159,135 @@ func TestSessionRepository_CleanupExpiredSessions(t *testing.T) {
 	var count int64
 	repo.db.Model(&domain.Session{}).Count(&count)
 	assert.Equal(t, int64(1), count)
+}
+
+// TestSessionRepository_GetSession_ServedFromCache proves the read path really
+// answers from memory: the row is gone, yet the session is returned.
+func TestSessionRepository_GetSession_ServedFromCache(t *testing.T) {
+	repo, cleanup := setupSessionRepository(t)
+	defer cleanup()
+	user := testutil.SeedUserWithHash(t, repo.db, "user", "user", domain.RoleUser, true, "hashed")
+
+	token, err := repo.CreateSession(context.Background(), user.ID, "127.0.0.1", "test-agent")
+	require.NoError(t, err)
+	require.NoError(t, repo.db.Where("user_id = ?", user.ID).Delete(&domain.Session{}).Error)
+
+	session, err := repo.GetSession(context.Background(), token)
+	require.NoError(t, err)
+	assert.Equal(t, user.ID, session.UserID)
+}
+
+// TestSessionRepository_GetSession_PopulatesCache proves a miss stores the row.
+func TestSessionRepository_GetSession_PopulatesCache(t *testing.T) {
+	repo, cleanup := setupSessionRepository(t)
+	defer cleanup()
+	user := testutil.SeedUserWithHash(t, repo.db, "user", "user", domain.RoleUser, true, "hashed")
+
+	token, err := repo.CreateSession(context.Background(), user.ID, "127.0.0.1", "test-agent")
+	require.NoError(t, err)
+	repo.sessions.InvalidateAll()
+
+	_, err = repo.GetSession(context.Background(), token)
+	require.NoError(t, err)
+	assert.Equal(t, 1, repo.sessions.Len(), "the miss must store the session")
+
+	// The stored row can disappear; the second read still succeeds from cache.
+	require.NoError(t, repo.db.Where("user_id = ?", user.ID).Delete(&domain.Session{}).Error)
+	_, err = repo.GetSession(context.Background(), token)
+	require.NoError(t, err)
+}
+
+// TestSessionRepository_GetSession_ReturnsCopy guards against handing the shared
+// cached pointer to callers.
+func TestSessionRepository_GetSession_ReturnsCopy(t *testing.T) {
+	repo, cleanup := setupSessionRepository(t)
+	defer cleanup()
+	user := testutil.SeedUserWithHash(t, repo.db, "user", "user", domain.RoleUser, true, "hashed")
+
+	token, err := repo.CreateSession(context.Background(), user.ID, "127.0.0.1", "test-agent")
+	require.NoError(t, err)
+
+	first, err := repo.GetSession(context.Background(), token)
+	require.NoError(t, err)
+	first.UserAgent = "mutated-by-caller"
+
+	second, err := repo.GetSession(context.Background(), token)
+	require.NoError(t, err)
+	assert.Equal(t, "test-agent", second.UserAgent, "the cached snapshot must not be mutable through the result")
+}
+
+// TestSessionRepository_RevokeSession_EvictsCache guards the security property:
+// a logged-out session must stop being served immediately.
+func TestSessionRepository_RevokeSession_EvictsCache(t *testing.T) {
+	repo, cleanup := setupSessionRepository(t)
+	defer cleanup()
+	user := testutil.SeedUserWithHash(t, repo.db, "user", "user", domain.RoleUser, true, "hashed")
+
+	token, err := repo.CreateSession(context.Background(), user.ID, "127.0.0.1", "test-agent")
+	require.NoError(t, err)
+	_, err = repo.GetSession(context.Background(), token)
+	require.NoError(t, err)
+	require.Equal(t, 1, repo.sessions.Len())
+
+	require.NoError(t, repo.RevokeSession(context.Background(), token))
+	assert.Equal(t, 0, repo.sessions.Len(), "revocation must evict the session")
+
+	_, err = repo.GetSession(context.Background(), token)
+	require.ErrorIs(t, err, gorm.ErrRecordNotFound)
+}
+
+// TestSessionRepository_RevokeAllUserSessions_EvictsCache covers password change
+// and admin deactivation, which revoke every session of a user.
+func TestSessionRepository_RevokeAllUserSessions_EvictsCache(t *testing.T) {
+	repo, cleanup := setupSessionRepository(t)
+	defer cleanup()
+	user := testutil.SeedUserWithHash(t, repo.db, "user", "user", domain.RoleUser, true, "hashed")
+
+	var tokens []string
+	for i := 0; i < 3; i++ {
+		token, err := repo.CreateSession(context.Background(), user.ID, "127.0.0.1", "test-agent")
+		require.NoError(t, err)
+		tokens = append(tokens, token)
+	}
+	require.Equal(t, 3, repo.sessions.Len())
+
+	require.NoError(t, repo.RevokeAllUserSessions(context.Background(), user.ID))
+	assert.Equal(t, 0, repo.sessions.Len(), "user-wide revocation must clear the cache")
+
+	for _, token := range tokens {
+		_, err := repo.GetSession(context.Background(), token)
+		require.ErrorIs(t, err, gorm.ErrRecordNotFound)
+	}
+}
+
+// TestSessionRepository_StaleIdleSnapshotFallsBackToDB covers an apparently idle
+// cached snapshot whose database row was refreshed by UpdateLastSeen: the read
+// must consult the database instead of signing the user out.
+func TestSessionRepository_StaleIdleSnapshotFallsBackToDB(t *testing.T) {
+	repo, cleanup := setupSessionRepository(t)
+	defer cleanup()
+	user := testutil.SeedUserWithHash(t, repo.db, "user", "user", domain.RoleUser, true, "hashed")
+
+	token, err := repo.CreateSession(context.Background(), user.ID, "127.0.0.1", "test-agent")
+	require.NoError(t, err)
+
+	// Simulate a snapshot that lags behind the row (UpdateLastSeen writes the
+	// database only): the cached copy claims the session has been idle for two
+	// hours while the row was seen a moment ago.
+	tokenHash := fmt.Sprintf("%x", sha256.Sum256([]byte(token)))
+	repo.sessions.Set(sessionCacheKey(tokenHash), &domain.Session{
+		UserID:       user.ID,
+		SessionToken: tokenHash,
+		CreatedAt:    time.Now(),
+		LastSeenAt:   time.Now().Add(-2 * time.Hour),
+		ExpiresAt:    time.Now().Add(time.Hour),
+	})
+	require.NoError(t, repo.db.Model(&domain.Session{}).Where("user_id = ?", user.ID).
+		Update("last_seen_at", time.Now()).Error)
+
+	session, err := repo.GetSession(context.Background(), token)
+	require.NoError(t, err)
+	assert.Equal(t, user.ID, session.UserID)
 }
 
 func TestSessionRepository_UpdateLastSeenIsThrottled(t *testing.T) {

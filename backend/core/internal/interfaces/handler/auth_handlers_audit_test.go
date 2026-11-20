@@ -30,7 +30,7 @@ func newAuthHandlerTestEnv(t *testing.T, mode string) (*AuthHandlers, *gorm.DB, 
 		CookieMaxAge:    30 * 24 * 60 * 60,
 		TokenLength:     64,
 	}
-	sessionRepo := auth.NewSessionRepository(db, sessionConfig)
+	sessionRepo := auth.NewSessionRepository(db, sessionConfig, nil)
 	bootstrap := auth.NewBootstrapService(db, "bootstrap_admin", "bootstrap123")
 	loginLimiter := auth.NewLoginRateLimiter(10, 15*time.Minute, 30*time.Minute)
 	registerLimiter := auth.NewLoginRateLimiter(10, 15*time.Minute, 30*time.Minute)

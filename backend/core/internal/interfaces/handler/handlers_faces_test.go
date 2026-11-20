@@ -292,3 +292,59 @@ func TestHandleFacesStart_JobStarted(t *testing.T) {
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &status))
 	require.True(t, status.Running)
 }
+
+// countingPersonRepo counts FindByID calls so a test can assert the
+// request-scoped name cache resolves a person once, not once per face.
+type countingPersonRepo struct {
+	repository.PersonRepository
+	calls map[uint]int
+}
+
+func (r *countingPersonRepo) FindByID(id uint) (*domain.Person, error) {
+	r.calls[id]++
+	return r.PersonRepository.FindByID(id)
+}
+
+// TestPersonName_ResolvedOncePerRequest guards the request-scoped person name
+// cache: a group photo repeats the same people across several faces, and each
+// name must cost one lookup per request.
+func TestPersonName_ResolvedOncePerRequest(t *testing.T) {
+	svc, _, cleanup := newFacesTestServer(t)
+	defer cleanup()
+
+	person := domain.Person{Name: "Anna"}
+	require.NoError(t, svc.personRepo.Create(&person))
+
+	counter := &countingPersonRepo{PersonRepository: svc.personRepo, calls: map[uint]int{}}
+	svc.personRepo = counter
+
+	names := make(map[uint]string)
+	for i := 0; i < 3; i++ {
+		require.Equal(t, "Anna", svc.personName(names, person.ID))
+	}
+	require.Equal(t, 1, counter.calls[person.ID], "the name must be resolved once per request")
+
+	// An unnamed face costs nothing.
+	require.Equal(t, "", svc.personName(names, 0))
+	require.Len(t, counter.calls, 1)
+}
+
+// TestPersonName_FreshRequestSeesRename guards that the name cache is scoped to
+// one request: a rename is visible to the next request because it starts with
+// an empty map.
+func TestPersonName_FreshRequestSeesRename(t *testing.T) {
+	svc, _, cleanup := newFacesTestServer(t)
+	defer cleanup()
+
+	person := domain.Person{Name: "Anna"}
+	require.NoError(t, svc.personRepo.Create(&person))
+
+	counter := &countingPersonRepo{PersonRepository: svc.personRepo, calls: map[uint]int{}}
+	svc.personRepo = counter
+
+	require.Equal(t, "Anna", svc.personName(make(map[uint]string), person.ID))
+
+	require.NoError(t, svc.personRepo.Save(&domain.Person{ID: person.ID, Name: "Anna Petrova"}))
+	require.Equal(t, "Anna Petrova", svc.personName(make(map[uint]string), person.ID))
+	require.Equal(t, 2, counter.calls[person.ID], "each request must resolve the current name")
+}

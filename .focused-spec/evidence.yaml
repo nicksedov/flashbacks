@@ -1221,3 +1221,31 @@ scopes:
     face-clustering.created-person-recognised-later:
       evidence:
         - go::./internal/application/faces::TestFaceRecognitionManager_CreatedPersonRecognisedLater
+    in-memory-ttl-cache.session-hit-returns-cached-session-without-db-read:
+      evidence:
+        - go::./internal/application/auth::TestSessionRepository_GetSession_ServedFromCache
+        - go::./internal/application/auth::TestSessionRepository_GetSession_ReturnsCopy
+    in-memory-ttl-cache.session-miss-falls-back-to-db-and-populates-cache:
+      evidence:
+        - go::./internal/application/auth::TestSessionRepository_GetSession_PopulatesCache
+    in-memory-ttl-cache.logout-revoke-password-change-invalidates-the-session-cache:
+      evidence:
+        - go::./internal/application/auth::TestSessionRepository_RevokeSession_EvictsCache
+        - go::./internal/application/auth::TestSessionRepository_RevokeAllUserSessions_EvictsCache
+    in-memory-ttl-cache.stale-idle-snapshot-judged-by-database:
+      evidence:
+        - go::./internal/application/auth::TestSessionRepository_StaleIdleSnapshotFallsBackToDB
+    in-memory-ttl-cache.settings-read-hits-cache:
+      evidence:
+        - go::./internal/domain/repository::TestAppSettingsRepository_CachesReadsAndInvalidatesOnWrite
+        - go::./internal/domain/repository::TestUserSettingsRepository_CachesReadsAndInvalidatesOnSave
+    in-memory-ttl-cache.settings-update-invalidates-cache:
+      evidence:
+        - go::./internal/domain/repository::TestAppSettingsRepository_CachesReadsAndInvalidatesOnWrite
+        - go::./internal/domain/repository::TestUserSettingsRepository_CachesReadsAndInvalidatesOnSave
+    in-memory-ttl-cache.person-name-cached-within-a-request:
+      evidence:
+        - go::./internal/interfaces/handler::TestPersonName_ResolvedOncePerRequest
+    in-memory-ttl-cache.person-rename-observed-on-the-next-request:
+      evidence:
+        - go::./internal/interfaces/handler::TestPersonName_FreshRequestSeesRename

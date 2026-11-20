@@ -25,7 +25,7 @@ func setupAuthServiceWithMode(t *testing.T, mode string) (*gorm.DB, *AuthService
 		TokenLength:     64,
 	}
 
-	sessionRepo := NewSessionRepository(db, sessionConfig)
+	sessionRepo := NewSessionRepository(db, sessionConfig, nil)
 	bootstrap := NewBootstrapService(db, "bootstrap_admin", "bootstrap123")
 	loginLimiter := NewLoginRateLimiter(10, 15*time.Minute, 30*time.Minute)
 	registerLimiter := NewLoginRateLimiter(10, 15*time.Minute, 30*time.Minute)

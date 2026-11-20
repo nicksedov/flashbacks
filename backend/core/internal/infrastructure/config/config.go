@@ -37,6 +37,15 @@ type AppConfig struct {
 	SessionIdleHours    int
 	SessionAbsoluteDays int
 	AccountCreationMode string // "self_service" | "self_service_with_approval" | "admin_only"
+	// SessionCacheTTL bounds how long an authenticated session may be served
+	// from the in-memory cache before the database is consulted again
+	// (default: 1m). Write paths evict the entry, so the TTL only bounds staleness
+	// from out-of-band database changes.
+	SessionCacheTTL time.Duration
+	// SettingsCacheTTL bounds how long app/user settings may be served from the
+	// in-memory cache before the database is consulted again (default: 5m).
+	// Settings writes evict their entry.
+	SettingsCacheTTL time.Duration
 
 	// Thumbnail cache configuration
 	ThumbnailCacheEnabled       bool
@@ -144,6 +153,8 @@ func LoadConfig() *AppConfig {
 		SessionIdleHours:            getEnvInt("SESSION_IDLE_HOURS", 720),   // 30 days
 		SessionAbsoluteDays:         getEnvInt("SESSION_ABSOLUTE_DAYS", 90), // 90 days
 		AccountCreationMode:         accountCreationMode,
+		SessionCacheTTL:             getEnvDuration("SESSION_CACHE_TTL", time.Minute),
+		SettingsCacheTTL:            getEnvDuration("SETTINGS_CACHE_TTL", 5*time.Minute),
 		ThumbnailCacheEnabled:       getEnv("THUMBNAIL_CACHE_ENABLED", "true") == "true",
 		ThumbnailCachePath:          getEnv("THUMBNAIL_CACHE_PATH", ""),
 		ThumbnailCacheMaxSize:       getEnvInt("THUMBNAIL_CACHE_MAX_SIZE", 320),
@@ -184,6 +195,8 @@ func (c *AppConfig) RegistryDefaults() map[string]string {
 		"BOOTSTRAP_LOGIN":                 c.BootstrapLogin,
 		"SESSION_IDLE_HOURS":              strconv.Itoa(c.SessionIdleHours),
 		"SESSION_ABSOLUTE_DAYS":           strconv.Itoa(c.SessionAbsoluteDays),
+		"SESSION_CACHE_TTL":               c.SessionCacheTTL.String(),
+		"SETTINGS_CACHE_TTL":              c.SettingsCacheTTL.String(),
 		"ACCOUNT_CREATION_MODE":           c.AccountCreationMode,
 		"THUMBNAIL_CACHE_ENABLED":         strconv.FormatBool(c.ThumbnailCacheEnabled),
 		"THUMBNAIL_CACHE_PATH":            c.ThumbnailCachePath,
@@ -216,6 +229,13 @@ func (c *AppConfig) ApplyRegistry(values map[string]string) {
 	applyPositiveInt := func(key string, target *int) {
 		if value, ok := values[key]; ok {
 			if parsed, err := strconv.Atoi(value); err == nil && parsed > 0 {
+				*target = parsed
+			}
+		}
+	}
+	applyDuration := func(key string, target *time.Duration) {
+		if value, ok := values[key]; ok {
+			if parsed, err := time.ParseDuration(value); err == nil && parsed > 0 {
 				*target = parsed
 			}
 		}
@@ -260,6 +280,8 @@ func (c *AppConfig) ApplyRegistry(values map[string]string) {
 	applyPositiveInt("OCR_CONCURRENT_REQUESTS", &c.OCRConcurrentRequests)
 	applyPositiveInt("SESSION_IDLE_HOURS", &c.SessionIdleHours)
 	applyPositiveInt("SESSION_ABSOLUTE_DAYS", &c.SessionAbsoluteDays)
+	applyDuration("SESSION_CACHE_TTL", &c.SessionCacheTTL)
+	applyDuration("SETTINGS_CACHE_TTL", &c.SettingsCacheTTL)
 	applyPositiveInt("THUMBNAIL_CACHE_MAX_SIZE", &c.ThumbnailCacheMaxSize)
 	applyPositiveInt("THUMBNAIL_CACHE_QUALITY", &c.ThumbnailCacheQuality)
 	applyPositiveInt("AGENT_MAX_CONVERSATION_TOKENS", &c.AgentMaxConversationTokens)

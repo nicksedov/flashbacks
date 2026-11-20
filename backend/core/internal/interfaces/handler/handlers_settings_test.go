@@ -24,7 +24,7 @@ func newSettingsTestServer(t *testing.T) (*Server, *gorm.DB, func()) {
 	svc := &Server{
 		db:              db,
 		settingsLoader:  helpers.NewSettingsLoader(db),
-		appSettingsRepo: repository.NewAppSettingsRepository(db),
+		appSettingsRepo: repository.NewAppSettingsRepository(db, nil),
 		scheduleRepo:    repository.NewScheduleRepository(db),
 	}
 	return svc, db, cleanup

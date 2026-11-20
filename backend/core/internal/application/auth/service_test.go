@@ -23,7 +23,7 @@ func setupAuthService(t *testing.T) (*gorm.DB, *AuthService, *BootstrapService, 
 		TokenLength:     64,
 	}
 
-	sessionRepo := NewSessionRepository(db, sessionConfig)
+	sessionRepo := NewSessionRepository(db, sessionConfig, nil)
 	bootstrap := NewBootstrapService(db, "bootstrap_admin", "bootstrap123")
 	loginLimiter := NewLoginRateLimiter(10, 15*time.Minute, 30*time.Minute)
 	registerLimiter := NewLoginRateLimiter(10, 15*time.Minute, 30*time.Minute)
@@ -138,7 +138,7 @@ func TestAuthService_Login_BootstrapMode(t *testing.T) {
 		CookieMaxAge:    30 * 24 * 60 * 60,
 		TokenLength:     64,
 	}
-	sessionRepo := NewSessionRepository(db, sessionConfig)
+	sessionRepo := NewSessionRepository(db, sessionConfig, nil)
 	bootstrap := NewBootstrapService(db, "bootstrap_admin", "bootstrap123")
 	loginLimiter := NewLoginRateLimiter(10, 15*time.Minute, 30*time.Minute)
 	authService := NewAuthService(db, bootstrap, sessionRepo, loginLimiter, NewLoginRateLimiter(10, 15*time.Minute, 30*time.Minute), domain.AccountCreationModeAdminOnly)
@@ -169,7 +169,7 @@ func TestAuthService_Login_BootstrapWrongCreds(t *testing.T) {
 		CookieMaxAge:    30 * 24 * 60 * 60,
 		TokenLength:     64,
 	}
-	sessionRepo := NewSessionRepository(db, sessionConfig)
+	sessionRepo := NewSessionRepository(db, sessionConfig, nil)
 	bootstrap := NewBootstrapService(db, "bootstrap_admin", "bootstrap123")
 	loginLimiter := NewLoginRateLimiter(10, 15*time.Minute, 30*time.Minute)
 	authService := NewAuthService(db, bootstrap, sessionRepo, loginLimiter, NewLoginRateLimiter(10, 15*time.Minute, 30*time.Minute), domain.AccountCreationModeAdminOnly)
@@ -194,7 +194,7 @@ func TestAuthService_Login_RateLimited(t *testing.T) {
 		CookieMaxAge:    30 * 24 * 60 * 60,
 		TokenLength:     64,
 	}
-	sessionRepo := NewSessionRepository(db, sessionConfig)
+	sessionRepo := NewSessionRepository(db, sessionConfig, nil)
 	bootstrap := NewBootstrapService(db, "bootstrap_admin", "bootstrap123")
 	// Use maxAttempts=1 for easier testing
 	loginLimiter := NewLoginRateLimiter(1, 15*time.Minute, 30*time.Minute)

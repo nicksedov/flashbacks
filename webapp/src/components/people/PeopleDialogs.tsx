@@ -120,6 +120,95 @@ export function RenamePersonDialog({
   )
 }
 
+/** What the merge alternative would fold into the person that holds the name. */
+export type PersonNameConflictMode = "merge-person" | "merge-selection" | "attach-faces"
+
+interface PersonNameConflictDialogProps {
+  /** The name the user typed; it is never saved. */
+  pendingName: string
+  /** The person that already holds that name. */
+  conflict: PersonDTO
+  mode: PersonNameConflictMode
+  loading?: boolean
+  /** Merge the pending person, selection or faces into `conflict`. */
+  onMerge: () => void
+  /** Go back to the name input and save nothing. */
+  onChangeName: () => void
+  /** Close the flow and save nothing. */
+  onCancel: () => void
+}
+
+/**
+ * Resolve a taken person name. The only two ways forward are the ones the user
+ * asked for: join the person that already holds the name, or pick another name.
+ */
+export function PersonNameConflictDialog({
+  pendingName,
+  conflict,
+  mode,
+  loading = false,
+  onMerge,
+  onChangeName,
+  onCancel,
+}: PersonNameConflictDialogProps) {
+  const { t } = useTranslation()
+  const handleOpenChange = useCancelHandler(onCancel, loading)
+
+  const mergeLabel =
+    mode === "merge-selection"
+      ? t("people.nameConflictMergeSelection", { name: conflict.name })
+      : mode === "attach-faces"
+        ? t("people.nameConflictAttachFaces", { name: conflict.name })
+        : t("people.nameConflictMergePerson", { name: conflict.name })
+
+  return (
+    <Dialog open onOpenChange={handleOpenChange}>
+      <DialogContent data-slot="name-conflict">
+        <DialogHeader>
+          <DialogTitle data-slot="name-conflict-title">{t("people.nameConflictTitle")}</DialogTitle>
+          <DialogDescription>
+            {t("people.nameConflictDescription", {
+              name: pendingName.trim(),
+              count: t("people.photoCount", { count: conflict.photoCount }),
+            })}
+          </DialogDescription>
+        </DialogHeader>
+        <p data-slot="name-conflict-hint" className="text-sm text-muted-foreground">
+          {t("people.nameConflictHint")}
+        </p>
+        <DialogFooter>
+          <Button
+            type="button"
+            variant="outline"
+            data-slot="name-conflict-cancel"
+            onClick={onCancel}
+            disabled={loading}
+          >
+            {t("people.cancel")}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            data-slot="name-conflict-rename"
+            onClick={onChangeName}
+            disabled={loading}
+          >
+            {t("people.nameConflictChangeName")}
+          </Button>
+          <Button
+            type="button"
+            data-slot="name-conflict-merge"
+            onClick={onMerge}
+            disabled={loading}
+          >
+            {mergeLabel}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 interface MergePeopleDialogProps {
   /** The selected people, target first. */
   people: PersonDTO[]

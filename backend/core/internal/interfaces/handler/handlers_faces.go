@@ -408,7 +408,16 @@ func (s *Server) requirePeopleCatalog(c *gin.Context) bool {
 
 // respondCatalogError maps a catalog error to the documented status code.
 func (s *Server) respondCatalogError(c *gin.Context, err error) {
+	var nameTaken *people.ErrNameTakenError
+
 	switch {
+	case errors.As(err, &nameTaken) && nameTaken.Existing != nil:
+		// A taken name is a conflict, not a bad request: the body tells the
+		// client which person holds it so the UI can offer a merge.
+		c.JSON(http.StatusConflict, dto.PersonNameConflictResponse{
+			Error:    string(i18n.MsgPeopleNameTaken),
+			Conflict: s.personDTO(nameTaken.Existing),
+		})
 	case errors.Is(err, people.ErrPersonNotFound):
 		s.respondError(c, http.StatusNotFound, i18n.MsgPeoplePersonNotFound)
 	case errors.Is(err, people.ErrFaceNotFound):

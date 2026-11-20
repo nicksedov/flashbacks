@@ -218,6 +218,9 @@ const (
 	MsgPeopleFaceAssigned    MessageKey = "people.face_assigned"
 	MsgPeopleListFailed      MessageKey = "people.list_failed"
 	MsgPeopleOperationFailed MessageKey = "people.operation_failed"
+	// MsgPeopleNameTaken is answered with 409 when a person's name is already
+	// held by another person; the body also carries that person as `conflict`.
+	MsgPeopleNameTaken MessageKey = "people.name_taken"
 
 	// Move files messages
 	MsgMoveFilesTargetDirRequired MessageKey = "move_files.target_dir_required"

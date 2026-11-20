@@ -5,6 +5,24 @@ function handleUnauthorized(): never {
   throw new Error("Authorization required")
 }
 
+/**
+ * ApiError is a failed API call that keeps the HTTP status and the parsed body,
+ * so a caller can tell a 409 name conflict from a generic failure. `message`
+ * stays the translated, human-readable text, so existing `catch` blocks that
+ * only read `err.message` keep working.
+ */
+export class ApiError extends Error {
+  readonly status: number
+  readonly body: unknown
+
+  constructor(message: string, status: number, body: unknown) {
+    super(message)
+    this.name = "ApiError"
+    this.status = status
+    this.body = body
+  }
+}
+
 // Function to handle API error messages
 // Backend now sends human-readable messages resolved from i18n keys
 export function translateApiMessage(message: string | undefined): string {
@@ -59,7 +77,7 @@ async function handleResponse<T>(response: Response): Promise<T> {
       handleUnauthorized()
     }
     const errorMessage = translateApiMessage(data.error || data.message)
-    throw new Error(errorMessage)
+    throw new ApiError(errorMessage, response.status, data)
   }
 
   return data as T
@@ -85,6 +103,10 @@ export async function apiGet<T>(path: string, params?: Record<string, string>, s
     if (err instanceof DOMException && err.name === "AbortError") {
       throw err
     }
+    // An ApiError already carries the status and body the caller needs.
+    if (err instanceof ApiError) {
+      throw err
+    }
     throw new Error(translateNetworkError(err))
   }
 }
@@ -100,6 +122,9 @@ export async function apiPost<T>(path: string, body?: unknown): Promise<T> {
 
     return handleResponse<T>(response)
   } catch (err) {
+    if (err instanceof ApiError) {
+      throw err
+    }
     throw new Error(translateNetworkError(err))
   }
 }
@@ -113,6 +138,9 @@ export async function apiDelete<T>(path: string): Promise<T> {
 
     return handleResponse<T>(response)
   } catch (err) {
+    if (err instanceof ApiError) {
+      throw err
+    }
     throw new Error(translateNetworkError(err))
   }
 }
@@ -128,6 +156,9 @@ export async function apiPut<T>(path: string, body?: unknown): Promise<T> {
 
     return handleResponse<T>(response)
   } catch (err) {
+    if (err instanceof ApiError) {
+      throw err
+    }
     throw new Error(translateNetworkError(err))
   }
 }
@@ -143,6 +174,9 @@ export async function apiPatch<T>(path: string, body?: unknown): Promise<T> {
 
     return handleResponse<T>(response)
   } catch (err) {
+    if (err instanceof ApiError) {
+      throw err
+    }
     throw new Error(translateNetworkError(err))
   }
 }
@@ -157,6 +191,9 @@ export async function apiUpload<T>(path: string, formData: FormData): Promise<T>
 
     return handleResponse<T>(response)
   } catch (err) {
+    if (err instanceof ApiError) {
+      throw err
+    }
     throw new Error(translateNetworkError(err))
   }
 }

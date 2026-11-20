@@ -82,6 +82,11 @@ func InitDatabase(cfg *config.AppConfig) (*gorm.DB, error) {
 		return nil, fmt.Errorf("failed to migrate database: %w", err)
 	}
 
+	// Person names are unique: backfill their keys, fold legacy duplicates into
+	// the oldest person and create the partial unique index. Runs before any
+	// other statement so a later index failure cannot hide the repair.
+	migratePersonNames(db)
+
 	db.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_llm_providers_alias ON llm_providers (alias)")
 
 	// Create composite index for calendar pagination: covers ORDER BY date_taken, image_file_id

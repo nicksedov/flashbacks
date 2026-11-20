@@ -264,7 +264,8 @@
     "disbanded": "Person disbanded; photos kept",
     "face_assigned": "Face updated",
     "list_failed": "Failed to load unassigned faces",
-    "operation_failed": "Catalog update failed"
+    "operation_failed": "Catalog update failed",
+    "name_taken": "Another person already has this name"
   },
 
   "description_move_files": "Move files messages",

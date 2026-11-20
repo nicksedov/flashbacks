@@ -1488,6 +1488,12 @@ paths:
           description: The face list is empty or the name is too long
         "404":
           description: A face does not exist or already belongs to a person
+        "409":
+          description: The name belongs to another person
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PersonNameConflictResponse"
 
   /api/people/merge:
     post:
@@ -1510,6 +1516,12 @@ paths:
           description: The source list is empty, too long, or contains the target
         "404":
           description: The target or a source person does not exist
+        "409":
+          description: The merge name belongs to a person outside the merge
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PersonNameConflictResponse"
 
   /api/people/{id}:
     patch:
@@ -1538,6 +1550,12 @@ paths:
           description: The name is longer than 200 characters
         "404":
           description: Person not found
+        "409":
+          description: The name belongs to another person
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PersonNameConflictResponse"
     delete:
       summary: Disband a person into unassigned faces
       operationId: disbandPerson
@@ -3489,7 +3507,9 @@ components:
       properties:
         name:
           type: string
-          description: Trimmed name; an empty or blank name clears it.
+          description: >-
+            Trimmed and whitespace-collapsed name; an empty or blank name clears
+            it. Must not belong to another person.
           maxLength: 200
       required:
         - name
@@ -3499,7 +3519,9 @@ components:
       properties:
         name:
           type: string
-          description: Optional display name; empty creates an unnamed person.
+          description: >-
+            Optional display name; empty creates an unnamed person. Must not
+            belong to another person.
           maxLength: 200
         faceIds:
           type: array
@@ -3521,11 +3543,28 @@ components:
             type: integer
         name:
           type: string
-          description: Optional name for the merged person; omitted keeps the target's name.
+          description: >-
+            Optional name for the merged person; omitted keeps the target's name.
+            Must not belong to a person outside the merge.
           maxLength: 200
       required:
         - targetPersonId
         - sourcePersonIds
+
+    PersonNameConflictResponse:
+      type: object
+      description: >-
+        A people mutation tried to use a name another person already holds. The
+        client resolves it by merging into `conflict` or by choosing another name.
+      properties:
+        error:
+          type: string
+          description: Localized message key; `people.name_taken`.
+        conflict:
+          $ref: "#/components/schemas/PersonDTO"
+      required:
+        - error
+        - conflict
 
     AssignFaceRequest:
       type: object

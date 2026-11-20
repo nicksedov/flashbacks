@@ -23,6 +23,7 @@ import {
   assignFaceToPerson,
   createPerson,
   fetchPeople,
+  mergePeople,
   renamePerson,
   replaceEnhancement,
   saveCopyEnhancement,
@@ -32,7 +33,14 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
 import { Camera, MapPin, MapPinPlus, Image as ImageIcon, Pencil, FileText } from "lucide-react"
 import { GeoSearchForm } from "./GeoSearchForm"
-import { CreatePersonDialog, PersonPickerDialog, RenamePersonDialog } from "@/components/people/PeopleDialogs"
+import {
+  CreatePersonDialog,
+  PersonNameConflictDialog,
+  PersonPickerDialog,
+  RenamePersonDialog,
+} from "@/components/people/PeopleDialogs"
+import type { PersonNameConflictMode } from "@/components/people/PeopleDialogs"
+import { findPersonNameConflict, nameConflictFromError } from "@/lib/person-name"
 import { showToastError } from "@/lib/toast-utils"
 import type { ImageFaceDTO, ImageMetadataDTO, PersonDTO } from "@/types"
 import { LightboxTabBar } from "./lightbox/lightboxChrome"
@@ -74,6 +82,13 @@ export function UnifiedLightbox({
   const [renameTarget, setRenameTarget] = useState<{ personId: number; name: string } | null>(null)
   const [catalog, setCatalog] = useState<PersonDTO[]>([])
   const [catalogBusy, setCatalogBusy] = useState(false)
+  // A taken name is never saved: the conflict dialog offers joining the person
+  // that holds it or returning to the input.
+  const [nameConflict, setNameConflict] = useState<{
+    pendingName: string
+    conflict: PersonDTO
+    mode: PersonNameConflictMode
+  } | null>(null)
 
   const handleShowGeoForm = useCallback((show: boolean) => {
     if (onShowGeoFormChange) {
@@ -106,6 +121,7 @@ export function UnifiedLightbox({
     setAssignPickerOpen(false)
     setCreateFromFaceOpen(false)
     setRenameTarget(null)
+    setNameConflict(null)
   }
 
   // Reset the enhancement-processing dedupe cache when the image changes.
@@ -113,6 +129,23 @@ export function UnifiedLightbox({
   useEffect(() => {
     processedEnhanceRef.current = new Set()
   }, [imagePath, initialMode])
+
+  // The People tab loads the catalog so a typed name can be checked against
+  // every person before any request; the server stays authoritative.
+  useEffect(() => {
+    if (activeMode !== "people") return
+    let cancelled = false
+    fetchPeople()
+      .then((response) => {
+        if (!cancelled) setCatalog(response.people ?? [])
+      })
+      .catch(() => {
+        if (!cancelled) setCatalog([])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [activeMode, imagePath])
 
   // OCR state
   const { ocrData, llmData, loading: ocrLoading, recognizing, resetState: resetOcr, handleRecognize } = useOcrState(
@@ -204,6 +237,12 @@ export function UnifiedLightbox({
   const handleCreateFromFace = useCallback(
     async (name: string) => {
       if (!selectedFace) return
+      const conflict = findPersonNameConflict(name, catalog)
+      if (conflict) {
+        setNameConflict({ pendingName: name, conflict, mode: "attach-faces" })
+        return
+      }
+
       setCatalogBusy(true)
       try {
         await createPerson({
@@ -213,32 +252,103 @@ export function UnifiedLightbox({
         closeFaceActions()
         refreshFaces()
         onPeopleChanged?.()
-      } catch {
+      } catch (err) {
+        const holder = nameConflictFromError(err)
+        if (holder) {
+          setNameConflict({ pendingName: name, conflict: holder, mode: "attach-faces" })
+          return
+        }
         showToastError(t("lightbox.people.actionFailed"))
       } finally {
         setCatalogBusy(false)
       }
     },
-    [closeFaceActions, onPeopleChanged, refreshFaces, selectedFace, t],
+    [catalog, closeFaceActions, onPeopleChanged, refreshFaces, selectedFace, t],
   )
 
   const handleRenamePerson = useCallback(
     async (name: string) => {
       if (!renameTarget) return
+      const personId = renameTarget.personId
+
+      const conflict = findPersonNameConflict(name, catalog, [personId])
+      if (conflict) {
+        // Keep the typed value so "choose another name" reopens the input with it.
+        setRenameTarget({ personId, name })
+        setNameConflict({ pendingName: name, conflict, mode: "merge-person" })
+        return
+      }
+
       setCatalogBusy(true)
       try {
-        await renamePerson(renameTarget.personId, name)
+        await renamePerson(personId, name)
         setRenameTarget(null)
         refreshFaces()
         onPeopleChanged?.()
-      } catch {
+      } catch (err) {
+        const holder = nameConflictFromError(err)
+        if (holder) {
+          setRenameTarget({ personId, name })
+          setNameConflict({ pendingName: name, conflict: holder, mode: "merge-person" })
+          return
+        }
         showToastError(t("lightbox.people.actionFailed"))
       } finally {
         setCatalogBusy(false)
       }
     },
-    [onPeopleChanged, refreshFaces, renameTarget, t],
+    [catalog, onPeopleChanged, refreshFaces, renameTarget, t],
   )
+
+  // The merge alternative of the conflict dialog: the cluster or the face joins
+  // the person that already holds the name, and that person disappears as a
+  // separate row.
+  const handleNameConflictMerge = useCallback(async () => {
+    const pending = nameConflict
+    if (!pending) return
+
+    setCatalogBusy(true)
+    try {
+      if (pending.mode === "attach-faces") {
+        if (selectedFace) {
+          await assignFaceToPerson(selectedFace.id, pending.conflict.id)
+          closeFaceActions()
+        }
+      } else if (renameTarget) {
+        await mergePeople({
+          targetPersonId: pending.conflict.id,
+          sourcePersonIds: [renameTarget.personId],
+        })
+        setRenameTarget(null)
+      }
+      setNameConflict(null)
+      refreshFaces()
+      onPeopleChanged?.()
+    } catch {
+      showToastError(t("lightbox.people.actionFailed"))
+    } finally {
+      setCatalogBusy(false)
+    }
+  }, [closeFaceActions, nameConflict, onPeopleChanged, refreshFaces, renameTarget, selectedFace, t])
+
+  // "Choose another name": drop the conflict and let the user type again.
+  const handleNameConflictChangeName = useCallback(() => {
+    const pending = nameConflict
+    if (!pending) return
+    setNameConflict(null)
+    if (pending.mode === "attach-faces") setCreateFromFaceOpen(true)
+  }, [nameConflict])
+
+  // Closing the conflict dialog abandons the whole attempt: nothing is saved.
+  const handleNameConflictCancel = useCallback(() => {
+    const pending = nameConflict
+    setNameConflict(null)
+    if (pending?.mode === "attach-faces") {
+      setCreateFromFaceOpen(false)
+      return
+    }
+    setRenameTarget(null)
+  }, [nameConflict])
 
   // AI Chat state
   const {
@@ -575,7 +685,7 @@ export function UnifiedLightbox({
         />
       )}
 
-      {selectedFace && createFromFaceOpen && (
+      {selectedFace && createFromFaceOpen && !nameConflict && (
         <CreatePersonDialog
           loading={catalogBusy}
           onCancel={() => setCreateFromFaceOpen(false)}
@@ -583,12 +693,24 @@ export function UnifiedLightbox({
         />
       )}
 
-      {renameTarget && (
+      {renameTarget && !nameConflict && (
         <RenamePersonDialog
           initialName={renameTarget.name}
           loading={catalogBusy}
           onCancel={() => setRenameTarget(null)}
           onSubmit={(name) => void handleRenamePerson(name)}
+        />
+      )}
+
+      {nameConflict && (
+        <PersonNameConflictDialog
+          pendingName={nameConflict.pendingName}
+          conflict={nameConflict.conflict}
+          mode={nameConflict.mode}
+          loading={catalogBusy}
+          onMerge={() => void handleNameConflictMerge()}
+          onChangeName={handleNameConflictChangeName}
+          onCancel={handleNameConflictCancel}
         />
       )}
     </LightboxDialog>

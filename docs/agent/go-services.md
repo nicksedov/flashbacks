@@ -72,6 +72,14 @@ humans.
   one and is never an exemplar or a cover.
 - `manual_assignment` and `people.manual` are **user decisions**: the job never
   detaches or deletes them, even when a size rule says otherwise.
+- A person's name is **unique** after `domain.NormalizePersonName` (trimmed,
+  inner whitespace collapsed, case-folded): `Catalog.Rename`,
+  `Catalog.CreateFromFaces` and `Catalog.Merge` must refuse a name another
+  person holds with `*people.ErrNameTakenError` (HTTP 409, `people.name_taken`),
+  and must write `people.name_key` together with `people.name` — the partial
+  unique index on `name_key` is the storage guarantee. Unnamed people are
+  exempt. Never compare names with SQL `lower()`: it is collation-dependent and
+  ignores the whitespace rule.
 - SQL in core must stay SQLite-compatible for the unit tests: use
   `CASE WHEN width < height THEN width ELSE height END`, not `LEAST()`.
 

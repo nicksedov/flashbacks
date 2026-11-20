@@ -32,7 +32,29 @@ var (
 	// ErrInvalidInput means the request payload is not acceptable; nothing was
 	// changed.
 	ErrInvalidInput = errors.New("people: invalid input")
+	// ErrNameTaken is the sentinel behind ErrNameTaken: errors.Is(err, ErrNameTaken)
+	// matches every name conflict, while errors.As(err, &taken) reads the person
+	// that holds the name.
+	ErrNameTaken = errors.New("people: name taken")
 )
+
+// ErrNameTakenError reports that a normalized name belongs to another person.
+// Existing is that person, so the HTTP layer can answer 409 with the conflict
+// without a second lookup.
+type ErrNameTakenError struct {
+	Existing *domain.Person
+}
+
+// Error implements the error interface.
+func (e *ErrNameTakenError) Error() string {
+	if e.Existing == nil {
+		return ErrNameTaken.Error()
+	}
+	return fmt.Sprintf("people: name taken by person %d", e.Existing.ID)
+}
+
+// Unwrap exposes the sentinel so errors.Is works on every name conflict.
+func (e *ErrNameTakenError) Unwrap() error { return ErrNameTaken }
 
 const (
 	// maxNameLength is the documented limit of a person's display name.
@@ -101,8 +123,11 @@ func NewCatalog(
 
 // Rename sets (or clears) a person's display name and marks the person as
 // curated, so a later clustering pass leaves it alone. A blank name clears it.
+//
+// The name is unique across the catalog after normalization; a name another
+// person already holds returns *ErrNameTakenError and changes nothing.
 func (c *Catalog) Rename(personID uint, name string) (*domain.Person, error) {
-	trimmed, err := normalizeName(name)
+	display, key, err := normalizeName(name)
 	if err != nil {
 		return nil, err
 	}
@@ -111,13 +136,20 @@ func (c *Catalog) Rename(personID uint, name string) (*domain.Person, error) {
 		return nil, err
 	}
 
+	// A person may take its own name in another case or spacing; only another
+	// person holding the name is a conflict.
+	excluded := []uint{personID}
 	if err := c.db.Transaction(func(tx *gorm.DB) error {
+		if err := c.ensureNameFree(tx, key, excluded); err != nil {
+			return err
+		}
 		return tx.Model(&domain.Person{}).Where("id = ?", personID).Updates(map[string]any{
-			"name":   trimmed,
-			"manual": true,
+			"name":     display,
+			"name_key": key,
+			"manual":   true,
 		}).Error
 	}); err != nil {
-		return nil, fmt.Errorf("rename person %d: %w", personID, err)
+		return nil, fmt.Errorf("rename person %d: %w", personID, c.nameConflict(key, excluded, err))
 	}
 
 	return c.loadPerson(personID)
@@ -133,13 +165,14 @@ func (c *Catalog) Merge(targetPersonID uint, sourcePersonIDs []uint, name *strin
 		return nil, err
 	}
 
-	var nameToStore *string
-	if name != nil {
-		trimmed, err := normalizeName(*name)
-		if err != nil {
-			return nil, err
+	hasName := name != nil
+	var nameDisplay, nameKey string
+	if hasName {
+		normalized, normalizedKey, normalizeErr := normalizeName(*name)
+		if normalizeErr != nil {
+			return nil, normalizeErr
 		}
-		nameToStore = &trimmed
+		nameDisplay, nameKey = normalized, normalizedKey
 	}
 
 	target, err := c.loadPerson(targetPersonID)
@@ -171,7 +204,16 @@ func (c *Catalog) Merge(targetPersonID uint, sourcePersonIDs []uint, name *strin
 		}
 	}
 
+	// The merge result may collide with the target's own name or with a source
+	// that is about to disappear; only a third person blocks it.
+	excluded := append([]uint{targetPersonID}, sources...)
+
 	if err := c.db.Transaction(func(tx *gorm.DB) error {
+		if hasName {
+			if err := c.ensureNameFree(tx, nameKey, excluded); err != nil {
+				return err
+			}
+		}
 		// Every face involved is a user decision from now on, so the job never
 		// re-clusters a merged face.
 		if err := tx.Model(&domain.Face{}).
@@ -189,8 +231,9 @@ func (c *Catalog) Merge(targetPersonID uint, sourcePersonIDs []uint, name *strin
 			"manual":        true,
 			"cover_face_id": cover,
 		}
-		if nameToStore != nil {
-			updates["name"] = *nameToStore
+		if hasName {
+			updates["name"] = nameDisplay
+			updates["name_key"] = nameKey
 		}
 		if err := tx.Model(&domain.Person{}).Where("id = ?", targetPersonID).
 			Updates(updates).Error; err != nil {
@@ -205,7 +248,7 @@ func (c *Catalog) Merge(targetPersonID uint, sourcePersonIDs []uint, name *strin
 		}
 		return tx.Where("id IN ?", sources).Delete(&domain.Person{}).Error
 	}); err != nil {
-		return nil, fmt.Errorf("merge people: %w", err)
+		return nil, fmt.Errorf("merge people: %w", c.nameConflict(nameKey, excluded, err))
 	}
 
 	return c.loadPerson(targetPersonID)
@@ -220,7 +263,7 @@ func (c *Catalog) CreateFromFaces(name string, faceIDs []uint) (*domain.Person, 
 		return nil, err
 	}
 
-	trimmed, err := normalizeName(name)
+	display, key, err := normalizeName(name)
 	if err != nil {
 		return nil, err
 	}
@@ -239,6 +282,12 @@ func (c *Catalog) CreateFromFaces(name string, faceIDs []uint) (*domain.Person, 
 		faces = append(faces, *face)
 	}
 
+	// The faces are validated first, so an unknown or already-assigned face is
+	// still reported as such when the name is taken as well.
+	if err := c.ensureNameFree(c.db, key, nil); err != nil {
+		return nil, err
+	}
+
 	embeddings, err := c.loadEmbeddings(ids)
 	if err != nil {
 		return nil, err
@@ -251,10 +300,10 @@ func (c *Catalog) CreateFromFaces(name string, faceIDs []uint) (*domain.Person, 
 	}
 
 	person := domain.Person{
-		Name:        trimmed,
 		Manual:      true,
 		CoverFaceID: &cover,
 	}
+	person.SetName(display)
 
 	references := make([]domain.PersonReference, 0, len(candidates))
 	for _, candidate := range candidates {
@@ -280,7 +329,7 @@ func (c *Catalog) CreateFromFaces(name string, faceIDs []uint) (*domain.Person, 
 		}
 		return replaceReferencesTx(tx, person.ID, references)
 	}); err != nil {
-		return nil, fmt.Errorf("create person from faces: %w", err)
+		return nil, fmt.Errorf("create person from faces: %w", c.nameConflict(key, nil, err))
 	}
 
 	return c.loadPerson(person.ID)
@@ -477,6 +526,72 @@ func (c *Catalog) ListUnassigned(page, pageSize int) (*UnassignedPage, error) {
 	}, nil
 }
 
+// ensureNameFree rejects a name another person already holds. excludeIDs are the
+// people this write is allowed to collide with: the person being renamed, and on
+// a merge the target plus the sources being folded in.
+func (c *Catalog) ensureNameFree(tx *gorm.DB, key string, excludeIDs []uint) error {
+	if key == "" {
+		return nil
+	}
+	holder, err := c.findNameHolder(tx, key, excludeIDs)
+	if err != nil {
+		return err
+	}
+	if holder != nil {
+		return &ErrNameTakenError{Existing: holder}
+	}
+	return nil
+}
+
+// findNameHolder returns the person that already holds the normalized name, or
+// nil when the name is free.
+func (c *Catalog) findNameHolder(tx *gorm.DB, key string, excludeIDs []uint) (*domain.Person, error) {
+	if key == "" {
+		return nil, nil
+	}
+	query := tx.Where("name_key = ?", key)
+	if len(excludeIDs) > 0 {
+		query = query.Where("id NOT IN ?", excludeIDs)
+	}
+
+	var person domain.Person
+	if err := query.Order("id").First(&person).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("find holder of name key %q: %w", key, err)
+	}
+	return &person, nil
+}
+
+// nameConflict converts a write rejected by the partial unique index on
+// people.name_key into the same error the pre-check produces. A concurrent
+// request can win the race after the pre-check, and the client must see the
+// conflict either way.
+func (c *Catalog) nameConflict(key string, excludeIDs []uint, err error) error {
+	if !isNameKeyConflict(err) {
+		return err
+	}
+	holder, lookupErr := c.findNameHolder(c.db, key, excludeIDs)
+	if lookupErr != nil || holder == nil {
+		return err
+	}
+	return &ErrNameTakenError{Existing: holder}
+}
+
+// isNameKeyConflict reports whether err is the unique violation of the partial
+// index on people.name_key. PostgreSQL names the index, SQLite names the column.
+func isNameKeyConflict(err error) bool {
+	if err == nil {
+		return false
+	}
+	message := strings.ToLower(err.Error())
+	if !strings.Contains(message, "name_key") {
+		return false
+	}
+	return strings.Contains(message, "unique") || strings.Contains(message, "duplicate")
+}
+
 // loadPerson returns a person or ErrPersonNotFound.
 func (c *Catalog) loadPerson(personID uint) (*domain.Person, error) {
 	person, err := c.persons.FindByID(personID)
@@ -636,14 +751,15 @@ func deleteReferencesTx(tx *gorm.DB, personIDs []uint) error {
 	return tx.Where("person_id IN ?", personIDs).Delete(&domain.PersonReference{}).Error
 }
 
-// normalizeName trims a display name and rejects one longer than maxNameLength
-// characters. An empty result means "unnamed".
-func normalizeName(name string) (string, error) {
-	trimmed := strings.TrimSpace(name)
-	if utf8.RuneCountInString(trimmed) > maxNameLength {
-		return "", ErrInvalidInput
+// normalizeName returns the display form of a name and its comparison key,
+// rejecting one longer than maxNameLength characters. Both results are empty for
+// "unnamed", which is exempt from the uniqueness rule.
+func normalizeName(name string) (display, key string, err error) {
+	display, key = domain.NormalizePersonName(name)
+	if utf8.RuneCountInString(display) > maxNameLength {
+		return "", "", ErrInvalidInput
 	}
-	return trimmed, nil
+	return display, key, nil
 }
 
 // normalizeSources validates the sources of a merge: at least one, at most

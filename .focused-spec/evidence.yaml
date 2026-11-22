@@ -1333,3 +1333,39 @@ scopes:
     face-recognition.people-tab-merge-name-conflict:
       evidence:
         - vitest::webapp/src/components/tabs/PeopleTab.test.tsx::PeopleTab > folds a selection into the person that already holds the merge name
+    face-recognition.lightbox-rename-suggestions-before-typing:
+      evidence:
+        - vitest::webapp/src/components/people/PeopleDialogs.test.tsx::RenamePersonDialog > opens with the seven most-photographed names
+    face-recognition.lightbox-rename-suggestions-prefilled-name:
+      evidence:
+        - vitest::webapp/src/components/people/PeopleDialogs.test.tsx::RenamePersonDialog > shows the top names when the field already holds a name
+    face-recognition.lightbox-rename-suggestions-ties:
+      evidence:
+        - vitest::webapp/src/lib/person-name.test.ts::personNameSuggestions > breaks equal photo counts by name
+    face-recognition.lightbox-rename-suggestions-filter:
+      evidence:
+        - vitest::webapp/src/lib/person-name.test.ts::personNameSuggestions > keeps only names containing the fragment
+    face-recognition.lightbox-rename-suggestions-ignores-case:
+      evidence:
+        - vitest::webapp/src/lib/person-name.test.ts::personNameSuggestions > ignores case and surrounding spaces
+    face-recognition.lightbox-rename-suggestions-no-match:
+      evidence:
+        - vitest::webapp/src/components/people/PeopleDialogs.test.tsx::RenamePersonDialog > hides the chips when the edited fragment matches nothing
+    face-recognition.lightbox-rename-suggestions-exclude-renamed:
+      evidence:
+        - vitest::webapp/src/lib/person-name.test.ts::personNameSuggestions > excludes the person being renamed
+    face-recognition.lightbox-rename-suggestions-skip-unnamed:
+      evidence:
+        - vitest::webapp/src/lib/person-name.test.ts::personNameSuggestions > skips unnamed people
+    face-recognition.lightbox-rename-suggestion-fills-input:
+      evidence:
+        - vitest::webapp/src/components/people/PeopleDialogs.test.tsx::RenamePersonDialog > fills the name from a suggestion without submitting
+    face-recognition.lightbox-rename-suggestion-opens-conflict:
+      evidence:
+        - vitest::webapp/src/components/gallery/UnifiedLightbox.test.tsx::UnifiedLightbox > offers the merge when a suggested name is saved
+    design-system.suggestion-chips-uniform:
+      evidence:
+        - vitest::webapp/src/components/ui/suggestion-chip.test.tsx::SuggestionChip > renders the shared pill styles
+    design-system.suggestion-chips-text-only:
+      evidence:
+        - vitest::webapp/src/components/people/PeopleDialogs.test.tsx::RenamePersonDialog > shows only the name on each suggestion chip

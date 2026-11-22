@@ -23,6 +23,7 @@ import {
   assignFaceToPerson,
   createPerson,
   fetchPeople,
+  fetchPersonSuggestions,
   mergePeople,
   renamePerson,
   replaceEnhancement,
@@ -81,6 +82,10 @@ export function UnifiedLightbox({
   const [createFromFaceOpen, setCreateFromFaceOpen] = useState(false)
   const [renameTarget, setRenameTarget] = useState<{ personId: number; name: string } | null>(null)
   const [catalog, setCatalog] = useState<PersonDTO[]>([])
+  // Named people only, loaded when the rename dialog opens. It is far smaller
+  // than the full catalog, so the suggestion chips appear without waiting for
+  // the listing that counts photos for every person.
+  const [suggestionCatalog, setSuggestionCatalog] = useState<PersonDTO[]>([])
   const [catalogBusy, setCatalogBusy] = useState(false)
   // A taken name is never saved: the conflict dialog offers joining the person
   // that holds it or returning to the input.
@@ -643,7 +648,11 @@ export function UnifiedLightbox({
                 error={facesError}
                 onRename={(personId) => {
                   const person = people.find((entry) => entry.personId === personId)
-                  if (person) setRenameTarget({ personId: person.personId, name: person.name })
+                  if (!person) return
+                  setRenameTarget({ personId: person.personId, name: person.name })
+                  fetchPersonSuggestions()
+                    .then((response) => setSuggestionCatalog(response.people ?? []))
+                    .catch(() => setSuggestionCatalog([]))
                 }}
                 className="w-full bg-card p-4 h-full flex flex-col"
               />
@@ -696,6 +705,8 @@ export function UnifiedLightbox({
       {renameTarget && !nameConflict && (
         <RenamePersonDialog
           initialName={renameTarget.name}
+          people={suggestionCatalog.length > 0 ? suggestionCatalog : catalog}
+          excludePersonId={renameTarget.personId}
           loading={catalogBusy}
           onCancel={() => setRenameTarget(null)}
           onSubmit={(name) => void handleRenamePerson(name)}

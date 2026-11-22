@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from "react"
 import { useTranslation } from "@/i18n"
 import { Button } from "@/components/ui/button"
 import { LightboxInfoReadout } from "./lightboxChrome"
+import { SuggestionChip } from "@/components/ui/suggestion-chip"
 import {
   Send,
   Square,
@@ -536,15 +537,12 @@ export function ChatPanel({
       {hasConversation && !isStreaming && imagePath && (
         <div className="px-4 pb-2 flex flex-wrap gap-1.5 shrink-0">
           {suggestions.map((s, i) => (
-            <button
+            <SuggestionChip
               key={i}
-              type="button"
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full border border-border/70 text-xs text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+              icon={s.icon}
+              label={t(s.labelKey)}
               onClick={() => handleSuggestionClick(s)}
-            >
-              {s.icon}
-              <span>{t(s.labelKey)}</span>
-            </button>
+            />
           ))}
         </div>
       )}

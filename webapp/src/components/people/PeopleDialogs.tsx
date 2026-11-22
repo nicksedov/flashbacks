@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { useTranslation } from "@/i18n"
 import { fetchPersonPhotos } from "@/api/endpoints"
+import { personNameSuggestions } from "@/lib/person-name"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { SuggestionChip } from "@/components/ui/suggestion-chip"
 import {
   Dialog,
   DialogContent,
@@ -63,21 +65,40 @@ function useCancelHandler(onCancel: () => void, loading: boolean) {
 
 interface RenamePersonDialogProps {
   initialName: string
+  /** The catalog the name suggestions come from; omit it to offer none. */
+  people?: PersonDTO[]
+  /** The person being renamed, which is never suggested. */
+  excludePersonId?: number
   loading?: boolean
   onCancel: () => void
   onSubmit: (name: string) => void
 }
 
-/** Set or clear one person's display name. */
+/** Set or clear one person's display name, with catalog names as suggestions. */
 export function RenamePersonDialog({
   initialName,
+  people = [],
+  excludePersonId,
   loading = false,
   onCancel,
   onSubmit,
 }: RenamePersonDialogProps) {
-  const { t } = useTranslation()
+  const { t, language } = useTranslation()
   const [name, setName] = useState(initialName)
+  // Until the user edits the field it keeps the seeded name, and the list shows
+  // the most-photographed names instead of filtering itself down to nothing.
+  const [pristine, setPristine] = useState(true)
   const handleOpenChange = useCancelHandler(onCancel, loading)
+  // Filling a suggestion is only a shortcut for typing: the input stays
+  // authoritative and Save is the only action that sends a request.
+  const suggestions = useMemo(
+    () =>
+      personNameSuggestions(people, pristine ? "" : name, {
+        excludeIds: excludePersonId === undefined ? [] : [excludePersonId],
+        locale: language,
+      }),
+    [excludePersonId, language, name, people, pristine],
+  )
 
   return (
     <Dialog open onOpenChange={handleOpenChange}>
@@ -93,8 +114,26 @@ export function RenamePersonDialog({
             data-slot="rename-input"
             value={name}
             maxLength={200}
-            onChange={(event) => setName(event.target.value)}
+            onChange={(event) => {
+              setPristine(false)
+              setName(event.target.value)
+            }}
           />
+          {suggestions.length > 0 && (
+            <div data-slot="rename-suggestions" className="flex flex-wrap gap-1.5">
+              {suggestions.map((person) => (
+                <SuggestionChip
+                  key={person.id}
+                  label={person.name}
+                  className="max-w-full"
+                  onClick={() => {
+                    setPristine(false)
+                    setName(person.name)
+                  }}
+                />
+              ))}
+            </div>
+          )}
         </div>
         <DialogFooter>
           <Button

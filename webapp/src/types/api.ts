@@ -1303,6 +1303,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/people/suggestions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List named people for name suggestions
+         * @description Returns only the people that carry a name and still have at least one photo, with their photo counts. The rename dialog ranks and filters this small set instead of waiting for the whole people listing.
+         */
+        get: operations["getPersonSuggestions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/people/merge": {
         parameters: {
             query?: never;
@@ -4548,6 +4568,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PersonNameConflictResponse"];
+                };
+            };
+        };
+    };
+    getPersonSuggestions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Named people with their photo counts */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PeopleResponse"];
                 };
             };
         };

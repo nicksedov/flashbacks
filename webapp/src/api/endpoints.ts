@@ -574,6 +574,15 @@ export function fetchPeople(): Promise<PeopleResponse> {
   return apiGet<PeopleResponse>("/api/people")
 }
 
+/**
+ * Named people only, with their photo counts. The rename dialog ranks and
+ * filters this small set, so suggestions never wait for the full people
+ * listing (which counts photos for every person).
+ */
+export function fetchPersonSuggestions(): Promise<PeopleResponse> {
+  return apiGet<PeopleResponse>("/api/people/suggestions")
+}
+
 export function fetchPersonPhotos(id: number, page: number, pageSize: number): Promise<PersonPhotosResponse> {
   return apiGet<PersonPhotosResponse>(`/api/people/${id}/photos`, {
     page: String(page),

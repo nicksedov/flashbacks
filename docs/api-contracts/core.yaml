@@ -1495,6 +1495,22 @@ paths:
               schema:
                 $ref: "#/components/schemas/PersonNameConflictResponse"
 
+  /api/people/suggestions:
+    get:
+      summary: List named people for name suggestions
+      description: >-
+        Returns only the people that carry a name and still have at least one
+        photo, with their photo counts. The rename dialog ranks and filters this
+        small set instead of waiting for the whole people listing.
+      operationId: getPersonSuggestions
+      responses:
+        "200":
+          description: Named people with their photo counts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PeopleResponse"
+
   /api/people/merge:
     post:
       summary: Merge people into one person

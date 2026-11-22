@@ -1,6 +1,19 @@
 import { ApiError } from "@/api/client"
 import type { PersonDTO } from "@/types"
 
+/** How many name suggestions a rename dialog offers at once. */
+export const PERSON_NAME_SUGGESTION_LIMIT = 7
+
+/** Narrowing options for {@link personNameSuggestions}. */
+export interface PersonNameSuggestionOptions {
+  /** People that must never be offered, typically the person being renamed. */
+  excludeIds?: number[]
+  /** Cap of returned entries; defaults to {@link PERSON_NAME_SUGGESTION_LIMIT}. */
+  limit?: number
+  /** Interface language, used only to order people with equal photo counts. */
+  locale?: string
+}
+
 /**
  * Canonical form of a person's name, mirroring the core service:
  * surrounding whitespace is trimmed, every internal whitespace run collapses to
@@ -9,6 +22,39 @@ import type { PersonDTO } from "@/types"
  */
 export function normalizePersonName(name: string): string {
   return name.replace(/\s+/g, " ").trim().toLowerCase()
+}
+
+/**
+ * Candidates the rename dialog offers under the name input.
+ *
+ * With an empty query the list is the named people with the most photos; once
+ * the user types, it keeps only names containing the typed fragment. Both the
+ * fragment and the names go through {@link normalizePersonName}, so matching
+ * ignores case and surrounding or repeated whitespace exactly like the
+ * uniqueness rule does. Unnamed people carry nothing to suggest and the ids in
+ * `excludeIds` (the person being renamed) are skipped; equal photo counts are
+ * ordered by name so the list is stable between openings.
+ */
+export function personNameSuggestions(
+  people: PersonDTO[],
+  query: string,
+  options: PersonNameSuggestionOptions = {},
+): PersonDTO[] {
+  const { excludeIds = [], limit = PERSON_NAME_SUGGESTION_LIMIT, locale } = options
+  const excluded = new Set(excludeIds)
+  const needle = normalizePersonName(query)
+
+  return people
+    .filter((person) => {
+      const key = normalizePersonName(person.name)
+      if (!key || excluded.has(person.id)) return false
+      return needle === "" || key.includes(needle)
+    })
+    .sort((left, right) => {
+      if (left.photoCount !== right.photoCount) return right.photoCount - left.photoCount
+      return normalizePersonName(left.name).localeCompare(normalizePersonName(right.name), locale)
+    })
+    .slice(0, Math.max(limit, 0))
 }
 
 /**

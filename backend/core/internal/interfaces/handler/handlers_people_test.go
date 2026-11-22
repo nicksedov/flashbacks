@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -102,6 +103,26 @@ func TestHandleCreatePerson_StatusCodes(t *testing.T) {
 	w = serveHandler(svc.handleCreatePerson, http.MethodPost, "/api/people",
 		dto.CreatePersonRequest{FaceIDs: []uint{999}})
 	require.Equal(t, http.StatusNotFound, w.Code)
+
+	// A name another person holds is a 409 and no face changes.
+	holder := domain.Person{}
+	holder.SetName("Иван")
+	require.NoError(t, svc.personRepo.Create(&holder))
+	extra := seedFace(t, db, image.ID, 0, 0.7)
+
+	w = serveHandler(svc.handleCreatePerson, http.MethodPost, "/api/people",
+		dto.CreatePersonRequest{Name: " иван ", FaceIDs: []uint{extra.ID}})
+	require.Equal(t, http.StatusConflict, w.Code)
+
+	var conflict dto.PersonNameConflictResponse
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &conflict))
+	require.Equal(t, "people.name_taken", conflict.Error)
+	require.Equal(t, holder.ID, conflict.Conflict.ID)
+	require.Equal(t, "Иван", conflict.Conflict.Name)
+
+	storedExtra, err := svc.faceRepo.FindByID(extra.ID)
+	require.NoError(t, err)
+	require.Equal(t, uint(0), storedExtra.PersonID)
 }
 
 // TestHandleMergePeople_StatusCodes guards POST /api/people/merge.
@@ -144,6 +165,32 @@ func TestHandleMergePeople_StatusCodes(t *testing.T) {
 	w = serveHandler(svc.handleMergePeople, http.MethodPost, "/api/people/merge",
 		dto.MergePeopleRequest{TargetPersonID: target.ID, SourcePersonIDs: []uint{999}})
 	require.Equal(t, http.StatusNotFound, w.Code)
+
+	// A merge name held by a person outside the merge is a 409 and nothing merges.
+	holder := domain.Person{}
+	holder.SetName("Иван")
+	require.NoError(t, svc.personRepo.Create(&holder))
+	extraTarget := domain.Person{}
+	extraSource := domain.Person{}
+	require.NoError(t, svc.personRepo.Create(&extraTarget))
+	require.NoError(t, svc.personRepo.Create(&extraSource))
+
+	conflicting := "ИВАН"
+	w = serveHandler(svc.handleMergePeople, http.MethodPost, "/api/people/merge",
+		dto.MergePeopleRequest{
+			TargetPersonID:  extraTarget.ID,
+			SourcePersonIDs: []uint{extraSource.ID},
+			Name:            &conflicting,
+		})
+	require.Equal(t, http.StatusConflict, w.Code)
+
+	var mergeConflict dto.PersonNameConflictResponse
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &mergeConflict))
+	require.Equal(t, "people.name_taken", mergeConflict.Error)
+	require.Equal(t, holder.ID, mergeConflict.Conflict.ID)
+
+	_, err = svc.personRepo.FindByID(extraSource.ID)
+	require.NoError(t, err)
 }
 
 // TestHandleDisbandPerson_StatusCodes guards DELETE /api/people/:id.
@@ -238,4 +285,33 @@ func TestHandleGetUnassignedFaces_Pagination(t *testing.T) {
 	require.Equal(t, "a.jpg", resp.Faces[0].FileName)
 	require.Equal(t, float32(30), resp.Faces[0].Width)
 	require.Equal(t, float32(0.9), resp.Faces[0].Confidence)
+}
+
+// TestHandleRenamePerson_NameTaken guards the 409 contract of a rename: the body
+// carries the error key and the person that already holds the name, and the
+// addressed person keeps its previous name.
+func TestHandleRenamePerson_NameTaken(t *testing.T) {
+	svc, _, cleanup := newFacesTestServer(t)
+	defer cleanup()
+
+	holder := domain.Person{}
+	holder.SetName("Иван")
+	require.NoError(t, svc.personRepo.Create(&holder))
+	other := domain.Person{}
+	require.NoError(t, svc.personRepo.Create(&other))
+
+	w := serveHandlerWithParam(svc.handleRenamePerson, http.MethodPatch,
+		"/api/people/"+strconv.FormatUint(uint64(other.ID), 10), "id",
+		strconv.FormatUint(uint64(other.ID), 10), dto.RenamePersonRequest{Name: " иван "})
+	require.Equal(t, http.StatusConflict, w.Code)
+
+	var body dto.PersonNameConflictResponse
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &body))
+	require.Equal(t, "people.name_taken", body.Error)
+	require.Equal(t, holder.ID, body.Conflict.ID)
+	require.Equal(t, "Иван", body.Conflict.Name)
+
+	stored, err := svc.personRepo.FindByID(other.ID)
+	require.NoError(t, err)
+	require.Equal(t, "", stored.Name)
 }

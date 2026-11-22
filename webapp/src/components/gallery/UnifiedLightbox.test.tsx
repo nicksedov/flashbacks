@@ -25,7 +25,9 @@ const endpoints = vi.hoisted(() => ({
   rejectEnhancement: vi.fn(),
   fetchImageFaces: vi.fn(),
   fetchPeople: vi.fn(),
+  fetchPersonSuggestions: vi.fn(),
   renamePerson: vi.fn(),
+  mergePeople: vi.fn(),
   assignFaceToPerson: vi.fn(),
   createPerson: vi.fn(),
 }))
@@ -123,7 +125,10 @@ describe("UnifiedLightbox", () => {
     endpoints.fetchImageFaces.mockResolvedValue({ faces: [] })
     endpoints.fetchPeople.mockReset()
     endpoints.fetchPeople.mockResolvedValue({ people: [] })
+    endpoints.fetchPersonSuggestions.mockReset()
+    endpoints.fetchPersonSuggestions.mockResolvedValue({ people: [] })
     endpoints.renamePerson.mockReset()
+    endpoints.mergePeople.mockReset()
     endpoints.assignFaceToPerson.mockReset()
     endpoints.createPerson.mockReset()
     // jsdom does not implement scrollIntoView, which ChatPanel calls on mount.
@@ -366,6 +371,166 @@ describe("UnifiedLightbox", () => {
       expect(screen.getAllByTestId("people-face-box")[0].getAttribute("data-numbered")).toBe("true"),
     )
     expect(screen.getAllByTestId("people-list-item")[0].textContent).toContain("Василиса")
+  })
+
+  it("refuses to create a person with a name another person already has", async () => {
+    dimensions.value = { width: 200, height: 100 }
+    endpoints.fetchImageFaces.mockResolvedValue({ faces: [personFace(1, 0, "")] })
+    endpoints.fetchPeople.mockResolvedValue({
+      people: [{ id: 3, name: "Василиса", photoCount: 12, coverThumbnail: "" }],
+    })
+
+    render(<UnifiedLightbox imagePath="a.jpg" initialMode="people" onClose={vi.fn()} />)
+
+    await waitFor(() => expect(endpoints.fetchPeople).toHaveBeenCalled())
+    await waitFor(() => expect(screen.getAllByTestId("people-face-box")).toHaveLength(1))
+    fireEvent.click(screen.getAllByTestId("people-face-box")[0])
+
+    await waitFor(() => expect(screen.getByText("lightbox.people.faceTitle")).toBeTruthy())
+    fireEvent.click(document.querySelector('[data-slot="face-create"]') as HTMLElement)
+
+    await waitFor(() => expect(screen.getByLabelText("people.createNameLabel")).toBeTruthy())
+    fireEvent.change(screen.getByLabelText("people.createNameLabel"), {
+      target: { value: "василиса" },
+    })
+    fireEvent.click(document.querySelector('[data-slot="create-confirm"]') as HTMLElement)
+
+    await waitFor(() => expect(document.querySelector('[data-slot="name-conflict"]')).toBeTruthy())
+    expect(endpoints.createPerson).not.toHaveBeenCalled()
+  })
+
+  it("asks before renaming a person to a name another person already has", async () => {
+    endpoints.fetchImageFaces.mockResolvedValue({ faces: [personFace(1, 7, "Anna")] })
+    endpoints.fetchPeople.mockResolvedValue({
+      people: [{ id: 3, name: "Василиса", photoCount: 12, coverThumbnail: "" }],
+    })
+
+    render(<UnifiedLightbox imagePath="a.jpg" initialMode="people" onClose={vi.fn()} />)
+
+    await waitFor(() => expect(screen.getByText("Anna")).toBeTruthy())
+    await waitFor(() => expect(endpoints.fetchPeople).toHaveBeenCalled())
+    fireEvent.click(screen.getByTestId("mobile-detail-toggle"))
+    fireEvent.click(screen.getByTestId("people-list-rename"))
+
+    await waitFor(() => expect(screen.getByLabelText("people.renameNameLabel")).toBeTruthy())
+    fireEvent.change(screen.getByLabelText("people.renameNameLabel"), {
+      target: { value: " василиса " },
+    })
+    fireEvent.click(document.querySelector('[data-slot="rename-save"]') as HTMLElement)
+
+    await waitFor(() => expect(document.querySelector('[data-slot="name-conflict"]')).toBeTruthy())
+    expect(endpoints.renamePerson).not.toHaveBeenCalled()
+  })
+
+  it("shows suggestion chips as soon as the rename dialog opens", async () => {
+    // The full listing never resolves: the suggestions must not wait for it.
+    endpoints.fetchPeople.mockReturnValue(new Promise(() => {}))
+    endpoints.fetchPersonSuggestions.mockResolvedValue({
+      people: [
+        { id: 20, name: "Иван", photoCount: 30, coverThumbnail: "" },
+        { id: 21, name: "Анна", photoCount: 25, coverThumbnail: "" },
+      ],
+    })
+    endpoints.fetchImageFaces.mockResolvedValue({ faces: [personFace(1, 7, "")] })
+
+    render(<UnifiedLightbox imagePath="a.jpg" initialMode="people" onClose={vi.fn()} />)
+
+    await waitFor(() => expect(screen.getByText("people.unnamed")).toBeTruthy())
+    fireEvent.click(screen.getByTestId("mobile-detail-toggle"))
+    fireEvent.click(screen.getByTestId("people-list-rename"))
+
+    await waitFor(() =>
+      expect(document.querySelectorAll('[data-slot="suggestion-chip"]')).toHaveLength(2),
+    )
+    expect(endpoints.fetchPersonSuggestions).toHaveBeenCalledTimes(1)
+  })
+
+  it("offers the merge when a suggested name is saved", async () => {
+    // An unnamed person, so the dialog opens with an empty input and the
+    // suggestions start from the most-photographed catalog names.
+    endpoints.fetchImageFaces.mockResolvedValue({ faces: [personFace(1, 7, "")] })
+    endpoints.fetchPeople.mockResolvedValue({
+      people: [
+        { id: 20, name: "Иван", photoCount: 30, coverThumbnail: "" },
+        { id: 21, name: "Анна", photoCount: 25, coverThumbnail: "" },
+        { id: 22, name: "Борис", photoCount: 20, coverThumbnail: "" },
+        { id: 23, name: "Вера", photoCount: 15, coverThumbnail: "" },
+        { id: 24, name: "Глеб", photoCount: 10, coverThumbnail: "" },
+        { id: 25, name: "Дина", photoCount: 5, coverThumbnail: "" },
+        { id: 26, name: "Егор", photoCount: 3, coverThumbnail: "" },
+        { id: 27, name: "Жанна", photoCount: 1, coverThumbnail: "" },
+      ],
+    })
+    endpoints.mergePeople.mockResolvedValue({
+      id: 20,
+      name: "Иван",
+      photoCount: 31,
+      coverThumbnail: "",
+    })
+
+    render(<UnifiedLightbox imagePath="a.jpg" initialMode="people" onClose={vi.fn()} />)
+
+    await waitFor(() => expect(screen.getByText("people.unnamed")).toBeTruthy())
+    await waitFor(() => expect(endpoints.fetchPeople).toHaveBeenCalled())
+    fireEvent.click(screen.getByTestId("mobile-detail-toggle"))
+    fireEvent.click(screen.getByTestId("people-list-rename"))
+
+    await waitFor(() => expect(screen.getByLabelText("people.renameNameLabel")).toBeTruthy())
+    await waitFor(() =>
+      expect(document.querySelectorAll('[data-slot="suggestion-chip"]')).toHaveLength(7),
+    )
+    const suggestions = document.querySelectorAll('[data-slot="suggestion-chip"]')
+    // Seven of the eight catalog people, the one with the most photos first.
+    expect(suggestions[0].textContent).toContain("Иван")
+    fireEvent.click(suggestions[0] as HTMLElement)
+
+    expect((screen.getByLabelText("people.renameNameLabel") as HTMLInputElement).value).toBe("Иван")
+    expect(endpoints.renamePerson).not.toHaveBeenCalled()
+
+    fireEvent.click(document.querySelector('[data-slot="rename-save"]') as HTMLElement)
+
+    await waitFor(() => expect(document.querySelector('[data-slot="name-conflict"]')).toBeTruthy())
+    expect(endpoints.renamePerson).not.toHaveBeenCalled()
+    fireEvent.click(document.querySelector('[data-slot="name-conflict-merge"]') as HTMLElement)
+
+    await waitFor(() =>
+      expect(endpoints.mergePeople).toHaveBeenCalledWith({ targetPersonId: 20, sourcePersonIds: [7] }),
+    )
+  })
+
+  it("folds the renamed cluster into the holder from the conflict dialog", async () => {
+    endpoints.fetchImageFaces.mockResolvedValue({ faces: [personFace(1, 7, "Anna")] })
+    endpoints.fetchPeople.mockResolvedValue({
+      people: [{ id: 3, name: "Василиса", photoCount: 12, coverThumbnail: "" }],
+    })
+    endpoints.mergePeople.mockResolvedValue({
+      id: 3,
+      name: "Василиса",
+      photoCount: 13,
+      coverThumbnail: "",
+    })
+
+    render(<UnifiedLightbox imagePath="a.jpg" initialMode="people" onClose={vi.fn()} />)
+
+    await waitFor(() => expect(screen.getByText("Anna")).toBeTruthy())
+    await waitFor(() => expect(endpoints.fetchPeople).toHaveBeenCalled())
+    fireEvent.click(screen.getByTestId("mobile-detail-toggle"))
+    fireEvent.click(screen.getByTestId("people-list-rename"))
+
+    await waitFor(() => expect(screen.getByLabelText("people.renameNameLabel")).toBeTruthy())
+    fireEvent.change(screen.getByLabelText("people.renameNameLabel"), {
+      target: { value: "василиса" },
+    })
+    fireEvent.click(document.querySelector('[data-slot="rename-save"]') as HTMLElement)
+
+    await waitFor(() => expect(document.querySelector('[data-slot="name-conflict"]')).toBeTruthy())
+    fireEvent.click(document.querySelector('[data-slot="name-conflict-merge"]') as HTMLElement)
+
+    await waitFor(() =>
+      expect(endpoints.mergePeople).toHaveBeenCalledWith({ targetPersonId: 3, sourcePersonIds: [7] }),
+    )
+    expect(endpoints.renamePerson).not.toHaveBeenCalled()
+    await waitFor(() => expect(document.querySelector('[data-slot="name-conflict"]')).toBeNull())
   })
 })
 

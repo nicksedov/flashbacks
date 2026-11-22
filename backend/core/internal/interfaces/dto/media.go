@@ -952,6 +952,15 @@ type MergePeopleRequest struct {
 	Name            *string `json:"name"`
 }
 
+// PersonNameConflictResponse is the 409 body of every people mutation that
+// carries a name. Error is the message key the client localizes; Conflict is the
+// person that already holds the requested name, so the client can offer to merge
+// into it instead of creating a duplicate.
+type PersonNameConflictResponse struct {
+	Error    string    `json:"error"`
+	Conflict PersonDTO `json:"conflict"`
+}
+
 // AssignFaceRequest is the body of PATCH /api/faces/:id. PersonID 0 detaches
 // the face from its person.
 type AssignFaceRequest struct {

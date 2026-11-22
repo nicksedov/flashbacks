@@ -15,6 +15,10 @@ type PersonRepository interface {
 	Save(person *domain.Person) error
 	// List returns every person ordered by ID.
 	List() ([]domain.Person, error)
+	// ListNamed returns only the people that carry a display name, ordered by
+	// ID. It backs the name suggestions, where an unnamed person has nothing to
+	// offer.
+	ListNamed() ([]domain.Person, error)
 	// Delete removes a person row. Deleting an unknown id is not an error.
 	Delete(id uint) error
 }
@@ -47,6 +51,14 @@ func (r *gormPersonRepo) Save(person *domain.Person) error {
 func (r *gormPersonRepo) List() ([]domain.Person, error) {
 	var people []domain.Person
 	if err := r.db.Order("id").Find(&people).Error; err != nil {
+		return nil, err
+	}
+	return people, nil
+}
+
+func (r *gormPersonRepo) ListNamed() ([]domain.Person, error) {
+	var people []domain.Person
+	if err := r.db.Where("name <> ''").Order("id").Find(&people).Error; err != nil {
 		return nil, err
 	}
 	return people, nil

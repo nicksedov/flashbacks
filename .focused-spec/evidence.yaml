@@ -1067,9 +1067,6 @@ scopes:
     face-recognition.person-name-too-long-rejected:
       evidence:
         - go::./internal/application/people::TestCatalogRename
-    face-recognition.person-name-duplicate-allowed:
-      evidence:
-        - go::./internal/application/people::TestCatalogRename
     face-recognition.people-merged:
       evidence:
         - go::./internal/application/people::TestCatalogMerge
@@ -1249,3 +1246,126 @@ scopes:
     in-memory-ttl-cache.person-rename-observed-on-the-next-request:
       evidence:
         - go::./internal/interfaces/handler::TestPersonName_FreshRequestSeesRename
+    face-recognition.person-name-inner-whitespace-collapsed:
+      evidence:
+        - go::./internal/domain::TestPersonNameKey
+        - go::./internal/application/people::TestCatalogRename
+    face-recognition.person-name-taken-rejected:
+      evidence:
+        - go::./internal/application/people::TestCatalogRenameRejectsTakenName
+        - go::./internal/interfaces/handler::TestHandleRenamePerson_NameTaken
+    face-recognition.person-name-taken-reports-holder:
+      evidence:
+        - go::./internal/interfaces/handler::TestHandleRenamePerson_NameTaken
+    face-recognition.person-name-conflict-ignores-case-and-spaces:
+      evidence:
+        - go::./internal/application/people::TestCatalogRenameIgnoresCaseAndSpacing
+    face-recognition.person-name-own-name-allowed:
+      evidence:
+        - go::./internal/application/people::TestCatalogRenameAllowsOwnName
+    face-recognition.person-name-unnamed-never-conflicts:
+      evidence:
+        - go::./internal/application/people::TestCatalogRenameKeepsUnnamedUnbounded
+    face-recognition.merge-name-taken-rejected:
+      evidence:
+        - go::./internal/application/people::TestCatalogMergeRejectsTakenName
+        - go::./internal/interfaces/handler::TestHandleMergePeople_StatusCodes
+    face-recognition.merge-name-of-target-allowed:
+      evidence:
+        - go::./internal/application/people::TestCatalogMergeAcceptsTargetAndSourceNames
+    face-recognition.merge-name-of-source-allowed:
+      evidence:
+        - go::./internal/application/people::TestCatalogMergeAcceptsTargetAndSourceNames
+    face-recognition.person-create-name-taken-rejected:
+      evidence:
+        - go::./internal/application/people::TestCatalogCreateRejectsTakenName
+        - go::./internal/interfaces/handler::TestHandleCreatePerson_StatusCodes
+    face-recognition.unique-name-across-entry-points:
+      evidence:
+        - go::./internal/application/people::TestCatalogRenameRejectsTakenName
+        - go::./internal/application/people::TestCatalogMergeRejectsTakenName
+        - go::./internal/application/people::TestCatalogCreateRejectsTakenName
+    face-recognition.unique-name-storage-guarantee:
+      evidence:
+        - go::./internal/infrastructure/database::TestMigratePersonNamesCreatesUniqueIndex
+    face-recognition.startup-duplicates-merged:
+      evidence:
+        - go::./internal/infrastructure/database::TestMigratePersonNamesMergesLegacyDuplicates
+    face-recognition.startup-repair-idempotent:
+      evidence:
+        - go::./internal/infrastructure/database::TestMigratePersonNamesIsIdempotent
+    face-recognition.startup-repair-keeps-unnamed:
+      evidence:
+        - go::./internal/infrastructure/database::TestMigratePersonNamesKeepsUnnamedPeople
+    face-recognition.conflict-dialog-shows-holder:
+      evidence:
+        - vitest::webapp/src/components/people/PeopleDialogs.test.tsx::PersonNameConflictDialog > names the person that holds the name and shows its photo count
+    face-recognition.conflict-merge-folds-into-holder:
+      evidence:
+        - vitest::webapp/src/components/tabs/PeopleTab.test.tsx::PeopleTab > merges the renamed person into the holder from the conflict dialog
+    face-recognition.conflict-change-name-saves-unique:
+      evidence:
+        - vitest::webapp/src/components/tabs/PeopleTab.test.tsx::PeopleTab > returns to the name input when the user chooses another name
+    face-recognition.conflict-cancel-keeps-catalog:
+      evidence:
+        - vitest::webapp/src/components/tabs/PeopleTab.test.tsx::PeopleTab > changes nothing when the conflict dialog is cancelled
+    face-recognition.conflict-detected-before-request:
+      evidence:
+        - vitest::webapp/src/components/tabs/PeopleTab.test.tsx::PeopleTab > asks before saving a name another person already has
+    face-recognition.name-conflict-strings-localized:
+      evidence:
+        - vitest::webapp/src/components/people/PeopleDialogs.test.tsx::PersonNameConflictDialog > is localized in Russian
+    face-recognition.lightbox-rename-conflict-no-duplicate:
+      evidence:
+        - vitest::webapp/src/components/gallery/UnifiedLightbox.test.tsx::UnifiedLightbox > asks before renaming a person to a name another person already has
+    face-recognition.lightbox-conflict-merges-person:
+      evidence:
+        - vitest::webapp/src/components/gallery/UnifiedLightbox.test.tsx::UnifiedLightbox > folds the renamed cluster into the holder from the conflict dialog
+    face-recognition.lightbox-create-from-face-conflict:
+      evidence:
+        - vitest::webapp/src/components/gallery/UnifiedLightbox.test.tsx::UnifiedLightbox > refuses to create a person with a name another person already has
+    face-recognition.people-tab-rename-conflict:
+      evidence:
+        - vitest::webapp/src/components/tabs/PeopleTab.test.tsx::PeopleTab > asks before saving a name another person already has
+    face-recognition.people-tab-create-conflict-attaches-faces:
+      evidence:
+        - vitest::webapp/src/components/people/UnassignedFacesView.test.tsx::UnassignedFacesView > attaches the selected faces to the person that already holds the name
+    face-recognition.people-tab-merge-name-conflict:
+      evidence:
+        - vitest::webapp/src/components/tabs/PeopleTab.test.tsx::PeopleTab > folds a selection into the person that already holds the merge name
+    face-recognition.lightbox-rename-suggestions-before-typing:
+      evidence:
+        - vitest::webapp/src/components/people/PeopleDialogs.test.tsx::RenamePersonDialog > opens with the seven most-photographed names
+    face-recognition.lightbox-rename-suggestions-prefilled-name:
+      evidence:
+        - vitest::webapp/src/components/people/PeopleDialogs.test.tsx::RenamePersonDialog > shows the top names when the field already holds a name
+    face-recognition.lightbox-rename-suggestions-ties:
+      evidence:
+        - vitest::webapp/src/lib/person-name.test.ts::personNameSuggestions > breaks equal photo counts by name
+    face-recognition.lightbox-rename-suggestions-filter:
+      evidence:
+        - vitest::webapp/src/lib/person-name.test.ts::personNameSuggestions > keeps only names containing the fragment
+    face-recognition.lightbox-rename-suggestions-ignores-case:
+      evidence:
+        - vitest::webapp/src/lib/person-name.test.ts::personNameSuggestions > ignores case and surrounding spaces
+    face-recognition.lightbox-rename-suggestions-no-match:
+      evidence:
+        - vitest::webapp/src/components/people/PeopleDialogs.test.tsx::RenamePersonDialog > hides the chips when the edited fragment matches nothing
+    face-recognition.lightbox-rename-suggestions-exclude-renamed:
+      evidence:
+        - vitest::webapp/src/lib/person-name.test.ts::personNameSuggestions > excludes the person being renamed
+    face-recognition.lightbox-rename-suggestions-skip-unnamed:
+      evidence:
+        - vitest::webapp/src/lib/person-name.test.ts::personNameSuggestions > skips unnamed people
+    face-recognition.lightbox-rename-suggestion-fills-input:
+      evidence:
+        - vitest::webapp/src/components/people/PeopleDialogs.test.tsx::RenamePersonDialog > fills the name from a suggestion without submitting
+    face-recognition.lightbox-rename-suggestion-opens-conflict:
+      evidence:
+        - vitest::webapp/src/components/gallery/UnifiedLightbox.test.tsx::UnifiedLightbox > offers the merge when a suggested name is saved
+    design-system.suggestion-chips-uniform:
+      evidence:
+        - vitest::webapp/src/components/ui/suggestion-chip.test.tsx::SuggestionChip > renders the shared pill styles
+    design-system.suggestion-chips-text-only:
+      evidence:
+        - vitest::webapp/src/components/people/PeopleDialogs.test.tsx::RenamePersonDialog > shows only the name on each suggestion chip

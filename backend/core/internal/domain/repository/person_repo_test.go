@@ -40,3 +40,33 @@ func TestPersonRepositoryDelete(t *testing.T) {
 		t.Fatalf("delete unknown person: %v", err)
 	}
 }
+
+// TestPersonRepositoryListNamed guards the name-suggestion read: only people
+// with a display name come back, in ID order, so an unnamed person never
+// appears as a suggestion.
+func TestPersonRepositoryListNamed(t *testing.T) {
+	db, cleanup := testutil.NewTestDB(t)
+	defer cleanup()
+
+	named := domain.Person{Name: "Anna"}
+	unnamed := domain.Person{}
+	other := domain.Person{Name: "Василиса"}
+	for _, person := range []*domain.Person{&named, &unnamed, &other} {
+		if err := db.Create(person).Error; err != nil {
+			t.Fatalf("create person: %v", err)
+		}
+	}
+
+	repo := NewPersonRepository(db)
+	people, err := repo.ListNamed()
+	if err != nil {
+		t.Fatalf("list named people: %v", err)
+	}
+
+	if len(people) != 2 {
+		t.Fatalf("named people = %+v, want 2", people)
+	}
+	if people[0].ID != named.ID || people[1].ID != other.ID {
+		t.Fatalf("named people ids = [%d %d], want [%d %d]", people[0].ID, people[1].ID, named.ID, other.ID)
+	}
+}

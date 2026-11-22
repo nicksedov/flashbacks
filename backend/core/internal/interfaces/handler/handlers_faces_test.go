@@ -96,6 +96,37 @@ func TestHandleGetPeople_ListsWithCoverAndCount(t *testing.T) {
 	require.NotEmpty(t, resp.People[0].CoverThumbnail)
 }
 
+// TestHandleGetPersonSuggestions_ListsNamedOnly guards GET
+// /api/people/suggestions: the rename dialog gets the named people only, and a
+// named person without photos is left out just like in the full listing.
+func TestHandleGetPersonSuggestions_ListsNamedOnly(t *testing.T) {
+	svc, db, cleanup := newFacesTestServer(t)
+	defer cleanup()
+
+	named := domain.Person{Name: "Anna"}
+	unnamed := domain.Person{}
+	photoless := domain.Person{Name: "Борис"}
+	for _, person := range []*domain.Person{&named, &unnamed, &photoless} {
+		require.NoError(t, svc.personRepo.Create(person))
+	}
+
+	img := testutil.SeedImageFile(t, db, "/gallery/p1.jpg", "h1", 10)
+	for index, person := range []*domain.Person{&named, &unnamed} {
+		face := domain.Face{ImageFileID: img.ID, X: float32(index), Y: 1, Width: 3, Height: 4, Confidence: 0.9}
+		require.NoError(t, svc.faceRepo.Create(&face))
+		require.NoError(t, svc.faceRepo.SetPersonID(face.ID, person.ID))
+	}
+
+	w := serveHandler(svc.handleGetPersonSuggestions, http.MethodGet, "/api/people/suggestions", nil)
+	require.Equal(t, http.StatusOK, w.Code)
+
+	var resp dto.PeopleResponse
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	require.Len(t, resp.People, 1)
+	require.Equal(t, "Anna", resp.People[0].Name)
+	require.Equal(t, 1, resp.People[0].PhotoCount)
+}
+
 // TestHandleGetPersonPhotos_Paginated guards the person photos endpoint.
 func TestHandleGetPersonPhotos_Paginated(t *testing.T) {
 	svc, db, cleanup := newFacesTestServer(t)

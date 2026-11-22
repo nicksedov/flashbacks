@@ -25,12 +25,30 @@ func (s *Server) handleGetPeople(c *gin.Context) {
 		return
 	}
 
+	c.JSON(http.StatusOK, dto.PeopleResponse{People: s.personDTOs(people)})
+}
+
+// handleGetPersonSuggestions returns only the people that carry a name, with
+// their photo counts. The rename dialog ranks and filters this small set, so
+// suggestions do not have to wait for the full listing to load.
+func (s *Server) handleGetPersonSuggestions(c *gin.Context) {
+	people, err := s.personRepo.ListNamed()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, i18n.ErrorResponse(i18n.MsgAuthInternalError))
+		return
+	}
+
+	c.JSON(http.StatusOK, dto.PeopleResponse{People: s.personDTOs(people)})
+}
+
+// personDTOs renders people with their photo count and cover thumbnail. A person
+// whose faces were re-scanned away stays in the table but is hidden: an empty
+// tile helps nobody.
+func (s *Server) personDTOs(people []domain.Person) []dto.PersonDTO {
 	dtos := make([]dto.PersonDTO, 0, len(people))
 	for _, person := range people {
 		photoCount, err := s.faceRepo.CountImageFilesByPersonID(person.ID)
 		if err != nil || photoCount == 0 {
-			// A person whose faces were re-scanned away stays in the table but is
-			// hidden from the listing: an empty tile helps nobody.
 			continue
 		}
 		dtos = append(dtos, dto.PersonDTO{
@@ -40,8 +58,7 @@ func (s *Server) handleGetPeople(c *gin.Context) {
 			CoverThumbnail: s.coverThumbnail(person.CoverFaceID),
 		})
 	}
-
-	c.JSON(http.StatusOK, dto.PeopleResponse{People: dtos})
+	return dtos
 }
 
 // coverThumbnail resolves a person's cover face to a thumbnail URL reference.
@@ -408,7 +425,16 @@ func (s *Server) requirePeopleCatalog(c *gin.Context) bool {
 
 // respondCatalogError maps a catalog error to the documented status code.
 func (s *Server) respondCatalogError(c *gin.Context, err error) {
+	var nameTaken *people.ErrNameTakenError
+
 	switch {
+	case errors.As(err, &nameTaken) && nameTaken.Existing != nil:
+		// A taken name is a conflict, not a bad request: the body tells the
+		// client which person holds it so the UI can offer a merge.
+		c.JSON(http.StatusConflict, dto.PersonNameConflictResponse{
+			Error:    string(i18n.MsgPeopleNameTaken),
+			Conflict: s.personDTO(nameTaken.Existing),
+		})
 	case errors.Is(err, people.ErrPersonNotFound):
 		s.respondError(c, http.StatusNotFound, i18n.MsgPeoplePersonNotFound)
 	case errors.Is(err, people.ErrFaceNotFound):

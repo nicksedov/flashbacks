@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { useTranslation } from "@/i18n"
 import { fetchPersonPhotos } from "@/api/endpoints"
+import { personNameSuggestions } from "@/lib/person-name"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { SuggestionChip } from "@/components/ui/suggestion-chip"
 import {
   Dialog,
   DialogContent,
@@ -63,21 +65,40 @@ function useCancelHandler(onCancel: () => void, loading: boolean) {
 
 interface RenamePersonDialogProps {
   initialName: string
+  /** The catalog the name suggestions come from; omit it to offer none. */
+  people?: PersonDTO[]
+  /** The person being renamed, which is never suggested. */
+  excludePersonId?: number
   loading?: boolean
   onCancel: () => void
   onSubmit: (name: string) => void
 }
 
-/** Set or clear one person's display name. */
+/** Set or clear one person's display name, with catalog names as suggestions. */
 export function RenamePersonDialog({
   initialName,
+  people = [],
+  excludePersonId,
   loading = false,
   onCancel,
   onSubmit,
 }: RenamePersonDialogProps) {
-  const { t } = useTranslation()
+  const { t, language } = useTranslation()
   const [name, setName] = useState(initialName)
+  // Until the user edits the field it keeps the seeded name, and the list shows
+  // the most-photographed names instead of filtering itself down to nothing.
+  const [pristine, setPristine] = useState(true)
   const handleOpenChange = useCancelHandler(onCancel, loading)
+  // Filling a suggestion is only a shortcut for typing: the input stays
+  // authoritative and Save is the only action that sends a request.
+  const suggestions = useMemo(
+    () =>
+      personNameSuggestions(people, pristine ? "" : name, {
+        excludeIds: excludePersonId === undefined ? [] : [excludePersonId],
+        locale: language,
+      }),
+    [excludePersonId, language, name, people, pristine],
+  )
 
   return (
     <Dialog open onOpenChange={handleOpenChange}>
@@ -93,8 +114,26 @@ export function RenamePersonDialog({
             data-slot="rename-input"
             value={name}
             maxLength={200}
-            onChange={(event) => setName(event.target.value)}
+            onChange={(event) => {
+              setPristine(false)
+              setName(event.target.value)
+            }}
           />
+          {suggestions.length > 0 && (
+            <div data-slot="rename-suggestions" className="flex flex-wrap gap-1.5">
+              {suggestions.map((person) => (
+                <SuggestionChip
+                  key={person.id}
+                  label={person.name}
+                  className="max-w-full"
+                  onClick={() => {
+                    setPristine(false)
+                    setName(person.name)
+                  }}
+                />
+              ))}
+            </div>
+          )}
         </div>
         <DialogFooter>
           <Button
@@ -113,6 +152,95 @@ export function RenamePersonDialog({
             disabled={loading}
           >
             {t("people.save")}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+/** What the merge alternative would fold into the person that holds the name. */
+export type PersonNameConflictMode = "merge-person" | "merge-selection" | "attach-faces"
+
+interface PersonNameConflictDialogProps {
+  /** The name the user typed; it is never saved. */
+  pendingName: string
+  /** The person that already holds that name. */
+  conflict: PersonDTO
+  mode: PersonNameConflictMode
+  loading?: boolean
+  /** Merge the pending person, selection or faces into `conflict`. */
+  onMerge: () => void
+  /** Go back to the name input and save nothing. */
+  onChangeName: () => void
+  /** Close the flow and save nothing. */
+  onCancel: () => void
+}
+
+/**
+ * Resolve a taken person name. The only two ways forward are the ones the user
+ * asked for: join the person that already holds the name, or pick another name.
+ */
+export function PersonNameConflictDialog({
+  pendingName,
+  conflict,
+  mode,
+  loading = false,
+  onMerge,
+  onChangeName,
+  onCancel,
+}: PersonNameConflictDialogProps) {
+  const { t } = useTranslation()
+  const handleOpenChange = useCancelHandler(onCancel, loading)
+
+  const mergeLabel =
+    mode === "merge-selection"
+      ? t("people.nameConflictMergeSelection", { name: conflict.name })
+      : mode === "attach-faces"
+        ? t("people.nameConflictAttachFaces", { name: conflict.name })
+        : t("people.nameConflictMergePerson", { name: conflict.name })
+
+  return (
+    <Dialog open onOpenChange={handleOpenChange}>
+      <DialogContent data-slot="name-conflict">
+        <DialogHeader>
+          <DialogTitle data-slot="name-conflict-title">{t("people.nameConflictTitle")}</DialogTitle>
+          <DialogDescription>
+            {t("people.nameConflictDescription", {
+              name: pendingName.trim(),
+              count: t("people.photoCount", { count: conflict.photoCount }),
+            })}
+          </DialogDescription>
+        </DialogHeader>
+        <p data-slot="name-conflict-hint" className="text-sm text-muted-foreground">
+          {t("people.nameConflictHint")}
+        </p>
+        <DialogFooter>
+          <Button
+            type="button"
+            variant="outline"
+            data-slot="name-conflict-cancel"
+            onClick={onCancel}
+            disabled={loading}
+          >
+            {t("people.cancel")}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            data-slot="name-conflict-rename"
+            onClick={onChangeName}
+            disabled={loading}
+          >
+            {t("people.nameConflictChangeName")}
+          </Button>
+          <Button
+            type="button"
+            data-slot="name-conflict-merge"
+            onClick={onMerge}
+            disabled={loading}
+          >
+            {mergeLabel}
           </Button>
         </DialogFooter>
       </DialogContent>

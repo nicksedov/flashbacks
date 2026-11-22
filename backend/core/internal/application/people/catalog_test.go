@@ -44,7 +44,8 @@ func newCatalogFixture(t *testing.T) *catalogFixture {
 func (f *catalogFixture) createPerson(t *testing.T, name string) *domain.Person {
 	t.Helper()
 
-	person := domain.Person{Name: name}
+	person := domain.Person{}
+	person.SetName(name)
 	if err := f.db.Create(&person).Error; err != nil {
 		t.Fatalf("create person: %v", err)
 	}
@@ -177,7 +178,23 @@ func TestCatalogRename(t *testing.T) {
 		}
 	})
 
-	t.Run("allows two people to share a name", func(t *testing.T) {
+	t.Run("stores the normalized key with the name", func(t *testing.T) {
+		fixture := newCatalogFixture(t)
+		person := fixture.createPerson(t, "")
+
+		updated, err := fixture.catalog.Rename(person.ID, "  Anna   Petrova  ")
+		if err != nil {
+			t.Fatalf("rename: %v", err)
+		}
+		if updated.Name != "Anna Petrova" {
+			t.Errorf("name = %q, want %q", updated.Name, "Anna Petrova")
+		}
+		if updated.NameKey != "anna petrova" {
+			t.Errorf("nameKey = %q, want %q", updated.NameKey, "anna petrova")
+		}
+	})
+
+	t.Run("refuses a name another person already holds", func(t *testing.T) {
 		fixture := newCatalogFixture(t)
 		first := fixture.createPerson(t, "")
 		second := fixture.createPerson(t, "")
@@ -185,8 +202,8 @@ func TestCatalogRename(t *testing.T) {
 		if _, err := fixture.catalog.Rename(first.ID, "Anna"); err != nil {
 			t.Fatalf("rename first: %v", err)
 		}
-		if _, err := fixture.catalog.Rename(second.ID, "Anna"); err != nil {
-			t.Fatalf("rename second: %v", err)
+		if _, err := fixture.catalog.Rename(second.ID, "Anna"); !errors.Is(err, ErrNameTaken) {
+			t.Fatalf("rename second error = %v, want ErrNameTaken", err)
 		}
 
 		people, err := fixture.persons.List()
@@ -196,10 +213,14 @@ func TestCatalogRename(t *testing.T) {
 		if len(people) != 2 {
 			t.Fatalf("people = %d, want 2", len(people))
 		}
+		named := 0
 		for _, person := range people {
-			if person.Name != "Anna" {
-				t.Errorf("person %d name = %q, want Anna", person.ID, person.Name)
+			if person.Name == "Anna" {
+				named++
 			}
+		}
+		if named != 1 {
+			t.Errorf("people named Anna = %d, want 1", named)
 		}
 	})
 }
@@ -703,5 +724,225 @@ func TestCatalogListUnassigned(t *testing.T) {
 	}
 	if empty.TotalFaces != 3 {
 		t.Errorf("total faces = %d, want 3", empty.TotalFaces)
+	}
+}
+
+// TestCatalogRenameRejectsTakenName guards the uniqueness rule on the rename
+// path: a name another person holds is refused, the conflict names the holder,
+// and the addressed person keeps its previous name.
+func TestCatalogRenameRejectsTakenName(t *testing.T) {
+	fixture := newCatalogFixture(t)
+	holder := fixture.createPerson(t, "Иван")
+	other := fixture.createPerson(t, "Василиса")
+
+	_, err := fixture.catalog.Rename(other.ID, "Иван")
+
+	var taken *ErrNameTakenError
+	if !errors.As(err, &taken) {
+		t.Fatalf("rename error = %v, want *ErrNameTakenError", err)
+	}
+	if !errors.Is(err, ErrNameTaken) {
+		t.Errorf("errors.Is(err, ErrNameTaken) = false, want true")
+	}
+	if taken.Existing == nil || taken.Existing.ID != holder.ID {
+		t.Fatalf("conflict holder = %+v, want person %d", taken.Existing, holder.ID)
+	}
+
+	stored, err := fixture.persons.FindByID(other.ID)
+	if err != nil {
+		t.Fatalf("reload person: %v", err)
+	}
+	if stored.Name != "Василиса" {
+		t.Errorf("name after refused rename = %q, want Василиса", stored.Name)
+	}
+
+	people, err := fixture.persons.List()
+	if err != nil {
+		t.Fatalf("list people: %v", err)
+	}
+	named := 0
+	for _, person := range people {
+		if person.Name == "Иван" {
+			named++
+		}
+	}
+	if named != 1 {
+		t.Errorf("people named Иван = %d, want 1", named)
+	}
+}
+
+// TestCatalogRenameIgnoresCaseAndSpacing guards that a name equal after
+// normalization is the same name, whatever the case or the padding.
+func TestCatalogRenameIgnoresCaseAndSpacing(t *testing.T) {
+	fixture := newCatalogFixture(t)
+	fixture.createPerson(t, "Иван")
+	other := fixture.createPerson(t, "")
+
+	for _, variant := range []string{" иВаН ", "иван", "ИВАН   "} {
+		if _, err := fixture.catalog.Rename(other.ID, variant); !errors.Is(err, ErrNameTaken) {
+			t.Errorf("rename to %q error = %v, want ErrNameTaken", variant, err)
+		}
+	}
+}
+
+// TestCatalogRenameAllowsOwnName guards that a person may take its own name in
+// another case: only a different person holding it is a conflict.
+func TestCatalogRenameAllowsOwnName(t *testing.T) {
+	fixture := newCatalogFixture(t)
+	person := fixture.createPerson(t, "Иван")
+
+	updated, err := fixture.catalog.Rename(person.ID, " иван ")
+	if err != nil {
+		t.Fatalf("rename: %v", err)
+	}
+	if updated.Name != "иван" {
+		t.Errorf("name = %q, want иван", updated.Name)
+	}
+	if updated.NameKey != "иван" {
+		t.Errorf("nameKey = %q, want иван", updated.NameKey)
+	}
+}
+
+// TestCatalogRenameKeepsUnnamedUnbounded guards that clearing a name is always
+// allowed and that unnamed people never collide with each other.
+func TestCatalogRenameKeepsUnnamedUnbounded(t *testing.T) {
+	fixture := newCatalogFixture(t)
+	fixture.createPerson(t, "")
+	fixture.createPerson(t, "")
+	named := fixture.createPerson(t, "Анна")
+
+	if _, err := fixture.catalog.Rename(named.ID, "   "); err != nil {
+		t.Fatalf("clear name: %v", err)
+	}
+
+	people, err := fixture.persons.List()
+	if err != nil {
+		t.Fatalf("list people: %v", err)
+	}
+	if len(people) != 3 {
+		t.Fatalf("people = %d, want 3", len(people))
+	}
+	for _, person := range people {
+		if person.Name != "" || person.NameKey != "" {
+			t.Errorf("person %d = (%q, %q), want both empty", person.ID, person.Name, person.NameKey)
+		}
+	}
+}
+
+// TestCatalogMergeRejectsTakenName guards that a merge name held by a person
+// outside the merge is refused and nothing is merged.
+func TestCatalogMergeRejectsTakenName(t *testing.T) {
+	fixture := newCatalogFixture(t)
+	image := fixture.createImage(t, "/library/a.jpg")
+	target := fixture.createPerson(t, "")
+	source := fixture.createPerson(t, "")
+	holder := fixture.createPerson(t, "Иван")
+	fixture.createFace(t, image.ID, source.ID, 0.9, nil)
+
+	name := " иван "
+	_, err := fixture.catalog.Merge(target.ID, []uint{source.ID}, &name)
+
+	var taken *ErrNameTakenError
+	if !errors.As(err, &taken) {
+		t.Fatalf("merge error = %v, want *ErrNameTakenError", err)
+	}
+	if taken.Existing == nil || taken.Existing.ID != holder.ID {
+		t.Fatalf("conflict holder = %+v, want person %d", taken.Existing, holder.ID)
+	}
+
+	if _, err := fixture.persons.FindByID(source.ID); err != nil {
+		t.Fatalf("source after refused merge: %v", err)
+	}
+	photos, err := fixture.faces.CountImageFilesByPersonID(source.ID)
+	if err != nil {
+		t.Fatalf("count source photos: %v", err)
+	}
+	if photos != 1 {
+		t.Errorf("source photo count = %d, want 1", photos)
+	}
+
+	storedTarget, err := fixture.persons.FindByID(target.ID)
+	if err != nil {
+		t.Fatalf("reload target: %v", err)
+	}
+	if storedTarget.Name != "" || storedTarget.Manual {
+		t.Errorf("target after refused merge = (%q, manual=%v), want unnamed and untouched",
+			storedTarget.Name, storedTarget.Manual)
+	}
+}
+
+// TestCatalogMergeAcceptsTargetAndSourceNames guards that the target's own name
+// and the names of the sources being folded in never block a merge.
+func TestCatalogMergeAcceptsTargetAndSourceNames(t *testing.T) {
+	t.Run("the target keeps its own name", func(t *testing.T) {
+		fixture := newCatalogFixture(t)
+		target := fixture.createPerson(t, "Иван")
+		source := fixture.createPerson(t, "")
+
+		name := "ИВАН"
+		merged, err := fixture.catalog.Merge(target.ID, []uint{source.ID}, &name)
+		if err != nil {
+			t.Fatalf("merge: %v", err)
+		}
+		if merged.Name != "ИВАН" || merged.NameKey != "иван" {
+			t.Errorf("merged = (%q, %q), want (ИВАН, иван)", merged.Name, merged.NameKey)
+		}
+	})
+
+	t.Run("a source that disappears frees its name", func(t *testing.T) {
+		fixture := newCatalogFixture(t)
+		target := fixture.createPerson(t, "")
+		source := fixture.createPerson(t, "Иван")
+
+		name := "Иван"
+		merged, err := fixture.catalog.Merge(target.ID, []uint{source.ID}, &name)
+		if err != nil {
+			t.Fatalf("merge: %v", err)
+		}
+		if merged.Name != "Иван" {
+			t.Errorf("merged name = %q, want Иван", merged.Name)
+		}
+		people, err := fixture.persons.List()
+		if err != nil {
+			t.Fatalf("list people: %v", err)
+		}
+		if len(people) != 1 {
+			t.Fatalf("people = %d, want 1", len(people))
+		}
+	})
+}
+
+// TestCatalogCreateRejectsTakenName guards the create entry point: a taken name
+// creates nothing and leaves the faces unassigned.
+func TestCatalogCreateRejectsTakenName(t *testing.T) {
+	fixture := newCatalogFixture(t)
+	image := fixture.createImage(t, "/library/a.jpg")
+	holder := fixture.createPerson(t, "Иван")
+	face := fixture.createFace(t, image.ID, 0, 0.9, []float32{1, 0, 0})
+
+	_, err := fixture.catalog.CreateFromFaces(" иван ", []uint{face.ID})
+
+	var taken *ErrNameTakenError
+	if !errors.As(err, &taken) {
+		t.Fatalf("create error = %v, want *ErrNameTakenError", err)
+	}
+	if taken.Existing == nil || taken.Existing.ID != holder.ID {
+		t.Fatalf("conflict holder = %+v, want person %d", taken.Existing, holder.ID)
+	}
+
+	stored, err := fixture.faces.FindByID(face.ID)
+	if err != nil {
+		t.Fatalf("reload face: %v", err)
+	}
+	if stored.PersonID != 0 {
+		t.Errorf("face person = %d, want 0", stored.PersonID)
+	}
+
+	people, err := fixture.persons.List()
+	if err != nil {
+		t.Fatalf("list people: %v", err)
+	}
+	if len(people) != 1 {
+		t.Errorf("people = %d, want 1", len(people))
 	}
 }

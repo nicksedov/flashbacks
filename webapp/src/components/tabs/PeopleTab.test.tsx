@@ -436,4 +436,144 @@ describe("PeopleTab", () => {
     await waitFor(() => expect(toast.showToastError).toHaveBeenCalledWith("Could not update the catalog"))
     expect(screen.getByText("Anna")).toBeTruthy()
   })
+
+  it("asks before saving a name another person already has", async () => {
+    endpoints.fetchPeople.mockResolvedValue({
+      people: [
+        { id: 1, name: "Иван", photoCount: 12, coverThumbnail: "" },
+        { id: 2, name: "", photoCount: 1, coverThumbnail: "" },
+      ],
+    })
+
+    const { container } = render(<PeopleTab />)
+    await waitFor(() => expect(container.querySelectorAll('[data-slot="person-tile"]')).toHaveLength(2))
+
+    fireEvent.click(container.querySelectorAll('[data-slot="person-rename"]')[1] as HTMLElement)
+    await waitFor(() => expect(screen.getByRole("dialog")).toBeTruthy())
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: " иван " } })
+    fireEvent.click(screen.getByText("Save", { selector: '[data-slot="rename-save"]' }))
+
+    await waitFor(() => expect(document.querySelector('[data-slot="name-conflict"]')).toBeTruthy())
+    expect(endpoints.renamePerson).not.toHaveBeenCalled()
+    const dialog = document.querySelector('[data-slot="name-conflict"]') as HTMLElement
+    expect(within(dialog).getByText(/12 photos/)).toBeTruthy()
+    // The grid is untouched while the user decides.
+    expect(container.querySelectorAll('[data-slot="person-tile"]')).toHaveLength(2)
+  })
+
+  it("merges the renamed person into the holder from the conflict dialog", async () => {
+    endpoints.fetchPeople.mockResolvedValue({
+      people: [
+        { id: 1, name: "Иван", photoCount: 12, coverThumbnail: "" },
+        { id: 2, name: "", photoCount: 1, coverThumbnail: "" },
+      ],
+    })
+    endpoints.mergePeople.mockResolvedValue({ id: 1, name: "Иван", photoCount: 13, coverThumbnail: "" })
+
+    const { container } = render(<PeopleTab />)
+    await waitFor(() => expect(container.querySelectorAll('[data-slot="person-tile"]')).toHaveLength(2))
+
+    fireEvent.click(container.querySelectorAll('[data-slot="person-rename"]')[1] as HTMLElement)
+    await waitFor(() => expect(screen.getByRole("dialog")).toBeTruthy())
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "иван" } })
+    fireEvent.click(screen.getByText("Save", { selector: '[data-slot="rename-save"]' }))
+
+    await waitFor(() => expect(document.querySelector('[data-slot="name-conflict"]')).toBeTruthy())
+    fireEvent.click(document.querySelector('[data-slot="name-conflict-merge"]') as HTMLElement)
+
+    await waitFor(() =>
+      expect(endpoints.mergePeople).toHaveBeenCalledWith({ targetPersonId: 1, sourcePersonIds: [2] }),
+    )
+    expect(endpoints.renamePerson).not.toHaveBeenCalled()
+    await waitFor(() => expect(container.querySelectorAll('[data-slot="person-tile"]')).toHaveLength(1))
+    expect(screen.getByText("Иван")).toBeTruthy()
+  })
+
+  it("returns to the name input when the user chooses another name", async () => {
+    endpoints.fetchPeople.mockResolvedValue({
+      people: [
+        { id: 1, name: "Иван", photoCount: 12, coverThumbnail: "" },
+        { id: 2, name: "", photoCount: 1, coverThumbnail: "" },
+      ],
+    })
+
+    const { container } = render(<PeopleTab />)
+    await waitFor(() => expect(container.querySelectorAll('[data-slot="person-tile"]')).toHaveLength(2))
+
+    fireEvent.click(container.querySelectorAll('[data-slot="person-rename"]')[1] as HTMLElement)
+    await waitFor(() => expect(screen.getByRole("dialog")).toBeTruthy())
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "иван" } })
+    fireEvent.click(screen.getByText("Save", { selector: '[data-slot="rename-save"]' }))
+    await waitFor(() => expect(document.querySelector('[data-slot="name-conflict"]')).toBeTruthy())
+
+    fireEvent.click(document.querySelector('[data-slot="name-conflict-rename"]') as HTMLElement)
+
+    await waitFor(() => expect(document.querySelector('[data-slot="name-conflict"]')).toBeNull())
+    expect(screen.getByLabelText("Name")).toBeTruthy()
+    expect(endpoints.renamePerson).not.toHaveBeenCalled()
+    expect(endpoints.mergePeople).not.toHaveBeenCalled()
+  })
+
+  it("changes nothing when the conflict dialog is cancelled", async () => {
+    endpoints.fetchPeople.mockResolvedValue({
+      people: [
+        { id: 1, name: "Иван", photoCount: 12, coverThumbnail: "" },
+        { id: 2, name: "", photoCount: 1, coverThumbnail: "" },
+      ],
+    })
+
+    const { container } = render(<PeopleTab />)
+    await waitFor(() => expect(container.querySelectorAll('[data-slot="person-tile"]')).toHaveLength(2))
+
+    fireEvent.click(container.querySelectorAll('[data-slot="person-rename"]')[1] as HTMLElement)
+    await waitFor(() => expect(screen.getByRole("dialog")).toBeTruthy())
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "иван" } })
+    fireEvent.click(screen.getByText("Save", { selector: '[data-slot="rename-save"]' }))
+    await waitFor(() => expect(document.querySelector('[data-slot="name-conflict"]')).toBeTruthy())
+
+    fireEvent.click(document.querySelector('[data-slot="name-conflict-cancel"]') as HTMLElement)
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull())
+    expect(endpoints.renamePerson).not.toHaveBeenCalled()
+    expect(endpoints.mergePeople).not.toHaveBeenCalled()
+    expect(container.querySelectorAll('[data-slot="person-tile"]')).toHaveLength(2)
+  })
+
+  it("folds a selection into the person that already holds the merge name", async () => {
+    endpoints.fetchPeople.mockResolvedValue({
+      people: [
+        { id: 1, name: "Иван", photoCount: 12, coverThumbnail: "" },
+        { id: 2, name: "Anna", photoCount: 1, coverThumbnail: "" },
+        { id: 3, name: "Bob", photoCount: 1, coverThumbnail: "" },
+      ],
+    })
+    endpoints.mergePeople.mockResolvedValue({ id: 1, name: "Иван", photoCount: 14, coverThumbnail: "" })
+
+    const { container } = render(<PeopleTab />)
+    await waitFor(() => expect(container.querySelectorAll('[data-slot="person-tile"]')).toHaveLength(3))
+
+    fireEvent.click(container.querySelectorAll('[data-slot="person-select"]')[1] as HTMLElement)
+    fireEvent.click(container.querySelectorAll('[data-slot="person-select"]')[2] as HTMLElement)
+    fireEvent.click(container.querySelector('[data-slot="people-merge"]') as HTMLElement)
+
+    await waitFor(() => expect(document.querySelector('[data-slot="merge-input"]')).toBeTruthy())
+    fireEvent.change(document.querySelector('[data-slot="merge-input"]') as HTMLElement, {
+      target: { value: "иван" },
+    })
+    fireEvent.click(document.querySelector('[data-slot="merge-confirm"]') as HTMLElement)
+
+    await waitFor(() => expect(document.querySelector('[data-slot="name-conflict"]')).toBeTruthy())
+    expect(endpoints.mergePeople).not.toHaveBeenCalled()
+
+    fireEvent.click(document.querySelector('[data-slot="name-conflict-merge"]') as HTMLElement)
+
+    await waitFor(() =>
+      expect(endpoints.mergePeople).toHaveBeenCalledWith({
+        targetPersonId: 1,
+        sourcePersonIds: [2, 3],
+        name: "Иван",
+      }),
+    )
+    await waitFor(() => expect(container.querySelectorAll('[data-slot="person-tile"]')).toHaveLength(1))
+  })
 })

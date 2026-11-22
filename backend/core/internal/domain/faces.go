@@ -27,6 +27,14 @@ type Person struct {
 	// Name is empty until the user renames the person; the UI falls back to a
 	// localized "Person N" label.
 	Name string `gorm:"default:''" json:"name"`
+	// NameKey is the unique identity of Name: trimmed, internal whitespace
+	// collapsed and case-folded (see PersonNameKey). It is never exposed to
+	// clients and is empty for an unnamed person, so unnamed people never
+	// collide. The catalog sets it through SetName on every name write and the
+	// database carries a partial unique index on it (idx_people_name_key_unique,
+	// created by the startup migration); no extra GORM index tag here, or the
+	// column would be indexed twice.
+	NameKey string `gorm:"default:''" json:"-"`
 	// Manual marks a person the user created, merged or renamed. The
 	// recognition job leaves manual people alone: it neither reconciles them
 	// into another person nor deletes them on a full re-cluster.
@@ -43,6 +51,31 @@ type Person struct {
 
 // TableName overrides the default GORM table name.
 func (Person) TableName() string { return "people" }
+
+// PersonNameKey returns the comparison key of a person's name: the display name
+// trimmed, every internal whitespace run collapsed to one space and the letters
+// case-folded, so "Иван", "иван" and " Иван " all name the same person. An empty
+// name yields an empty key, which marks the person as unnamed and is exempt from
+// the uniqueness rule.
+func PersonNameKey(name string) string {
+	return strings.ToLower(strings.Join(strings.Fields(name), " "))
+}
+
+// NormalizePersonName returns the display form and the comparison key of name.
+// The display form is what people.name stores, the key is what people.name_key
+// stores and what uniqueness is decided on.
+func NormalizePersonName(name string) (display, key string) {
+	display = strings.Join(strings.Fields(name), " ")
+	return display, strings.ToLower(display)
+}
+
+// SetName stores a display name together with its comparison key, so the two
+// columns can never disagree.
+func (p *Person) SetName(name string) {
+	display, key := NormalizePersonName(name)
+	p.Name = display
+	p.NameKey = key
+}
 
 // Face is a detected face on an image. A face references exactly one person
 // once the background job has clustered it (PersonID == 0 means unassigned).

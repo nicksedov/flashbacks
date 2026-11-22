@@ -1303,6 +1303,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/people/suggestions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List named people for name suggestions
+         * @description Returns only the people that carry a name and still have at least one photo, with their photo counts. The rename dialog ranks and filters this small set instead of waiting for the whole people listing.
+         */
+        get: operations["getPersonSuggestions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/people/merge": {
         parameters: {
             query?: never;
@@ -2455,11 +2475,11 @@ export interface components {
             faces?: components["schemas"]["ImageFaceDTO"][];
         };
         RenamePersonRequest: {
-            /** @description Trimmed name; an empty or blank name clears it. */
+            /** @description Trimmed and whitespace-collapsed name; an empty or blank name clears it. Must not belong to another person. */
             name: string;
         };
         CreatePersonRequest: {
-            /** @description Optional display name; empty creates an unnamed person. */
+            /** @description Optional display name; empty creates an unnamed person. Must not belong to another person. */
             name?: string;
             /** @description 1–200 distinct unassigned face ids. */
             faceIds: number[];
@@ -2468,8 +2488,14 @@ export interface components {
             targetPersonId: number;
             /** @description 1–50 distinct person ids; must not contain the target. */
             sourcePersonIds: number[];
-            /** @description Optional name for the merged person; omitted keeps the target's name. */
+            /** @description Optional name for the merged person; omitted keeps the target's name. Must not belong to a person outside the merge. */
             name?: string;
+        };
+        /** @description A people mutation tried to use a name another person already holds. The client resolves it by merging into `conflict` or by choosing another name. */
+        PersonNameConflictResponse: {
+            /** @description Localized message key; `people.name_taken`. */
+            error: string;
+            conflict: components["schemas"]["PersonDTO"];
         };
         AssignFaceRequest: {
             /** @description The person to assign the face to; 0 detaches it. */
@@ -4535,6 +4561,35 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description The name belongs to another person */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonNameConflictResponse"];
+                };
+            };
+        };
+    };
+    getPersonSuggestions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Named people with their photo counts */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PeopleResponse"];
+                };
+            };
         };
     };
     mergePeople: {
@@ -4572,6 +4627,15 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description The merge name belongs to a person outside the merge */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonNameConflictResponse"];
+                };
             };
         };
     };
@@ -4641,6 +4705,15 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description The name belongs to another person */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonNameConflictResponse"];
+                };
             };
         };
     };

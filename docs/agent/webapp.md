@@ -92,7 +92,24 @@ Placed next to it: `tests/webapp/` holds the HTTP integration suite
 ## 6. API integration and contracts
 
 - API base URL is `/api`, proxied by Vite in dev; use the `fetch` client in
-  `src/api/client.ts` with proper error handling.
+  `src/api/client.ts` with proper error handling. A failed call throws
+  `ApiError` carrying `status` and the parsed `body`; keep that object intact
+  when re-throwing, or the caller loses the reason (the `api*` helpers already
+  re-throw it as-is).
+- A person's name is unique across the catalog. A name the user types must be
+  checked with `findPersonNameConflict` from `src/lib/person-name.ts` and, when
+  taken, resolved through `PersonNameConflictDialog` — merge into the person
+  that holds it or type another name. Never save a name the server answers
+  `409 people.name_taken` for; `nameConflictFromError` reads that body.
+- The lightbox rename dialog offers catalog names as suggestions through the
+  shared `SuggestionChip` primitive (`src/components/ui/suggestion-chip.tsx`):
+  the chips show the seven most-photographed names when the dialog opens and
+  narrow to the typed fragment after the first edit. `UnifiedLightbox` loads
+  them with `fetchPersonSuggestions` (named people only) when the dialog opens,
+  and `personNameSuggestions` in `src/lib/person-name.ts` ranks and filters
+  them client-side. The dialog's `people` and `excludePersonId` props are
+  optional, so the workspace People tab's rename dialog passes neither and
+  shows no suggestions.
 - Include the CSRF token on mutating requests; session-based auth.
 - Use type-safe form validation and surface user-friendly error messages; client
   validation complements server-side validation and never replaces it.

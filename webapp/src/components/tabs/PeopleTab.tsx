@@ -17,11 +17,14 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { showToastError, showToastSuccess } from "@/lib/toast-utils"
+import { findPersonNameConflict, nameConflictFromError } from "@/lib/person-name"
 import {
   MergePeopleDialog,
+  PersonNameConflictDialog,
   PersonPickerDialog,
   RenamePersonDialog,
 } from "@/components/people/PeopleDialogs"
+import type { PersonNameConflictMode } from "@/components/people/PeopleDialogs"
 import { UnassignedFacesView } from "@/components/people/UnassignedFacesView"
 
 /**
@@ -56,6 +59,13 @@ export function PeopleTab() {
   const [mergeIntoSource, setMergeIntoSource] = useState<PersonDTO | null>(null)
   const [disbandTarget, setDisbandTarget] = useState<PersonDTO | null>(null)
   const [busy, setBusy] = useState(false)
+  // A taken name is never saved: the conflict dialog offers joining the person
+  // that holds it or returning to the input.
+  const [nameConflict, setNameConflict] = useState<{
+    pendingName: string
+    conflict: PersonDTO
+    mode: PersonNameConflictMode
+  } | null>(null)
 
   const reloadPeople = useCallback(() => {
     return fetchPeople()
@@ -150,6 +160,13 @@ export function PeopleTab() {
   const handleRenameSubmit = useCallback(
     async (name: string) => {
       if (!renameTarget) return
+
+      const conflict = findPersonNameConflict(name, people, [renameTarget.id])
+      if (conflict) {
+        setNameConflict({ pendingName: name, conflict, mode: "merge-person" })
+        return
+      }
+
       setBusy(true)
       try {
         const updated = await renamePerson(renameTarget.id, name)
@@ -158,42 +175,124 @@ export function PeopleTab() {
         )
         setSelected((current) => (current && current.id === updated.id ? updated : current))
         setRenameTarget(null)
-      } catch {
+      } catch (err) {
+        const holder = nameConflictFromError(err)
+        if (holder) {
+          setNameConflict({ pendingName: name, conflict: holder, mode: "merge-person" })
+          return
+        }
         showToastError(t("people.actionFailed"))
       } finally {
         setBusy(false)
       }
     },
-    [renameTarget, t],
+    [people, renameTarget, t],
   )
 
   const handleMergeSubmit = useCallback(
-    async (name?: string) => {
-      if (selectedPeople.length < 2) return
-      const [target, ...sources] = selectedPeople
+    async (name?: string, overrideTargetId?: number) => {
+      if (selectedPeople.length < 2 && overrideTargetId === undefined) return
+      const [fallbackTarget] = selectedPeople
+      if (!fallbackTarget) return
+
+      const targetId = overrideTargetId ?? fallbackTarget.id
+      const sourceIds = selectedPeople
+        .map((person) => person.id)
+        .filter((personId) => personId !== targetId)
+
+      // An override target means the user already resolved the conflict, so the
+      // pre-check must not open the same dialog again.
+      if (name && overrideTargetId === undefined) {
+        const conflict = findPersonNameConflict(
+          name,
+          people,
+          selectedPeople.map((person) => person.id),
+        )
+        if (conflict) {
+          setNameConflict({ pendingName: name, conflict, mode: "merge-selection" })
+          return
+        }
+      }
+
       setBusy(true)
       try {
         const merged = await mergePeople({
-          targetPersonId: target.id,
-          sourcePersonIds: sources.map((person) => person.id),
+          targetPersonId: targetId,
+          sourcePersonIds: sourceIds,
           ...(name ? { name } : {}),
         })
-        const sourceIds = new Set(sources.map((person) => person.id))
+        const sourceSet = new Set(sourceIds)
         setPeople((current) =>
           current
-            .filter((person) => !sourceIds.has(person.id))
-            .map((person) => (person.id === target.id ? merged : person)),
+            .filter((person) => !sourceSet.has(person.id))
+            .map((person) => (person.id === targetId ? merged : person)),
         )
         setSelectedIds([])
         setMergeOpen(false)
-      } catch {
+        setNameConflict(null)
+      } catch (err) {
+        const holder = nameConflictFromError(err)
+        if (holder && name && overrideTargetId === undefined) {
+          setNameConflict({ pendingName: name, conflict: holder, mode: "merge-selection" })
+          return
+        }
         showToastError(t("people.actionFailed"))
       } finally {
         setBusy(false)
       }
     },
-    [selectedPeople, t],
+    [people, selectedPeople, t],
   )
+
+  // The merge alternative: the renamed person or the whole selection joins the
+  // person that already holds the name.
+  const handleNameConflictMerge = useCallback(async () => {
+    const pending = nameConflict
+    if (!pending) return
+    setNameConflict(null)
+
+    if (pending.mode === "merge-selection") {
+      await handleMergeSubmit(pending.conflict.name, pending.conflict.id)
+      return
+    }
+
+    if (!renameTarget) return
+    setBusy(true)
+    try {
+      const merged = await mergePeople({
+        targetPersonId: pending.conflict.id,
+        sourcePersonIds: [renameTarget.id],
+      })
+      setPeople((current) =>
+        current
+          .filter((person) => person.id !== renameTarget.id)
+          .map((person) => (person.id === pending.conflict.id ? merged : person)),
+      )
+      setSelected((current) => (current && current.id === renameTarget.id ? merged : current))
+      setSelectedIds((current) => current.filter((id) => id !== renameTarget.id))
+      setRenameTarget(null)
+      showToastSuccess(
+        t("people.mergeIntoDone", {
+          name: merged.name || t("people.unnamed", { id: merged.id }),
+        }),
+      )
+    } catch {
+      showToastError(t("people.actionFailed"))
+    } finally {
+      setBusy(false)
+    }
+  }, [handleMergeSubmit, nameConflict, renameTarget, t])
+
+  // "Choose another name" reveals the input again; cancelling abandons the flow.
+  const handleNameConflictChangeName = useCallback(() => {
+    setNameConflict(null)
+  }, [])
+
+  const handleNameConflictCancel = useCallback(() => {
+    setNameConflict(null)
+    setRenameTarget(null)
+    setMergeOpen(false)
+  }, [])
 
   // Folding one cluster into an already-known person: the cluster's faces and
   // photos move to the chosen person and the cluster row disappears.
@@ -322,6 +421,18 @@ export function PeopleTab() {
             loading={busy}
             onCancel={() => setRenameTarget(null)}
             onSubmit={(name) => void handleRenameSubmit(name)}
+          />
+        )}
+
+        {nameConflict && (
+          <PersonNameConflictDialog
+            pendingName={nameConflict.pendingName}
+            conflict={nameConflict.conflict}
+            mode={nameConflict.mode}
+            loading={busy}
+            onMerge={() => void handleNameConflictMerge()}
+            onChangeName={handleNameConflictChangeName}
+            onCancel={handleNameConflictCancel}
           />
         )}
 
@@ -526,6 +637,18 @@ export function PeopleTab() {
           loading={busy}
           onCancel={() => setMergeOpen(false)}
           onSubmit={(name) => void handleMergeSubmit(name)}
+        />
+      )}
+
+      {nameConflict && (
+        <PersonNameConflictDialog
+          pendingName={nameConflict.pendingName}
+          conflict={nameConflict.conflict}
+          mode={nameConflict.mode}
+          loading={busy}
+          onMerge={() => void handleNameConflictMerge()}
+          onChangeName={handleNameConflictChangeName}
+          onCancel={handleNameConflictCancel}
         />
       )}
 

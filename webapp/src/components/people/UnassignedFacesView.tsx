@@ -8,7 +8,12 @@ import { ErrorBanner } from "@/components/ui/error-banner"
 import { Button } from "@/components/ui/button"
 import { showToastError } from "@/lib/toast-utils"
 import { cn } from "@/lib/utils"
-import { CreatePersonDialog, PersonPickerDialog } from "@/components/people/PeopleDialogs"
+import {
+  CreatePersonDialog,
+  PersonNameConflictDialog,
+  PersonPickerDialog,
+} from "@/components/people/PeopleDialogs"
+import { findPersonNameConflict, nameConflictFromError } from "@/lib/person-name"
 import type { PersonDTO, UnassignedFaceDTO } from "@/types"
 
 const PAGE_SIZE = 24
@@ -106,6 +111,12 @@ export function UnassignedFacesView({ people, onPeopleChanged }: UnassignedFaces
   const [pickerOpen, setPickerOpen] = useState(false)
   const [createOpen, setCreateOpen] = useState(false)
   const [busy, setBusy] = useState(false)
+  // A selected face never joins a second person with a taken name: the conflict
+  // dialog offers attaching the faces to the existing person instead.
+  const [nameConflict, setNameConflict] = useState<{
+    pendingName: string
+    conflict: PersonDTO
+  } | null>(null)
 
   const loadPage = useCallback((targetPage: number) => {
     return fetchUnassignedFaces(targetPage, PAGE_SIZE)
@@ -156,6 +167,12 @@ export function UnassignedFacesView({ people, onPeopleChanged }: UnassignedFaces
 
   const handleCreate = useCallback(
     async (name: string) => {
+      const conflict = findPersonNameConflict(name, people)
+      if (conflict) {
+        setNameConflict({ pendingName: name, conflict })
+        return
+      }
+
       setBusy(true)
       try {
         await createPerson({
@@ -167,14 +184,28 @@ export function UnassignedFacesView({ people, onPeopleChanged }: UnassignedFaces
         onPeopleChanged()
         setLoading(true)
         await loadPage(page)
-      } catch {
+      } catch (err) {
+        const holder = nameConflictFromError(err)
+        if (holder) {
+          setNameConflict({ pendingName: name, conflict: holder })
+          return
+        }
         showToastError(t("people.actionFailed"))
       } finally {
         setBusy(false)
       }
     },
-    [loadPage, onPeopleChanged, page, selectedIds, t],
+    [loadPage, onPeopleChanged, page, people, selectedIds, t],
   )
+
+  // "Merge" for a taken name means the selected faces join the person that
+  // already holds it; no second person is created.
+  const handleNameConflictMerge = useCallback(async () => {
+    const conflicted = nameConflict
+    if (!conflicted) return
+    setNameConflict(null)
+    await handleAttach(conflicted.conflict.id)
+  }, [handleAttach, nameConflict])
 
   return (
     <div data-slot="unassigned-view">
@@ -263,11 +294,26 @@ export function UnassignedFacesView({ people, onPeopleChanged }: UnassignedFaces
         />
       )}
 
-      {createOpen && (
+      {createOpen && !nameConflict && (
         <CreatePersonDialog
           loading={busy}
           onCancel={() => setCreateOpen(false)}
           onSubmit={(name) => void handleCreate(name)}
+        />
+      )}
+
+      {nameConflict && (
+        <PersonNameConflictDialog
+          pendingName={nameConflict.pendingName}
+          conflict={nameConflict.conflict}
+          mode="attach-faces"
+          loading={busy}
+          onMerge={() => void handleNameConflictMerge()}
+          onChangeName={() => setNameConflict(null)}
+          onCancel={() => {
+            setNameConflict(null)
+            setCreateOpen(false)
+          }}
         />
       )}
     </div>

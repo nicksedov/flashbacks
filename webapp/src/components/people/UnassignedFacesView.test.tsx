@@ -234,4 +234,28 @@ describe("UnassignedFacesView", () => {
     await waitFor(() => expect(toast.showToastError).toHaveBeenCalledWith("Could not update the catalog"))
     expect(container.querySelectorAll('[data-slot="unassigned-face"]')).toHaveLength(1)
   })
+
+  it("attaches the selected faces to the person that already holds the name", async () => {
+    endpoints.fetchUnassignedFaces.mockResolvedValue(page([unassignedFace({ id: 5 })]))
+    endpoints.assignFaceToPerson.mockResolvedValue({ id: 5, personId: 7 })
+
+    const { container } = renderView()
+    await waitFor(() =>
+      expect(container.querySelectorAll('[data-slot="unassigned-face"]')).toHaveLength(1),
+    )
+
+    fireEvent.click(container.querySelector('[data-slot="unassigned-face"]') as HTMLElement)
+    fireEvent.click(container.querySelector('[data-slot="unassigned-create"]') as HTMLElement)
+    await waitFor(() => expect(screen.getByRole("dialog")).toBeTruthy())
+    fireEvent.change(screen.getByLabelText("Name (optional)"), { target: { value: "anna" } })
+    fireEvent.click(screen.getByText("Create", { selector: '[data-slot="create-confirm"]' }))
+
+    await waitFor(() => expect(document.querySelector('[data-slot="name-conflict"]')).toBeTruthy())
+    expect(endpoints.createPerson).not.toHaveBeenCalled()
+
+    fireEvent.click(document.querySelector('[data-slot="name-conflict-merge"]') as HTMLElement)
+
+    await waitFor(() => expect(endpoints.assignFaceToPerson).toHaveBeenCalledWith(5, 7))
+    expect(endpoints.createPerson).not.toHaveBeenCalled()
+  })
 })

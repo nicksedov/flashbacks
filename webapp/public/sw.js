@@ -1,4 +1,4 @@
-const CACHE_NAME = 'flashbacks-v3';
+const CACHE_NAME = 'flashbacks-v4';
 const STATIC_ASSETS = [
   '/manifest.json',
   '/favicon.png',
@@ -37,9 +37,11 @@ self.addEventListener('fetch', (event) => {
   // Skip non-GET requests
   if (request.method !== 'GET') return;
 
-  // API requests: network-first with cache fallback
+  // API requests are network-only: a cached payload can name entities the
+  // backend no longer holds (for example a cluster merged into another person),
+  // so a cached response is never replayed as the current state.
   if (url.pathname.startsWith('/api/')) {
-    event.respondWith(networkFirstWithCache(request));
+    event.respondWith(fetch(request));
     return;
   }
 

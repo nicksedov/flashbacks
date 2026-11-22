@@ -1369,3 +1369,12 @@ scopes:
     design-system.suggestion-chips-text-only:
       evidence:
         - vitest::webapp/src/components/people/PeopleDialogs.test.tsx::RenamePersonDialog > shows only the name on each suggestion chip
+    face-recognition.people-detail-closes-when-person-gone:
+      evidence:
+        - vitest::webapp/src/components/tabs/PeopleTab.test.tsx::PeopleTab > returns to the grid when the open person disappears from the refreshed catalog
+    face-recognition.people-list-refreshes-on-visibility:
+      evidence:
+        - vitest::webapp/src/components/tabs/PeopleTab.test.tsx::PeopleTab > reloads the catalog when the tab becomes visible again
+    face-recognition.catalog-request-network-only:
+      evidence:
+        - vitest::webapp/src/service-worker.test.ts::service worker > serves API requests from the network without touching the cache

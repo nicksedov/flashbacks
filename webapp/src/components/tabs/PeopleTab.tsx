@@ -47,7 +47,14 @@ export function PeopleTab() {
   const { t } = useTranslation()
   const [people, setPeople] = useState<PersonDTO[]>([])
   const [loading, setLoading] = useState(true)
-  const [selected, setSelected] = useState<PersonDTO | null>(null)
+  // The detail view is derived from the loaded catalog rather than stored as a
+  // copy: a refresh that drops the person closes the detail by itself instead
+  // of keeping a ghost header and the former cluster's photos on screen.
+  const [selectedId, setSelectedId] = useState<number | null>(null)
+  const selected = useMemo(
+    () => (selectedId === null ? null : people.find((person) => person.id === selectedId) ?? null),
+    [people, selectedId],
+  )
   const [photos, setPhotos] = useState<GalleryImageDTO[]>([])
   const [photosLoading, setPhotosLoading] = useState(false)
   const [lightboxPath, setLightboxPath] = useState<string | null>(null)
@@ -73,6 +80,21 @@ export function PeopleTab() {
       .catch(() => showToastError(t("people.loadFailed")))
   }, [t])
 
+  // A catalog change made in another view, tab or browser session is picked up
+  // as soon as the tab is visible again, so a merged-away cluster cannot linger
+  // in an open People tab.
+  useEffect(() => {
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === "visible") void reloadPeople()
+    }
+    document.addEventListener("visibilitychange", refreshWhenVisible)
+    window.addEventListener("focus", refreshWhenVisible)
+    return () => {
+      document.removeEventListener("visibilitychange", refreshWhenVisible)
+      window.removeEventListener("focus", refreshWhenVisible)
+    }
+  }, [reloadPeople])
+
   useEffect(() => {
     let cancelled = false
     fetchPeople()
@@ -90,10 +112,12 @@ export function PeopleTab() {
     }
   }, [])
 
+  const selectedPersonId = selected?.id ?? null
+
   useEffect(() => {
-    if (!selected) return
+    if (selectedPersonId === null) return
     let cancelled = false
-    fetchPersonPhotos(selected.id, 1, 200)
+    fetchPersonPhotos(selectedPersonId, 1, 200)
       .then((res) => {
         if (!cancelled) setPhotos(res.images ?? [])
       })
@@ -106,7 +130,7 @@ export function PeopleTab() {
     return () => {
       cancelled = true
     }
-  }, [selected])
+  }, [selectedPersonId])
 
   const displayName = useCallback(
     (person: PersonDTO): string => person.name || t("people.unnamed", { id: person.id }),
@@ -114,13 +138,13 @@ export function PeopleTab() {
   )
 
   const handleSelect = useCallback((person: PersonDTO) => {
-    setSelected(person)
+    setSelectedId(person.id)
     setPhotosLoading(true)
     setPhotos([])
   }, [])
 
   const handleBack = useCallback(() => {
-    setSelected(null)
+    setSelectedId(null)
     setPhotos([])
     setPhotosLoading(false)
     setLightboxPath(null)
@@ -173,7 +197,6 @@ export function PeopleTab() {
         setPeople((current) =>
           current.map((person) => (person.id === updated.id ? updated : person)),
         )
-        setSelected((current) => (current && current.id === updated.id ? updated : current))
         setRenameTarget(null)
       } catch (err) {
         const holder = nameConflictFromError(err)
@@ -268,7 +291,6 @@ export function PeopleTab() {
           .filter((person) => person.id !== renameTarget.id)
           .map((person) => (person.id === pending.conflict.id ? merged : person)),
       )
-      setSelected((current) => (current && current.id === renameTarget.id ? merged : current))
       setSelectedIds((current) => current.filter((id) => id !== renameTarget.id))
       setRenameTarget(null)
       showToastSuccess(
@@ -312,7 +334,6 @@ export function PeopleTab() {
             .map((person) => (person.id === targetPersonId ? merged : person)),
         )
         setSelectedIds((current) => current.filter((id) => id !== source.id))
-        setSelected((current) => (current && current.id === source.id ? null : current))
         setMergeIntoSource(null)
         showToastSuccess(
           t("people.mergeIntoDone", {
@@ -335,7 +356,6 @@ export function PeopleTab() {
       await disbandPerson(disbandTarget.id)
       setPeople((current) => current.filter((person) => person.id !== disbandTarget.id))
       setSelectedIds((current) => current.filter((id) => id !== disbandTarget.id))
-      setSelected((current) => (current && current.id === disbandTarget.id ? null : current))
       setDisbandTarget(null)
     } catch {
       showToastError(t("people.actionFailed"))

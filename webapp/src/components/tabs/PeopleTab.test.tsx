@@ -5,11 +5,19 @@ import { PeopleTab } from "./PeopleTab"
 // The lightbox owns its own data fetching; the People tab only has to hand it
 // the clicked photo and the initial mode, so replace it with a probe.
 vi.mock("@/components/gallery/UnifiedLightbox", () => ({
-  UnifiedLightbox: (props: { imagePath: string | null; initialMode?: string; onClose: () => void }) =>
+  UnifiedLightbox: (props: {
+    imagePath: string | null
+    initialMode?: string
+    onClose: () => void
+    onPeopleChanged?: () => void
+  }) =>
     props.imagePath ? (
       <div data-slot="lightbox" data-path={props.imagePath} data-mode={props.initialMode}>
         <button type="button" onClick={props.onClose}>
           close-lightbox
+        </button>
+        <button type="button" data-slot="lightbox-people-changed" onClick={() => props.onPeopleChanged?.()}>
+          people-changed
         </button>
       </div>
     ) : null,
@@ -172,6 +180,70 @@ describe("PeopleTab", () => {
     fireEvent.click(within(lightbox).getByText("close-lightbox"))
 
     await waitFor(() => expect(container.querySelector('[data-slot="lightbox"]')).toBeNull())
+  })
+
+  it("returns to the grid when the open person disappears from the refreshed catalog", async () => {
+    endpoints.fetchPeople
+      .mockResolvedValueOnce({
+        people: [
+          { id: 5, name: "", photoCount: 2, coverThumbnail: "" },
+          { id: 2, name: "Василиса", photoCount: 4, coverThumbnail: "" },
+        ],
+      })
+      .mockResolvedValueOnce({
+        people: [{ id: 2, name: "Василиса", photoCount: 6, coverThumbnail: "" }],
+      })
+    endpoints.fetchPersonPhotos.mockResolvedValue({
+      images: [{ id: 9, path: "/gallery/a.jpg", fileName: "a.jpg" }],
+      totalImages: 1,
+      currentPage: 1,
+      pageSize: 50,
+      totalPages: 1,
+      hasNextPage: false,
+    })
+
+    const { container } = render(<PeopleTab />)
+    await waitFor(() => expect(container.querySelectorAll('[data-slot="person-tile"]')).toHaveLength(2))
+
+    fireEvent.click(container.querySelectorAll('[data-slot="person-tile"]')[0] as HTMLElement)
+    await waitFor(() => expect(container.querySelector('[data-slot="people-detail"]')).toBeTruthy())
+
+    // The photo's lightbox reports a catalog change: the cluster was folded into
+    // the person that already held the name, so the open person is gone.
+    fireEvent.click(container.querySelector('[data-slot="person-photo"]') as HTMLElement)
+    fireEvent.click(container.querySelector('[data-slot="lightbox-people-changed"]') as HTMLElement)
+
+    await waitFor(() => expect(container.querySelector('[data-slot="people-grid"]')).toBeTruthy())
+    expect(container.querySelector('[data-slot="people-detail"]')).toBeNull()
+    expect(screen.queryByText("Person 5")).toBeNull()
+    expect(screen.getByText("Василиса")).toBeTruthy()
+  })
+
+  it("reloads the catalog when the tab becomes visible again", async () => {
+    endpoints.fetchPeople
+      .mockResolvedValueOnce({
+        people: [
+          { id: 5, name: "", photoCount: 2, coverThumbnail: "" },
+          { id: 2, name: "Василиса", photoCount: 4, coverThumbnail: "" },
+        ],
+      })
+      .mockResolvedValueOnce({
+        people: [{ id: 2, name: "Василиса", photoCount: 6, coverThumbnail: "" }],
+      })
+
+    const visibility = vi.spyOn(Document.prototype, "visibilityState", "get").mockReturnValue("visible")
+
+    const { container } = render(<PeopleTab />)
+    await waitFor(() => expect(container.querySelectorAll('[data-slot="person-tile"]')).toHaveLength(2))
+
+    // Another view or session folded the cluster into Василиса while this tab
+    // was hidden; becoming visible again must pick up the fresh catalog.
+    fireEvent(document, new Event("visibilitychange"))
+
+    await waitFor(() => expect(container.querySelectorAll('[data-slot="person-tile"]')).toHaveLength(1))
+    expect(screen.queryByText("Person 5")).toBeNull()
+    expect(endpoints.fetchPeople).toHaveBeenCalledTimes(2)
+    visibility.mockRestore()
   })
 
   it("shows the empty-state title and hint when no people have been discovered", async () => {
